@@ -54,6 +54,7 @@
 #include <QMessageBox>
 #include <QNetworkInterface>
 #include <QProcess>
+#include <QRegularExpression>
 #include <QTextStream>
 #include <QTimer>
 #include <QUrl>
@@ -162,19 +163,22 @@ QString resolvePrefixGameDocumentsDir(const WinePrefix& prefix,
   return QDir(prefix.myGamesPath()).filePath(dataDirName);
 }
 
-QString resolveSaveRelativePath(std::shared_ptr<Profile> profile,
-                                const IPluginGame* managedGame,
-                                MOBase::LocalSavegames* localSaves)
+QString resolveAbsoluteSaveDir(const WinePrefix& prefix,
+                               const IPluginGame* managedGame,
+                               MOBase::LocalSavegames* localSaves,
+                               std::shared_ptr<Profile> profile)
 {
   if (profile == nullptr || managedGame == nullptr) {
-    return "Saves";
+    const QString dataDirName = resolveWineDataDirName(managedGame);
+    return QDir(prefix.myGamesPath()).filePath(dataDirName + "/Saves");
   }
 
   const QString profileSaveDir =
       QDir(profile->absolutePath()).filePath("saves");
-  const QString gameDocumentsDir =
-      QDir::cleanPath(managedGame->documentsDirectory().absolutePath());
 
+  // Strategy 1: Use LocalSavegames::mappings() if available.
+  // Extract the user-relative portion of the destination (after drive_c/users/<name>/)
+  // and reconstruct it under our prefix's userProfilePath().
   if (localSaves != nullptr) {
     const MappingType mappings = localSaves->mappings(QDir(profileSaveDir));
     for (const auto& mapping : mappings) {
@@ -184,30 +188,46 @@ QString resolveSaveRelativePath(std::shared_ptr<Profile> profile,
 
       const QString source = QDir::cleanPath(mapping.source);
       const QString destination = QDir::cleanPath(mapping.destination);
-      if (source == QDir::cleanPath(profileSaveDir) &&
-          destination.startsWith(gameDocumentsDir, Qt::CaseInsensitive)) {
-        const QString relative =
-            QDir(gameDocumentsDir).relativeFilePath(destination);
-        if (!relative.isEmpty() && relative != ".") {
-          return relative;
-        }
+      if (source != QDir::cleanPath(profileSaveDir)) {
+        continue;
+      }
+
+      // Extract the user-relative path (after drive_c/users/<username>/)
+      static const QRegularExpression userDirRe(
+          "drive_c/users/[^/]+/(.+)", QRegularExpression::CaseInsensitiveOption);
+      const auto match = userDirRe.match(destination);
+      if (match.hasMatch()) {
+        const QString userRelative = match.captured(1);
+        const QString resolved =
+            QDir(prefix.userProfilePath()).filePath(userRelative);
+        log::debug("resolveAbsoluteSaveDir: from mappings -> '{}'", resolved);
+        return resolved;
       }
     }
   }
 
-  const auto iniFiles = managedGame->iniFiles();
-  if (iniFiles.isEmpty()) {
-    return "Saves";
+  // Strategy 2: Use managedGame->savesDirectory()
+  {
+    const QDir savesDir = managedGame->savesDirectory();
+    const QString savesPath = QDir::cleanPath(savesDir.absolutePath());
+    static const QRegularExpression userDirRe(
+        "drive_c/users/[^/]+/(.+)", QRegularExpression::CaseInsensitiveOption);
+    const auto match = userDirRe.match(savesPath);
+    if (match.hasMatch()) {
+      const QString userRelative = match.captured(1);
+      const QString resolved =
+          QDir(prefix.userProfilePath()).filePath(userRelative);
+      log::debug("resolveAbsoluteSaveDir: from savesDirectory -> '{}'", resolved);
+      return resolved;
+    }
   }
 
-  const QString iniPath = profile->absoluteIniFilePath(iniFiles[0]);
-  if (!QFileInfo::exists(iniPath)) {
-    return "Saves";
-  }
-
-  QSettings ini(iniPath, QSettings::IniFormat);
-  const QString savePath = ini.value("General/SLocalSavePath").toString().trimmed();
-  return savePath.isEmpty() ? "Saves" : savePath;
+  // Fallback: Documents/My Games/<dataDirName>/Saves (old Bethesda behavior)
+  const QString dataDirName = resolveWineDataDirName(managedGame);
+  const QString fallback =
+      QDir(prefix.myGamesPath()).filePath(dataDirName + "/Saves");
+  log::debug("resolveAbsoluteSaveDir: fallback -> '{}'", fallback);
+  return fallback;
 }
 #endif
 
@@ -2182,9 +2202,9 @@ bool OrganizerCore::beforeRun(
                   "Documents/My Games INI dir='{}'",
                   pluginsTargetDir, documentsDir);
         const auto localSavesFeature = gameFeatures().gameFeature<LocalSavegames>();
-        const QString saveRelativePath =
-            resolveSaveRelativePath(m_CurrentProfile, managedGame(),
-                                    localSavesFeature.get());
+        const QString absoluteSaveDir =
+            resolveAbsoluteSaveDir(prefix, managedGame(),
+                                   localSavesFeature.get(), m_CurrentProfile);
 
         // Read plugin lines from profile's plugins.txt
         QFile pluginsFile(m_CurrentProfile->getPluginsFileName());
@@ -2245,14 +2265,13 @@ bool OrganizerCore::beforeRun(
           const QString profileSavesDir =
               QDir(m_CurrentProfile->absolutePath()).filePath("saves");
           log::debug("Resolved local save mapping: profile='{}', target='{}'",
-                     profileSavesDir, saveRelativePath);
-          if (!prefix.deployProfileSaves(profileSavesDir, dataDirName, saveRelativePath,
-                                         true)) {
+                     profileSavesDir, absoluteSaveDir);
+          if (!prefix.deployProfileSaves(profileSavesDir, absoluteSaveDir, true)) {
             log::warn("Failed to deploy profile saves from '{}' to prefix '{}'",
                       profileSavesDir, prefixPathStr);
           } else {
-            log::debug("Deployed profile saves '{}' -> '{}/{}' in prefix '{}'",
-                       profileSavesDir, dataDirName, saveRelativePath, prefixPathStr);
+            log::debug("Deployed profile saves '{}' -> '{}' in prefix '{}'",
+                       profileSavesDir, absoluteSaveDir, prefixPathStr);
           }
         }
       } else {
@@ -2292,16 +2311,16 @@ void OrganizerCore::afterRun(const QFileInfo& binary, DWORD exitCode)
       if (prefix.isValid()) {
         const QString dataDirName = resolveWineDataDirName(managedGame());
         const auto localSavesFeature = gameFeatures().gameFeature<LocalSavegames>();
-        const QString saveRelativePath =
-            resolveSaveRelativePath(m_CurrentProfile, managedGame(),
-                                    localSavesFeature.get());
+        const QString absoluteSaveDir =
+            resolveAbsoluteSaveDir(prefix, managedGame(),
+                                   localSavesFeature.get(), m_CurrentProfile);
 
         if (m_CurrentProfile->localSavesEnabled()) {
           const QString profileSavesDir =
               QDir(m_CurrentProfile->absolutePath()).filePath("saves");
           log::debug("Syncing local save mapping: profile='{}', target='{}'",
-                     profileSavesDir, saveRelativePath);
-          if (!prefix.syncSavesBack(profileSavesDir, dataDirName, saveRelativePath)) {
+                     profileSavesDir, absoluteSaveDir);
+          if (!prefix.syncSavesBack(profileSavesDir, absoluteSaveDir)) {
             log::warn("Failed to sync saves back from prefix '{}' to '{}'",
                       prefixPathStr, profileSavesDir);
           }

@@ -198,7 +198,7 @@ const SKIP_DIRS: &[&str] = &[
     "NetHood", "PrintHood", "Recent", "SendTo",
     "Start Menu", "Templates", "My Documents", "My Music",
     "My Pictures", "My Videos", "Desktop", "Downloads",
-    "Favorites", "Links", "Saved Games", "Searches",
+    "Favorites", "Links", "Searches",
     "Contacts", "3D Objects",
 ];
 

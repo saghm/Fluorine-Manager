@@ -3,6 +3,7 @@
 #include <QDateTime>
 #include <QDir>
 #include <QDirIterator>
+#include <QSet>
 #include <QFile>
 #include <QFileInfo>
 #include <QTextStream>
@@ -11,8 +12,6 @@
 
 namespace
 {
-constexpr const char* BackupSavesUpper = ".mo2linux_backup_Saves";
-constexpr const char* BackupSavesLower = ".mo2linux_backup_saves";
 constexpr const char* BackupIniSuffix  = ".mo2linux_backup";
 
 bool copyFileWithParents(const QString& source, const QString& destination)
@@ -130,6 +129,11 @@ QString WinePrefix::myGamesPath() const
 QString WinePrefix::appdataLocal() const
 {
   return QDir(driveC()).filePath("users/steamuser/AppData/Local");
+}
+
+QString WinePrefix::userProfilePath() const
+{
+  return QDir(driveC()).filePath("users/steamuser");
 }
 
 bool WinePrefix::deployPlugins(const QStringList& plugins, const QString& dataDir) const
@@ -264,8 +268,8 @@ bool WinePrefix::deployProfileIni(const QString& sourceIniPath,
   return true;
 }
 
-bool WinePrefix::deployProfileSaves(const QString& profileSaveDir, const QString& gameName,
-                                    const QString& saveRelativePath,
+bool WinePrefix::deployProfileSaves(const QString& profileSaveDir,
+                                    const QString& absoluteSaveDir,
                                     bool clearDestination) const
 {
   if (!isValid()) {
@@ -273,38 +277,40 @@ bool WinePrefix::deployProfileSaves(const QString& profileSaveDir, const QString
     return false;
   }
 
-  MOBase::log::debug("deployProfileSaves: profileSaveDir='{}', gameName='{}', "
-                     "saveRelativePath='{}', clearDestination={}",
-                     profileSaveDir, gameName, saveRelativePath, clearDestination);
-  const QString gameRoot = QDir(myGamesPath()).filePath(gameName);
-  const QString normalizedSavePath =
-      QString(saveRelativePath).replace('\\', '/').trimmed();
-  const QString effectiveSavePath = normalizedSavePath.isEmpty() ? "Saves" : normalizedSavePath;
-  const QString destinationSavesDirUpper = QDir(gameRoot).filePath(effectiveSavePath);
-  const QString destinationSavesDirLower =
-      QDir(gameRoot).filePath(effectiveSavePath.toLower());
-  const QString backupUpper = QDir(gameRoot).filePath(BackupSavesUpper);
-  const QString backupLower = QDir(gameRoot).filePath(BackupSavesLower);
+  MOBase::log::debug("deployProfileSaves: profileSaveDir='{}', absoluteSaveDir='{}', "
+                     "clearDestination={}",
+                     profileSaveDir, absoluteSaveDir, clearDestination);
+
+  const QFileInfo saveDirInfo(absoluteSaveDir);
+  const QString parentDir = saveDirInfo.dir().absolutePath();
+  const QString leafName = saveDirInfo.fileName();
+  const QString backupUpper =
+      QDir(parentDir).filePath(".mo2linux_backup_" + leafName);
+  const QString backupLower =
+      QDir(parentDir).filePath(".mo2linux_backup_" + leafName.toLower());
+  const QString lowerSaveDir =
+      QDir(parentDir).filePath(leafName.toLower());
 
   if (clearDestination) {
     // Recover from any stale backup left by an interrupted run.
     if ((QDir(backupUpper).exists() || QDir(backupLower).exists()) &&
-        !restoreBackedUpSaves(destinationSavesDirUpper, destinationSavesDirLower,
+        !restoreBackedUpSaves(absoluteSaveDir, lowerSaveDir,
                               backupUpper, backupLower)) {
       return false;
     }
 
-    if (QDir(destinationSavesDirUpper).exists() &&
-        !QDir().rename(destinationSavesDirUpper, backupUpper)) {
+    if (QDir(absoluteSaveDir).exists() &&
+        !QDir().rename(absoluteSaveDir, backupUpper)) {
       return false;
     }
-    if (QDir(destinationSavesDirLower).exists() &&
-        !QDir().rename(destinationSavesDirLower, backupLower)) {
+    if (absoluteSaveDir != lowerSaveDir &&
+        QDir(lowerSaveDir).exists() &&
+        !QDir().rename(lowerSaveDir, backupLower)) {
       return false;
     }
   }
 
-  if (!QDir().mkpath(destinationSavesDirUpper)) {
+  if (!QDir().mkpath(absoluteSaveDir)) {
     return false;
   }
 
@@ -312,32 +318,31 @@ bool WinePrefix::deployProfileSaves(const QString& profileSaveDir, const QString
     return true;
   }
 
-  return copyTreeContents(profileSaveDir, destinationSavesDirUpper);
+  return copyTreeContents(profileSaveDir, absoluteSaveDir);
 }
 
-bool WinePrefix::syncSavesBack(const QString& profileSaveDir, const QString& gameName,
-                               const QString& saveRelativePath) const
+bool WinePrefix::syncSavesBack(const QString& profileSaveDir,
+                               const QString& absoluteSaveDir) const
 {
   if (!isValid()) {
     MOBase::log::error("syncSavesBack: prefix '{}' is not valid", m_prefixPath);
     return false;
   }
 
-  MOBase::log::debug("syncSavesBack: profileSaveDir='{}', gameName='{}', "
-                     "saveRelativePath='{}'",
-                     profileSaveDir, gameName, saveRelativePath);
-  const QString gameRoot = QDir(myGamesPath()).filePath(gameName);
-  const QString normalizedSavePath =
-      QString(saveRelativePath).replace('\\', '/').trimmed();
-  const QString effectiveSavePath = normalizedSavePath.isEmpty() ? "Saves" : normalizedSavePath;
-  const QString upperSaves = QDir(gameRoot).filePath(effectiveSavePath);
-  const QString lowerSaves = QDir(gameRoot).filePath(effectiveSavePath.toLower());
+  MOBase::log::debug("syncSavesBack: profileSaveDir='{}', absoluteSaveDir='{}'",
+                     profileSaveDir, absoluteSaveDir);
+
+  const QFileInfo saveDirInfo(absoluteSaveDir);
+  const QString parentDir = saveDirInfo.dir().absolutePath();
+  const QString leafName = saveDirInfo.fileName();
+  const QString lowerSaveDir =
+      QDir(parentDir).filePath(leafName.toLower());
 
   QString sourceSavesDir;
-  if (QDir(upperSaves).exists()) {
-    sourceSavesDir = upperSaves;
-  } else if (QDir(lowerSaves).exists()) {
-    sourceSavesDir = lowerSaves;
+  if (QDir(absoluteSaveDir).exists()) {
+    sourceSavesDir = absoluteSaveDir;
+  } else if (absoluteSaveDir != lowerSaveDir && QDir(lowerSaveDir).exists()) {
+    sourceSavesDir = lowerSaveDir;
   } else {
     return true;
   }
@@ -352,10 +357,13 @@ bool WinePrefix::syncSavesBack(const QString& profileSaveDir, const QString& gam
                       profileSaveDir);
   }
 
-  const QString backupUpper = QDir(gameRoot).filePath(BackupSavesUpper);
-  const QString backupLower = QDir(gameRoot).filePath(BackupSavesLower);
-  if (!restoreBackedUpSaves(upperSaves, lowerSaves, backupUpper, backupLower)) {
-    MOBase::log::warn("Failed restoring backed up global saves in '{}'", gameRoot);
+  const QString backupUpper =
+      QDir(parentDir).filePath(".mo2linux_backup_" + leafName);
+  const QString backupLower =
+      QDir(parentDir).filePath(".mo2linux_backup_" + leafName.toLower());
+  if (!restoreBackedUpSaves(absoluteSaveDir, lowerSaveDir,
+                            backupUpper, backupLower)) {
+    MOBase::log::warn("Failed restoring backed up global saves in '{}'", parentDir);
     return false;
   }
 
@@ -387,27 +395,43 @@ void WinePrefix::restoreStaleBackups() const
     }
   }
 
-  // Also restore stale save backups
-  const QString myGames = myGamesPath();
-  if (QDir(myGames).exists()) {
-    QDirIterator gameIt(myGames, QDir::Dirs | QDir::NoDotAndDotDot);
-    while (gameIt.hasNext()) {
-      gameIt.next();
-      const QString gameRoot   = gameIt.filePath();
-      const QString backupUp   = QDir(gameRoot).filePath(BackupSavesUpper);
-      const QString backupLow  = QDir(gameRoot).filePath(BackupSavesLower);
+  // Also restore stale save backups — scan entire prefix for .mo2linux_backup_*
+  // directories (saves may be in Documents/My Games/.../Saves, Saved Games/..., etc.)
+  QSet<QString> processedBackups;
+  QDirIterator saveIt(driveC(), QDir::Dirs | QDir::Hidden | QDir::NoDotAndDotDot,
+                      QDirIterator::Subdirectories);
+  while (saveIt.hasNext()) {
+    saveIt.next();
+    const QString dirName = saveIt.fileName();
+    if (!dirName.startsWith(".mo2linux_backup_")) {
+      continue;
+    }
 
-      if (QDir(backupUp).exists() || QDir(backupLow).exists()) {
-        MOBase::log::info("Restoring stale save backups in '{}'", gameRoot);
+    const QString backupPath = saveIt.filePath();
+    const QString parentDir = QFileInfo(backupPath).dir().absolutePath();
+    const QString originalLeaf = dirName.mid(QString(".mo2linux_backup_").length());
+    if (originalLeaf.isEmpty()) {
+      continue;
+    }
 
-        // Determine the live save dirs (uppercase "Saves" preferred)
-        const QString liveUpper = QDir(gameRoot).filePath("Saves");
-        const QString liveLower = QDir(gameRoot).filePath("saves");
+    // Use lowercase key to deduplicate upper/lower variants in same parent
+    const QString dedupeKey = parentDir + "/" + originalLeaf.toLower();
+    if (processedBackups.contains(dedupeKey)) {
+      continue;
+    }
+    processedBackups.insert(dedupeKey);
 
-        if (!restoreBackedUpSaves(liveUpper, liveLower, backupUp, backupLow)) {
-          MOBase::log::warn("Failed to restore stale save backups in '{}'", gameRoot);
-        }
-      }
+    const QString liveUpper = QDir(parentDir).filePath(originalLeaf);
+    const QString liveLower = QDir(parentDir).filePath(originalLeaf.toLower());
+    const QString backupUpper =
+        QDir(parentDir).filePath(".mo2linux_backup_" + originalLeaf);
+    const QString backupLower =
+        QDir(parentDir).filePath(".mo2linux_backup_" + originalLeaf.toLower());
+
+    MOBase::log::info("Restoring stale save backups: '{}' in '{}'",
+                      originalLeaf, parentDir);
+    if (!restoreBackedUpSaves(liveUpper, liveLower, backupUpper, backupLower)) {
+      MOBase::log::warn("Failed to restore stale save backups in '{}'", parentDir);
     }
   }
 }
