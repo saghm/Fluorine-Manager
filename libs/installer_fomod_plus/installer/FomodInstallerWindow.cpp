@@ -17,6 +17,7 @@
 #include <QScrollBar>
 #include <QSettings>
 #include <QSizePolicy>
+#include <QStandardPaths>
 #include <QSplitter>
 #include <QVBoxLayout>
 #include <utility>
@@ -93,8 +94,9 @@ void FomodInstallerWindow::closeEvent(QCloseEvent* event)
 
 void FomodInstallerWindow::saveGeometryAndState() const
 {
-    const auto cwd = QDir::currentPath();
-    QSettings settings(cwd + "/fomod-plus-settings.ini", QSettings::IniFormat);
+    const auto configDir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    QDir().mkpath(configDir);
+    QSettings settings(configDir + "/fomod-plus-settings.ini", QSettings::IniFormat);
     settings.setValue("windowGeometry", saveGeometry());
     settings.setValue("centerSplitState", mCenterRow->saveState());
     settings.setValue("leftSplitState", mLeftPane->saveState());
@@ -102,8 +104,8 @@ void FomodInstallerWindow::saveGeometryAndState() const
 
 void FomodInstallerWindow::restoreGeometryAndState()
 {
-    const auto cwd = QDir::currentPath();
-    const QSettings settings(cwd + "/fomod-plus-settings.ini", QSettings::IniFormat);
+    const auto configDir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    const QSettings settings(configDir + "/fomod-plus-settings.ini", QSettings::IniFormat);
     restoreGeometry(settings.value("windowGeometry").toByteArray());
     mCenterRow->restoreState(settings.value("centerSplitState").toByteArray());
     mLeftPane->restoreState(settings.value("leftSplitState").toByteArray());

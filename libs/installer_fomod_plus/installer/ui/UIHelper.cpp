@@ -61,7 +61,10 @@ QLabel* UIHelper::createHyperlink(const QString& url, QWidget* parent = nullptr)
 
 QString UIHelper::getFullImagePath(const QString& fomodPath, const QString& imagePath)
 {
-    return QDir::tempPath() + "/" + fomodPath + "/" + imagePath;
+    // Fomod XMLs may use Windows backslashes in image paths (e.g. "fomod\MCM.png")
+    QString normalized = imagePath;
+    normalized.replace('\\', '/');
+    return QDir::tempPath() + "/" + fomodPath + "/" + normalized;
 }
 
 void UIHelper::setGlobalAlignment(QBoxLayout* layout, const Qt::Alignment alignment)
