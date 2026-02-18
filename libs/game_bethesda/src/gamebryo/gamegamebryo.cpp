@@ -22,6 +22,7 @@
 #include <QFileInfo>
 #include <QIcon>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QJsonValue>
 #include <QSettings>
 #include <QStandardPaths>
@@ -505,6 +506,22 @@ QString GameGamebryo::myGamesPath() const
 #endif
 }
 
+static QString readFluorinePrefixPath()
+{
+  QString configRoot =
+      QStandardPaths::writableLocation(QStandardPaths::ConfigLocation);
+  if (configRoot.isEmpty())
+    configRoot = QDir::homePath() + "/.config";
+  QString configPath = QDir(configRoot).filePath("fluorine/config.json");
+  QFile f(configPath);
+  if (!f.open(QIODevice::ReadOnly))
+    return {};
+  auto json = QJsonDocument::fromJson(f.readAll());
+  if (!json.isObject())
+    return {};
+  return json.object().value("prefix_path").toString().trimmed();
+}
+
 QString GameGamebryo::localAppFolder()
 {
 #ifdef _WIN32
@@ -516,8 +533,7 @@ QString GameGamebryo::localAppFolder()
   return result;
 #else
   // On Linux, AppData/Local lives inside the Wine prefix.
-  const QString configuredPrefix =
-      QSettings().value("fluorine/prefix_path").toString().trimmed();
+  const QString configuredPrefix = readFluorinePrefixPath();
   if (!configuredPrefix.isEmpty()) {
     const QString appDataLocal =
         QDir(configuredPrefix).filePath("drive_c/users/steamuser/AppData/Local");
@@ -729,9 +745,8 @@ QString GameGamebryo::determineMyGamesPath(const QString& gameName)
   // Check common Wine prefix locations for steamuser Documents.
   QStringList prefixDocPaths;
 
-  // First check the configured prefix from MO2 settings (most reliable).
-  const QString configuredPrefix =
-      QSettings().value("fluorine/prefix_path").toString().trimmed();
+  // First check the configured prefix from fluorine config (most reliable).
+  const QString configuredPrefix = readFluorinePrefixPath();
   if (!configuredPrefix.isEmpty()) {
     const QString configuredDocs =
         QDir(configuredPrefix).filePath("drive_c/users/steamuser/Documents");
