@@ -7,8 +7,6 @@
 #include <QObject>
 #include <QString>
 
-class QProcess;
-
 #include <exception>
 #include <memory>
 #include <thread>
@@ -88,15 +86,6 @@ private:
   struct fuse_session* m_session = nullptr;
   std::thread m_fuseThread;
   bool m_mounted = false;
-
-  QProcess* m_helperProcess = nullptr;
-  bool mountViaHelper(const QString& overwrite_dir, const QString& game_dir,
-                      const QString& data_dir_name,
-                      const std::vector<std::pair<std::string, std::string>>& mods);
-  void writeVfsConfig(const QString& configPath, const QString& mount_point,
-                      const QString& overwrite_dir, const QString& game_dir,
-                      const QString& data_dir_name,
-                      const std::vector<std::pair<std::string, std::string>>& mods);
 };
 
 #endif

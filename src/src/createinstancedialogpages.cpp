@@ -14,19 +14,6 @@
 namespace cid
 {
 
-// On Flatpak the native file dialog returns XDG portal FUSE paths that may
-// not properly expose directory contents.  Returns options that force the
-// Qt built-in dialog when running inside Flatpak.
-static QFileDialog::Options flatpakSafeOptions()
-{
-  QFileDialog::Options opts;
-#ifndef _WIN32
-  if (qEnvironmentVariableIsSet("FLATPAK_ID"))
-    opts |= QFileDialog::DontUseNativeDialog;
-#endif
-  return opts;
-}
-
 using namespace MOBase;
 using MOBase::TaskDialog;
 
@@ -329,7 +316,7 @@ void GamePage::select(IPluginGame* game, const QString& dir)
         const auto path = QFileDialog::getExistingDirectory(
             &m_dlg,
             QObject::tr("Find game installation for %1").arg(game->displayGameName()),
-            {}, flatpakSafeOptions());
+            {}, {});
 
         if (path.isEmpty()) {
           // cancelled
@@ -377,7 +364,7 @@ void GamePage::select(IPluginGame* game, const QString& dir)
 void GamePage::selectCustom()
 {
   const auto path = QFileDialog::getExistingDirectory(
-      &m_dlg, QObject::tr("Find game installation"), {}, flatpakSafeOptions());
+      &m_dlg, QObject::tr("Find game installation"), {}, {});
 
   if (path.isEmpty()) {
     // reselect the previous button
@@ -1115,7 +1102,7 @@ void PathsPage::onChanged()
 void PathsPage::browse(QLineEdit* e)
 {
   const auto s =
-      QFileDialog::getExistingDirectory(&m_dlg, {}, e->text(), flatpakSafeOptions());
+      QFileDialog::getExistingDirectory(&m_dlg, {}, e->text(), {});
   if (s.isNull() || s.isEmpty()) {
     return;
   }

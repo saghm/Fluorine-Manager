@@ -314,6 +314,16 @@
                  </property>
                 </widget>
                </item>
+               <item row="10" column="0" colspan="2">
+                <widget class="QCheckBox" name="steamDrmCheckBox">
+                 <property name="text">
+                  <string>Steam DRM integration</string>
+                 </property>
+                 <property name="toolTip">
+                  <string>Enable Steam DRM bridge for this instance. Disable for GOG or DRM-free games to prevent crashes.</string>
+                 </property>
+                </widget>
+               </item>
               </layout>
              </widget>
             </item>

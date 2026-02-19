@@ -63,7 +63,6 @@ struct SpawnParameters
 #else
   int stdOut = -1;
   int stdErr = -1;
-  QProcess** helperProcessOut = nullptr;
 #endif
 };
 

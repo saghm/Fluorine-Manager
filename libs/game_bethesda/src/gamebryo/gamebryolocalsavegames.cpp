@@ -56,7 +56,9 @@ QString GamebryoLocalSavegames::localSavesDummy() const
 
 QDir GamebryoLocalSavegames::localSavesDirectory() const
 {
-  return QDir(m_Game->myGamesPath()).absoluteFilePath(localSavesDummy());
+  QString dummy = localSavesDummy();
+  dummy.replace("\\", "/");
+  return QDir(m_Game->myGamesPath()).absoluteFilePath(dummy);
 }
 
 QDir GamebryoLocalSavegames::localGameDirectory() const

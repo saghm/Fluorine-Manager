@@ -8,6 +8,7 @@
 #include "shared/appconfig.h"
 #include "shared/util.h"
 #include "ui_instancemanagerdialog.h"
+#include <QCheckBox>
 #include <QFile>
 #include <QFileDialog>
 #include <QSettings>
@@ -212,6 +213,15 @@ InstanceManagerDialog::InstanceManagerDialog(PluginContainer& pc, QWidget* paren
   });
   connect(ui->deleteInstance, &QPushButton::clicked, [&] {
     deleteInstance();
+  });
+
+  connect(ui->steamDrmCheckBox, &QCheckBox::toggled, [&](bool checked) {
+    const auto* inst = singleSelection();
+    if (!inst) return;
+    const QString ini = inst->iniPath();
+    if (ini.isEmpty()) return;
+    QSettings s(ini, QSettings::IniFormat);
+    s.setValue("fluorine/steam_drm", checked);
   });
 
   connect(ui->switchToInstance, &QPushButton::clicked, [&] {
@@ -772,16 +782,23 @@ void InstanceManagerDialog::fillData(const Instance& ii)
   ui->gameName->setText(ii.gameName());
   ui->gameDir->setText(ii.gameDirectory());
 
-  // read prefix info from the instance's INI
+  // read prefix info and fluorine settings from the instance's INI
   {
     const QString ini = ii.iniPath();
     if (!ini.isEmpty() && QFile::exists(ini)) {
       QSettings s(ini, QSettings::IniFormat);
       ui->prefixPath->setText(s.value("Settings/proton_prefix_path").toString());
       ui->protonVersion->setText(s.value("fluorine/proton_name").toString());
+
+      ui->steamDrmCheckBox->blockSignals(true);
+      ui->steamDrmCheckBox->setChecked(s.value("fluorine/steam_drm", true).toBool());
+      ui->steamDrmCheckBox->blockSignals(false);
     } else {
       ui->prefixPath->clear();
       ui->protonVersion->clear();
+      ui->steamDrmCheckBox->blockSignals(true);
+      ui->steamDrmCheckBox->setChecked(false);
+      ui->steamDrmCheckBox->blockSignals(false);
     }
   }
 
@@ -822,6 +839,9 @@ void InstanceManagerDialog::clearData()
   ui->gameDir->clear();
   ui->prefixPath->clear();
   ui->protonVersion->clear();
+  ui->steamDrmCheckBox->blockSignals(true);
+  ui->steamDrmCheckBox->setChecked(false);
+  ui->steamDrmCheckBox->blockSignals(false);
 
   setButtonsEnabled(false);
 
@@ -845,18 +865,9 @@ void InstanceManagerDialog::setButtonsEnabled(bool b)
 void InstanceManagerDialog::openExistingPortable()
 {
   // On Flatpak, the native file dialog goes through the XDG Desktop Portal,
-  // which returns FUSE paths (/run/user/.../doc/...) that may not properly
-  // expose directory contents.  Use the Qt built-in dialog to get real paths.
-  QFileDialog::Options opts;
-#ifndef _WIN32
-  if (qEnvironmentVariableIsSet("FLATPAK_ID")) {
-    opts |= QFileDialog::DontUseNativeDialog;
-  }
-#endif
-
   const QString dir = QFileDialog::getExistingDirectory(
       this, tr("Select portable instance folder"),
-      QStandardPaths::writableLocation(QStandardPaths::HomeLocation), opts);
+      QStandardPaths::writableLocation(QStandardPaths::HomeLocation));
 
   if (dir.isEmpty()) {
     return;

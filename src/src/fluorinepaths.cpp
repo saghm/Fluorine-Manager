@@ -3,16 +3,18 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
+#include <QStandardPaths>
 #include <QTextStream>
 
 #include <cstdio>
 
-static const QString OldRoot =
-    QDir::homePath() + "/.local/share/fluorine";
+static const QString OldFlatpakRoot =
+    QDir::homePath() + "/.var/app/com.fluorine.manager";
 
 QString fluorineDataDir()
 {
-  return QDir::homePath() + "/.var/app/com.fluorine.manager";
+  return QDir::homePath() + "/.local/share/fluorine";
 }
 
 void fluorineMigrateDataDir()
@@ -21,8 +23,41 @@ void fluorineMigrateDataDir()
   return;
 #endif
 
-  const QString oldRoot = OldRoot;
+  const QString oldRoot = OldFlatpakRoot;
   const QString newRoot = fluorineDataDir();
+
+  // Always check for config.json migration, even if data was already moved.
+  // The Flatpak stored config.json under its sandboxed XDG_CONFIG_HOME
+  // (~/.var/app/com.fluorine.manager/config/), but outside Flatpak
+  // QStandardPaths returns ~/.config/.
+  {
+    const QString oldConfigJson = oldRoot + "/config/fluorine/config.json";
+    QString configRoot = QStandardPaths::writableLocation(
+        QStandardPaths::ConfigLocation);
+    if (configRoot.isEmpty()) {
+      configRoot = QDir::homePath() + "/.config";
+    }
+    const QString newConfigJson =
+        QDir(configRoot).filePath("fluorine/config.json");
+    if (QFile::exists(oldConfigJson) && !QFile::exists(newConfigJson)) {
+      QDir().mkpath(QFileInfo(newConfigJson).dir().absolutePath());
+      if (QFile::copy(oldConfigJson, newConfigJson)) {
+        fprintf(stderr, "[fluorine] Migrated config.json to %s\n",
+                qUtf8Printable(newConfigJson));
+        // Update prefix_path if it references the old Flatpak root
+        if (auto cfg = FluorineConfig::load()) {
+          if (cfg->prefix_path.startsWith(oldRoot)) {
+            cfg->prefix_path.replace(oldRoot, newRoot);
+            cfg->save();
+            fprintf(stderr, "[fluorine]   updated config prefix_path\n");
+          }
+        }
+      } else {
+        fprintf(stderr, "[fluorine] FAILED to copy config.json to %s\n",
+                qUtf8Printable(newConfigJson));
+      }
+    }
+  }
 
   // Already migrated or old path never existed
   if (QFile::exists(oldRoot + "/MOVED.txt")) {

@@ -94,6 +94,8 @@ public slots:
 
   void aboutToUpdate();
 
+  void rowChanged(int row);
+
 private:
   DownloadManager& m_manager;
   Settings& m_settings;

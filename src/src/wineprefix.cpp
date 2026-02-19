@@ -145,8 +145,8 @@ bool WinePrefix::deployPlugins(const QStringList& plugins, const QString& dataDi
   }
 
   const QString pluginsDir = QDir(appdataLocal()).filePath(dataDir);
-  MOBase::log::debug("deployPlugins: target dir='{}', {} plugins to deploy",
-                     pluginsDir, plugins.size());
+  MOBase::log::info("deployPlugins: target dir='{}', count={}", pluginsDir,
+                    plugins.size());
 
   if (!QDir().mkpath(pluginsDir)) {
     MOBase::log::error("deployPlugins: failed to create directory '{}'", pluginsDir);
@@ -179,8 +179,8 @@ bool WinePrefix::deployPlugins(const QStringList& plugins, const QString& dataDi
     pluginsStream << plugin << "\r\n";
   }
   pluginsFile.close();
-  MOBase::log::debug("deployPlugins: wrote {} plugins to '{}'", plugins.size(),
-                     pluginsPath);
+  MOBase::log::info("deployPlugins: wrote {} plugins to '{}'", plugins.size(),
+                    pluginsPath);
 
   // Also write lowercase "plugins.txt" for games that expect it (e.g. FalloutNV).
   const QString pluginsLower = QDir(pluginsDir).filePath("plugins.txt");
@@ -208,7 +208,7 @@ bool WinePrefix::deployPlugins(const QStringList& plugins, const QString& dataDi
 
     loadOrderStream << line << "\r\n";
   }
-  MOBase::log::debug("deployPlugins: wrote loadorder.txt to '{}'", loadOrderPath);
+  MOBase::log::info("deployPlugins: wrote loadorder.txt to '{}'", loadOrderPath);
 
   return true;
 }

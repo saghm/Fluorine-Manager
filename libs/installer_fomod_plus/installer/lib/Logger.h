@@ -90,8 +90,6 @@ public:
         if (mLogFile.is_open()) {
             writeLog(mLogFile);
         }
-        
-        writeLog(std::cout);
     }
 
     Logger& operator=(const Logger&) = delete;

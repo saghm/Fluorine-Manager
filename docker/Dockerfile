@@ -26,6 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     qt6-webengine-dev \
     libqt6websockets6-dev \
     qt6-wayland \
+    kde-style-breeze \
     # Python
     python3 python3-pyqt6 \
     # Misc

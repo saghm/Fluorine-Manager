@@ -34,23 +34,6 @@ fn find_in_path(binary: &str) -> Option<PathBuf> {
 }
 
 pub fn resolve_umu_run() -> Option<PathBuf> {
-    if is_flatpak() {
-        // In Flatpak, umu-run must run on the host via flatpak-spawn --host.
-        let host_copy = env::var("XDG_DATA_HOME")
-            .ok()
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                let home = env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-                PathBuf::from(home).join(".local/share")
-            })
-            .join("fluorine/umu-run");
-        if host_copy.exists() {
-            return Some(host_copy);
-        }
-        // Fall back to bare name for host PATH resolution.
-        return Some(PathBuf::from("umu-run"));
-    }
-
     let bundled = env::var("NAK_BUNDLED_UMU_RUN")
         .ok()
         .map(PathBuf::from)
@@ -64,14 +47,8 @@ pub fn resolve_umu_run() -> Option<PathBuf> {
     }
 }
 
-pub fn is_flatpak() -> bool {
-    Path::new("/.flatpak-info").exists()
-}
-
 /// Build a command to run `exe` with the given environment variables.
 ///
-/// In Flatpak mode, `flatpak-spawn --host` is used and env vars are passed as
-/// `--env=KEY=VALUE` flags (the host process does NOT inherit the sandbox env).
 /// In steam-run mode, the command is wrapped with `steam-run`.
 /// Otherwise the command runs directly.
 pub fn build_command<S: AsRef<OsStr>>(
@@ -84,19 +61,6 @@ pub fn build_command<S: AsRef<OsStr>>(
         for (key, value) in envs {
             cmd.env(key, value.as_ref());
         }
-        return cmd;
-    }
-    if is_flatpak() {
-        let mut cmd = Command::new("flatpak-spawn");
-        cmd.arg("--host");
-        for (key, value) in envs {
-            cmd.arg(format!(
-                "--env={}={}",
-                key,
-                value.as_ref().to_string_lossy()
-            ));
-        }
-        cmd.arg(exe.as_ref());
         return cmd;
     }
     let mut cmd = Command::new(exe);

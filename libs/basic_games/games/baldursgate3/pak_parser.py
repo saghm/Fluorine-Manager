@@ -281,21 +281,12 @@ class BG3PakParser:
             except Exception:
                 pass
 
-            if os.path.exists("/.flatpak-info"):
-                # In Flatpak, host wine binaries can't execute directly
-                # (missing host libraries). Use flatpak-spawn to run on host.
-                spawn_cmd = ["flatpak-spawn", "--host"]
-                if wine_prefix:
-                    spawn_cmd.append(f"--env=WINEPREFIX={wine_prefix}")
-                spawn_cmd.extend(["bash", "-c", command])
-                result = subprocess.run(spawn_cmd, **kwargs)
-            else:
-                env = os.environ.copy()
-                if wine_prefix:
-                    env["WINEPREFIX"] = wine_prefix
-                kwargs["env"] = env
-                kwargs["shell"] = True
-                result = subprocess.run(command, **kwargs)
+            env = os.environ.copy()
+            if wine_prefix:
+                env["WINEPREFIX"] = wine_prefix
+            kwargs["env"] = env
+            kwargs["shell"] = True
+            result = subprocess.run(command, **kwargs)
 
         if result.returncode:
             qWarning(

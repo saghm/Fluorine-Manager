@@ -3,11 +3,11 @@
 
 #include <QString>
 
-/// Returns the Fluorine data directory: ~/.var/app/com.fluorine.manager
+/// Returns the Fluorine data directory: ~/.local/share/fluorine
 QString fluorineDataDir();
 
-/// One-time migration from ~/.local/share/fluorine/ back to
-/// ~/.var/app/com.fluorine.manager/. Call before initLogging().
+/// One-time migration from ~/.var/app/com.fluorine.manager/ to
+/// ~/.local/share/fluorine/. Call before initLogging().
 void fluorineMigrateDataDir();
 
 #endif  // FLUORINEPATHS_H

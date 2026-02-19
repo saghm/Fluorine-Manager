@@ -494,11 +494,7 @@ QString GameGamebryo::myGamesPath() const
   return findInRegistry(HKEY_LOCAL_MACHINE, L"Software\\LOOT", L"Installed Path") +
          "/Loot.exe";
 #else
-  // On Linux, look for loot in common locations
-  QString flatpakPath = QDir::homePath() + "/.var/app/io.github.loot.loot/data/LOOT/Loot";
-  if (QFileInfo(flatpakPath).exists())
-    return flatpakPath;
-  // Try system PATH
+  // On Linux, look for loot in PATH
   QString systemLoot = QStandardPaths::findExecutable("loot");
   if (!systemLoot.isEmpty())
     return systemLoot;

@@ -443,6 +443,7 @@ private slots:
   void about();
 
   void resetActionIcons();
+  void resetButtonIcons();
 
 private slots:  // ui slots
   // actions

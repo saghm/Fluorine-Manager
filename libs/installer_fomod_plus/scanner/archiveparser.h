@@ -83,7 +83,6 @@ public:
         }
 
         if (hasFomodFiles(archive->getFileList())) {
-            std::cout << "Found FOMOD files in " << qualifiedInstallerPath.toStdString() << std::endl;
             return ScanResult::HAS_FOMOD;
         }
         return ScanResult::NO_FOMOD;

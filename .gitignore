@@ -7,12 +7,8 @@ build-container-2404-gcc14/
 # Rust build artifacts
 target/
 
-# Flatpak build cache and artifacts
-.flatpak-builder/
-.flatpak-build/
-flatpak-repo/
-flatpak/builddir/
-*.flatpak
+# AppImage build artifacts
+*.AppImage
 
 # Logs
 *.log
@@ -26,3 +22,16 @@ compile_commands.json
 # OS junk
 .DS_Store
 Thumbs.db
+
+# AppImage extraction/build leftovers
+squashfs-root/
+build-source/
+flatpak-repo/
+*.flatpak
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Generated settings files
+fomod-plus-settings.ini

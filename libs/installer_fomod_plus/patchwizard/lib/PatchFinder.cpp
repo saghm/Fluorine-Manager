@@ -77,7 +77,6 @@ void PatchFinder::populateInstalledPlugins()
         const auto mod_tree = mod->fileTree();
         for (auto it = mod_tree->begin(); it != mod_tree->end(); ++it) {
             if ((*it)->isFile() && isPluginFile((*it)->name())) {
-                std::cout << "Plugin: " << (*it)->name().toStdString() << std::endl;
                 m_installedPlugins[mod].emplace_back((*it)->name().toStdString());
                 m_installedPluginsCacheSet.insert((*it)->name().toStdString());
             }

@@ -27,7 +27,6 @@ bool CtrlClickEventFilter::eventFilter(QObject* obj, QEvent* event)
         if (mouseEvent->button() == Qt::LeftButton &&
             mouseEvent->modifiers() & Qt::ControlModifier) {
             // TODO: Add Ctrl+click handler logic here
-            std::cout << "Ctrl+click detected on plugin: " << mPlugin->getName() << " in group: " << mGroup->getName() << std::endl;
             // For now, just fall through to default behavior
         }
     }

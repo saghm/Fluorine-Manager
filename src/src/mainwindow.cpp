@@ -548,6 +548,7 @@ MainWindow::MainWindow(Settings& settings, OrganizerCore& organizerCore,
   refreshExecutablesList();
   updatePinnedExecutables();
   resetActionIcons();
+  resetButtonIcons();
   processUpdates();
 
   ui->modList->updateModCount();
@@ -639,6 +640,32 @@ void MainWindow::resetActionIcons()
   updateProblemsButton();
 }
 
+void MainWindow::resetButtonIcons()
+{
+  // Some icon-only QPushButtons can lose their icons after stylesheet repolish on
+  // Linux/AppImage. Re-apply explicit resource icons to keep these controls visible.
+  ui->listOptionsBtn->setIcon(QIcon::fromTheme(
+      "preferences-system", QIcon(":/MO/gui/settings")));
+  ui->openFolderMenu->setIcon(
+      QIcon::fromTheme("folder-open", QIcon(":/MO/gui/open_folder")));
+  ui->restoreModsButton->setIcon(
+      QIcon::fromTheme("edit-undo", QIcon(":/MO/gui/restore")));
+  ui->saveModsButton->setIcon(
+      QIcon::fromTheme("document-save", QIcon(":/MO/gui/backup")));
+  ui->sortButton->setIcon(QIcon::fromTheme("view-sort-ascending", QIcon(":/MO/gui/sort")));
+  ui->restoreButton->setIcon(
+      QIcon::fromTheme("edit-undo", QIcon(":/MO/gui/restore")));
+  ui->saveButton->setIcon(QIcon::fromTheme("document-save", QIcon(":/MO/gui/backup")));
+
+  ui->listOptionsBtn->setIconSize(QSize(16, 16));
+  ui->openFolderMenu->setIconSize(QSize(16, 16));
+  ui->restoreModsButton->setIconSize(QSize(16, 16));
+  ui->saveModsButton->setIconSize(QSize(16, 16));
+  ui->sortButton->setIconSize(QSize(16, 16));
+  ui->restoreButton->setIconSize(QSize(16, 16));
+  ui->saveButton->setIconSize(QSize(16, 16));
+}
+
 MainWindow::~MainWindow()
 {
   try {
@@ -715,6 +742,7 @@ void MainWindow::allowListResize()
 void MainWindow::updateStyle(const QString&)
 {
   resetActionIcons();
+  resetButtonIcons();
 }
 
 void MainWindow::resizeEvent(QResizeEvent* event)
@@ -1909,10 +1937,30 @@ void MainWindow::refreshExecutablesList()
 
   add(tr("<Edit...>"), {});
 
-  for (const auto& exe : *m_OrganizerCore.executablesList()) {
-    if (!exe.hide()) {
-      add(exe.title(), exe.binaryInfo());
+  auto shouldSkipInLaunchDropdown = [](const Executable& exe) {
+    const QString title = exe.title().trimmed();
+    const QString lower = title.toLower();
+    if (lower == QStringLiteral("proton") || lower == QStringLiteral("prefix") ||
+        lower.startsWith(QStringLiteral("proton ")) ||
+        lower.startsWith(QStringLiteral("prefix "))) {
+      return true;
     }
+
+    return false;
+  };
+
+  for (const auto& exe : *m_OrganizerCore.executablesList()) {
+    if (exe.hide()) {
+      continue;
+    }
+
+    if (shouldSkipInLaunchDropdown(exe)) {
+      log::debug("Skipping internal executable entry '{}' from launch dropdown",
+                 exe.title());
+      continue;
+    }
+
+    add(exe.title(), exe.binaryInfo());
   }
 
   if (ui->executablesListBox->count() == 1) {

@@ -54,6 +54,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <report.h>
 #include <scopeguard.h>
 #include <utility.h>
+#include <cstdio>
 
 #ifdef _WIN32
 // see addDllsToPath() below
@@ -272,6 +273,8 @@ void MOApplication::firstTimeSetup(MOMultiProcess& multiProcess)
 int MOApplication::setup(MOMultiProcess& multiProcess, bool forceSelect)
 {
   TimeThis tt("MOApplication setup()");
+  std::fprintf(stderr, "[setup-diag] setup() entered\n");
+  std::fflush(stderr);
 
   // makes plugin data path available to plugins, see
   // IOrganizer::getPluginDataPath()
@@ -280,8 +283,14 @@ int MOApplication::setup(MOMultiProcess& multiProcess, bool forceSelect)
   // figuring out the current instance
   m_instance = getCurrentInstance(forceSelect);
   if (!m_instance) {
+    std::fprintf(stderr, "[setup-diag] getCurrentInstance() returned null\n");
+    std::fflush(stderr);
     return 1;
   }
+  std::fprintf(stderr, "[setup-diag] instance dir='%s' ini='%s'\n",
+               qUtf8Printable(m_instance->directory()),
+               qUtf8Printable(m_instance->iniPath()));
+  std::fflush(stderr);
 
   // first time the data path is available, set the global property and log
   // directory, then log a bunch of debug stuff
@@ -289,10 +298,15 @@ int MOApplication::setup(MOMultiProcess& multiProcess, bool forceSelect)
   setProperty("dataPath", dataPath);
 
   if (!setLogDirectory(dataPath)) {
+    std::fprintf(stderr, "[setup-diag] setLogDirectory() failed for '%s'\n",
+                 qUtf8Printable(dataPath));
+    std::fflush(stderr);
     reportError(tr("Failed to create log folder."));
     InstanceManager::singleton().clearCurrentInstance();
     return 1;
   }
+  std::fprintf(stderr, "[setup-diag] setLogDirectory() ok\n");
+  std::fflush(stderr);
 
 #ifdef _WIN32
   log::debug("command line: '{}'", QString::fromWCharArray(GetCommandLineW()));
@@ -323,6 +337,9 @@ int MOApplication::setup(MOMultiProcess& multiProcess, bool forceSelect)
 
   // loading settings
   m_settings.reset(new Settings(m_instance->iniPath(), true));
+  std::fprintf(stderr, "[setup-diag] settings loaded from '%s'\n",
+               qUtf8Printable(m_instance->iniPath()));
+  std::fflush(stderr);
   log::getDefault().setLevel(m_settings->diagnostics().logLevel());
   log::debug("using ini at '{}'", m_settings->filename());
 
@@ -359,18 +376,28 @@ int MOApplication::setup(MOMultiProcess& multiProcess, bool forceSelect)
   log::debug("initializing core");
 
   m_core.reset(new OrganizerCore(*m_settings));
+  std::fprintf(stderr, "[setup-diag] organizer core constructed\n");
+  std::fflush(stderr);
   if (!m_core->bootstrap()) {
+    std::fprintf(stderr, "[setup-diag] organizer core bootstrap failed\n");
+    std::fflush(stderr);
     reportError(tr("Failed to set up data paths."));
     InstanceManager::singleton().clearCurrentInstance();
     return 1;
   }
+  std::fprintf(stderr, "[setup-diag] organizer core bootstrap ok\n");
+  std::fflush(stderr);
 
   // plugins
   tt.start("MOApplication::doOneRun() plugins");
   log::debug("initializing plugins");
 
   m_plugins = std::make_unique<PluginContainer>(m_core.get());
+  std::fprintf(stderr, "[setup-diag] plugin container constructed, loading plugins...\n");
+  std::fflush(stderr);
   m_plugins->loadPlugins();
+  std::fprintf(stderr, "[setup-diag] plugin loading finished\n");
+  std::fflush(stderr);
   log::debug("all plugins loaded");
 
   // instance

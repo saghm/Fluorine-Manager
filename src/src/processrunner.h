@@ -185,9 +185,6 @@ private:
   QFileInfo m_shellOpen;
   env::HandlePtr m_handle;
   DWORD m_exitCode;
-#ifndef _WIN32
-  QProcess* m_processHelper = nullptr;
-#endif
 
   bool shouldRunShell() const;
   bool shouldRefresh(Results r) const;

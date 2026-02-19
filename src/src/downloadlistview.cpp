@@ -50,6 +50,11 @@ void DownloadProgressDelegate::paint(QPainter* painter,
     sourceIndex = index;
   }
 
+  if (sourceIndex.row() < 0 || sourceIndex.row() >= m_Manager->numTotalDownloads() + m_Manager->numPendingDownloads()) {
+    QStyledItemDelegate::paint(painter, option, index);
+    return;
+  }
+
   bool pendingDownload = (sourceIndex.row() >= m_Manager->numTotalDownloads());
   if (sourceIndex.column() == DownloadList::COL_STATUS && !pendingDownload &&
       m_Manager->getState(sourceIndex.row()) == DownloadManager::STATE_DOWNLOADING) {

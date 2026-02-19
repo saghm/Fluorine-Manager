@@ -34,8 +34,6 @@ bool FomodPlusInstaller::init(IOrganizer* organizer)
     mOrganizer = organizer;
     mFomodContent = make_shared<FomodDataContent>(organizer);
     log.setLogFilePath(QDir::currentPath().toStdString() + "/logs/fomodplus.log");
-    std::cout << "QDir::currentPath(): " << QDir::currentPath().toStdString() << std::endl;
-    std::cout << "mOrganizer->basePath() : " << mOrganizer->basePath().toStdString() << std::endl;
 
     // REMEMBER: This mFomodDB persists beyond the scope of an individual install. Do not do anything nasty to it.
     mFomodDb = std::make_unique<FomodDB>(mOrganizer->basePath().toStdString());

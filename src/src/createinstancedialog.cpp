@@ -67,8 +67,9 @@ private:
         return;
       }
 
-      // root directory
-      QDir d(cs[0]);
+      // root directory — on Unix, splitting "/home/user" produces ["", "home", "user"]
+      // so cs[0] is empty; use "/" as the root to keep paths absolute.
+      QDir d(cs[0].isEmpty() ? QStringLiteral("/") : cs[0]);
 
       // for each directory after the root
       for (int i = 1; i < cs.size(); ++i) {

@@ -57,18 +57,6 @@ def _walk_files(root_dir: str):
             yield os.path.join(dirpath, name)
 
 
-def _host_cp(src: str, dst: str) -> bool:
-    """Copy a file via the host OS (bypasses Flatpak sandbox restrictions)."""
-    try:
-        result = subprocess.run(
-            ["flatpak-spawn", "--host", "cp", "-f", "--reflink=auto", "--", src, dst],
-            capture_output=True, timeout=30,
-        )
-        return result.returncode == 0
-    except (subprocess.SubprocessError, OSError):
-        return False
-
-
 def _ensure_readable(path: str):
     """Ensure a file has owner-read permission (mod archives sometimes strip it)."""
     try:
@@ -99,8 +87,6 @@ def _reflink_copy(src: str, dst: str):
         return
     except OSError as e:
         last_err = f"{e.strerror} (errno {e.errno})"
-    if _IN_FLATPAK and _host_cp(src, dst):
-        return
     raise OSError(f"Root Builder: failed to copy {src} -> {dst}: {last_err}")
 
 
@@ -111,33 +97,6 @@ def _ensure_writable(path: str):
         os.chmod(path, st.st_mode | 0o200)
     except OSError:
         pass
-
-
-_IN_FLATPAK = os.path.exists("/.flatpak-info")
-
-
-def _host_rm(path: str) -> bool:
-    """Remove a file via the host OS (bypasses Flatpak sandbox restrictions)."""
-    try:
-        result = subprocess.run(
-            ["flatpak-spawn", "--host", "rm", "-f", "--", path],
-            capture_output=True, timeout=10,
-        )
-        return result.returncode == 0
-    except (subprocess.SubprocessError, OSError):
-        return False
-
-
-def _host_mv(src: str, dst: str) -> bool:
-    """Move a file via the host OS (bypasses Flatpak sandbox restrictions)."""
-    try:
-        result = subprocess.run(
-            ["flatpak-spawn", "--host", "mv", "-f", "--", src, dst],
-            capture_output=True, timeout=10,
-        )
-        return result.returncode == 0
-    except (subprocess.SubprocessError, OSError):
-        return False
 
 
 def _force_remove(path: str) -> bool:
@@ -154,8 +113,6 @@ def _force_remove(path: str) -> bool:
         return True
     except OSError:
         pass
-    if _IN_FLATPAK and _host_rm(path):
-        return True
     qWarning(f"Root Builder: could not remove {path}")
     return False
 
@@ -556,11 +513,10 @@ class RootBuilder(mobase.IPluginTool):
                         _force_remove(dst)
                     shutil.move(bak, dst)
                 except OSError:
-                    if not (_IN_FLATPAK and _host_mv(bak, dst)):
-                        qWarning(
-                            f"Root Builder: could not restore backup "
-                            f"{bak} -> {dst}"
-                        )
+                    qWarning(
+                        f"Root Builder: could not restore backup "
+                        f"{bak} -> {dst}"
+                    )
 
         # Clean up backup dir
         backup_dir = os.path.join(storage, _BACKUP_SUBDIR)

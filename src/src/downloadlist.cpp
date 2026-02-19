@@ -37,6 +37,7 @@ DownloadList::DownloadList(OrganizerCore& core, QObject* parent)
 {
   connect(&m_manager, SIGNAL(update(int)), this, SLOT(update(int)));
   connect(&m_manager, SIGNAL(aboutToUpdate()), this, SLOT(aboutToUpdate()));
+  connect(&m_manager, SIGNAL(stateChanged(int,int)), this, SLOT(rowChanged(int)));
 }
 
 int DownloadList::rowCount(const QModelIndex& parent) const
@@ -107,6 +108,9 @@ QMimeData* DownloadList::mimeData(const QModelIndexList& indexes) const
 
 QVariant DownloadList::data(const QModelIndex& index, int role) const
 {
+  if (!index.isValid() || index.row() < 0 || index.row() >= rowCount())
+    return QVariant();
+
   bool pendingDownload = index.row() >= m_manager.numTotalDownloads();
   if (role == Qt::DisplayRole) {
     if (pendingDownload) {
@@ -254,6 +258,14 @@ void DownloadList::update(int row)
         this->index(row, this->columnCount(QModelIndex()) - 1, QModelIndex()));
   else
     log::error("invalid row {} in download list, update failed", row);
+}
+
+void DownloadList::rowChanged(int row)
+{
+  if (row >= 0 && row < rowCount()) {
+    emit dataChanged(index(row, 0, QModelIndex()),
+                     index(row, columnCount(QModelIndex()) - 1, QModelIndex()));
+  }
 }
 
 bool DownloadList::lessThanPredicate(const QModelIndex& left, const QModelIndex& right)

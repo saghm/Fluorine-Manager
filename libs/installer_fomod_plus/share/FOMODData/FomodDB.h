@@ -33,8 +33,6 @@ public:
       for (const auto &group: installStep.optionalFileGroups.groups) {
         for (const auto &plugin: group.plugins.plugins) {
           // Create a DB entry for the given plugin if it has an ESP
-          std::cout << "\nPlugin: " << plugin.name << std::endl;
-
           for (auto file: plugin.files.files) {
             if (file.isFolder || !isPluginFile(file.source)) {
               continue;

@@ -48,14 +48,6 @@ list(REMOVE_ITEM ORGANIZER_SOURCES
 list(REMOVE_ITEM ORGANIZER_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/usvfsconnector.h)
 
-# VFS helper has its own main() — exclude from organizer
-list(REMOVE_ITEM ORGANIZER_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/vfs/vfs_helper_main.cpp)
-
-# Process helper has its own main() — exclude from organizer
-list(REMOVE_ITEM ORGANIZER_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/process_helper_main.cpp)
-
 # Remove WebEngine-dependent sources when not available
 if(NOT Qt6WebEngineWidgets_FOUND)
     list(REMOVE_ITEM ORGANIZER_SOURCES
@@ -127,43 +119,6 @@ target_compile_definitions(organizer PRIVATE
     $<$<BOOL:${Qt6WebEngineWidgets_FOUND}>:MO2_WEBENGINE>)
 
 if(NOT WIN32)
-    # ── Standalone VFS helper for Flatpak (runs on host via flatpak-spawn) ──
-    add_executable(mo2-vfs-helper
-        vfs/vfs_helper_main.cpp
-        vfs/vfstree.cpp
-        vfs/mo2filesystem.cpp
-        vfs/inodetable.cpp
-        vfs/overwritemanager.cpp)
-    # Prefer static libfuse3 so the helper is fully self-contained (Flatpak
-    # runs it on the host via flatpak-spawn where SDK .so files don't exist).
-    # Fall back to shared linking for source builds where libfuse3.a isn't
-    # available (the helper still works since libfuse3.so is on the host).
-    find_library(_fuse3_static libfuse3.a PATHS ${FUSE3_LIBRARY_DIRS} NO_DEFAULT_PATH)
-    if(NOT _fuse3_static)
-      find_library(_fuse3_static libfuse3.a)
-    endif()
-    target_link_directories(mo2-vfs-helper PRIVATE ${FUSE3_LIBRARY_DIRS})
-    if(_fuse3_static)
-      target_link_libraries(mo2-vfs-helper PRIVATE
-          -Wl,-Bstatic -lfuse3 -Wl,-Bdynamic
-          Threads::Threads)
-    else()
-      message(STATUS "libfuse3.a not found, linking mo2-vfs-helper against shared libfuse3")
-      target_link_libraries(mo2-vfs-helper PRIVATE
-          PkgConfig::FUSE3
-          Threads::Threads)
-    endif()
-    target_include_directories(mo2-vfs-helper PRIVATE ${FUSE3_INCLUDE_DIRS})
-    target_compile_definitions(mo2-vfs-helper PRIVATE FUSE_USE_VERSION=35)
-    target_compile_features(mo2-vfs-helper PRIVATE cxx_std_23)
-
-    # ── Standalone process helper for Flatpak game launching ──
-    # Keeps the flatpak-spawn proxy alive while monitoring the game process tree.
-    add_executable(mo2-process-helper
-        process_helper_main.cpp)
-    target_link_libraries(mo2-process-helper PRIVATE Threads::Threads)
-    target_compile_features(mo2-process-helper PRIVATE cxx_std_23)
-
     option(MO2_BUNDLE_7Z_RUNTIME "Copy a Linux 7z module into organizer/dlls" ON)
     option(MO2_STAGE_PYTHON_PLUGIN_PAYLOAD
         "Stage shipped Python plugin payload into build plugins/ for Linux runs" ON)

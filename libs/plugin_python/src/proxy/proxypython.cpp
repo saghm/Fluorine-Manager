@@ -224,6 +224,9 @@ bool ProxyPython::init(IOrganizer* moInfo)
 
     if (!m_Runner || !m_Runner->isInitialized()) {
         m_LoadFailure = FailureType::INITIALIZATION;
+        MOBase::log::error("Python proxy: interpreter failed to initialize, "
+                           "Python plugins will be unavailable");
+        return true;  // return true so the plugin stays loaded (shows diagnostic)
     }
     else {
         m_Runner->addDllSearchPath(pluginDataRoot / "dlls");
@@ -296,7 +299,7 @@ QStringList ProxyPython::pluginList(const QDir& pluginPath) const
 
 QList<QObject*> ProxyPython::load(const QString& identifier)
 {
-    if (!m_Runner) {
+    if (!m_Runner || !m_Runner->isInitialized()) {
         return {};
     }
     return m_Runner->load(identifier);
@@ -304,7 +307,7 @@ QList<QObject*> ProxyPython::load(const QString& identifier)
 
 void ProxyPython::unload(const QString& identifier)
 {
-    if (m_Runner) {
+    if (m_Runner && m_Runner->isInitialized()) {
         return m_Runner->unload(identifier);
     }
 }

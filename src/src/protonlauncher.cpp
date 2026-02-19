@@ -1,5 +1,4 @@
 #include "protonlauncher.h"
-#include "fluorinepaths.h"
 
 #include <nak_ffi.h>
 #include <QCoreApplication>
@@ -102,43 +101,6 @@ void maybeWrapWithSteamRun(bool useSteamRun, QString& program, QStringList& argu
   arguments = wrappedArgs;
 }
 
-bool isFlatpak()
-{
-  return QFileInfo::exists(QStringLiteral("/.flatpak-info"));
-}
-
-// In Flatpak, Wine/Proton binaries can't execute inside the sandbox (they need
-// the Steam Runtime's linker and 32-bit libs).  Wrap them with flatpak-spawn
-// --host so they run on the host system instead.
-//
-// flatpak-spawn --host runs via the Flatpak portal D-Bus interface, which does
-// NOT reliably forward the caller's process environment.  We must pass any
-// custom env vars explicitly with --env= flags.
-void maybeWrapForFlatpak(QString& program, QStringList& arguments,
-                         const QProcessEnvironment& env)
-{
-  if (!isFlatpak()) {
-    return;
-  }
-
-  QStringList wrappedArgs;
-  wrappedArgs.append(QStringLiteral("--host"));
-
-  // Pass every env var that differs from the inherited system environment.
-  const QProcessEnvironment sysEnv = QProcessEnvironment::systemEnvironment();
-  for (const QString& key : env.keys()) {
-    const QString val = env.value(key);
-    if (val != sysEnv.value(key)) {
-      wrappedArgs.append(QStringLiteral("--env=%1=%2").arg(key, val));
-    }
-  }
-
-  wrappedArgs.append(program);
-  wrappedArgs.append(arguments);
-  program   = QStringLiteral("flatpak-spawn");
-  arguments = wrappedArgs;
-}
-
 bool isValidEnvKey(const QString& key)
 {
   if (key.isEmpty()) {
@@ -179,7 +141,7 @@ bool parseEnvAssignment(const QString& token, QString& keyOut, QString& valueOut
 
 ProtonLauncher::ProtonLauncher()
     : m_steamAppId(0), m_useUmu(false), m_preferSystemUmu(false),
-      m_useSteamRun(false)
+      m_useSteamRun(false), m_useSteamDrm(true)
 {}
 
 ProtonLauncher& ProtonLauncher::setBinary(const QString& path)
@@ -258,18 +220,18 @@ ProtonLauncher& ProtonLauncher::setUseSteamRun(bool useSteamRun)
   return *this;
 }
 
+ProtonLauncher& ProtonLauncher::setSteamDrm(bool useSteamDrm)
+{
+  m_useSteamDrm = useSteamDrm;
+  return *this;
+}
+
 ProtonLauncher& ProtonLauncher::addEnvVar(const QString& key, const QString& value)
 {
   if (!key.isEmpty()) {
     m_envVars.insert(key, value);
   }
 
-  return *this;
-}
-
-ProtonLauncher& ProtonLauncher::setHelperProcessOut(QProcess** out)
-{
-  m_helperProcessOut = out;
   return *this;
 }
 
@@ -297,7 +259,9 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
     return false;
   }
 
-  ensureSteamRunning();
+  if (m_useSteamDrm) {
+    ensureSteamRunning();
+  }
 
   QString protonScript = m_protonPath;
   if (QFileInfo(protonScript).isDir()) {
@@ -311,7 +275,6 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
   wrapProgram(m_wrapperCommands, protonScript, protonArgs, program, arguments);
   maybeWrapWithSteamRun(m_useSteamRun, program, arguments);
 
-  // Build environment BEFORE flatpak wrapping (flatpak-spawn needs --env= flags).
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
   env.remove("PYTHONHOME");
 
@@ -357,11 +320,6 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
 
   MOBase::log::info("Proton launch: '{}' run '{}'", protonScript, m_binary);
 
-  if (isFlatpak()) {
-    return launchViaProcessHelper(program, arguments, env, m_workingDir, pid);
-  }
-
-  maybeWrapForFlatpak(program, arguments, env);
   return startDetachedWithEnv(program, arguments, m_workingDir, env, pid);
 }
 
@@ -373,60 +331,50 @@ bool ProtonLauncher::launchWithUmu(qint64& pid) const
 
   // Steam must be running for games with Steamworks DRM (Application Load
   // Error 5:0000065434 occurs otherwise).
-  ensureSteamRunning();
+  if (m_useSteamDrm) {
+    ensureSteamRunning();
+  }
 
   // Resolve umu-run according to user preference (bundled vs system).
-  // In Flatpak, umu-run must run on the host (it needs Steam Runtime).
-  // Use the full path to our copied umu-run since the host PATH won't include it.
+  const QString appDir = QCoreApplication::applicationDirPath();
+  const QString bundled = appDir + QStringLiteral("/umu-run");
+
+  // Search PATH for a system umu-run, excluding our own app directory
+  // (the launcher prepends it to PATH, so findExecutable would find the
+  // bundled copy otherwise).
+  QString system;
+  const QStringList pathDirs =
+      QString::fromLocal8Bit(qgetenv("PATH")).split(QLatin1Char(':'), Qt::SkipEmptyParts);
+  for (const QString& dir : pathDirs) {
+    if (QDir(dir) == QDir(appDir))
+      continue;
+    const QString candidate = QStandardPaths::findExecutable(
+        QStringLiteral("umu-run"), {dir});
+    if (!candidate.isEmpty()) {
+      system = candidate;
+      break;
+    }
+  }
+
   QString umuRun;
-  if (isFlatpak()) {
-    const QString flatpakUmu = fluorineDataDir() + QStringLiteral("/umu-run");
-    if (QFileInfo::exists(flatpakUmu)) {
-      umuRun = flatpakUmu;
-    } else {
-      // Fall back to bare name (requires host to have umu-run in PATH)
-      umuRun = QStringLiteral("umu-run");
+  if (m_preferSystemUmu) {
+    if (!system.isEmpty()) {
+      umuRun = system;
+    } else if (QFileInfo::exists(bundled)) {
+      umuRun = bundled;
+      MOBase::log::warn(
+          "System umu-run preferred but not found in PATH, falling back to bundled");
     }
   } else {
-    const QString appDir = QCoreApplication::applicationDirPath();
-    const QString bundled = appDir + QStringLiteral("/umu-run");
-
-    // Search PATH for a system umu-run, excluding our own app directory
-    // (the launcher prepends it to PATH, so findExecutable would find the
-    // bundled copy otherwise).
-    QString system;
-    const QStringList pathDirs =
-        QString::fromLocal8Bit(qgetenv("PATH")).split(QLatin1Char(':'), Qt::SkipEmptyParts);
-    for (const QString& dir : pathDirs) {
-      if (QDir(dir) == QDir(appDir))
-        continue;
-      const QString candidate = QStandardPaths::findExecutable(
-          QStringLiteral("umu-run"), {dir});
-      if (!candidate.isEmpty()) {
-        system = candidate;
-        break;
-      }
+    if (QFileInfo::exists(bundled)) {
+      umuRun = bundled;
+    } else if (!system.isEmpty()) {
+      umuRun = system;
     }
-
-    if (m_preferSystemUmu) {
-      if (!system.isEmpty()) {
-        umuRun = system;
-      } else if (QFileInfo::exists(bundled)) {
-        umuRun = bundled;
-        MOBase::log::warn(
-            "System umu-run preferred but not found in PATH, falling back to bundled");
-      }
-    } else {
-      if (QFileInfo::exists(bundled)) {
-        umuRun = bundled;
-      } else if (!system.isEmpty()) {
-        umuRun = system;
-      }
-    }
-
-    MOBase::log::info("umu-run: preferSystem={}, bundled='{}' (exists={}), system='{}', selected='{}'",
-        m_preferSystemUmu, bundled, QFileInfo::exists(bundled), system, umuRun);
   }
+
+  MOBase::log::info("umu-run: preferSystem={}, bundled='{}' (exists={}), system='{}', selected='{}'",
+      m_preferSystemUmu, bundled, QFileInfo::exists(bundled), system, umuRun);
 
   if (umuRun.isEmpty()) {
     MOBase::log::warn("umu-run not found (bundled or in PATH)");
@@ -440,7 +388,6 @@ bool ProtonLauncher::launchWithUmu(qint64& pid) const
   wrapProgram(m_wrapperCommands, umuRun, umuArgs, program, arguments);
   maybeWrapWithSteamRun(m_useSteamRun, program, arguments);
 
-  // Build environment BEFORE flatpak wrapping (flatpak-spawn needs --env= flags).
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
   env.remove("PYTHONHOME");
 
@@ -471,11 +418,15 @@ bool ProtonLauncher::launchWithUmu(qint64& pid) const
     }
   }
 
-  if (effectiveSteamAppId != 0) {
+  if (m_useSteamDrm && effectiveSteamAppId != 0) {
     // umu-run expects GAMEID in "umu-<AppID>" format to extract SteamAppId.
     env.insert("GAMEID", QStringLiteral("umu-") + QString::number(effectiveSteamAppId));
     env.insert("SteamAppId", QString::number(effectiveSteamAppId));
     env.insert("SteamGameId", QString::number(effectiveSteamAppId));
+    env.insert("STORE", QStringLiteral("steam"));
+  } else {
+    // No Steam DRM — use a generic game ID so umu-run doesn't try Steam integration.
+    env.insert("GAMEID", QStringLiteral("umu-0"));
   }
 
   for (auto it = m_wrapperEnvVars.cbegin(); it != m_wrapperEnvVars.cend(); ++it) {
@@ -503,11 +454,6 @@ bool ProtonLauncher::launchWithUmu(qint64& pid) const
                                QString::number(effectiveSteamAppId)),
                     steamPath);
 
-  if (isFlatpak()) {
-    return launchViaProcessHelper(program, arguments, env, m_workingDir, pid);
-  }
-
-  maybeWrapForFlatpak(program, arguments, env);
   return startDetachedWithEnv(program, arguments, m_workingDir, env, pid);
 }
 
@@ -531,130 +477,21 @@ bool ProtonLauncher::launchDirect(qint64& pid) const
     env.insert(it.key(), it.value());
   }
 
-  if (isFlatpak()) {
-    return launchViaProcessHelper(program, arguments, env, m_workingDir, pid);
-  }
-
-  maybeWrapForFlatpak(program, arguments, env);
   return startDetachedWithEnv(program, arguments, m_workingDir, env, pid);
-}
-
-bool ProtonLauncher::launchViaProcessHelper(
-    const QString& program, const QStringList& arguments,
-    const QProcessEnvironment& env, const QString& workingDir,
-    qint64& pid) const
-{
-  const QString helperBin = fluorineDataDir() + QStringLiteral("/bin/mo2-process-helper");
-  if (!QFileInfo::exists(helperBin)) {
-    MOBase::log::warn("mo2-process-helper not found at '{}', falling back to "
-                      "flatpak-spawn direct launch", helperBin);
-    // Fall back to old direct flatpak-spawn path.
-    QString prog = program;
-    QStringList args = arguments;
-    QProcessEnvironment envCopy = env;
-    maybeWrapForFlatpak(prog, args, envCopy);
-    return startDetachedWithEnv(prog, args, workingDir, envCopy, pid);
-  }
-
-  auto* proc = new QProcess();
-  proc->setProcessChannelMode(QProcess::SeparateChannels);
-  proc->start(QStringLiteral("flatpak-spawn"),
-              {QStringLiteral("--host"), helperBin});
-
-  if (!proc->waitForStarted(5000)) {
-    MOBase::log::error("Failed to start flatpak-spawn for process helper");
-    delete proc;
-    return false;
-  }
-
-  // Write config block to helper's stdin.
-  auto writeLine = [&](const QString& line) {
-    proc->write(line.toUtf8());
-    proc->write("\n");
-  };
-
-  writeLine(QStringLiteral("program=") + program);
-  for (const QString& arg : arguments) {
-    writeLine(QStringLiteral("arg=") + arg);
-  }
-
-  // Send env vars that differ from system environment.
-  const QProcessEnvironment sysEnv = QProcessEnvironment::systemEnvironment();
-  for (const QString& key : env.keys()) {
-    const QString val = env.value(key);
-    if (val != sysEnv.value(key)) {
-      writeLine(QStringLiteral("env=") + key + QStringLiteral("=") + val);
-    }
-  }
-
-  if (!workingDir.isEmpty()) {
-    writeLine(QStringLiteral("workdir=") + workingDir);
-  }
-
-  // Blank line terminates config.
-  proc->write("\n");
-  proc->waitForBytesWritten(2000);
-
-  // Read response: "started <pid>" or "error <message>"
-  if (!proc->waitForReadyRead(10000)) {
-    MOBase::log::error("Process helper did not respond in time");
-    proc->kill();
-    proc->waitForFinished(2000);
-    delete proc;
-    return false;
-  }
-
-  const QString response = QString::fromUtf8(proc->readLine()).trimmed();
-  if (response.startsWith(QStringLiteral("started "))) {
-    MOBase::log::info("Process helper: {}", response);
-  } else {
-    MOBase::log::error("Process helper error: {}", response);
-    proc->kill();
-    proc->waitForFinished(2000);
-    delete proc;
-    return false;
-  }
-
-  // Use the flatpak-spawn PID for kill(pid,0) polling.
-  pid = proc->processId();
-
-  // Store the QProcess so it stays alive (keeping flatpak-spawn alive).
-  if (m_helperProcessOut) {
-    *m_helperProcessOut = proc;
-  } else {
-    // No owner provided — leak intentionally to keep the pipe alive.
-    // The process will clean up when the game exits.
-    MOBase::log::debug("No helper process owner set, helper will self-manage");
-  }
-
-  return true;
 }
 
 bool ProtonLauncher::ensureSteamRunning()
 {
   QProcess pgrep;
-  if (isFlatpak()) {
-    // In Flatpak, check for Steam on the host.
-    pgrep.start("flatpak-spawn", {"--host", "pgrep", "-x", "steam"});
-  } else {
-    pgrep.start("pgrep", {"-x", "steam"});
-  }
+  pgrep.start("pgrep", {"-x", "steam"});
   if (pgrep.waitForFinished(2000) && pgrep.exitCode() == 0) {
     return true;
   }
 
   qint64 pid = -1;
-  if (isFlatpak()) {
-    if (QProcess::startDetached("flatpak-spawn",
-                                {"--host", "steam", "-silent"}, QString(), &pid)) {
-      MOBase::log::warn("Steam was not running, started it on host in silent mode");
-      return true;
-    }
-  } else {
-    if (QProcess::startDetached("steam", {"-silent"}, QString(), &pid)) {
-      MOBase::log::warn("Steam was not running, started it in silent mode");
-      return true;
-    }
+  if (QProcess::startDetached("steam", {"-silent"}, QString(), &pid)) {
+    MOBase::log::warn("Steam was not running, started it in silent mode");
+    return true;
   }
 
   return false;

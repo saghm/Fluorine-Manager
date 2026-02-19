@@ -85,21 +85,6 @@ namespace mo2::python {
             return true;
         }
 
-        std::optional<QByteArray> oldPythonHome;
-        std::optional<QByteArray> oldPythonPath;
-        auto restorePythonEnv = [&]() {
-            if (oldPythonHome.has_value()) {
-                setenv("PYTHONHOME", oldPythonHome->constData(), 1);
-            } else {
-                unsetenv("PYTHONHOME");
-            }
-            if (oldPythonPath.has_value()) {
-                setenv("PYTHONPATH", oldPythonPath->constData(), 1);
-            } else {
-                unsetenv("PYTHONPATH");
-            }
-        };
-
         try {
             static const char* argv0 = "ModOrganizer.exe";
 
@@ -107,14 +92,49 @@ namespace mo2::python {
 #ifdef MO2_PYTHON_SHARED_LIBRARY
             // Ensure libpython symbols are globally visible for extension modules
             // loaded later (_struct, PyQt6, etc.).
+            bool usedNoload = true;
             void* pyHandle =
                 dlopen(MO2_PYTHON_SHARED_LIBRARY, RTLD_NOW | RTLD_GLOBAL | RTLD_NOLOAD);
             if (pyHandle == nullptr) {
+                usedNoload = false;
                 pyHandle = dlopen(MO2_PYTHON_SHARED_LIBRARY, RTLD_NOW | RTLD_GLOBAL);
             }
             if (pyHandle == nullptr) {
-                MOBase::log::warn("failed to dlopen python shared library '{}': {}",
+                MOBase::log::warn("python: failed to dlopen '{}': {}",
                                   MO2_PYTHON_SHARED_LIBRARY, dlerror());
+            } else {
+                MOBase::log::debug("python: '{}' promoted to RTLD_GLOBAL ({})",
+                                   MO2_PYTHON_SHARED_LIBRARY,
+                                   usedNoload ? "RTLD_NOLOAD" : "fresh load");
+            }
+
+            // Diagnose which DSO the Python init symbols resolve to globally.
+            {
+                Dl_info di;
+                void* sym = dlsym(RTLD_DEFAULT, "Py_InitializeEx");
+                if (sym && dladdr(sym, &di)) {
+                    fprintf(stderr, "[py-diag] Py_InitializeEx global from '%s'\n",
+                            di.dli_fname);
+                    MOBase::log::debug("python: Py_InitializeEx (global) from '{}'",
+                                       di.dli_fname);
+                } else {
+                    fprintf(stderr, "[py-diag] Py_InitializeEx NOT in global scope "
+                                    "(sym=%p, err=%s)\n",
+                            sym, dlerror());
+                    MOBase::log::warn("python: Py_InitializeEx NOT in global scope "
+                                      "(sym={}, err={})",
+                                      sym, dlerror());
+                }
+                sym = dlsym(RTLD_DEFAULT, "Py_IsInitialized");
+                if (sym && dladdr(sym, &di)) {
+                    fprintf(stderr, "[py-diag] Py_IsInitialized global from '%s'\n",
+                            di.dli_fname);
+                    MOBase::log::debug("python: Py_IsInitialized (global) from '{}'",
+                                       di.dli_fname);
+                } else {
+                    fprintf(stderr, "[py-diag] Py_IsInitialized NOT in global scope\n");
+                    MOBase::log::warn("python: Py_IsInitialized NOT in global scope");
+                }
             }
 #endif
 #endif
@@ -130,6 +150,25 @@ namespace mo2::python {
             } else {
                 pythonHome = QCoreApplication::applicationDirPath() + "/python";
             }
+            if (!QDir(pythonHome).exists()) {
+                MOBase::log::warn("python: PYTHONHOME dir '{}' does not exist",
+                                  pythonHome);
+            }
+
+            std::optional<QByteArray> oldPythonHome;
+            std::optional<QByteArray> oldPythonPath;
+            auto restorePythonEnv = [&]() {
+                if (oldPythonHome.has_value()) {
+                    setenv("PYTHONHOME", oldPythonHome->constData(), 1);
+                } else {
+                    unsetenv("PYTHONHOME");
+                }
+                if (oldPythonPath.has_value()) {
+                    setenv("PYTHONPATH", oldPythonPath->constData(), 1);
+                } else {
+                    unsetenv("PYTHONPATH");
+                }
+            };
             if (const char* v = std::getenv("PYTHONHOME"); v != nullptr) {
                 oldPythonHome = QByteArray(v);
             }
@@ -137,48 +176,86 @@ namespace mo2::python {
                 oldPythonPath = QByteArray(v);
             }
 
-            if (QDir(pythonHome).exists()) {
-                setenv("PYTHONHOME", pythonHome.toUtf8().constData(), 1);
-
-                const QDir libDir(pythonHome + "/lib");
-                const auto pyDirs =
-                    libDir.entryList({"python3.*"}, QDir::Dirs | QDir::NoDotAndDotDot);
-                if (!pyDirs.isEmpty()) {
-                    const QString pyver = pyDirs.first();
-                    const QString pyPath = QString("%1/lib/%2:%1/lib/%2/site-packages:%1")
-                                               .arg(pythonHome, pyver);
-                    setenv("PYTHONPATH", pyPath.toUtf8().constData(), 1);
-                }
-            }
-
             // Paths we want to prepend/append for MO2 plugin loading.
             auto paths = pythonPaths;
 
-            PyConfig config;
-            PyConfig_InitPythonConfig(&config);
+            // Configure bundled Python like running python/bin/python3 directly.
+            const QDir libDir(pythonHome + "/lib");
+            const auto pyDirs =
+                libDir.entryList({"python3.*"}, QDir::Dirs | QDir::NoDotAndDotDot);
+            const QString pyverDir = pyDirs.isEmpty() ? QStringLiteral("python3.13")
+                                                      : pyDirs.first();
+            const QString stdlibDir = pythonHome + "/lib/" + pyverDir;
+            const QString stdlibZip = pythonHome + "/lib/python313.zip";
+            const QString rootDynloadDir = pythonHome + "/lib-dynload";
+            const QString rootPlatDir = pythonHome + "/plat-linux2";
+            const QString dynloadDir = stdlibDir + "/lib-dynload";
+            const QString siteDir = stdlibDir + "/site-packages";
 
-            // from PyBind11
-            config.parse_argv              = 0;
-            config.install_signal_handlers = 0;
+            QStringList corePaths = {stdlibDir, siteDir, dynloadDir};
+            if (QFile::exists(stdlibZip)) {
+                corePaths.prepend(stdlibZip);
+            }
+            if (QDir(rootDynloadDir).exists()) {
+                corePaths.append(rootDynloadDir);
+            }
+            if (QDir(rootPlatDir).exists()) {
+                corePaths.append(rootPlatDir);
+            }
 
-            // from MO2
-            config.site_import        = 1;
-            config.optimization_level = 2;
+            corePaths.append(pythonHome);
+            const QByteArray pyPath = corePaths.join(":").toUtf8();
+            setenv("PYTHONHOME", pythonHome.toUtf8().constData(), 1);
+            setenv("PYTHONPATH", pyPath.constData(), 1);
 
-            py::initialize_interpreter(&config, 1, &argv0, true);
+            fprintf(stderr,
+                    "[py-diag] calling Py_InitializeFromConfig, PYTHONHOME='%s', "
+                    "Py_IsInitialized before=%d\n",
+                    pythonHome.toUtf8().constData(), Py_IsInitialized());
+            MOBase::log::debug(
+                "python: calling Py_InitializeFromConfig, PYTHONHOME='{}', "
+                "Py_IsInitialized before={}",
+                pythonHome, Py_IsInitialized());
 
-            // Restore process environment after interpreter startup so
-            // subprocesses (umu/NaK/tools) are not forced onto MO2's Python.
-            restorePythonEnv();
+            // Use Py_InitializeFromConfig (Python 3.8+) for explicit error reporting.
+            {
+                PyConfig config;
+                PyConfig_InitPythonConfig(&config);
+                // PYTHONHOME is already set via setenv; PyConfig reads it from env.
+                PyStatus status = Py_InitializeFromConfig(&config);
+                PyConfig_Clear(&config);
+                if (PyStatus_Exception(status)) {
+                    fprintf(stderr,
+                            "[py-diag] Py_InitializeFromConfig FAILED: '%s' [in '%s']\n",
+                            status.err_msg ? status.err_msg : "(no message)",
+                            status.func ? status.func : "(no func)");
+                    MOBase::log::error(
+                        "python: Py_InitializeFromConfig failed: '{}' [in '{}']",
+                        status.err_msg ? status.err_msg : "(no message)",
+                        status.func ? status.func : "(no func)");
+                    restorePythonEnv();
+                    return false;
+                }
+            }
+
+            fprintf(stderr, "[py-diag] Py_IsInitialized after=%d\n",
+                    Py_IsInitialized());
+            MOBase::log::debug("python: Py_IsInitialized after={}",
+                               Py_IsInitialized());
 
             if (!Py_IsInitialized()) {
+                const char* ph = std::getenv("PYTHONHOME");
+                const char* pp = std::getenv("PYTHONPATH");
                 MOBase::log::error(
-                    "failed to init python: failed to initialize interpreter.");
-
-                if (PyGILState_Check()) {
-                    PyEval_SaveThread();
-                }
-
+                    "failed to init python: Py_IsInitialized() returned false.");
+                MOBase::log::error("  PYTHONHOME='{}', PYTHONPATH='{}'",
+                                   ph ? ph : "(null)", pp ? pp : "(null)");
+                MOBase::log::error("  pythonHome='{}', exists={}", pythonHome,
+                                   QDir(pythonHome).exists() ? "yes" : "no");
+                const QString encPath = pythonHome + "/lib/python3.13/encodings";
+                MOBase::log::error("  encodings dir='{}', exists={}", encPath,
+                                   QDir(encPath).exists() ? "yes" : "no");
+                restorePythonEnv();
                 return false;
             }
 
@@ -201,11 +278,11 @@ namespace mo2::python {
             // when Python is initialized, the GIl is acquired, and if it is not
             // release, trying to acquire it on a different thread will deadlock
             PyEval_SaveThread();
+            restorePythonEnv();
 
             return true;
         }
         catch (const py::error_already_set& ex) {
-            restorePythonEnv();
             MOBase::log::error("failed to init python: {}", ex.what());
             return false;
         }
@@ -353,7 +430,8 @@ namespace mo2::python {
             return allInterfaceList;
         }
         catch (const py::error_already_set& ex) {
-            MOBase::log::error("Failed to import plugin from {}.", identifier);
+            MOBase::log::error("Failed to import plugin from {}: {}", identifier,
+                               ex.what());
             throw pyexcept::PythonError(ex);
         }
     }

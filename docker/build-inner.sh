@@ -31,17 +31,10 @@ mkdir -p "${OUT_DIR}/plugins" "${OUT_DIR}/dlls" "${OUT_DIR}/lib"
 # ── Main binary + helpers ──
 cp -f "${RUNDIR}/ModOrganizer" "${OUT_DIR}/ModOrganizer-core"
 if [ -f "${RUNDIR}/umu-run" ]; then
-    # Patch umu-run to fix two issues with Steamworks DRM:
-    #
-    # 1. Preserve STEAM_COMPAT_CLIENT_INSTALL_PATH from the parent environment.
-    #    Upstream umu-run initialises this to "" and never picks up the caller's
-    #    value, which prevents the Steam client libraries from being found.
-    #
-    # 2. Remove UMU_ID from the environment before Proton runs.  GE-Proton
-    #    treats games with UMU_ID as non-Steam titles and skips the steam.exe
-    #    DRM bridge, causing "Application load error 5:0000065434".  For actual
-    #    Steam games (SteamAppId != "0") we delete UMU_ID so Proton uses the
-    #    correct steam.exe launch path.
+    # Patch umu-run to preserve STEAM_COMPAT_CLIENT_INSTALL_PATH from the
+    # parent environment.  Upstream umu-run initialises this to "" and never
+    # picks up the caller's value, which prevents the Steam client libraries
+    # from being found.
     UMU_PATCH_DIR="$(mktemp -d)"
     (cd "${UMU_PATCH_DIR}" && "${BUILD_PY}" << PATCHEOF
 import zipfile, pathlib
@@ -58,16 +51,6 @@ new1 = (old1
     + '\n    )')
 if old1 in src and 'STEAM_COMPAT_CLIENT_INSTALL_PATH"] = os.environ' not in src:
     src = src.replace(old1, new1)
-
-# Patch 2: delete UMU_ID before Proton launch for Steam games
-old2 = '            os.environ[key] = val'
-new2 = (old2
-    + '\n\n        # GE-Proton treats games with UMU_ID as non-Steam titles and skips'
-    + '\n        # the steam.exe DRM bridge.  Remove it for Steam games.'
-    + '\n        if "UMU_ID" in os.environ and env.get("SteamAppId", "0") != "0":'
-    + '\n            del os.environ["UMU_ID"]')
-if old2 in src and 'del os.environ["UMU_ID"]' not in src:
-    src = src.replace(old2, new2, 1)
 
 run_py.write_text(src)
 PATCHEOF
@@ -91,6 +74,7 @@ done
 find build/libs -type f \( \
     -name "libgame_*.so" -o \
     -name "libinstaller_*.so" -o \
+    -name "libfomod_plus_*.so" -o \
     -name "libpreview_*.so" -o \
     -name "libdiagnose_*.so" -o \
     -name "libcheck_*.so" -o \
@@ -117,6 +101,12 @@ for f in /src/src/plugins/*.py; do
     [ -f "${f}" ] && cp -f "${f}" "${OUT_DIR}/plugins/"
 done
 
+# ── Stylesheets (themes) ──
+if [ -d "build/src/src/stylesheets" ]; then
+    cp -a "build/src/src/stylesheets" "${OUT_DIR}/"
+    echo "Bundled stylesheets"
+fi
+
 # ── 7z runtime ──
 SO7="build/src/src/dlls/7z.so"
 if [ -f "${SO7}" ]; then
@@ -139,6 +129,80 @@ for boost_lib in /lib/x86_64-linux-gnu/libboost_program_options.so* \
                  /lib/x86_64-linux-gnu/libboost_thread.so*; do
     [ -f "${boost_lib}" ] && cp -Lf "${boost_lib}" "${OUT_DIR}/lib/"
 done
+
+# ── Bundle ALL shared library dependencies ──
+# Collect every .so the binary and plugins link against, then bundle
+# everything except core glibc/system libs (which must come from the host).
+echo "Bundling shared library dependencies..."
+
+# Libraries that MUST come from the host (glibc, GPU drivers, etc.)
+SKIP_PATTERN="linux-vdso|ld-linux|libc\.so|libm\.so|libdl\.so|librt\.so|libpthread|libresolv|libnss|libgcc_s|libstdc\+\+"
+# GPU/graphics drivers must be host-provided
+SKIP_PATTERN="${SKIP_PATTERN}|libGL\.so|libEGL|libGLX|libGLdispatch|libdrm|libvulkan|libX11|libxcb|libwayland-client|libwayland-server|libwayland-cursor|libwayland-egl|libxkbcommon"
+# libpython is shipped by the portable Python runtime in python/lib/ — do NOT
+# copy the container's version into lib/ or it will shadow the portable one.
+SKIP_PATTERN="${SKIP_PATTERN}|libpython"
+
+collect_deps() {
+    ldd "$1" 2>/dev/null | grep "=>" | awk '{print $3}' | grep "^/" | sort -u
+}
+
+ALL_DEPS=$(mktemp)
+# Main binary
+collect_deps "${OUT_DIR}/ModOrganizer-core" >> "${ALL_DEPS}"
+# All plugin .so files
+find "${OUT_DIR}/plugins" -name "*.so" -exec sh -c 'ldd "$1" 2>/dev/null | grep "=>" | awk "{print \$3}" | grep "^/"' _ {} \; >> "${ALL_DEPS}"
+# Our own libs
+find "${OUT_DIR}/lib" -name "*.so*" -exec sh -c 'ldd "$1" 2>/dev/null | grep "=>" | awk "{print \$3}" | grep "^/"' _ {} \; >> "${ALL_DEPS}"
+# lootcli
+[ -f "${OUT_DIR}/lootcli" ] && collect_deps "${OUT_DIR}/lootcli" >> "${ALL_DEPS}"
+
+sort -u "${ALL_DEPS}" | while read -r dep; do
+    dep_name="$(basename "${dep}")"
+    # Skip system libs
+    if echo "${dep_name}" | grep -qE "${SKIP_PATTERN}"; then
+        continue
+    fi
+    # Skip if already bundled
+    if [ -f "${OUT_DIR}/lib/${dep_name}" ]; then
+        continue
+    fi
+    cp -Lf "${dep}" "${OUT_DIR}/lib/" 2>/dev/null || true
+done
+rm -f "${ALL_DEPS}"
+# Remove any libpython that leaked into lib/ — must come from python/lib/ only.
+rm -f "${OUT_DIR}/lib"/libpython*.so* 2>/dev/null || true
+echo "Dependencies bundled."
+
+# ── Qt6 platform plugins ──
+QT6_PLUGIN_DIR="/usr/lib/x86_64-linux-gnu/qt6/plugins"
+if [ ! -d "${QT6_PLUGIN_DIR}" ]; then
+    QT6_PLUGIN_DIR="$(qtpaths6 --plugin-dir 2>/dev/null || echo "")"
+fi
+if [ -d "${QT6_PLUGIN_DIR}" ]; then
+    mkdir -p "${OUT_DIR}/qt6plugins"
+    for plugin_type in platforms tls networkinformation styles \
+                       wayland-shell-integration \
+                       wayland-decoration-client wayland-graphics-integration-client \
+                       platformthemes imageformats iconengines xcbglintegrations \
+                       egldeviceintegrations; do
+        if [ -d "${QT6_PLUGIN_DIR}/${plugin_type}" ]; then
+            cp -a "${QT6_PLUGIN_DIR}/${plugin_type}" "${OUT_DIR}/qt6plugins/"
+        fi
+    done
+    # Bundle deps of Qt plugins too
+    find "${OUT_DIR}/qt6plugins" -name "*.so" -exec sh -c '
+        ldd "$1" 2>/dev/null | grep "=>" | awk "{print \$3}" | grep "^/" | while read dep; do
+            dep_name="$(basename "${dep}")"
+            echo "${dep_name}" | grep -qE "'"${SKIP_PATTERN}"'" && continue
+            [ -f "'"${OUT_DIR}"'/lib/${dep_name}" ] && continue
+            cp -Lf "${dep}" "'"${OUT_DIR}"'/lib/" 2>/dev/null || true
+        done
+    ' _ {} \;
+    echo "Bundled Qt6 plugins from ${QT6_PLUGIN_DIR}"
+else
+    echo "WARNING: Could not find Qt6 plugin directory"
+fi
 
 # libloot (custom-built, never on user systems).
 if [ -f /usr/local/lib/libloot.so.0 ]; then
@@ -242,41 +306,156 @@ export MO2_PYTHON_DIR="${HERE}/python"
 MO2_PYTHONHOME="${HERE}/python"
 unset PYTHONPATH PYTHONNOUSERSITE PYTHONHOME
 
-# Find system Qt6 plugins (compiled-in path won't match across distros).
-if [ -z "${QT_PLUGIN_PATH:-}" ]; then
-    for qt_dir in /usr/lib/qt6/plugins \
-                  /usr/lib/x86_64-linux-gnu/qt6/plugins \
-                  /usr/lib64/qt6/plugins; do
-        if [ -d "${qt_dir}/platforms" ]; then
-            export QT_PLUGIN_PATH="${qt_dir}"
-            break
-        fi
-    done
-    if [ -z "${QT_PLUGIN_PATH:-}" ] && command -v qtpaths6 >/dev/null 2>&1; then
-        export QT_PLUGIN_PATH="$(qtpaths6 --plugin-dir)"
-    fi
-fi
-
-# Quick dependency check.
-missing="$(ldd "${HERE}/ModOrganizer-core" 2>/dev/null | grep "not found" || true)"
-if [ -n "${missing}" ]; then
-    echo "ERROR: Missing system libraries:"
-    echo "${missing}"
-    echo ""
-    echo "On Arch/CachyOS:  sudo pacman -S qt6-base qt6-websockets qt6-wayland"
-    echo "On Fedora:        sudo dnf install qt6-qtbase qt6-qtwebsockets qt6-qtwayland"
-    echo "On Ubuntu/Debian: sudo apt install qt6-base-dev libqt6websockets6-dev qt6-wayland"
-    exit 1
-fi
+# Use bundled Qt6 plugins.
+export QT_PLUGIN_PATH="${HERE}/qt6plugins"
 
 cd "${HERE}"
 exec env PYTHONHOME="${MO2_PYTHONHOME}" "${HERE}/ModOrganizer-core" "$@"
 LAUNCH
 chmod +x "${OUT_DIR}/fluorine-manager"
 
-# ── Summary ──
+# ── Desktop integration files (for AppImage) ──
+cp -f /src/data/com.fluorine.manager.desktop "${OUT_DIR}/"
+cp -f /src/data/com.fluorine.manager.png "${OUT_DIR}/"
+cp -f /src/data/com.fluorine.manager.metainfo.xml "${OUT_DIR}/"
+
+# ── Build AppImage ──
+echo ""
+echo "=== Building AppImage ==="
+
+APPDIR="/src/build/AppDir"
+rm -rf "${APPDIR}"
+mkdir -p "${APPDIR}/usr/bin" "${APPDIR}/usr/lib" "${APPDIR}/usr/share/applications" \
+         "${APPDIR}/usr/plugins" \
+         "${APPDIR}/usr/share/icons/hicolor/256x256/apps" \
+         "${APPDIR}/usr/share/metainfo"
+
+# Copy staging into AppDir layout
+cp -a "${OUT_DIR}"/. "${APPDIR}/usr/bin/"
+# Move libs to standard location
+mv "${APPDIR}/usr/bin/lib"/* "${APPDIR}/usr/lib/" 2>/dev/null || true
+rmdir "${APPDIR}/usr/bin/lib" 2>/dev/null || true
+# Flatpak runtime exposed Qt plugins from a stable system location. Mirror that
+# layout in AppImage by placing bundled Qt plugins under /usr/plugins.
+if [ -d "${APPDIR}/usr/bin/qt6plugins" ]; then
+    cp -a "${APPDIR}/usr/bin/qt6plugins"/. "${APPDIR}/usr/plugins/"
+fi
+
+# Desktop integration
+cp -f "${OUT_DIR}/com.fluorine.manager.desktop" "${APPDIR}/usr/share/applications/"
+cp -f "${OUT_DIR}/com.fluorine.manager.png" "${APPDIR}/usr/share/icons/hicolor/256x256/apps/"
+cp -f "${OUT_DIR}/com.fluorine.manager.metainfo.xml" "${APPDIR}/usr/share/metainfo/"
+
+# Bundle icon themes so QIcon::fromTheme() calls resolve inside the AppImage.
+# Flatpak runtime provided this globally; AppImage must carry it explicitly.
+mkdir -p "${APPDIR}/usr/share/icons"
+for theme_dir in /usr/share/icons/*; do
+    [ -d "${theme_dir}" ] || continue
+    cp -a "${theme_dir}" "${APPDIR}/usr/share/icons/"
+done
+if [ -f "/usr/share/icons/default/index.theme" ]; then
+    mkdir -p "${APPDIR}/usr/share/icons/default"
+    cp -f "/usr/share/icons/default/index.theme" "${APPDIR}/usr/share/icons/default/"
+fi
+
+# Update RPATH for new lib location
+patchelf --set-rpath '$ORIGIN/../lib' "${APPDIR}/usr/bin/ModOrganizer-core"
+[ -f "${APPDIR}/usr/bin/lootcli" ] && patchelf --set-rpath '$ORIGIN/../lib' "${APPDIR}/usr/bin/lootcli"
+find "${APPDIR}/usr/bin/plugins" -name "*.so" -exec patchelf --set-rpath '$ORIGIN/../../lib' {} \; 2>/dev/null || true
+
+# Create AppRun wrapper
+cat > "${APPDIR}/AppRun" <<'APPRUN'
+#!/usr/bin/env bash
+set -euo pipefail
+SELF="$(readlink -f "$0")"
+HERE="$(cd "$(dirname "$SELF")" && pwd)"
+BIN="${HERE}/usr/bin"
+APPIMAGE_DIR="$(dirname "$(readlink -f "${APPIMAGE:-$0}")")"
+
+sync_dir() {
+    local name="$1"
+    local src="${BIN}/${name}"
+    local dst="${APPIMAGE_DIR}/${name}"
+    [ -d "${src}" ] || return 0
+    mkdir -p "${dst}"
+    (cd "${src}" && tar --exclude-vcs -cf - .) | (cd "${dst}" && tar -xf -)
+}
+
+# Keep runtime payload outside the transient AppImage mount.
+sync_dir "plugins"
+sync_dir "dlls"
+sync_dir "python"
+
+export PATH="${BIN}:${PATH}"
+if [ -d "${APPIMAGE_DIR}/python/lib" ]; then
+    export LD_LIBRARY_PATH="${HERE}/usr/lib:${APPIMAGE_DIR}/python/lib:${LD_LIBRARY_PATH:-}"
+else
+    export LD_LIBRARY_PATH="${HERE}/usr/lib:${BIN}/python/lib:${LD_LIBRARY_PATH:-}"
+fi
+
+export MO2_BASE_DIR="${APPIMAGE_DIR}"
+export MO2_PLUGINS_DIR="${APPIMAGE_DIR}/plugins"
+export MO2_DLLS_DIR="${APPIMAGE_DIR}/dlls"
+if [ -d "${APPIMAGE_DIR}/python/lib" ]; then
+    export MO2_PYTHON_DIR="${APPIMAGE_DIR}/python"
+else
+    export MO2_PYTHON_DIR="${BIN}/python"
+fi
+
+unset PYTHONPATH PYTHONNOUSERSITE PYTHONHOME
+
+# Use bundled Qt6 plugins.
+export QT_PLUGIN_PATH="${HERE}/usr/plugins"
+export QT_QPA_PLATFORM_PLUGIN_PATH="${HERE}/usr/plugins/platforms"
+export XDG_DATA_DIRS="${HERE}/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+export QT_ICON_THEME_NAME="${QT_ICON_THEME_NAME:-breeze}"
+export QT_STYLE_OVERRIDE="${QT_STYLE_OVERRIDE:-Breeze}"
+export XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-KDE}"
+
+cd "${APPIMAGE_DIR}"
+exec "${BIN}/ModOrganizer-core" "$@"
+APPRUN
+chmod +x "${APPDIR}/AppRun"
+
+# Symlinks required by AppImage spec
+ln -sf usr/share/applications/com.fluorine.manager.desktop "${APPDIR}/com.fluorine.manager.desktop"
+ln -sf usr/share/icons/hicolor/256x256/apps/com.fluorine.manager.png "${APPDIR}/com.fluorine.manager.png"
+ln -sf usr/share/icons/hicolor/256x256/apps/com.fluorine.manager.png "${APPDIR}/.DirIcon"
+
+# Extract linuxdeploy (can't use FUSE inside Docker)
+DEPLOY_DIR="/tmp/linuxdeploy-extract"
+if [ ! -d "${DEPLOY_DIR}" ]; then
+    cd /opt/linuxdeploy
+    ./linuxdeploy-x86_64.AppImage --appimage-extract >/dev/null
+    mv squashfs-root "${DEPLOY_DIR}"
+    chmod +x "${DEPLOY_DIR}/AppRun"
+fi
+
+# Use linuxdeploy to generate the AppImage.
+# We skip the Qt plugin since we already handle Qt plugin paths at runtime
+# and our deps are already staged.
+export ARCH=x86_64
+"${DEPLOY_DIR}/AppRun" \
+    --appdir "${APPDIR}" \
+    --output appimage \
+    --desktop-file "${APPDIR}/usr/share/applications/com.fluorine.manager.desktop" \
+    --icon-file "${APPDIR}/usr/share/icons/hicolor/256x256/apps/com.fluorine.manager.png" \
+    2>&1 || {
+    echo "WARNING: linuxdeploy AppImage generation failed, falling back to staging dir output"
+}
+
+# Move AppImage to output
+APPIMAGE_FILE=$(ls -1 Fluorine*.AppImage 2>/dev/null || ls -1 *.AppImage 2>/dev/null || true)
+if [ -n "${APPIMAGE_FILE}" ]; then
+    mv "${APPIMAGE_FILE}" "/src/build/"
+    echo ""
+    echo "=== AppImage built ==="
+    ls -lh "/src/build/"*.AppImage
+else
+    echo ""
+    echo "=== Staging complete (AppImage generation skipped) ==="
+fi
+
 echo ""
 echo "=== Build Summary ==="
 du -sh "${OUT_DIR}"/*/ "${OUT_DIR}"/ModOrganizer-core 2>/dev/null | sort -rh
-echo ""
-echo "Staging complete."

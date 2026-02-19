@@ -2205,6 +2205,7 @@ bool OrganizerCore::beforeRun(
         const QString absoluteSaveDir =
             resolveAbsoluteSaveDir(prefix, managedGame(),
                                    localSavesFeature.get(), m_CurrentProfile);
+        log::info("Wine prefix save target: '{}'", absoluteSaveDir);
 
         // Read plugin lines from profile's plugins.txt
         QFile pluginsFile(m_CurrentProfile->getPluginsFileName());
@@ -2220,6 +2221,11 @@ bool OrganizerCore::beforeRun(
           pluginsFile.close();
 
           if (!plugins.isEmpty()) {
+            log::info(
+                "Deploying plugin list to '{}' and '{}' (load order to '{}')",
+                QDir(pluginsTargetDir).filePath("Plugins.txt"),
+                QDir(pluginsTargetDir).filePath("plugins.txt"),
+                QDir(pluginsTargetDir).filePath("loadorder.txt"));
             if (prefix.deployPlugins(plugins, dataDirName)) {
               log::debug("Deployed {} plugins to prefix '{}' (dataDirName='{}')",
                          plugins.size(), prefixPathStr, dataDirName);
@@ -2243,8 +2249,8 @@ bool OrganizerCore::beforeRun(
                 m_CurrentProfile->absoluteIniFilePath(iniFile);
             const QString targetIni =
                 QDir(targetIniBase).filePath(QFileInfo(iniFile).fileName());
-            log::debug("INI deploy check: source='{}' exists={}, target='{}'",
-                       sourceIni, QFileInfo::exists(sourceIni), targetIni);
+            log::info("INI deploy target: '{}' -> '{}' (exists={})", sourceIni,
+                      targetIni, QFileInfo::exists(sourceIni));
             if (QFileInfo::exists(sourceIni) &&
                 prefix.deployProfileIni(sourceIni, targetIni)) {
               ++deployedIniCount;
@@ -2264,8 +2270,8 @@ bool OrganizerCore::beforeRun(
         if (m_CurrentProfile->localSavesEnabled()) {
           const QString profileSavesDir =
               QDir(m_CurrentProfile->absolutePath()).filePath("saves");
-          log::debug("Resolved local save mapping: profile='{}', target='{}'",
-                     profileSavesDir, absoluteSaveDir);
+          log::info("Save deploy target: '{}' -> '{}'", profileSavesDir,
+                    absoluteSaveDir);
           if (!prefix.deployProfileSaves(profileSavesDir, absoluteSaveDir, true)) {
             log::warn("Failed to deploy profile saves from '{}' to prefix '{}'",
                       profileSavesDir, prefixPathStr);
@@ -2318,8 +2324,8 @@ void OrganizerCore::afterRun(const QFileInfo& binary, DWORD exitCode)
         if (m_CurrentProfile->localSavesEnabled()) {
           const QString profileSavesDir =
               QDir(m_CurrentProfile->absolutePath()).filePath("saves");
-          log::debug("Syncing local save mapping: profile='{}', target='{}'",
-                     profileSavesDir, absoluteSaveDir);
+          log::info("Save sync target: '{}' <- '{}'", profileSavesDir,
+                    absoluteSaveDir);
           if (!prefix.syncSavesBack(profileSavesDir, absoluteSaveDir)) {
             log::warn("Failed to sync saves back from prefix '{}' to '{}'",
                       prefixPathStr, profileSavesDir);
@@ -2336,7 +2342,7 @@ void OrganizerCore::afterRun(const QFileInfo& binary, DWORD exitCode)
             const QString targetIni =
                 QDir(targetIniBase).filePath(QFileInfo(iniFile).fileName());
             iniMappings.append({profileIni, targetIni});
-            log::debug("Sync profile INI '{}' <- '{}'", profileIni, targetIni);
+            log::info("INI sync target: '{}' <- '{}'", profileIni, targetIni);
           }
 
           if (!iniMappings.isEmpty() &&

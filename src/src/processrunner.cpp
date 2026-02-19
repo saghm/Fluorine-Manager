@@ -1175,7 +1175,6 @@ std::optional<ProcessRunner::Results> ProcessRunner::runBinary()
 #ifdef _WIN32
   m_handle.reset(startBinary(parent, m_sp));
 #else
-  m_sp.helperProcessOut = &m_processHelper;
   m_handle.reset(reinterpret_cast<HANDLE>(static_cast<intptr_t>(startBinary(parent, m_sp))));
 #endif
   if (m_handle.get() == INVALID_HANDLE_VALUE) {
@@ -1265,12 +1264,9 @@ ProcessRunner::Results ProcessRunner::postRun()
         const QFileInfo binary = m_sp.binary;
         QPointer<OrganizerCore> core = &m_core;
 
-        QProcess* helper = m_processHelper;
-        m_processHelper = nullptr;
-
-        std::thread([core, binary, pid, helper]() {
-          // For detached processes (including flatpak-spawn helper),
-          // waitpid will fail with ECHILD. Use kill(0) polling instead.
+        std::thread([core, binary, pid]() {
+          // For detached processes, waitpid will fail with ECHILD.
+          // Use kill(0) polling instead.
           int status = 0;
           pid_t waited = -1;
           do {
@@ -1292,16 +1288,6 @@ ProcessRunner::Results ProcessRunner::postRun()
           } else {
             MOBase::log::warn("process runner: waitpid failed for pid {}: {}", pid,
                               errno);
-          }
-
-          // Clean up helper QProcess on the main thread.
-          if (helper) {
-            QMetaObject::invokeMethod(
-                QCoreApplication::instance(), [helper]() {
-                  helper->waitForFinished(1000);
-                  delete helper;
-                },
-                Qt::QueuedConnection);
           }
 
           if (!core) {
@@ -1352,14 +1338,6 @@ ProcessRunner::Results ProcessRunner::postRun()
     });
   }
 
-#ifndef _WIN32
-  // Clean up the process helper (keeps flatpak-spawn alive during game).
-  if (m_processHelper) {
-    m_processHelper->waitForFinished(1000);
-    delete m_processHelper;
-    m_processHelper = nullptr;
-  }
-#endif
 
   if (shouldRefresh(r)) {
     QEventLoop loop;

@@ -385,9 +385,8 @@ int checkMissingFiles()
   log::debug("  . checking Linux dependencies");
   int n = 0;
 
-  // Check for FUSE (skip in Flatpak — the VFS helper runs on the host)
-  if (!QFileInfo::exists("/.flatpak-info") &&
-      !QFileInfo::exists("/usr/lib/libfuse3.so") &&
+  // Check for FUSE
+  if (!QFileInfo::exists("/usr/lib/libfuse3.so") &&
       !QFileInfo::exists("/usr/lib64/libfuse3.so") &&
       !QFileInfo::exists("/usr/lib/x86_64-linux-gnu/libfuse3.so")) {
     log::warn("libfuse3 not found - FUSE VFS will not work");

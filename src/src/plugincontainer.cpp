@@ -9,6 +9,7 @@
 #include <QDirIterator>
 #include <QMessageBox>
 #include <QToolButton>
+#include <cstdio>
 #include <boost/fusion/algorithm/iteration/for_each.hpp>
 #include <boost/fusion/include/at_key.hpp>
 #include <boost/fusion/include/for_each.hpp>
@@ -57,6 +58,12 @@ static void ensureBundledPluginsLinked(const QString& bundledDir,
   }
 }
 #endif
+
+static void printPluginDiagToStderr(const QString& message)
+{
+  std::fprintf(stderr, "[plugin-diag] %s\n", qUtf8Printable(message));
+  std::fflush(stderr);
+}
 
 // Welcome to the wonderful world of MO2 plugin management!
 //
@@ -642,11 +649,22 @@ IPlugin* PluginContainer::registerPlugin(QObject* plugin, const QString& filepat
       bf::at_key<IPluginProxy>(m_Plugins).push_back(proxy);
       emit pluginRegistered(proxy);
 
-      QStringList filepaths = proxy->pluginList(
+      const QString pluginRoot =
           m_PluginPath.isEmpty()
               ? (AppConfig::basePath() + "/" + ToQString(AppConfig::pluginPath()))
-              : m_PluginPath);
+              : m_PluginPath;
+      QStringList filepaths = proxy->pluginList(pluginRoot);
+      log::warn("proxy '{}' discovered {} proxied plugin candidate(s) in '{}'",
+                proxy->name(), filepaths.size(),
+                QDir::toNativeSeparators(pluginRoot));
+      printPluginDiagToStderr(
+          QString("proxy '%1' discovered %2 proxied plugin candidate(s) in '%3'")
+              .arg(proxy->name())
+              .arg(filepaths.size())
+              .arg(QDir::toNativeSeparators(pluginRoot)));
       for (const QString& filepath : filepaths) {
+        log::debug("proxy '{}' candidate: '{}'", proxy->name(),
+                   QDir::toNativeSeparators(filepath));
         loadProxied(filepath, proxy);
       }
       return proxy;
@@ -841,32 +859,58 @@ std::vector<QObject*> PluginContainer::loadProxied(const QString& filepath,
   std::vector<QObject*> proxiedPlugins;
 
   try {
+    log::warn("loading proxied plugin candidate '{}' via proxy '{}'",
+              QDir::toNativeSeparators(filepath),
+              (proxy ? proxy->name() : QStringLiteral("<null>")));
+    printPluginDiagToStderr(
+        QString("loading proxied plugin candidate '%1' via proxy '%2'")
+            .arg(QDir::toNativeSeparators(filepath))
+            .arg(proxy ? proxy->name() : QStringLiteral("<null>")));
+
     // We get a list of matching plugins as proxies can return multiple plugins
     // per file and do not  have a good way of supporting multiple inheritance.
     QList<QObject*> matchingPlugins = proxy->load(filepath);
+    if (matchingPlugins.isEmpty()) {
+      log::warn("no plugins were returned for proxied candidate '{}' via proxy '{}'",
+                QDir::toNativeSeparators(filepath), proxy->name());
+      printPluginDiagToStderr(
+          QString("no plugins were returned for proxied candidate '%1' via proxy '%2'")
+              .arg(QDir::toNativeSeparators(filepath))
+              .arg(proxy->name()));
+    }
 
     // We are going to group plugin by names and "fix" them later:
     std::map<QString, std::vector<IPlugin*>> proxiedByNames;
 
     for (QObject* proxiedPlugin : matchingPlugins) {
-      if (proxiedPlugin != nullptr) {
+      if (proxiedPlugin == nullptr) {
+        log::warn("proxy '{}' returned a null QObject for '{}'", proxy->name(),
+                  QDir::toNativeSeparators(filepath));
+        printPluginDiagToStderr(
+            QString("proxy '%1' returned a null QObject for '%2'")
+                .arg(proxy->name())
+                .arg(QDir::toNativeSeparators(filepath)));
+        continue;
+      }
 
-        if (IPlugin* proxied = registerPlugin(proxiedPlugin, filepath, proxy);
-            proxied) {
-          log::debug("loaded plugin '{}@{}' from '{}' - [{}]", proxied->name(),
-                     proxied->version().canonicalString(),
-                     QFileInfo(filepath).fileName(),
-                     implementedInterfaces(proxied).join(", "));
+      if (IPlugin* proxied = registerPlugin(proxiedPlugin, filepath, proxy); proxied) {
+        log::debug("loaded plugin '{}@{}' from '{}' - [{}]", proxied->name(),
+                   proxied->version().canonicalString(),
+                   QFileInfo(filepath).fileName(),
+                   implementedInterfaces(proxied).join(", "));
 
-          // Store the plugin for later:
-          proxiedPlugins.push_back(proxiedPlugin);
-          proxiedByNames[proxied->name()].push_back(proxied);
-        } else {
-          log::warn("plugin \"{}\" failed to load. If this plugin is for an older "
-                    "version of MO "
-                    "you have to update it or delete it if no update exists.",
-                    filepath);
-        }
+        // Store the plugin for later:
+        proxiedPlugins.push_back(proxiedPlugin);
+        proxiedByNames[proxied->name()].push_back(proxied);
+      } else {
+        log::warn(
+            "proxied candidate '{}' from proxy '{}' failed to register as an MO2 plugin",
+            QDir::toNativeSeparators(filepath), proxy->name());
+        printPluginDiagToStderr(
+            QString("proxied candidate '%1' from proxy '%2' failed to register as an "
+                    "MO2 plugin")
+                .arg(QDir::toNativeSeparators(filepath))
+                .arg(proxy->name()));
       }
     }
 
@@ -886,9 +930,37 @@ std::vector<QObject*> PluginContainer::loadProxied(const QString& filepath,
         }
       }
     }
+    log::warn("finished proxied candidate '{}' via proxy '{}': {} plugin(s) loaded",
+              QDir::toNativeSeparators(filepath), proxy->name(),
+              proxiedPlugins.size());
+    printPluginDiagToStderr(
+        QString("finished proxied candidate '%1' via proxy '%2': %3 plugin(s) loaded")
+            .arg(QDir::toNativeSeparators(filepath))
+            .arg(proxy->name())
+            .arg(proxiedPlugins.size()));
   } catch (const std::exception& e) {
+    log::error("failed to initialize proxied candidate '{}' via proxy '{}': {}",
+               QDir::toNativeSeparators(filepath),
+               (proxy ? proxy->name() : QStringLiteral("<null>")), e.what());
+    printPluginDiagToStderr(
+        QString("failed to initialize proxied candidate '%1' via proxy '%2': %3")
+            .arg(QDir::toNativeSeparators(filepath))
+            .arg(proxy ? proxy->name() : QStringLiteral("<null>"))
+            .arg(e.what()));
     reportError(
         QObject::tr("failed to initialize plugin %1: %2").arg(filepath).arg(e.what()));
+  } catch (...) {
+    log::error("failed to initialize proxied candidate '{}' via proxy '{}': "
+               "unknown exception",
+               QDir::toNativeSeparators(filepath),
+               (proxy ? proxy->name() : QStringLiteral("<null>")));
+    printPluginDiagToStderr(
+        QString("failed to initialize proxied candidate '%1' via proxy '%2': unknown "
+                "exception")
+            .arg(QDir::toNativeSeparators(filepath))
+            .arg(proxy ? proxy->name() : QStringLiteral("<null>")));
+    reportError(QObject::tr("failed to initialize plugin %1: unknown exception")
+                    .arg(filepath));
   }
 
   return proxiedPlugins;

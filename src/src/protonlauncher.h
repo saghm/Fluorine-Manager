@@ -8,8 +8,6 @@
 #include <cstdint>
 #include <utility>
 
-class QProcess;
-
 class ProtonLauncher
 {
 public:
@@ -25,8 +23,8 @@ public:
   ProtonLauncher& setUmu(bool useUmu);
   ProtonLauncher& setPreferSystemUmu(bool preferSystemUmu);
   ProtonLauncher& setUseSteamRun(bool useSteamRun);
+  ProtonLauncher& setSteamDrm(bool useSteamDrm);
   ProtonLauncher& addEnvVar(const QString& key, const QString& value);
-  ProtonLauncher& setHelperProcessOut(QProcess** out);
 
   // Launch dispatch: UMU -> Proton -> Direct
   std::pair<bool, qint64> launch() const;
@@ -35,9 +33,6 @@ private:
   bool launchWithProton(qint64& pid) const;
   bool launchWithUmu(qint64& pid) const;
   bool launchDirect(qint64& pid) const;
-  bool launchViaProcessHelper(const QString& program, const QStringList& arguments,
-                              const QProcessEnvironment& env,
-                              const QString& workingDir, qint64& pid) const;
   static bool ensureSteamRunning();
 
   QString m_binary;
@@ -50,9 +45,9 @@ private:
   bool m_useUmu;
   bool m_preferSystemUmu;
   bool m_useSteamRun;
+  bool m_useSteamDrm;
   QMap<QString, QString> m_envVars;
   QMap<QString, QString> m_wrapperEnvVars;
-  QProcess** m_helperProcessOut = nullptr;
 };
 
 #endif  // PROTONLAUNCHER_H

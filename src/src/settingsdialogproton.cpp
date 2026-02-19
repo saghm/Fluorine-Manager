@@ -313,14 +313,8 @@ void ProtonSettingsTab::onOpenPrefixFolder()
 
 void ProtonSettingsTab::onBrowsePrefixLocation()
 {
-  QFileDialog::Options opts;
-#ifndef _WIN32
-  if (qEnvironmentVariableIsSet("FLATPAK_ID"))
-    opts |= QFileDialog::DontUseNativeDialog;
-#endif
   const QString dir = QFileDialog::getExistingDirectory(
-      parentWidget(), tr("Select Prefix Location"), ui->prefixLocationEdit->text(),
-      opts);
+      parentWidget(), tr("Select Prefix Location"), ui->prefixLocationEdit->text());
   if (!dir.isEmpty()) {
     ui->prefixLocationEdit->setText(dir);
   }
@@ -425,41 +419,22 @@ void ProtonSettingsTab::onWinetricks()
     }
   }
 
-  // In Flatpak, wine/winetricks must run on the host via flatpak-spawn --host
-  // because Proton binaries need the host's linker and Steam Runtime libs.
-  const bool flatpak = QFileInfo::exists(QStringLiteral("/.flatpak-info"));
-
-  QString program;
+  QString program = winetricksPath;
   QStringList arguments;
+  arguments << QStringLiteral("--gui");
 
-  if (flatpak) {
-    program = QStringLiteral("flatpak-spawn");
-    arguments << QStringLiteral("--host");
-    for (const QString& flag : envFlags) {
-      arguments << QStringLiteral("--env=%1").arg(flag);
+  QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+  for (const QString& flag : envFlags) {
+    const int eq = flag.indexOf('=');
+    if (eq > 0) {
+      env.insert(flag.left(eq), flag.mid(eq + 1));
     }
-    arguments << winetricksPath << QStringLiteral("--gui");
-  } else {
-    program = winetricksPath;
-    arguments << QStringLiteral("--gui");
-
-    // For non-Flatpak, set env vars directly on the process
-    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-    for (const QString& flag : envFlags) {
-      const int eq = flag.indexOf('=');
-      if (eq > 0) {
-        env.insert(flag.left(eq), flag.mid(eq + 1));
-      }
-    }
-    QProcess proc;
-    proc.setProcessEnvironment(env);
-    proc.setProgram(program);
-    proc.setArguments(arguments);
-    proc.startDetached();
-    return;
   }
-
-  QProcess::startDetached(program, arguments);
+  QProcess proc;
+  proc.setProcessEnvironment(env);
+  proc.setProgram(program);
+  proc.setArguments(arguments);
+  proc.startDetached();
 }
 
 void ProtonSettingsTab::onFixGameRegistries()
@@ -516,14 +491,9 @@ void ProtonSettingsTab::showGameRegistryDialog()
   layout->addLayout(pathLayout);
 
   QObject::connect(browseBtn, &QPushButton::clicked, &dialog, [&dialog, pathEdit]() {
-    QFileDialog::Options opts;
-#ifndef _WIN32
-    if (qEnvironmentVariableIsSet("FLATPAK_ID"))
-      opts |= QFileDialog::DontUseNativeDialog;
-#endif
     const QString dir = QFileDialog::getExistingDirectory(
         &dialog, QObject::tr("Select Game Installation Folder"),
-        pathEdit->text().isEmpty() ? QDir::homePath() : pathEdit->text(), opts);
+        pathEdit->text().isEmpty() ? QDir::homePath() : pathEdit->text());
     if (!dir.isEmpty()) {
       pathEdit->setText(dir);
     }

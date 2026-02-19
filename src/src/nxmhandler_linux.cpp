@@ -174,8 +174,6 @@ QString NxmHandlerLinux::socketPath()
 
 void NxmHandlerLinux::registerHandler() const
 {
-  const bool flatpak = QFile::exists(QStringLiteral("/.flatpak-info"));
-
   const QString home = QDir::homePath();
   if (home.isEmpty()) {
     log::error("cannot register nxm handler: home path is empty");
@@ -190,37 +188,30 @@ void NxmHandlerLinux::registerHandler() const
     return;
   }
 
-  QString execLine;
-
-  if (flatpak) {
-    // In Flatpak the desktop file is invoked on the HOST, so use flatpak run
-    execLine = "flatpak run com.fluorine.manager nxm-handle %u";
-  } else {
-    // Non-Flatpak: create a wrapper script and point the desktop file at it
-    const QString localBin = ensureDir(home + "/.local/bin");
-    if (localBin.isEmpty()) {
-      log::error("cannot register nxm handler: failed to create ~/.local/bin");
-      return;
-    }
-
-    const QString wrapperPath = localBin + "/mo2-nxm-handler";
-    const QString executable  = QCoreApplication::applicationFilePath();
-    const QString wrapper =
-        QString("#!/bin/sh\nexec \"%1\" nxm-handle \"$@\"\n").arg(executable);
-
-    if (!writeTextFile(wrapperPath, wrapper)) {
-      log::error("failed to write nxm wrapper script '{}'", wrapperPath);
-      return;
-    }
-
-    QFile::setPermissions(wrapperPath,
-                          QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-                              QFileDevice::ExeOwner | QFileDevice::ReadGroup |
-                              QFileDevice::ExeGroup | QFileDevice::ReadOther |
-                              QFileDevice::ExeOther);
-
-    execLine = "mo2-nxm-handler nxm-handle %u";
+  // Create a wrapper script and point the desktop file at it
+  const QString localBin = ensureDir(home + "/.local/bin");
+  if (localBin.isEmpty()) {
+    log::error("cannot register nxm handler: failed to create ~/.local/bin");
+    return;
   }
+
+  const QString wrapperPath = localBin + "/mo2-nxm-handler";
+  const QString executable  = QCoreApplication::applicationFilePath();
+  const QString wrapper =
+      QString("#!/bin/sh\nexec \"%1\" nxm-handle \"$@\"\n").arg(executable);
+
+  if (!writeTextFile(wrapperPath, wrapper)) {
+    log::error("failed to write nxm wrapper script '{}'", wrapperPath);
+    return;
+  }
+
+  QFile::setPermissions(wrapperPath,
+                        QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                            QFileDevice::ExeOwner | QFileDevice::ReadGroup |
+                            QFileDevice::ExeGroup | QFileDevice::ReadOther |
+                            QFileDevice::ExeOther);
+
+  const QString execLine = "mo2-nxm-handler nxm-handle %u";
 
   const QString desktopPath = appsDir + "/mo2-nxm-handler.desktop";
   const QString desktop = QString("[Desktop Entry]\n"
@@ -240,21 +231,10 @@ void NxmHandlerLinux::registerHandler() const
   updateMimeAppsList(appsDir + "/mimeapps.list", "x-scheme-handler/nxm",
                      "mo2-nxm-handler.desktop");
 
-  if (flatpak) {
-    // update-desktop-database doesn't exist inside the sandbox; run it on the host
-    QProcess p;
-    p.start(QStringLiteral("flatpak-spawn"),
-            {QStringLiteral("--host"), QStringLiteral("update-desktop-database"),
-             appsDir});
-    if (!p.waitForFinished(5000) || p.exitCode() != 0) {
-      log::warn("update-desktop-database on host exited with code {}", p.exitCode());
-    }
-  } else {
-    const auto result =
-        QProcess::execute("update-desktop-database", QStringList() << appsDir);
-    if (result != 0) {
-      log::warn("update-desktop-database exited with code {}", result);
-    }
+  const auto result =
+      QProcess::execute("update-desktop-database", QStringList() << appsDir);
+  if (result != 0) {
+    log::warn("update-desktop-database exited with code {}", result);
   }
 }
 
