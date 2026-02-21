@@ -212,6 +212,7 @@ pub struct NakKnownGame {
     pub name: *const c_char,
     pub steam_app_id: *const c_char,
     pub gog_app_id: *const c_char, // null if none
+    pub epic_app_id: *const c_char, // null if none
     pub my_games_folder: *const c_char,
     pub appdata_local_folder: *const c_char,
     pub appdata_roaming_folder: *const c_char,
@@ -236,6 +237,7 @@ static KNOWN_GAMES_FFI: std::sync::LazyLock<KnownGamesVec> = std::sync::LazyLock
                 name: leak_str(kg.name),
                 steam_app_id: leak_str(kg.steam_app_id),
                 gog_app_id: leak_str_opt(kg.gog_app_id),
+                epic_app_id: leak_str_opt(kg.epic_app_id),
                 my_games_folder: leak_str_opt(kg.my_games_folder),
                 appdata_local_folder: leak_str_opt(kg.appdata_local_folder),
                 appdata_roaming_folder: leak_str_opt(kg.appdata_roaming_folder),

@@ -22,43 +22,45 @@
 #include <dirent.h>
 #include <fstream>
 #include <signal.h>
+#include <sys/wait.h>
 #include <unordered_map>
 #include <unordered_set>
-#include <sys/wait.h>
+
 #endif
 
 using namespace MOBase;
 
-void adjustForVirtualized(const IPluginGame* game, spawn::SpawnParameters& sp,
-                          const Settings& settings)
-{
+void adjustForVirtualized(const IPluginGame *game, spawn::SpawnParameters &sp,
+                          const Settings &settings) {
   const QString modsPath = settings.paths().mods();
 
   // Check if this a request with either an executable or a working directory
   // under our mods folder then will start the process in a virtualized
   // "environment" with the appropriate paths fixed:
   // (i.e. mods\FNIS\path\exe => game\data\path\exe)
-  QString cwdPath         = sp.currentDirectory.absolutePath();
+  QString cwdPath = sp.currentDirectory.absolutePath();
   QString trailedModsPath = modsPath;
   if (!trailedModsPath.endsWith('/')) {
     trailedModsPath = trailedModsPath + '/';
   }
-  bool virtualizedCwd = cwdPath.startsWith(trailedModsPath, Qt::CaseInsensitive);
-  QString binPath     = sp.binary.absoluteFilePath();
-  bool virtualizedBin = binPath.startsWith(trailedModsPath, Qt::CaseInsensitive);
+  bool virtualizedCwd =
+      cwdPath.startsWith(trailedModsPath, Qt::CaseInsensitive);
+  QString binPath = sp.binary.absoluteFilePath();
+  bool virtualizedBin =
+      binPath.startsWith(trailedModsPath, Qt::CaseInsensitive);
   if (virtualizedCwd || virtualizedBin) {
     if (virtualizedCwd) {
-      int cwdOffset       = cwdPath.indexOf('/', trailedModsPath.length());
+      int cwdOffset = cwdPath.indexOf('/', trailedModsPath.length());
       QString adjustedCwd = cwdPath.mid(cwdOffset, -1);
-      cwdPath             = game->dataDirectory().absolutePath();
+      cwdPath = game->dataDirectory().absolutePath();
       if (cwdOffset >= 0)
         cwdPath += adjustedCwd;
     }
 
     if (virtualizedBin) {
-      int binOffset       = binPath.indexOf('/', trailedModsPath.length());
+      int binOffset = binPath.indexOf('/', trailedModsPath.length());
       QString adjustedBin = binPath.mid(binOffset, -1);
-      binPath             = game->dataDirectory().absolutePath();
+      binPath = game->dataDirectory().absolutePath();
       if (binOffset >= 0)
         binPath += adjustedBin;
     }
@@ -69,7 +71,7 @@ void adjustForVirtualized(const IPluginGame* game, spawn::SpawnParameters& sp,
                           .arg(QDir::toNativeSeparators(cwdPath),
                                QDir::toNativeSeparators(binPath), sp.arguments);
 
-    sp.binary    = QFileInfo(QCoreApplication::applicationFilePath());
+    sp.binary = QFileInfo(QCoreApplication::applicationFilePath());
     sp.arguments = cmdline;
     sp.currentDirectory.setPath(QCoreApplication::applicationDirPath());
 #else
@@ -97,8 +99,7 @@ void adjustForVirtualized(const IPluginGame* game, spawn::SpawnParameters& sp,
 }
 
 #ifdef _WIN32
-std::optional<ProcessRunner::Results> singleWait(HANDLE handle, DWORD pid)
-{
+std::optional<ProcessRunner::Results> singleWait(HANDLE handle, DWORD pid) {
   if (handle == INVALID_HANDLE_VALUE) {
     return ProcessRunner::Error;
   }
@@ -116,7 +117,7 @@ std::optional<ProcessRunner::Results> singleWait(HANDLE handle, DWORD pid)
     return {};
   }
 
-  case WAIT_FAILED:  // fall-through
+  case WAIT_FAILED: // fall-through
   default: {
     // error
     const auto e = ::GetLastError();
@@ -126,23 +127,16 @@ std::optional<ProcessRunner::Results> singleWait(HANDLE handle, DWORD pid)
   }
 }
 #else
-std::optional<ProcessRunner::Results> singleWait(HANDLE handle, DWORD pid)
-{
+std::optional<ProcessRunner::Results> singleWait(HANDLE handle, DWORD pid) {
   Q_UNUSED(handle);
   Q_UNUSED(pid);
   return ProcessRunner::Completed;
 }
 #endif
 
-enum class Interest
-{
-  None = 0,
-  Weak,
-  Strong
-};
+enum class Interest { None = 0, Weak, Strong };
 
-QString toString(Interest i)
-{
+QString toString(Interest i) {
   switch (i) {
   case Interest::Weak:
     return "weak";
@@ -150,22 +144,20 @@ QString toString(Interest i)
   case Interest::Strong:
     return "strong";
 
-  case Interest::None:  // fall-through
+  case Interest::None: // fall-through
   default:
     return "no";
   }
 }
 
-struct InterestingProcess
-{
+struct InterestingProcess {
   env::Process p;
   Interest interest = Interest::None;
   env::HandlePtr handle;
 };
 
-InterestingProcess findRandomProcess(const env::Process& root)
-{
-  for (auto&& c : root.children()) {
+InterestingProcess findRandomProcess(const env::Process &root) {
+  for (auto &&c : root.children()) {
     env::HandlePtr h = c.openHandleForWait();
     if (h) {
       return {c, Interest::Weak, std::move(h)};
@@ -183,18 +175,18 @@ InterestingProcess findRandomProcess(const env::Process& root)
 // returns a process that's in the hidden list, or the top-level process if
 // they're all hidden; returns an invalid process if the list is empty
 //
-InterestingProcess findInterestingProcessInTrees(const env::Process& root)
-{
+InterestingProcess findInterestingProcessInTrees(const env::Process &root) {
   // Certain process names we wish to "hide" for aesthetic reason:
   static const std::vector<QString> hiddenList = {
-      QFileInfo(QCoreApplication::applicationFilePath()).fileName(), "conhost.exe"};
+      QFileInfo(QCoreApplication::applicationFilePath()).fileName(),
+      "conhost.exe"};
 
   if (root.children().empty()) {
     return {};
   }
 
-  auto isHidden = [&](auto&& p) {
-    for (auto& h : hiddenList) {
+  auto isHidden = [&](auto &&p) {
+    for (auto &h : hiddenList) {
       if (p.name().contains(h, Qt::CaseInsensitive)) {
         return true;
       }
@@ -203,7 +195,7 @@ InterestingProcess findInterestingProcessInTrees(const env::Process& root)
     return false;
   };
 
-  for (auto&& p : root.children()) {
+  for (auto &&p : root.children()) {
     if (!isHidden(p)) {
       env::HandlePtr h = p.openHandleForWait();
       if (h) {
@@ -221,21 +213,19 @@ InterestingProcess findInterestingProcessInTrees(const env::Process& root)
   return findRandomProcess(root);
 }
 
-void dump(const env::Process& p, int indent)
-{
-  log::debug("{}{}, pid={}, ppid={}", std::string(indent * 4, ' '), p.name(), p.pid(),
-             p.ppid());
+void dump(const env::Process &p, int indent) {
+  log::debug("{}{}, pid={}, ppid={}", std::string(indent * 4, ' '), p.name(),
+             p.pid(), p.ppid());
 
-  for (auto&& c : p.children()) {
+  for (auto &&c : p.children()) {
     dump(c, indent + 1);
   }
 }
 
-void dump(const env::Process& root)
-{
+void dump(const env::Process &root) {
   log::debug("process tree:");
 
-  for (auto&& p : root.children()) {
+  for (auto &&p : root.children()) {
     dump(p, 1);
   }
 }
@@ -243,8 +233,7 @@ void dump(const env::Process& root)
 #ifdef _WIN32
 // gets the most interesting process in the list
 //
-InterestingProcess getInterestingProcess(HANDLE job)
-{
+InterestingProcess getInterestingProcess(HANDLE job) {
   env::Process root = env::getProcessTree(job);
   if (root.children().empty()) {
     log::debug("nothing to wait for");
@@ -270,10 +259,9 @@ const std::chrono::milliseconds Infinite(-1);
 // waits for completion, times out after `wait` if not Infinite
 //
 std::optional<ProcessRunner::Results> timedWait(HANDLE handle, DWORD pid,
-                                                UILocker::Session* ls,
+                                                UILocker::Session *ls,
                                                 std::chrono::milliseconds wait,
-                                                std::atomic<bool>& interrupt)
-{
+                                                std::atomic<bool> &interrupt) {
   using namespace std::chrono;
 
   high_resolution_clock::time_point start;
@@ -310,7 +298,7 @@ std::optional<ProcessRunner::Results> timedWait(HANDLE handle, DWORD pid,
         return ProcessRunner::Cancelled;
       }
 
-      case UILocker::NoResult:  // fall-through
+      case UILocker::NoResult: // fall-through
       default: {
         // shouldn't happen
         log::debug("unexpected result {} while waiting for {}",
@@ -335,9 +323,9 @@ std::optional<ProcessRunner::Results> timedWait(HANDLE handle, DWORD pid,
   return ProcessRunner::ForceUnlocked;
 }
 
-ProcessRunner::Results waitForProcessesThreadImpl(HANDLE job, UILocker::Session* ls,
-                                                  std::atomic<bool>& interrupt)
-{
+ProcessRunner::Results
+waitForProcessesThreadImpl(HANDLE job, UILocker::Session *ls,
+                           std::atomic<bool> &interrupt) {
   using namespace std::chrono;
 
   DWORD currentPID = 0;
@@ -395,9 +383,9 @@ ProcessRunner::Results waitForProcessesThreadImpl(HANDLE job, UILocker::Session*
   return ProcessRunner::ForceUnlocked;
 }
 
-void waitForProcessesThread(ProcessRunner::Results& result, HANDLE job,
-                            UILocker::Session* ls, std::atomic<bool>& interrupt)
-{
+void waitForProcessesThread(ProcessRunner::Results &result, HANDLE job,
+                            UILocker::Session *ls,
+                            std::atomic<bool> &interrupt) {
   result = waitForProcessesThreadImpl(job, ls, interrupt);
 
   // the session can be null when running shortcuts with locking disabled
@@ -406,9 +394,9 @@ void waitForProcessesThread(ProcessRunner::Results& result, HANDLE job,
   }
 }
 
-ProcessRunner::Results waitForProcesses(const std::vector<HANDLE>& initialProcesses,
-                                        UILocker::Session* ls)
-{
+ProcessRunner::Results
+waitForProcesses(const std::vector<HANDLE> &initialProcesses,
+                 UILocker::Session *ls) {
   if (initialProcesses.empty()) {
     // nothing to wait for
     return ProcessRunner::Completed;
@@ -428,7 +416,7 @@ ProcessRunner::Results waitForProcesses(const std::vector<HANDLE>& initialProces
 
   bool oneWorked = false;
 
-  for (auto&& h : initialProcesses) {
+  for (auto &&h : initialProcesses) {
     if (::AssignProcessToJobObject(job.get(), h)) {
       oneWorked = true;
     } else {
@@ -457,13 +445,11 @@ ProcessRunner::Results waitForProcesses(const std::vector<HANDLE>& initialProces
   auto results = ProcessRunner::Running;
   std::atomic<bool> interrupt(false);
 
-  auto* t = QThread::create(waitForProcessesThread, std::ref(results), monitor, ls,
-                            std::ref(interrupt));
+  auto *t = QThread::create(waitForProcessesThread, std::ref(results), monitor,
+                            ls, std::ref(interrupt));
 
   QEventLoop events;
-  QObject::connect(t, &QThread::finished, [&] {
-    events.quit();
-  });
+  QObject::connect(t, &QThread::finished, [&] { events.quit(); });
 
   t->start();
   events.exec();
@@ -479,8 +465,7 @@ ProcessRunner::Results waitForProcesses(const std::vector<HANDLE>& initialProces
 }
 
 ProcessRunner::Results waitForProcess(HANDLE initialProcess, LPDWORD exitCode,
-                                      UILocker::Session* ls)
-{
+                                      UILocker::Session *ls) {
   std::vector<HANDLE> processes = {initialProcess};
 
   const auto r = waitForProcesses(processes, ls);
@@ -489,7 +474,8 @@ ProcessRunner::Results waitForProcess(HANDLE initialProcess, LPDWORD exitCode,
   if (exitCode && r != ProcessRunner::Running) {
     if (!::GetExitCodeProcess(initialProcess, exitCode)) {
       const auto e = ::GetLastError();
-      log::warn("failed to get exit code of process, {}", formatSystemMessage(e));
+      log::warn("failed to get exit code of process, {}",
+                formatSystemMessage(e));
     }
   }
 
@@ -498,13 +484,11 @@ ProcessRunner::Results waitForProcess(HANDLE initialProcess, LPDWORD exitCode,
 
 #else // !_WIN32
 
-pid_t handleToPid(HANDLE h)
-{
+pid_t handleToPid(HANDLE h) {
   return static_cast<pid_t>(reinterpret_cast<intptr_t>(h));
 }
 
-QString readProcComm(pid_t pid)
-{
+QString readProcComm(pid_t pid) {
   QFile f(QString("/proc/%1/comm").arg(pid));
   if (!f.open(QIODevice::ReadOnly)) {
     return {};
@@ -513,21 +497,20 @@ QString readProcComm(pid_t pid)
   return QString::fromUtf8(f.readAll()).trimmed();
 }
 
-std::unordered_map<pid_t, std::vector<pid_t>> buildProcChildrenMap()
-{
+std::unordered_map<pid_t, std::vector<pid_t>> buildProcChildrenMap() {
   std::unordered_map<pid_t, std::vector<pid_t>> children;
-  DIR* proc = opendir("/proc");
+  DIR *proc = opendir("/proc");
   if (!proc) {
     return children;
   }
 
-  struct dirent* entry = nullptr;
+  struct dirent *entry = nullptr;
   while ((entry = readdir(proc)) != nullptr) {
     if (entry->d_type != DT_DIR && entry->d_type != DT_UNKNOWN) {
       continue;
     }
 
-    const char* name = entry->d_name;
+    const char *name = entry->d_name;
     if (*name == '\0' || !std::isdigit(static_cast<unsigned char>(*name))) {
       continue;
     }
@@ -556,9 +539,8 @@ std::unordered_map<pid_t, std::vector<pid_t>> buildProcChildrenMap()
   return children;
 }
 
-std::unordered_set<pid_t>
-collectDescendants(pid_t root, const std::unordered_map<pid_t, std::vector<pid_t>>& children)
-{
+std::unordered_set<pid_t> collectDescendants(
+    pid_t root, const std::unordered_map<pid_t, std::vector<pid_t>> &children) {
   std::unordered_set<pid_t> out;
   std::deque<pid_t> q;
   q.push_back(root);
@@ -582,8 +564,8 @@ collectDescendants(pid_t root, const std::unordered_map<pid_t, std::vector<pid_t
   return out;
 }
 
-QStringList buildExpectedExecutables(const QFileInfo& binary, const QString& arguments)
-{
+QStringList buildExpectedExecutables(const QFileInfo &binary,
+                                     const QString &arguments) {
   QStringList expected;
   auto addName = [&](QString name) {
     name = name.trimmed().toLower();
@@ -595,7 +577,7 @@ QStringList buildExpectedExecutables(const QFileInfo& binary, const QString& arg
   addName(binary.fileName());
 
   const auto args = QProcess::splitCommand(arguments);
-  for (const QString& arg : args) {
+  for (const QString &arg : args) {
     const QFileInfo fi(arg);
     const QString base = fi.fileName();
     if (base.endsWith(".exe", Qt::CaseInsensitive)) {
@@ -603,17 +585,18 @@ QStringList buildExpectedExecutables(const QFileInfo& binary, const QString& arg
     }
   }
 
+  log::debug("buildExpectedExecutables: returning [{}]",
+             expected.join(", ").toStdString());
   return expected;
 }
 
-pid_t findTrackedProcess(pid_t rootPid, const QStringList& expected,
-                         QString* trackedNameOut)
-{
+pid_t findTrackedProcess(pid_t rootPid, const QStringList &expected,
+                         QString *trackedNameOut) {
   if (expected.isEmpty()) {
     return 0;
   }
 
-  const auto children    = buildProcChildrenMap();
+  const auto children = buildProcChildrenMap();
   const auto descendants = collectDescendants(rootPid, children);
   if (descendants.empty()) {
     return 0;
@@ -636,12 +619,16 @@ pid_t findTrackedProcess(pid_t rootPid, const QStringList& expected,
 
   if (best > 0 && trackedNameOut) {
     *trackedNameOut = bestName;
+    log::debug("findTrackedProcess: found best={}, name={}", best,
+               bestName.toStdString());
+  } else {
+    log::debug("findTrackedProcess: no tracked process found for rootPid={}",
+               rootPid);
   }
   return best;
 }
 
-DWORD exitCodeFromWaitStatus(int status)
-{
+DWORD exitCodeFromWaitStatus(int status) {
   if (WIFEXITED(status)) {
     return static_cast<DWORD>(WEXITSTATUS(status));
   }
@@ -653,9 +640,9 @@ DWORD exitCodeFromWaitStatus(int status)
   return 0;
 }
 
-ProcessRunner::Results waitForPid(pid_t pid, LPDWORD exitCode, UILocker::Session* ls,
-                                  const QStringList& expected)
-{
+ProcessRunner::Results waitForPid(pid_t pid, LPDWORD exitCode,
+                                  UILocker::Session *ls,
+                                  const QStringList &expected) {
   if (pid <= 0) {
     return ProcessRunner::Error;
   }
@@ -665,10 +652,9 @@ ProcessRunner::Results waitForPid(pid_t pid, LPDWORD exitCode, UILocker::Session
   // which works for any process owned by the same user.
   bool useKillPoll = false;
   {
-    int status        = 0;
+    int status = 0;
     const pid_t probe = ::waitpid(pid, &status, WNOHANG);
     if (probe == pid) {
-      // Already exited before we even started waiting
       if (exitCode != nullptr) {
         *exitCode = exitCodeFromWaitStatus(status);
       }
@@ -686,13 +672,13 @@ ProcessRunner::Results waitForPid(pid_t pid, LPDWORD exitCode, UILocker::Session
 
   while (true) {
     QString trackedName;
-    pid_t displayPid      = pid;
-    QString displayName   = readProcComm(pid);
-    const pid_t tracked   = findTrackedProcess(pid, expected, &trackedName);
+    pid_t displayPid = pid;
+    QString displayName = readProcComm(pid);
+    const pid_t tracked = findTrackedProcess(pid, expected, &trackedName);
     if (tracked > 0) {
       seenTrackedProcess = true;
-      displayPid         = tracked;
-      displayName        = trackedName;
+      displayPid = tracked;
+      displayName = trackedName;
     } else if (seenTrackedProcess) {
       if (exitCode != nullptr) {
         *exitCode = 0;
@@ -702,7 +688,8 @@ ProcessRunner::Results waitForPid(pid_t pid, LPDWORD exitCode, UILocker::Session
     }
 
     if (ls != nullptr) {
-      ls->setInfo(static_cast<DWORD>(std::max<pid_t>(0, displayPid)), displayName);
+      ls->setInfo(static_cast<DWORD>(std::max<pid_t>(0, displayPid)),
+                  displayName);
     }
 
     if (useKillPoll) {
@@ -716,13 +703,13 @@ ProcessRunner::Results waitForPid(pid_t pid, LPDWORD exitCode, UILocker::Session
           return ProcessRunner::Completed;
         }
         // EPERM means the process exists but we can't signal it; keep waiting
-        if (errno != EPERM) {
+        else if (errno != EPERM) {
           log::error("failed checking process {}, errno={}", pid, errno);
           return ProcessRunner::Error;
         }
       }
     } else {
-      int status             = 0;
+      int status = 0;
       const pid_t waitResult = ::waitpid(pid, &status, WNOHANG);
 
       if (waitResult == pid) {
@@ -776,23 +763,21 @@ ProcessRunner::Results waitForPid(pid_t pid, LPDWORD exitCode, UILocker::Session
 }
 
 ProcessRunner::Results waitForProcess(HANDLE initialProcess, LPDWORD exitCode,
-                                      UILocker::Session* ls,
-                                      const QStringList& expected)
-{
+                                      UILocker::Session *ls,
+                                      const QStringList &expected) {
   return waitForPid(handleToPid(initialProcess), exitCode, ls, expected);
 }
 
-ProcessRunner::Results waitForProcesses(const std::vector<HANDLE>& initialProcesses,
-                                        UILocker::Session* ls,
-                                        const QStringList& expected)
-{
+ProcessRunner::Results
+waitForProcesses(const std::vector<HANDLE> &initialProcesses,
+                 UILocker::Session *ls, const QStringList &expected) {
   if (initialProcesses.empty()) {
     return ProcessRunner::Completed;
   }
 
   for (HANDLE h : initialProcesses) {
     DWORD ignored = 0;
-    const auto r  = waitForPid(handleToPid(h), &ignored, ls, expected);
+    const auto r = waitForPid(handleToPid(h), &ignored, ls, expected);
     if (r != ProcessRunner::Completed) {
       return r;
     }
@@ -803,16 +788,14 @@ ProcessRunner::Results waitForProcesses(const std::vector<HANDLE>& initialProces
 
 #endif // _WIN32
 
-ProcessRunner::ProcessRunner(OrganizerCore& core, IUserInterface* ui)
-    : m_core(core), m_ui(ui), m_lockReason(UILocker::NoReason), m_waitFlags(NoFlags),
-      m_handle(INVALID_HANDLE_VALUE), m_exitCode(-1)
-{
+ProcessRunner::ProcessRunner(OrganizerCore &core, IUserInterface *ui)
+    : m_core(core), m_ui(ui), m_lockReason(UILocker::NoReason),
+      m_waitFlags(NoFlags), m_handle(INVALID_HANDLE_VALUE), m_exitCode(-1) {
   // all processes started in ProcessRunner are hooked by default
   setHooked(true);
 }
 
-ProcessRunner& ProcessRunner::setBinary(const QFileInfo& binary)
-{
+ProcessRunner &ProcessRunner::setBinary(const QFileInfo &binary) {
 #ifndef _WIN32
   m_sp.binary = QFileInfo(MOBase::normalizePathForHost(binary.filePath()));
 #else
@@ -821,14 +804,12 @@ ProcessRunner& ProcessRunner::setBinary(const QFileInfo& binary)
   return *this;
 }
 
-ProcessRunner& ProcessRunner::setArguments(const QString& arguments)
-{
+ProcessRunner &ProcessRunner::setArguments(const QString &arguments) {
   m_sp.arguments = arguments;
   return *this;
 }
 
-ProcessRunner& ProcessRunner::setCurrentDirectory(const QDir& directory)
-{
+ProcessRunner &ProcessRunner::setCurrentDirectory(const QDir &directory) {
 #ifndef _WIN32
   m_sp.currentDirectory.setPath(MOBase::normalizePathForHost(directory.path()));
 #else
@@ -837,37 +818,35 @@ ProcessRunner& ProcessRunner::setCurrentDirectory(const QDir& directory)
   return *this;
 }
 
-ProcessRunner& ProcessRunner::setSteamID(const QString& steamID)
-{
+ProcessRunner &ProcessRunner::setSteamID(const QString &steamID) {
   m_sp.steamAppID = steamID;
   return *this;
 }
 
-ProcessRunner& ProcessRunner::setCustomOverwrite(const QString& customOverwrite)
-{
+ProcessRunner &
+ProcessRunner::setCustomOverwrite(const QString &customOverwrite) {
   m_customOverwrite = customOverwrite;
   return *this;
 }
 
-ProcessRunner& ProcessRunner::setForcedLibraries(const ForcedLibraries& forcedLibraries)
-{
+ProcessRunner &
+ProcessRunner::setForcedLibraries(const ForcedLibraries &forcedLibraries) {
   m_forcedLibraries = forcedLibraries;
   return *this;
 }
 
-ProcessRunner& ProcessRunner::setProfileName(const QString& profileName)
-{
+ProcessRunner &ProcessRunner::setProfileName(const QString &profileName) {
   m_profileName = profileName;
   return *this;
 }
 
-ProcessRunner& ProcessRunner::setWaitForCompletion(WaitFlags flags,
-                                                   UILocker::Reasons reason)
-{
-  m_waitFlags  = flags;
+ProcessRunner &ProcessRunner::setWaitForCompletion(WaitFlags flags,
+                                                   UILocker::Reasons reason) {
+  m_waitFlags = flags;
   m_lockReason = reason;
 
-  if (m_waitFlags.testFlag(WaitForRefresh) && !m_waitFlags.testFlag(TriggerRefresh)) {
+  if (m_waitFlags.testFlag(WaitForRefresh) &&
+      !m_waitFlags.testFlag(TriggerRefresh)) {
     log::warn("process runner: WaitForRefresh without TriggerRefresh "
               "makes no sense, will be ignored");
   }
@@ -875,14 +854,13 @@ ProcessRunner& ProcessRunner::setWaitForCompletion(WaitFlags flags,
   return *this;
 }
 
-ProcessRunner& ProcessRunner::setHooked(bool b)
-{
+ProcessRunner &ProcessRunner::setHooked(bool b) {
   m_sp.hooked = b;
   return *this;
 }
 
-ProcessRunner& ProcessRunner::setFromFile(QWidget* parent, const QFileInfo& targetInfo)
-{
+ProcessRunner &ProcessRunner::setFromFile(QWidget *parent,
+                                          const QFileInfo &targetInfo) {
   if (!parent && m_ui) {
     parent = m_ui->mainWindow();
   }
@@ -900,7 +878,7 @@ ProcessRunner& ProcessRunner::setFromFile(QWidget* parent, const QFileInfo& targ
     break;
   }
 
-  case spawn::FileExecutionTypes::Other:  // fall-through
+  case spawn::FileExecutionTypes::Other: // fall-through
   default: {
     m_shellOpen = targetInfo;
     setHooked(false);
@@ -911,8 +889,7 @@ ProcessRunner& ProcessRunner::setFromFile(QWidget* parent, const QFileInfo& targ
   return *this;
 }
 
-ProcessRunner& ProcessRunner::setFromExecutable(const Executable& exe)
-{
+ProcessRunner &ProcessRunner::setFromExecutable(const Executable &exe) {
   const auto profile = m_core.currentProfile();
   if (!profile) {
     throw MyException(QObject::tr("No profile set"));
@@ -941,33 +918,33 @@ ProcessRunner& ProcessRunner::setFromExecutable(const Executable& exe)
   return *this;
 }
 
-ProcessRunner& ProcessRunner::setFromShortcut(const MOShortcut& shortcut)
-{
+ProcessRunner &ProcessRunner::setFromShortcut(const MOShortcut &shortcut) {
   const auto currentInstance = InstanceManager::singleton().currentInstance();
 
   if (currentInstance) {
     if (shortcut.hasInstance() && !shortcut.isForInstance(*currentInstance)) {
-      MOBase::reportError(
-          QObject::tr(
-              "This shortcut is for instance '%1' but Mod Organizer is currently "
-              "running for '%2'. Exit Mod Organizer before running the shortcut or "
-              "change the active instance.")
-              .arg(shortcut.instanceDisplayName())
-              .arg(currentInstance->displayName()));
+      MOBase::reportError(QObject::tr("This shortcut is for instance '%1' but "
+                                      "Mod Organizer is currently "
+                                      "running for '%2'. Exit Mod Organizer "
+                                      "before running the shortcut or "
+                                      "change the active instance.")
+                              .arg(shortcut.instanceDisplayName())
+                              .arg(currentInstance->displayName()));
 
       throw std::exception();
     }
   }
 
-  const auto* exes = m_core.executablesList();
-  const auto exe   = exes->find(shortcut.executableName());
+  const auto *exes = m_core.executablesList();
+  const auto exe = exes->find(shortcut.executableName());
 
   if (exe != exes->end()) {
     setFromExecutable(*exe);
   } else {
-    MOBase::reportError(QObject::tr("Executable '%1' does not exist in instance '%2'.")
-                            .arg(shortcut.executableName())
-                            .arg(currentInstance->displayName()));
+    MOBase::reportError(
+        QObject::tr("Executable '%1' does not exist in instance '%2'.")
+            .arg(shortcut.executableName())
+            .arg(currentInstance->displayName()));
 
     throw std::exception();
   }
@@ -975,11 +952,10 @@ ProcessRunner& ProcessRunner::setFromShortcut(const MOShortcut& shortcut)
   return *this;
 }
 
-ProcessRunner& ProcessRunner::setFromFileOrExecutable(
-    const QString& executable, const QStringList& args, const QString& cwd,
-    const QString& profileOverride, const QString& forcedCustomOverwrite,
-    bool ignoreCustomOverwrite)
-{
+ProcessRunner &ProcessRunner::setFromFileOrExecutable(
+    const QString &executable, const QStringList &args, const QString &cwd,
+    const QString &profileOverride, const QString &forcedCustomOverwrite,
+    bool ignoreCustomOverwrite) {
   const auto profile = m_core.currentProfile();
   if (!profile) {
     throw MyException(QObject::tr("No profile set"));
@@ -1004,24 +980,27 @@ ProcessRunner& ProcessRunner::setFromFileOrExecutable(
     }
 
     try {
-      const Executable& exe = m_core.executablesList()->getByBinary(m_sp.binary);
+      const Executable &exe =
+          m_core.executablesList()->getByBinary(m_sp.binary);
 
       setSteamID(exe.steamAppID());
-      setCustomOverwrite(profile->setting("custom_overwrites", exe.title()).toString());
+      setCustomOverwrite(
+          profile->setting("custom_overwrites", exe.title()).toString());
 
       if (profile->forcedLibrariesEnabled(exe.title())) {
         setForcedLibraries(profile->determineForcedLibraries(exe.title()));
       }
-    } catch (const std::runtime_error&) {
+    } catch (const std::runtime_error &) {
       // nop
     }
   } else {
     // only a file name, search executables list
     try {
-      const Executable& exe = m_core.executablesList()->get(executable);
+      const Executable &exe = m_core.executablesList()->get(executable);
 
       setSteamID(exe.steamAppID());
-      setCustomOverwrite(profile->setting("custom_overwrites", exe.title()).toString());
+      setCustomOverwrite(
+          profile->setting("custom_overwrites", exe.title()).toString());
 
       if (profile->forcedLibrariesEnabled(exe.title())) {
         setForcedLibraries(profile->determineForcedLibraries(exe.title()));
@@ -1036,7 +1015,7 @@ ProcessRunner& ProcessRunner::setFromFileOrExecutable(
       if (cwd == "") {
         setCurrentDirectory(exe.workingDirectory());
       }
-    } catch (const std::runtime_error&) {
+    } catch (const std::runtime_error &) {
       log::warn("\"{}\" not set up as executable", executable);
     }
   }
@@ -1050,13 +1029,11 @@ ProcessRunner& ProcessRunner::setFromFileOrExecutable(
   return *this;
 }
 
-bool ProcessRunner::shouldRunShell() const
-{
+bool ProcessRunner::shouldRunShell() const {
   return !m_shellOpen.filePath().isEmpty();
 }
 
-ProcessRunner::Results ProcessRunner::run()
-{
+ProcessRunner::Results ProcessRunner::run() {
   // check if setHooked() was called after setFromFile(); this needs to
   // modify the settings to run the associated executable instead of using
   // shell::Open()
@@ -1097,9 +1074,9 @@ ProcessRunner::Results ProcessRunner::run()
   return postRun();
 }
 
-std::optional<ProcessRunner::Results> ProcessRunner::runShell()
-{
-  const auto file = MOBase::normalizePathForHost(m_shellOpen.absoluteFilePath());
+std::optional<ProcessRunner::Results> ProcessRunner::runShell() {
+  const auto file =
+      MOBase::normalizePathForHost(m_shellOpen.absoluteFilePath());
 
   log::debug("executing from shell: '{}'", file);
 
@@ -1122,8 +1099,7 @@ std::optional<ProcessRunner::Results> ProcessRunner::runShell()
   return {};
 }
 
-std::optional<ProcessRunner::Results> ProcessRunner::runBinary()
-{
+std::optional<ProcessRunner::Results> ProcessRunner::runBinary() {
   if (m_profileName.isEmpty()) {
     // get the current profile name if it wasn't overridden
     const auto profile = m_core.currentProfile();
@@ -1143,10 +1119,10 @@ std::optional<ProcessRunner::Results> ProcessRunner::runBinary()
   }
 
   // parent widget used for any dialog popped up while checking for things
-  QWidget* parent = (m_ui ? m_ui->mainWindow() : nullptr);
+  QWidget *parent = (m_ui ? m_ui->mainWindow() : nullptr);
 
-  const auto* game = m_core.managedGame();
-  auto& settings   = m_core.settings();
+  const auto *game = m_core.managedGame();
+  auto &settings = m_core.settings();
 
   if (m_sp.steamAppID.trimmed().isEmpty()) {
     const QString gameSteamId = game->steamAPPId().trimmed();
@@ -1158,7 +1134,8 @@ std::optional<ProcessRunner::Results> ProcessRunner::runBinary()
   }
 
   // start steam if needed
-  if (!checkSteam(parent, m_sp, game->gameDirectory(), m_sp.steamAppID, settings)) {
+  if (!checkSteam(parent, m_sp, game->gameDirectory(), m_sp.steamAppID,
+                  settings)) {
     return Error;
   }
 
@@ -1175,7 +1152,8 @@ std::optional<ProcessRunner::Results> ProcessRunner::runBinary()
 #ifdef _WIN32
   m_handle.reset(startBinary(parent, m_sp));
 #else
-  m_handle.reset(reinterpret_cast<HANDLE>(static_cast<intptr_t>(startBinary(parent, m_sp))));
+  m_handle.reset(reinterpret_cast<HANDLE>(
+      static_cast<intptr_t>(startBinary(parent, m_sp))));
 #endif
   if (m_handle.get() == INVALID_HANDLE_VALUE) {
     return Error;
@@ -1184,8 +1162,7 @@ std::optional<ProcessRunner::Results> ProcessRunner::runBinary()
   return {};
 }
 
-bool ProcessRunner::shouldRefresh(Results r) const
-{
+bool ProcessRunner::shouldRefresh(Results r) const {
   // afterRun() is only called with the Refresh flag; it refreshes the
   // directory structure and notifies plugins
   //
@@ -1211,11 +1188,12 @@ bool ProcessRunner::shouldRefresh(Results r) const
   case ForceUnlocked: {
     // The process may still be running when the user force-unlocks.
     // Refreshing in that state can race with file updates.
-    log::debug("process runner: not refreshing because the ui was force unlocked");
+    log::debug(
+        "process runner: not refreshing because the ui was force unlocked");
     return false;
   }
 
-  case Error:  // fall-through
+  case Error: // fall-through
   case Cancelled:
   case Running:
   default: {
@@ -1224,8 +1202,7 @@ bool ProcessRunner::shouldRefresh(Results r) const
   }
 }
 
-ProcessRunner::Results ProcessRunner::postRun()
-{
+ProcessRunner::Results ProcessRunner::postRun() {
   const bool mustWait = (m_waitFlags & ForceWait);
 
   if (!m_sp.hooked && !mustWait) {
@@ -1248,8 +1225,9 @@ ProcessRunner::Results ProcessRunner::postRun()
   if (mustWait) {
     if (!lockEnabled) {
       // at least tell the user what's going on
-      log::debug("locking is disabled, but the output of the application is required; "
-                 "overriding this setting and locking the ui");
+      log::debug(
+          "locking is disabled, but the output of the application is required; "
+          "overriding this setting and locking the ui");
     }
   } else {
     // no force wait
@@ -1257,10 +1235,12 @@ ProcessRunner::Results ProcessRunner::postRun()
     if (m_lockReason == UILocker::NoReason) {
       // no locking requested
 #ifndef _WIN32
-      // Main window launches typically use TriggerRefresh without waiting/locking.
-      // In that mode we still need post-run refresh/sync once the process exits.
+      // Main window launches typically use TriggerRefresh without
+      // waiting/locking. In that mode we still need post-run refresh/sync once
+      // the process exits.
       if (m_waitFlags.testFlag(TriggerRefresh)) {
-        const pid_t pid = static_cast<pid_t>(reinterpret_cast<intptr_t>(m_handle.get()));
+        const pid_t pid =
+            static_cast<pid_t>(reinterpret_cast<intptr_t>(m_handle.get()));
         const QFileInfo binary = m_sp.binary;
         QPointer<OrganizerCore> core = &m_core;
 
@@ -1283,11 +1263,11 @@ ProcessRunner::Results ProcessRunner::postRun()
           } else if (errno == ECHILD) {
             // Detached process — poll with kill(0) until gone.
             while (::kill(pid, 0) == 0 || errno == EPERM) {
-              usleep(200000);  // 200ms
+              usleep(200000); // 200ms
             }
           } else {
-            MOBase::log::warn("process runner: waitpid failed for pid {}: {}", pid,
-                              errno);
+            MOBase::log::warn("process runner: waitpid failed for pid {}: {}",
+                              pid, errno);
           }
 
           if (!core) {
@@ -1295,7 +1275,8 @@ ProcessRunner::Results ProcessRunner::postRun()
           }
 
           QMetaObject::invokeMethod(
-              core, [core, binary, exitCode]() {
+              core,
+              [core, binary, exitCode]() {
                 if (core) {
                   core->afterRun(binary, exitCode);
                 }
@@ -1303,7 +1284,8 @@ ProcessRunner::Results ProcessRunner::postRun()
               Qt::QueuedConnection);
         }).detach();
 
-        log::debug("process runner: scheduled async post-run refresh for pid {}", pid);
+        log::debug(
+            "process runner: scheduled async post-run refresh for pid {}", pid);
       }
 #endif
       return Running;
@@ -1331,13 +1313,13 @@ ProcessRunner::Results ProcessRunner::postRun()
     //
     // MO will be running in the background with no visual feedback, but that's
     // how it is
-    r = waitForProcess(m_handle.get(), &m_exitCode, nullptr, expectedExecutables);
+    r = waitForProcess(m_handle.get(), &m_exitCode, nullptr,
+                       expectedExecutables);
   } else {
-    withLock([&](auto& ls) {
+    withLock([&](auto &ls) {
       r = waitForProcess(m_handle.get(), &m_exitCode, &ls, expectedExecutables);
     });
   }
-
 
   if (shouldRefresh(r)) {
     QEventLoop loop;
@@ -1361,38 +1343,28 @@ ProcessRunner::Results ProcessRunner::postRun()
 }
 
 #ifdef _WIN32
-ProcessRunner::Results ProcessRunner::attachToProcess(HANDLE h)
-{
+ProcessRunner::Results ProcessRunner::attachToProcess(HANDLE h) {
   m_handle.reset(h);
   return postRun();
 }
 #else
-ProcessRunner::Results ProcessRunner::attachToProcess(pid_t pid)
-{
+ProcessRunner::Results ProcessRunner::attachToProcess(pid_t pid) {
   m_handle.reset(reinterpret_cast<HANDLE>(static_cast<intptr_t>(pid)));
   return postRun();
 }
 #endif
 
-DWORD ProcessRunner::exitCode() const
-{
-  return m_exitCode;
-}
+DWORD ProcessRunner::exitCode() const { return m_exitCode; }
 
 #ifdef _WIN32
-HANDLE ProcessRunner::getProcessHandle() const
-{
-  return m_handle.get();
-}
+HANDLE ProcessRunner::getProcessHandle() const { return m_handle.get(); }
 #else
-pid_t ProcessRunner::getProcessHandle() const
-{
+pid_t ProcessRunner::getProcessHandle() const {
   return static_cast<pid_t>(reinterpret_cast<intptr_t>(m_handle.get()));
 }
 #endif
 
-env::HandlePtr ProcessRunner::stealProcessHandle()
-{
+env::HandlePtr ProcessRunner::stealProcessHandle() {
   auto h = m_handle.release();
   m_handle.reset(INVALID_HANDLE_VALUE);
   return env::HandlePtr(h);
@@ -1400,8 +1372,7 @@ env::HandlePtr ProcessRunner::stealProcessHandle()
 
 #ifdef _WIN32
 ProcessRunner::Results
-ProcessRunner::waitForAllUSVFSProcessesWithLock(UILocker::Reasons reason)
-{
+ProcessRunner::waitForAllUSVFSProcessesWithLock(UILocker::Reasons reason) {
   m_lockReason = reason;
 
   if (!m_core.settings().interface().lockGUI()) {
@@ -1412,7 +1383,7 @@ ProcessRunner::waitForAllUSVFSProcessesWithLock(UILocker::Reasons reason)
   auto r = Error;
 
   for (;;) {
-    withLock([&](auto& ls) {
+    withLock([&](auto &ls) {
       const auto processes = getRunningUSVFSProcesses();
       if (processes.empty()) {
         r = Completed;
@@ -1439,8 +1410,7 @@ ProcessRunner::waitForAllUSVFSProcessesWithLock(UILocker::Reasons reason)
 }
 #endif
 
-void ProcessRunner::withLock(std::function<void(UILocker::Session&)> f)
-{
+void ProcessRunner::withLock(std::function<void(UILocker::Session &)> f) {
   auto ls = UILocker::instance().lock(m_lockReason);
   f(*ls);
 }

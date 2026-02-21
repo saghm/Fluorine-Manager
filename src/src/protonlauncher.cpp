@@ -3,14 +3,98 @@
 #include <nak_ffi.h>
 #include <QCoreApplication>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QStandardPaths>
 #include <log.h>
 
+
 namespace
 {
+// Restore the pre-AppImage environment for child processes (umu-run, Proton,
+// pressure-vessel).  The AppRun script saves FLUORINE_ORIG_* vars before
+// modifying PATH, LD_LIBRARY_PATH, etc.  We restore from those saved values
+// so game processes get a clean host environment without AppImage library paths.
+void cleanAppImageEnv(QProcessEnvironment& env)
+{
+  // Remove Fluorine/AppImage-specific vars that should never leak to game processes.
+  env.remove("QT_QPA_PLATFORM_PLUGIN_PATH");
+  env.remove("MO2_PLUGINS_DIR");
+  env.remove("MO2_DLLS_DIR");
+  env.remove("MO2_PYTHON_DIR");
+  env.remove("MO2_BASE_DIR");
+
+  // AppImage runtime injects these — they can confuse pressure-vessel/umu-run.
+  env.remove("APPIMAGE");
+  env.remove("APPDIR");
+  env.remove("OWD");
+  env.remove("ARGV0");
+  env.remove("APPIMAGE_ORIGINAL_EXEC");
+
+  env.remove("DESKTOPINTEGRATION");
+
+  // Restore saved pre-AppImage values.  AppRun sets FLUORINE_ORIG_* before
+  // modifying PATH, LD_LIBRARY_PATH, etc.  If those vars exist, use them to
+  // restore the original host environment.  If not (standalone/non-AppImage),
+  // fall back to stripping known AppImage patterns.
+  auto restoreOrStrip = [](const QString& var, const QString& origVar,
+                           QProcessEnvironment& e) {
+    if (e.contains(origVar)) {
+      const QString orig = e.value(origVar);
+      if (orig.isEmpty()) {
+        e.remove(var);
+      } else {
+        e.insert(var, orig);
+      }
+      e.remove(origVar);
+    } else {
+      // Fallback: strip AppImage mount paths by pattern.
+      const QString value = e.value(var);
+      if (value.isEmpty()) return;
+      QStringList kept;
+      for (const QString& p : value.split(':')) {
+        if (p.contains(".mount_Fluori") || p.contains("/fluorine/python")) {
+          continue;
+        }
+        kept.append(p);
+      }
+      if (kept.isEmpty()) {
+        e.remove(var);
+      } else {
+        e.insert(var, kept.join(':'));
+      }
+    }
+  };
+
+  const bool hasOrigVars = env.contains("FLUORINE_ORIG_PATH");
+  restoreOrStrip("LD_LIBRARY_PATH", "FLUORINE_ORIG_LD_LIBRARY_PATH", env);
+  restoreOrStrip("PATH", "FLUORINE_ORIG_PATH", env);
+  restoreOrStrip("XDG_DATA_DIRS", "FLUORINE_ORIG_XDG_DATA_DIRS", env);
+  restoreOrStrip("QT_PLUGIN_PATH", "FLUORINE_ORIG_QT_PLUGIN_PATH", env);
+
+  MOBase::log::debug("cleanAppImageEnv: {} (LD_LIBRARY_PATH='{}')",
+                     hasOrigVars ? "restored from FLUORINE_ORIG_*" : "pattern-strip fallback",
+                     env.value("LD_LIBRARY_PATH", "<unset>"));
+}
+
+// GE-Proton crashes in update_builtin_libs() if tracked_files doesn't exist
+// (e.g. prefix was created by plain Wine, not Proton).  Create an empty one.
+void ensureTrackedFilesExist(const QString& compatDataPath)
+{
+  if (compatDataPath.isEmpty()) return;
+  const QString tracked = QDir(compatDataPath).filePath("tracked_files");
+  if (!QFileInfo::exists(tracked)) {
+    QDir().mkpath(compatDataPath);
+    QFile f(tracked);
+    if (f.open(QIODevice::WriteOnly)) {
+      f.close();
+      MOBase::log::debug("created empty tracked_files at '{}'", tracked);
+    }
+  }
+}
+
 QString compatDataPathFromPrefix(const QString& prefixPath)
 {
   if (prefixPath.isEmpty()) {
@@ -226,6 +310,12 @@ ProtonLauncher& ProtonLauncher::setSteamDrm(bool useSteamDrm)
   return *this;
 }
 
+ProtonLauncher& ProtonLauncher::setStoreVariant(const QString& variant)
+{
+  m_storeVariant = variant.trimmed();
+  return *this;
+}
+
 ProtonLauncher& ProtonLauncher::addEnvVar(const QString& key, const QString& value)
 {
   if (!key.isEmpty()) {
@@ -277,6 +367,7 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
 
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
   env.remove("PYTHONHOME");
+  cleanAppImageEnv(env);
 
   if (!m_prefixPath.isEmpty()) {
     env.insert("WINEPREFIX", m_prefixPath);
@@ -284,6 +375,7 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
 
   const QString compatDataPath = compatDataPathFromPrefix(m_prefixPath);
   if (!compatDataPath.isEmpty()) {
+    ensureTrackedFilesExist(compatDataPath);
     env.insert("STEAM_COMPAT_DATA_PATH", compatDataPath);
   }
 
@@ -320,6 +412,10 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
 
   MOBase::log::info("Proton launch: '{}' run '{}'", protonScript, m_binary);
 
+  if (!m_workingDir.isEmpty()) {
+    env.insert("PWD", m_workingDir);
+  }
+
   return startDetachedWithEnv(program, arguments, m_workingDir, env, pid);
 }
 
@@ -335,9 +431,11 @@ bool ProtonLauncher::launchWithUmu(qint64& pid) const
     ensureSteamRunning();
   }
 
-  // Resolve umu-run according to user preference (bundled vs system).
+  // Resolve umu-run: prefer the copy deployed to the Fluorine data dir
+  // (~/.local/share/fluorine/umu-run), then system PATH, then AppImage bundled.
   const QString appDir = QCoreApplication::applicationDirPath();
   const QString bundled = appDir + QStringLiteral("/umu-run");
+  const QString dataDir = QDir::home().filePath(".local/share/fluorine/umu-run");
 
   // Search PATH for a system umu-run, excluding our own app directory
   // (the launcher prepends it to PATH, so findExecutable would find the
@@ -356,25 +454,20 @@ bool ProtonLauncher::launchWithUmu(qint64& pid) const
     }
   }
 
+  // Priority: data dir > system (if preferred) > bundled > system (fallback)
   QString umuRun;
-  if (m_preferSystemUmu) {
-    if (!system.isEmpty()) {
-      umuRun = system;
-    } else if (QFileInfo::exists(bundled)) {
-      umuRun = bundled;
-      MOBase::log::warn(
-          "System umu-run preferred but not found in PATH, falling back to bundled");
-    }
-  } else {
-    if (QFileInfo::exists(bundled)) {
-      umuRun = bundled;
-    } else if (!system.isEmpty()) {
-      umuRun = system;
-    }
+  if (QFileInfo::exists(dataDir)) {
+    umuRun = dataDir;
+  } else if (m_preferSystemUmu && !system.isEmpty()) {
+    umuRun = system;
+  } else if (QFileInfo::exists(bundled)) {
+    umuRun = bundled;
+  } else if (!system.isEmpty()) {
+    umuRun = system;
   }
 
-  MOBase::log::info("umu-run: preferSystem={}, bundled='{}' (exists={}), system='{}', selected='{}'",
-      m_preferSystemUmu, bundled, QFileInfo::exists(bundled), system, umuRun);
+  MOBase::log::info("umu-run: dataDir='{}' (exists={}), bundled='{}' (exists={}), system='{}', selected='{}'",
+      dataDir, QFileInfo::exists(dataDir), bundled, QFileInfo::exists(bundled), system, umuRun);
 
   if (umuRun.isEmpty()) {
     MOBase::log::warn("umu-run not found (bundled or in PATH)");
@@ -390,6 +483,7 @@ bool ProtonLauncher::launchWithUmu(qint64& pid) const
 
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
   env.remove("PYTHONHOME");
+  cleanAppImageEnv(env);
 
   if (!m_prefixPath.isEmpty()) {
     env.insert("WINEPREFIX", m_prefixPath);
@@ -400,12 +494,8 @@ bool ProtonLauncher::launchWithUmu(qint64& pid) const
   }
 
   // umu-run sets STEAM_COMPAT_DATA_PATH internally from WINEPREFIX, so we
-  // do NOT set it here.  However, the game's Steamworks DRM still needs
-  // STEAM_COMPAT_CLIENT_INSTALL_PATH to locate the Steam client libraries.
-  const QString steamPath = detectSteamPath();
-  if (!steamPath.isEmpty()) {
-    env.insert("STEAM_COMPAT_CLIENT_INSTALL_PATH", steamPath);
-  }
+  // do NOT set it here.  However, ensure tracked_files exists for Proton.
+  ensureTrackedFilesExist(compatDataPathFromPrefix(m_prefixPath));
 
   uint32_t effectiveSteamAppId = m_steamAppId;
   if (effectiveSteamAppId == 0) {
@@ -418,15 +508,55 @@ bool ProtonLauncher::launchWithUmu(qint64& pid) const
     }
   }
 
-  if (m_useSteamDrm && effectiveSteamAppId != 0) {
-    // umu-run expects GAMEID in "umu-<AppID>" format to extract SteamAppId.
+  // Always pass the game's Steam App ID as GAMEID for protonfixes lookup.
+  // GAMEID identifies the game (for compatibility fixes), separate from DRM.
+  if (effectiveSteamAppId != 0) {
     env.insert("GAMEID", QStringLiteral("umu-") + QString::number(effectiveSteamAppId));
-    env.insert("SteamAppId", QString::number(effectiveSteamAppId));
-    env.insert("SteamGameId", QString::number(effectiveSteamAppId));
-    env.insert("STORE", QStringLiteral("steam"));
   } else {
-    // No Steam DRM — use a generic game ID so umu-run doesn't try Steam integration.
     env.insert("GAMEID", QStringLiteral("umu-0"));
+  }
+
+  if (m_useSteamDrm) {
+    // Steam DRM games need the Steam client path and Steam identity env vars.
+    env.insert("STORE", QStringLiteral("steam"));
+    const QString steamPath = detectSteamPath();
+    if (!steamPath.isEmpty()) {
+      env.insert("STEAM_COMPAT_CLIENT_INSTALL_PATH", steamPath);
+    }
+    if (effectiveSteamAppId != 0) {
+      env.insert("SteamAppId", QString::number(effectiveSteamAppId));
+      env.insert("SteamGameId", QString::number(effectiveSteamAppId));
+    }
+  } else {
+    // Non-Steam games: do NOT set SteamAppId/SteamGameId — those can trigger
+    // Steamworks initialization in Wine which crashes GOG/Epic games.
+    env.remove("SteamAPPId");
+    env.remove("SteamAppId");
+    env.remove("SteamGameId");
+
+    // Set STORE so umu-run knows this is a non-Steam game.  Without STORE,
+    // umu-run may attempt Steam-specific behavior that breaks GOG/Epic titles.
+    // umu-run expects lowercase values (gog, egs, etc.).
+    if (!m_storeVariant.isEmpty()) {
+      env.insert("STORE", m_storeVariant.toLower());
+    } else {
+      env.insert("STORE", QStringLiteral("gog"));
+    }
+  }
+
+  // Remove FUSE VFS file descriptors — these are Fluorine-internal and must
+  // not leak into game processes (especially pressure-vessel containers).
+  env.remove("_FUSE_COMMFD");
+  env.remove("_FUSE_COMMFD2");
+
+  // Remove Qt/KDE theme vars that can confuse pressure-vessel/Wine.
+  env.remove("QML_DISABLE_DISK_CACHE");
+  env.remove("QT_ICON_THEME_NAME");
+  env.remove("QT_STYLE_OVERRIDE");
+  env.remove("OLDPWD");
+
+  if (!m_workingDir.isEmpty()) {
+    env.insert("PWD", m_workingDir);
   }
 
   for (auto it = m_wrapperEnvVars.cbegin(); it != m_wrapperEnvVars.cend(); ++it) {
@@ -446,13 +576,11 @@ bool ProtonLauncher::launchWithUmu(qint64& pid) const
     }
   }
 
-  MOBase::log::info("UMU launch: '{}' '{}' (game id: {}, steam: '{}')", umuRun,
-                    m_binary,
-                    (effectiveSteamAppId == 0
-                         ? QStringLiteral("<unset>")
-                         : QStringLiteral("umu-") +
-                               QString::number(effectiveSteamAppId)),
-                    steamPath);
+  MOBase::log::info("UMU launch: '{}' '{}' (GAMEID={}, STORE={}, steam_drm={})",
+                    umuRun, m_binary,
+                    env.value("GAMEID"),
+                    env.value("STORE", "<unset>"),
+                    m_useSteamDrm);
 
   return startDetachedWithEnv(program, arguments, m_workingDir, env, pid);
 }
@@ -470,6 +598,7 @@ bool ProtonLauncher::launchDirect(qint64& pid) const
 
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
   env.remove("PYTHONHOME");
+  cleanAppImageEnv(env);
   for (auto it = m_wrapperEnvVars.cbegin(); it != m_wrapperEnvVars.cend(); ++it) {
     env.insert(it.key(), it.value());
   }

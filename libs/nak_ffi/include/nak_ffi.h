@@ -46,6 +46,7 @@ typedef struct {
     const char *name;
     const char *steam_app_id;
     const char *gog_app_id;              /* NULL if none */
+    const char *epic_app_id;             /* NULL if none */
     const char *my_games_folder;         /* NULL if not applicable */
     const char *appdata_local_folder;    /* NULL if not applicable */
     const char *appdata_roaming_folder;  /* NULL if not applicable */

@@ -24,6 +24,7 @@ public:
   ProtonLauncher& setPreferSystemUmu(bool preferSystemUmu);
   ProtonLauncher& setUseSteamRun(bool useSteamRun);
   ProtonLauncher& setSteamDrm(bool useSteamDrm);
+  ProtonLauncher& setStoreVariant(const QString& variant);
   ProtonLauncher& addEnvVar(const QString& key, const QString& value);
 
   // Launch dispatch: UMU -> Proton -> Direct
@@ -46,6 +47,7 @@ private:
   bool m_preferSystemUmu;
   bool m_useSteamRun;
   bool m_useSteamDrm;
+  QString m_storeVariant; // "GOG", "Epic", or empty for Steam
   QMap<QString, QString> m_envVars;
   QMap<QString, QString> m_wrapperEnvVars;
 };

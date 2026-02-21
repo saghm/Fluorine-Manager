@@ -54,7 +54,10 @@ static void ensureBundledPluginsLinked(const QString& bundledDir,
       }
     }
 
-    QFile::link(it.filePath(), target);
+    if (!QFile::link(it.filePath(), target)) {
+      log::warn("ensureBundledPluginsLinked: failed to symlink '{}' -> '{}'",
+                it.filePath(), target);
+    }
   }
 }
 #endif
@@ -446,9 +449,7 @@ QStringList PluginContainer::pluginFileNames() const
   std::vector<IPluginProxy*> proxyList = bf::at_key<IPluginProxy>(m_Plugins);
   for (IPluginProxy* proxy : proxyList) {
     QStringList proxiedPlugins = proxy->pluginList(
-        m_PluginPath.isEmpty()
-            ? (AppConfig::basePath() + "/" + ToQString(AppConfig::pluginPath()))
-            : m_PluginPath);
+        m_PluginPath.isEmpty() ? AppConfig::pluginsPath() : m_PluginPath);
     result.append(proxiedPlugins);
   }
   return result;
@@ -650,9 +651,7 @@ IPlugin* PluginContainer::registerPlugin(QObject* plugin, const QString& filepat
       emit pluginRegistered(proxy);
 
       const QString pluginRoot =
-          m_PluginPath.isEmpty()
-              ? (AppConfig::basePath() + "/" + ToQString(AppConfig::pluginPath()))
-              : m_PluginPath;
+          m_PluginPath.isEmpty() ? AppConfig::pluginsPath() : m_PluginPath;
       QStringList filepaths = proxy->pluginList(pluginRoot);
       log::warn("proxy '{}' discovered {} proxied plugin candidate(s) in '{}'",
                 proxy->name(), filepaths.size(),
@@ -1033,9 +1032,7 @@ void PluginContainer::loadPlugin(QString const& filepath)
     // We need to check if this can be handled by a proxy.
     for (auto* proxy : this->plugins<IPluginProxy>()) {
       auto filepaths = proxy->pluginList(
-          m_PluginPath.isEmpty()
-              ? (AppConfig::basePath() + "/" + ToQString(AppConfig::pluginPath()))
-              : m_PluginPath);
+          m_PluginPath.isEmpty() ? AppConfig::pluginsPath() : m_PluginPath);
       if (filepaths.contains(filepath)) {
         plugins = loadProxied(filepath, proxy);
         break;
@@ -1253,8 +1250,7 @@ void PluginContainer::loadPlugins()
     }
   }
 
-  QString pluginPath =
-      AppConfig::basePath() + "/" + ToQString(AppConfig::pluginPath());
+  QString pluginPath = AppConfig::pluginsPath();
 
 #ifndef _WIN32
   // Per-instance plugin directory: symlink bundled plugins, then load from there.

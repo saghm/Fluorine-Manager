@@ -8,11 +8,54 @@
 #include <new>
 #include <report.h>
 
+#include <QFile>
+#include <QTextStream>
+
 using namespace MOBase;
 
 namespace
 {
 bool g_disableSaveTooltipsAfterOOM = false;
+
+// Read a value from a Bethesda-style INI file without QSettings.
+// QSettings::IniFormat interprets backslashes as line continuations,
+// which corrupts values like "sLocalSavePath=__MO_Saves\".
+QString readIniValueDirect(const QString& iniFile, const QString& section,
+                           const QString& key)
+{
+  QFile file(iniFile);
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    return {};
+  }
+
+  const QString sectionHeader = "[" + section + "]";
+  QTextStream in(&file);
+  bool inSection = false;
+
+  while (!in.atEnd()) {
+    QString line = in.readLine().trimmed();
+    if (line.startsWith('[') && line.endsWith(']')) {
+      if (inSection)
+        break;
+      if (line.compare(sectionHeader, Qt::CaseInsensitive) == 0)
+        inSection = true;
+      continue;
+    }
+
+    if (inSection && !line.isEmpty() && !line.startsWith(';') &&
+        !line.startsWith('#')) {
+      int eqPos = line.indexOf('=');
+      if (eqPos > 0) {
+        QString existingKey = line.left(eqPos).trimmed();
+        if (existingKey.compare(key, Qt::CaseInsensitive) == 0) {
+          return line.mid(eqPos + 1).trimmed();
+        }
+      }
+    }
+  }
+
+  return {};
+}
 
 QString sanitizeText(QString in, int maxLen = 200)
 {
@@ -213,9 +256,15 @@ QDir SavesTab::currentSavesDir() const
       savesDir = m_core.managedGame()->savesDirectory();
     }
 #else
-    // On Linux, use QSettings to read the INI file
-    QSettings ini(iniPath, QSettings::IniFormat);
-    QString savePath = ini.value("General/SLocalSavePath").toString();
+    // Read directly without QSettings — QSettings::IniFormat interprets
+    // trailing backslashes as line continuations, corrupting values like
+    // "sLocalSavePath=__MO_Saves\".
+    QString savePath = readIniValueDirect(iniPath, "General", "sLocalSavePath");
+    // Strip trailing path separators (Bethesda INIs use "Saves\" with a
+    // trailing backslash that is part of the value, not a continuation).
+    while (savePath.endsWith('\\') || savePath.endsWith('/')) {
+      savePath.chop(1);
+    }
     if (!savePath.isEmpty()) {
       savesDir.setPath(m_core.managedGame()->documentsDirectory().absoluteFilePath(savePath));
     } else {

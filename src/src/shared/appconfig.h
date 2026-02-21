@@ -36,6 +36,16 @@ namespace AppConfig
 // returned; otherwise falls back to QCoreApplication::applicationDirPath().
 QString basePath();
 
+// Returns the directory containing MO2 plugins.  On Linux, if the
+// MO2_PLUGINS_DIR environment variable is set (e.g. when plugins live
+// inside a read-only AppImage squashfs) that value is used; otherwise
+// falls back to basePath() + "/plugins".
+QString pluginsPath();
+
+// Returns the directory containing bundled DLLs (7z.so, etc.).
+// Respects MO2_DLLS_DIR on Linux, otherwise basePath() + "/dlls".
+QString dllsPath();
+
 namespace MOShared
 {
 #undef PARWSTRING

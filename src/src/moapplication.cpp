@@ -456,14 +456,15 @@ int MOApplication::setup(MOMultiProcess& multiProcess, bool forceSelect)
   m_core->createDefaultProfile();
   m_core->createOverwriteDirectories();
 
-  log::info("using game plugin '{}' ('{}', variant {}, steam id '{}') at {}",
-            m_instance->gamePlugin()->gameName(),
-            m_instance->gamePlugin()->gameShortName(),
-            (m_settings->game().edition().value_or("").isEmpty()
-                 ? "(none)"
-                 : *m_settings->game().edition()),
-            m_instance->gamePlugin()->steamAPPId(),
-            m_instance->gamePlugin()->gameDirectory().absolutePath());
+  {
+    const auto edition = m_settings->game().edition().value_or("");
+    const auto variant = edition.isEmpty() ? QString("Steam") : edition;
+    log::info("using game plugin '{}' ('{}', variant {}) at {}",
+              m_instance->gamePlugin()->gameName(),
+              m_instance->gamePlugin()->gameShortName(),
+              variant,
+              m_instance->gamePlugin()->gameDirectory().absolutePath());
+  }
 
   CategoryFactory::instance().loadCategories();
   m_core->updateExecutablesList();

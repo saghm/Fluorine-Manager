@@ -2692,9 +2692,7 @@ void MainWindow::openInstallFolder()
 
 void MainWindow::openPluginsFolder()
 {
-  QString pluginsPath =
-      AppConfig::basePath() + "/" + ToQString(AppConfig::pluginPath());
-  shell::Explore(pluginsPath);
+  shell::Explore(AppConfig::pluginsPath());
 }
 
 void MainWindow::openStylesheetsFolder()

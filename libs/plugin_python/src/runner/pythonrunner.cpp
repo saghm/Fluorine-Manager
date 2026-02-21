@@ -89,54 +89,62 @@ namespace mo2::python {
             static const char* argv0 = "ModOrganizer.exe";
 
 #ifndef _WIN32
-#ifdef MO2_PYTHON_SHARED_LIBRARY
             // Ensure libpython symbols are globally visible for extension modules
             // loaded later (_struct, PyQt6, etc.).
-            bool usedNoload = true;
-            void* pyHandle =
-                dlopen(MO2_PYTHON_SHARED_LIBRARY, RTLD_NOW | RTLD_GLOBAL | RTLD_NOLOAD);
-            if (pyHandle == nullptr) {
-                usedNoload = false;
-                pyHandle = dlopen(MO2_PYTHON_SHARED_LIBRARY, RTLD_NOW | RTLD_GLOBAL);
-            }
-            if (pyHandle == nullptr) {
-                MOBase::log::warn("python: failed to dlopen '{}': {}",
-                                  MO2_PYTHON_SHARED_LIBRARY, dlerror());
-            } else {
-                MOBase::log::debug("python: '{}' promoted to RTLD_GLOBAL ({})",
-                                   MO2_PYTHON_SHARED_LIBRARY,
-                                   usedNoload ? "RTLD_NOLOAD" : "fresh load");
-            }
-
-            // Diagnose which DSO the Python init symbols resolve to globally.
+            //
+            // We must promote the *already-loaded* libpython to RTLD_GLOBAL.
+            // Using the compile-time filename (e.g. "libpython3.13.so.1.0") with
+            // RTLD_NOLOAD can fail when the portable Python's SONAME differs
+            // (e.g. "libpython3.13.so"), causing a second copy to be loaded and
+            // making Py_IsInitialized() return false after Py_InitializeFromConfig().
+            //
+            // Instead, find the DSO that provides Py_IsInitialized via dladdr, then
+            // re-dlopen that exact path with RTLD_GLOBAL.
             {
                 Dl_info di;
-                void* sym = dlsym(RTLD_DEFAULT, "Py_InitializeEx");
-                if (sym && dladdr(sym, &di)) {
-                    fprintf(stderr, "[py-diag] Py_InitializeEx global from '%s'\n",
+                void* sym = dlsym(RTLD_DEFAULT, "Py_IsInitialized");
+                if (sym && dladdr(sym, &di) && di.dli_fname) {
+                    void* pyHandle =
+                        dlopen(di.dli_fname, RTLD_NOW | RTLD_GLOBAL | RTLD_NOLOAD);
+                    if (pyHandle) {
+                        MOBase::log::debug(
+                            "python: promoted '{}' to RTLD_GLOBAL via dladdr",
                             di.dli_fname);
-                    MOBase::log::debug("python: Py_InitializeEx (global) from '{}'",
-                                       di.dli_fname);
+                    } else {
+                        // Fallback: load by full path (not NOLOAD).
+                        pyHandle = dlopen(di.dli_fname, RTLD_NOW | RTLD_GLOBAL);
+                        if (pyHandle) {
+                            MOBase::log::debug(
+                                "python: loaded '{}' with RTLD_GLOBAL (fresh)",
+                                di.dli_fname);
+                        } else {
+                            MOBase::log::warn(
+                                "python: failed to promote '{}' to RTLD_GLOBAL: {}",
+                                di.dli_fname, dlerror());
+                        }
+                    }
                 } else {
-                    fprintf(stderr, "[py-diag] Py_InitializeEx NOT in global scope "
-                                    "(sym=%p, err=%s)\n",
-                            sym, dlerror());
-                    MOBase::log::warn("python: Py_InitializeEx NOT in global scope "
-                                      "(sym={}, err={})",
-                                      sym, dlerror());
-                }
-                sym = dlsym(RTLD_DEFAULT, "Py_IsInitialized");
-                if (sym && dladdr(sym, &di)) {
-                    fprintf(stderr, "[py-diag] Py_IsInitialized global from '%s'\n",
-                            di.dli_fname);
-                    MOBase::log::debug("python: Py_IsInitialized (global) from '{}'",
-                                       di.dli_fname);
-                } else {
-                    fprintf(stderr, "[py-diag] Py_IsInitialized NOT in global scope\n");
-                    MOBase::log::warn("python: Py_IsInitialized NOT in global scope");
+                    // Py_IsInitialized not yet in scope — libpython may not be loaded
+                    // as a dependency yet.  Try the compile-time name.
+#ifdef MO2_PYTHON_SHARED_LIBRARY
+                    void* pyHandle =
+                        dlopen(MO2_PYTHON_SHARED_LIBRARY, RTLD_NOW | RTLD_GLOBAL);
+                    if (pyHandle) {
+                        MOBase::log::debug(
+                            "python: loaded '{}' with RTLD_GLOBAL (compile-time name)",
+                            MO2_PYTHON_SHARED_LIBRARY);
+                    } else {
+                        MOBase::log::warn(
+                            "python: failed to dlopen '{}': {}",
+                            MO2_PYTHON_SHARED_LIBRARY, dlerror());
+                    }
+#else
+                    MOBase::log::warn(
+                        "python: Py_IsInitialized not found in global scope and "
+                        "no compile-time library name available");
+#endif
                 }
             }
-#endif
 #endif
 
             // For portable/AppImage builds, set PYTHONHOME so the interpreter
@@ -221,8 +229,18 @@ namespace mo2::python {
             {
                 PyConfig config;
                 PyConfig_InitPythonConfig(&config);
-                // PYTHONHOME is already set via setenv; PyConfig reads it from env.
-                PyStatus status = Py_InitializeFromConfig(&config);
+                // Set config.home directly (more reliable than env for embedded use).
+                std::wstring wHome = pythonHome.toStdWString();
+                PyStatus status = PyConfig_SetString(&config, &config.home, wHome.c_str());
+                if (PyStatus_Exception(status)) {
+                    MOBase::log::error(
+                        "python: PyConfig_SetString(home) failed: '{}'",
+                        status.err_msg ? status.err_msg : "(no message)");
+                    PyConfig_Clear(&config);
+                    restorePythonEnv();
+                    return false;
+                }
+                status = Py_InitializeFromConfig(&config);
                 PyConfig_Clear(&config);
                 if (PyStatus_Exception(status)) {
                     fprintf(stderr,

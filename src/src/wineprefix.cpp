@@ -10,10 +10,17 @@
 #include <log.h>
 #include <uibase/filesystemutilities.h>
 
+#ifndef _WIN32
+#include <sys/stat.h>
+#include <utime.h>
+#endif
+
 namespace
 {
 constexpr const char* BackupIniSuffix  = ".mo2linux_backup";
 
+// Copy a file, preserving its modification time so that games see the
+// original save timestamps rather than "now".
 bool copyFileWithParents(const QString& source, const QString& destination)
 {
   const QFileInfo destinationInfo(destination);
@@ -25,7 +32,23 @@ bool copyFileWithParents(const QString& source, const QString& destination)
     return false;
   }
 
-  return QFile::copy(source, destination);
+  if (!QFile::copy(source, destination)) {
+    return false;
+  }
+
+#ifndef _WIN32
+  // QFile::copy() does not preserve timestamps.  Restore the source file's
+  // mtime so that games display the correct save date.
+  struct stat srcStat;
+  if (stat(source.toUtf8().constData(), &srcStat) == 0) {
+    struct utimbuf times;
+    times.actime  = srcStat.st_atime;
+    times.modtime = srcStat.st_mtime;
+    utime(destination.toUtf8().constData(), &times);
+  }
+#endif
+
+  return true;
 }
 
 bool copyTreeContents(const QString& sourceRoot, const QString& destinationRoot)
@@ -49,16 +72,22 @@ bool restoreBackedUpSaves(const QString& liveUpper, const QString& liveLower,
                           const QString& backupUpper, const QString& backupLower)
 {
   if (QDir(liveUpper).exists() && !QDir(liveUpper).removeRecursively()) {
+    MOBase::log::warn("restoreBackedUpSaves: failed to remove '{}'", liveUpper);
     return false;
   }
   if (QDir(liveLower).exists() && !QDir(liveLower).removeRecursively()) {
+    MOBase::log::warn("restoreBackedUpSaves: failed to remove '{}'", liveLower);
     return false;
   }
 
   if (QDir(backupUpper).exists() && !QDir().rename(backupUpper, liveUpper)) {
+    MOBase::log::warn("restoreBackedUpSaves: failed to rename '{}' -> '{}'",
+                      backupUpper, liveUpper);
     return false;
   }
   if (QDir(backupLower).exists() && !QDir().rename(backupLower, liveLower)) {
+    MOBase::log::warn("restoreBackedUpSaves: failed to rename '{}' -> '{}'",
+                      backupLower, liveLower);
     return false;
   }
 
@@ -296,16 +325,21 @@ bool WinePrefix::deployProfileSaves(const QString& profileSaveDir,
     if ((QDir(backupUpper).exists() || QDir(backupLower).exists()) &&
         !restoreBackedUpSaves(absoluteSaveDir, lowerSaveDir,
                               backupUpper, backupLower)) {
+      MOBase::log::warn("deployProfileSaves: failed to restore stale backup");
       return false;
     }
 
     if (QDir(absoluteSaveDir).exists() &&
         !QDir().rename(absoluteSaveDir, backupUpper)) {
+      MOBase::log::warn("deployProfileSaves: failed to backup '{}' -> '{}'",
+                        absoluteSaveDir, backupUpper);
       return false;
     }
     if (absoluteSaveDir != lowerSaveDir &&
         QDir(lowerSaveDir).exists() &&
         !QDir().rename(lowerSaveDir, backupLower)) {
+      MOBase::log::warn("deployProfileSaves: failed to backup '{}' -> '{}'",
+                        lowerSaveDir, backupLower);
       return false;
     }
   }

@@ -53,12 +53,10 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 using namespace MOBase;
 using namespace MOShared;
 
-namespace spawn::dialogs
-{
+namespace spawn::dialogs {
 
 #ifdef _WIN32
-std::wstring makeRightsDetails(const env::FileSecurity& fs)
-{
+std::wstring makeRightsDetails(const env::FileSecurity &fs) {
   if (fs.rights.normalRights) {
     return L"(normal rights)";
   }
@@ -75,22 +73,22 @@ std::wstring makeRightsDetails(const env::FileSecurity& fs)
   return s;
 }
 
-QString makeDetails(const SpawnParameters& sp, DWORD code, const QString& more = {})
-{
+QString makeDetails(const SpawnParameters &sp, DWORD code,
+                    const QString &more = {}) {
   std::wstring owner, rights;
 
   if (sp.binary.isFile()) {
     const auto fs = env::getFileSecurity(sp.binary.absoluteFilePath());
 
     if (fs.error.isEmpty()) {
-      owner  = fs.owner.toStdWString();
+      owner = fs.owner.toStdWString();
       rights = makeRightsDetails(fs);
     } else {
-      owner  = fs.error.toStdWString();
+      owner = fs.error.toStdWString();
       rights = fs.error.toStdWString();
     }
   } else {
-    owner  = L"(file not found)";
+    owner = L"(file not found)";
     rights = L"(file not found)";
   }
 
@@ -98,7 +96,7 @@ QString makeDetails(const SpawnParameters& sp, DWORD code, const QString& more =
       (sp.currentDirectory.isEmpty() ? true : sp.currentDirectory.exists());
 
   const auto appDir = QCoreApplication::applicationDirPath();
-  const auto sep    = QDir::separator();
+  const auto sep = QDir::separator();
 
   const std::wstring usvfs_x86_dll =
       QFileInfo(appDir + sep + "usvfs_x86.dll").isFile() ? L"ok" : L"not found";
@@ -107,10 +105,12 @@ QString makeDetails(const SpawnParameters& sp, DWORD code, const QString& more =
       QFileInfo(appDir + sep + "usvfs_x64.dll").isFile() ? L"ok" : L"not found";
 
   const std::wstring usvfs_x86_proxy =
-      QFileInfo(appDir + sep + "usvfs_proxy_x86.exe").isFile() ? L"ok" : L"not found";
+      QFileInfo(appDir + sep + "usvfs_proxy_x86.exe").isFile() ? L"ok"
+                                                               : L"not found";
 
   const std::wstring usvfs_x64_proxy =
-      QFileInfo(appDir + sep + "usvfs_proxy_x64.exe").isFile() ? L"ok" : L"not found";
+      QFileInfo(appDir + sep + "usvfs_proxy_x64.exe").isFile() ? L"ok"
+                                                               : L"not found";
 
   std::wstring elevated;
   if (auto b = env::Environment().windowsInfo().isElevated()) {
@@ -119,42 +119,44 @@ QString makeDetails(const SpawnParameters& sp, DWORD code, const QString& more =
     elevated = L"(not available)";
   }
 
-  auto s = std::format(L"Error {} {}{}: {}\n"
-                       L" . binary: '{}'\n"
-                       L" . owner: {}\n"
-                       L" . rights: {}\n"
-                       L" . arguments: '{}'\n"
-                       L" . cwd: '{}'{}\n"
-                       L" . stdout: {}, stderr: {}, hooked: {}\n"
-                       L" . MO elevated: {}",
-                       code, errorCodeName(code), (more.isEmpty() ? more : ", " + more),
-                       formatSystemMessage(code),
-                       QDir::toNativeSeparators(sp.binary.absoluteFilePath()), owner,
-                       rights, sp.arguments,
-                       QDir::toNativeSeparators(sp.currentDirectory.absolutePath()),
-                       (cwdExists ? L"" : L" (not found)"),
-                       (sp.stdOut == INVALID_HANDLE_VALUE ? L"no" : L"yes"),
-                       (sp.stdErr == INVALID_HANDLE_VALUE ? L"no" : L"yes"),
-                       (sp.hooked ? L"yes" : L"no"), elevated);
+  auto s = std::format(
+      L"Error {} {}{}: {}\n"
+      L" . binary: '{}'\n"
+      L" . owner: {}\n"
+      L" . rights: {}\n"
+      L" . arguments: '{}'\n"
+      L" . cwd: '{}'{}\n"
+      L" . stdout: {}, stderr: {}, hooked: {}\n"
+      L" . MO elevated: {}",
+      code, errorCodeName(code), (more.isEmpty() ? more : ", " + more),
+      formatSystemMessage(code),
+      QDir::toNativeSeparators(sp.binary.absoluteFilePath()), owner, rights,
+      sp.arguments,
+      QDir::toNativeSeparators(sp.currentDirectory.absolutePath()),
+      (cwdExists ? L"" : L" (not found)"),
+      (sp.stdOut == INVALID_HANDLE_VALUE ? L"no" : L"yes"),
+      (sp.stdErr == INVALID_HANDLE_VALUE ? L"no" : L"yes"),
+      (sp.hooked ? L"yes" : L"no"), elevated);
 
   if (sp.hooked) {
     s += std::format(L"\n . usvfs x86:{} x64:{} proxy_x86:{} proxy_x64:{}",
-                     usvfs_x86_dll, usvfs_x64_dll, usvfs_x86_proxy, usvfs_x64_proxy);
+                     usvfs_x86_dll, usvfs_x64_dll, usvfs_x86_proxy,
+                     usvfs_x64_proxy);
   }
 
   return QString::fromStdWString(s);
 }
 #else
-QString makeDetails(const SpawnParameters& sp, int code, const QString& more = {})
-{
+QString makeDetails(const SpawnParameters &sp, int code,
+                    const QString &more = {}) {
   const bool cwdExists =
       (sp.currentDirectory.isEmpty() ? true : sp.currentDirectory.exists());
 
   QString s = QString("Error %1%2: %3\n"
-                       " . binary: '%4'\n"
-                       " . arguments: '%5'\n"
-                       " . cwd: '%6'%7\n"
-                       " . stdout: %8, stderr: %9, hooked: %10")
+                      " . binary: '%4'\n"
+                      " . arguments: '%5'\n"
+                      " . cwd: '%6'%7\n"
+                      " . stdout: %8, stderr: %9, hooked: %10")
                   .arg(code)
                   .arg(more.isEmpty() ? more : ", " + more)
                   .arg(QString::fromUtf8(strerror(code)))
@@ -171,19 +173,21 @@ QString makeDetails(const SpawnParameters& sp, int code, const QString& more = {
 #endif
 
 #ifdef _WIN32
-QString makeContent(const SpawnParameters& sp, DWORD code)
-{
+QString makeContent(const SpawnParameters &sp, DWORD code) {
   if (code == ERROR_INVALID_PARAMETER) {
     return QObject::tr(
-        "This error typically happens because an antivirus has deleted critical "
+        "This error typically happens because an antivirus has deleted "
+        "critical "
         "files from Mod Organizer's installation folder or has made them "
         "generally inaccessible. Add an exclusion for Mod Organizer's "
-        "installation folder in your antivirus, reinstall Mod Organizer and try "
+        "installation folder in your antivirus, reinstall Mod Organizer and "
+        "try "
         "again.");
   } else if (code == ERROR_ACCESS_DENIED) {
     return QObject::tr(
         "This error typically happens because an antivirus is preventing Mod "
-        "Organizer from starting programs. Add an exclusion for Mod Organizer's "
+        "Organizer from starting programs. Add an exclusion for Mod "
+        "Organizer's "
         "installation folder in your antivirus and try again.");
   } else if (code == ERROR_FILE_NOT_FOUND) {
     return QObject::tr("The file '%1' does not exist.")
@@ -198,15 +202,13 @@ QString makeContent(const SpawnParameters& sp, DWORD code)
   return QString::fromStdWString(formatSystemMessage(code));
 }
 #else
-QString makeContent(const SpawnParameters& sp, int code)
-{
+QString makeContent(const SpawnParameters &sp, int code) {
   if (code == ENOENT) {
     return QObject::tr("The file '%1' does not exist.")
         .arg(sp.binary.absoluteFilePath());
   } else if (code == EACCES) {
-    return QObject::tr(
-        "Permission denied when trying to start '%1'. "
-        "Check that the file is executable.")
+    return QObject::tr("Permission denied when trying to start '%1'. "
+                       "Check that the file is executable.")
         .arg(sp.binary.absoluteFilePath());
   }
 
@@ -220,38 +222,39 @@ QString makeContent(const SpawnParameters& sp, int code)
 #endif
 
 #ifdef _WIN32
-QMessageBox::StandardButton badSteamReg(QWidget* parent, const QString& keyName,
-                                        const QString& valueName)
-{
+QMessageBox::StandardButton badSteamReg(QWidget *parent, const QString &keyName,
+                                        const QString &valueName) {
   const auto details =
-      QString("can't start steam, registry value at '%1' is empty or doesn't exist")
+      QString(
+          "can't start steam, registry value at '%1' is empty or doesn't exist")
           .arg(keyName + "\\" + valueName);
 
   log::error("{}", details);
 
   return MOBase::TaskDialog(parent, QObject::tr("Cannot start Steam"))
       .main(QObject::tr("Cannot start Steam"))
-      .content(
-          QObject::tr("The path to the Steam executable cannot be found. You might try "
-                      "reinstalling Steam."))
+      .content(QObject::tr(
+          "The path to the Steam executable cannot be found. You might try "
+          "reinstalling Steam."))
       .details(details)
       .icon(QMessageBox::Critical)
       .button({QObject::tr("Continue without starting Steam"),
-               QObject::tr("The program may fail to launch."), QMessageBox::Yes})
+               QObject::tr("The program may fail to launch."),
+               QMessageBox::Yes})
       .button({QObject::tr("Cancel"), QMessageBox::Cancel})
       .exec();
 }
 #endif
 
 #ifdef _WIN32
-QMessageBox::StandardButton startSteamFailed(QWidget* parent, const QString& keyName,
-                                             const QString& valueName,
-                                             const QString& exe,
-                                             const SpawnParameters& sp, DWORD e)
-{
-  auto details = QString("a steam install was found in the registry at '%1': '%2'\n\n")
-                     .arg(keyName + "\\" + valueName)
-                     .arg(exe);
+QMessageBox::StandardButton
+startSteamFailed(QWidget *parent, const QString &keyName,
+                 const QString &valueName, const QString &exe,
+                 const SpawnParameters &sp, DWORD e) {
+  auto details =
+      QString("a steam install was found in the registry at '%1': '%2'\n\n")
+          .arg(keyName + "\\" + valueName)
+          .arg(exe);
 
   details += makeDetails(sp, e);
 
@@ -263,26 +266,27 @@ QMessageBox::StandardButton startSteamFailed(QWidget* parent, const QString& key
       .details(details)
       .icon(QMessageBox::Critical)
       .button({QObject::tr("Continue without starting Steam"),
-               QObject::tr("The program may fail to launch."), QMessageBox::Yes})
+               QObject::tr("The program may fail to launch."),
+               QMessageBox::Yes})
       .button({QObject::tr("Cancel"), QMessageBox::Cancel})
       .exec();
 }
 #endif
 
-void spawnFailed(QWidget* parent, const SpawnParameters& sp,
+void spawnFailed(QWidget *parent, const SpawnParameters &sp,
 #ifdef _WIN32
                  DWORD code
 #else
                  int code
 #endif
-)
-{
+) {
   const auto details = makeDetails(sp, code);
   log::error("{}", details);
 
   const auto title = QObject::tr("Cannot launch program");
 
-  const auto mainText = QObject::tr("Cannot start %1").arg(sp.binary.fileName());
+  const auto mainText =
+      QObject::tr("Cannot start %1").arg(sp.binary.fileName());
 
   MOBase::TaskDialog(parent, title)
       .main(mainText)
@@ -293,10 +297,9 @@ void spawnFailed(QWidget* parent, const SpawnParameters& sp,
 }
 
 #ifdef _WIN32
-void helperFailed(QWidget* parent, DWORD code, const QString& why,
-                  const std::wstring& binary, const std::wstring& cwd,
-                  const std::wstring& args)
-{
+void helperFailed(QWidget *parent, DWORD code, const QString &why,
+                  const std::wstring &binary, const std::wstring &cwd,
+                  const std::wstring &args) {
   SpawnParameters sp;
   sp.binary = QFileInfo(QString::fromStdWString(binary));
   sp.currentDirectory.setPath(QString::fromStdWString(cwd));
@@ -307,7 +310,8 @@ void helperFailed(QWidget* parent, DWORD code, const QString& why,
 
   const auto title = QObject::tr("Cannot launch helper");
 
-  const auto mainText = QObject::tr("Cannot start %1").arg(sp.binary.fileName());
+  const auto mainText =
+      QObject::tr("Cannot start %1").arg(sp.binary.fileName());
 
   MOBase::TaskDialog(parent, title)
       .main(mainText)
@@ -317,20 +321,22 @@ void helperFailed(QWidget* parent, DWORD code, const QString& why,
       .exec();
 }
 
-bool confirmRestartAsAdmin(QWidget* parent, const SpawnParameters& sp)
-{
+bool confirmRestartAsAdmin(QWidget *parent, const SpawnParameters &sp) {
   const auto details = makeDetails(sp, ERROR_ELEVATION_REQUIRED);
 
   log::error("{}", details);
 
   const auto title = QObject::tr("Elevation required");
 
-  const auto mainText = QObject::tr("Cannot start %1").arg(sp.binary.fileName());
+  const auto mainText =
+      QObject::tr("Cannot start %1").arg(sp.binary.fileName());
 
   const auto content = QObject::tr(
       "This program is requesting to run as administrator but Mod Organizer "
-      "itself is not running as administrator. Running programs as administrator "
-      "is typically unnecessary as long as the game and Mod Organizer have been "
+      "itself is not running as administrator. Running programs as "
+      "administrator "
+      "is typically unnecessary as long as the game and Mod Organizer have "
+      "been "
       "installed outside \"Program Files\".\r\n\r\n"
       "You can restart Mod Organizer as administrator and try launching the "
       "program again.");
@@ -344,24 +350,24 @@ bool confirmRestartAsAdmin(QWidget* parent, const SpawnParameters& sp)
           .details(details)
           .icon(QMessageBox::Question)
           .button({QObject::tr("Restart Mod Organizer as administrator"),
-                   QObject::tr(
-                       "You must allow \"helper.exe\" to make changes to the system."),
+                   QObject::tr("You must allow \"helper.exe\" to make changes "
+                               "to the system."),
                    QMessageBox::Yes})
           .button({QObject::tr("Cancel"), QMessageBox::Cancel})
           .exec();
 
   return (r == QMessageBox::Yes);
 }
-#endif  // _WIN32
+#endif // _WIN32
 
-QMessageBox::StandardButton
-confirmStartSteam(QWidget* parent, const SpawnParameters& sp, const QString& details)
-{
-  const auto title    = QObject::tr("Launch Steam");
+QMessageBox::StandardButton confirmStartSteam(QWidget *parent,
+                                              const SpawnParameters &sp,
+                                              const QString &details) {
+  const auto title = QObject::tr("Launch Steam");
   const auto mainText = QObject::tr("This program requires Steam");
-  const auto content  = QObject::tr(
-      "Mod Organizer has detected that this program likely requires Steam to be "
-       "running to function properly.");
+  const auto content = QObject::tr("Mod Organizer has detected that this "
+                                   "program likely requires Steam to be "
+                                   "running to function properly.");
 
   return MOBase::TaskDialog(parent, title)
       .main(mainText)
@@ -377,17 +383,16 @@ confirmStartSteam(QWidget* parent, const SpawnParameters& sp, const QString& det
 }
 
 #ifdef _WIN32
-QMessageBox::StandardButton confirmRestartAsAdminForSteam(QWidget* parent,
-                                                          const SpawnParameters& sp)
-{
-  const auto title    = QObject::tr("Elevation required");
+QMessageBox::StandardButton
+confirmRestartAsAdminForSteam(QWidget *parent, const SpawnParameters &sp) {
+  const auto title = QObject::tr("Elevation required");
   const auto mainText = QObject::tr("Steam is running as administrator");
-  const auto content  = QObject::tr(
+  const auto content = QObject::tr(
       "Running Steam as administrator is typically unnecessary and can cause "
-       "problems when Mod Organizer itself is not running as administrator."
-       "\r\n\r\n"
-       "You can restart Mod Organizer as administrator and try launching the "
-       "program again.");
+      "problems when Mod Organizer itself is not running as administrator."
+      "\r\n\r\n"
+      "You can restart Mod Organizer as administrator and try launching the "
+      "program again.");
 
   return MOBase::TaskDialog(parent, title)
       .main(mainText)
@@ -395,24 +400,25 @@ QMessageBox::StandardButton confirmRestartAsAdminForSteam(QWidget* parent,
       .icon(QMessageBox::Question)
       .button(
           {QObject::tr("Restart Mod Organizer as administrator"),
-           QObject::tr("You must allow \"helper.exe\" to make changes to the system."),
+           QObject::tr(
+               "You must allow \"helper.exe\" to make changes to the system."),
            QMessageBox::Yes})
-      .button({QObject::tr("Continue"), QObject::tr("The program might fail to run."),
-               QMessageBox::No})
+      .button({QObject::tr("Continue"),
+               QObject::tr("The program might fail to run."), QMessageBox::No})
       .button({QObject::tr("Cancel"), QMessageBox::Cancel})
       .remember("steamAdminQuery", sp.binary.fileName())
       .exec();
 }
 
-bool eventLogNotRunning(QWidget* parent, const env::Service& s,
-                        const SpawnParameters& sp)
-{
-  const auto title    = QObject::tr("Event Log not running");
+bool eventLogNotRunning(QWidget *parent, const env::Service &s,
+                        const SpawnParameters &sp) {
+  const auto title = QObject::tr("Event Log not running");
   const auto mainText = QObject::tr("The Event Log service is not running");
-  const auto content  = QObject::tr(
-      "The Windows Event Log service is not running. This can prevent USVFS from "
-       "running properly and your mods may not be recognized by the program being "
-       "launched.");
+  const auto content = QObject::tr("The Windows Event Log service is not "
+                                   "running. This can prevent USVFS from "
+                                   "running properly and your mods may not be "
+                                   "recognized by the program being "
+                                   "launched.");
 
   const auto r =
       MOBase::TaskDialog(parent, title)
@@ -421,18 +427,18 @@ bool eventLogNotRunning(QWidget* parent, const env::Service& s,
           .details(s.toString())
           .icon(QMessageBox::Question)
           .remember("eventLogService", sp.binary.fileName())
-          .button({QObject::tr("Continue"), QObject::tr("Your mods might not work."),
-                   QMessageBox::Yes})
+          .button({QObject::tr("Continue"),
+                   QObject::tr("Your mods might not work."), QMessageBox::Yes})
           .button({QObject::tr("Cancel"), QMessageBox::Cancel})
           .exec();
 
   return (r == QMessageBox::Yes);
 }
-#endif  // _WIN32
+#endif // _WIN32
 
-QMessageBox::StandardButton
-confirmBlacklisted(QWidget* parent, const SpawnParameters& sp, Settings& settings)
-{
+QMessageBox::StandardButton confirmBlacklisted(QWidget *parent,
+                                               const SpawnParameters &sp,
+                                               Settings &settings) {
   const auto title = QObject::tr("Blacklisted program");
   const auto mainText =
       QObject::tr("The program %1 is blacklisted").arg(sp.binary.fileName());
@@ -446,17 +452,18 @@ confirmBlacklisted(QWidget* parent, const SpawnParameters& sp, Settings& setting
                        "Current blacklist: " +
                        settings.executablesBlacklist();
 
-  auto r = MOBase::TaskDialog(parent, title)
-               .main(mainText)
-               .content(content)
-               .details(details)
-               .icon(QMessageBox::Question)
-               .remember("blacklistedExecutable", sp.binary.fileName())
-               .button({QObject::tr("Continue"),
-                        QObject::tr("Your mods might not work."), QMessageBox::Yes})
-               .button({QObject::tr("Change the blacklist"), QMessageBox::Retry})
-               .button({QObject::tr("Cancel"), QMessageBox::Cancel})
-               .exec();
+  auto r =
+      MOBase::TaskDialog(parent, title)
+          .main(mainText)
+          .content(content)
+          .details(details)
+          .icon(QMessageBox::Question)
+          .remember("blacklistedExecutable", sp.binary.fileName())
+          .button({QObject::tr("Continue"),
+                   QObject::tr("Your mods might not work."), QMessageBox::Yes})
+          .button({QObject::tr("Change the blacklist"), QMessageBox::Retry})
+          .button({QObject::tr("Cancel"), QMessageBox::Cancel})
+          .exec();
 
   if (r == QMessageBox::Retry) {
     if (!WorkaroundsSettingsTab::changeBlacklistNow(parent, settings)) {
@@ -467,13 +474,11 @@ confirmBlacklisted(QWidget* parent, const SpawnParameters& sp, Settings& setting
   return r;
 }
 
-}  // namespace spawn::dialogs
+} // namespace spawn::dialogs
 
-namespace spawn
-{
+namespace spawn {
 
-void logSpawning(const SpawnParameters& sp, const QString& realCmd)
-{
+void logSpawning(const SpawnParameters &sp, const QString &realCmd) {
   log::debug("spawning binary:\n"
              " . exe: '{}'\n"
              " . args: '{}'\n"
@@ -489,23 +494,21 @@ void logSpawning(const SpawnParameters& sp, const QString& realCmd)
              (sp.stdOut == INVALID_HANDLE_VALUE ? "no" : "yes"),
              (sp.stdErr == INVALID_HANDLE_VALUE ? "no" : "yes"),
 #else
-             (sp.stdOut == -1 ? "no" : "yes"),
-             (sp.stdErr == -1 ? "no" : "yes"),
+             (sp.stdOut == -1 ? "no" : "yes"), (sp.stdErr == -1 ? "no" : "yes"),
 #endif
              realCmd);
 }
 
 #ifndef _WIN32
-uint32_t parseSteamAppId(const QString& steamAppId)
-{
-  bool ok      = false;
+uint32_t parseSteamAppId(const QString &steamAppId) {
+  bool ok = false;
   const auto n = steamAppId.toUInt(&ok);
   return (ok ? n : 0u);
 }
 
-QString firstExistingSetting(const QSettings& settings, const QStringList& keys)
-{
-  for (const QString& key : keys) {
+QString firstExistingSetting(const QSettings &settings,
+                             const QStringList &keys) {
+  for (const QString &key : keys) {
     const QString value = settings.value(key).toString().trimmed();
     if (!value.isEmpty()) {
       return value;
@@ -515,13 +518,13 @@ QString firstExistingSetting(const QSettings& settings, const QStringList& keys)
   return {};
 }
 
-QString resolvePrefixPath()
-{
-  if (auto cfg = FluorineConfig::load(); cfg.has_value() && cfg->prefixExists()) {
+QString resolvePrefixPath() {
+  if (auto cfg = FluorineConfig::load();
+      cfg.has_value() && cfg->prefixExists()) {
     return cfg->prefix_path.trimmed();
   }
 
-  const Settings* settings = Settings::maybeInstance();
+  const Settings *settings = Settings::maybeInstance();
   if (settings == nullptr) {
     return {};
   }
@@ -532,8 +535,7 @@ QString resolvePrefixPath()
                          "Proton/prefix_path", "fluorine/prefix_path"});
 }
 
-QString resolveProtonPath()
-{
+QString resolveProtonPath() {
   if (auto cfg = FluorineConfig::load(); cfg.has_value()) {
     const QString protonPath = cfg->proton_path.trimmed();
     if (!protonPath.isEmpty()) {
@@ -541,35 +543,34 @@ QString resolveProtonPath()
     }
   }
 
-  const Settings* settings = Settings::maybeInstance();
+  const Settings *settings = Settings::maybeInstance();
   if (settings == nullptr) {
     return {};
   }
 
   const QSettings instanceSettings(settings->filename(), QSettings::IniFormat);
-  return firstExistingSetting(instanceSettings,
-                              {"Settings/proton_path", "Proton/path",
-                               "fluorine/proton_path"});
+  return firstExistingSetting(
+      instanceSettings,
+      {"Settings/proton_path", "Proton/path", "fluorine/proton_path"});
 }
 #endif
 
 #ifdef _WIN32
-DWORD spawn(const SpawnParameters& sp, HANDLE& processHandle)
-{
+DWORD spawn(const SpawnParameters &sp, HANDLE &processHandle) {
   BOOL inheritHandles = FALSE;
 
   STARTUPINFO si = {};
-  si.cb          = sizeof(si);
+  si.cb = sizeof(si);
 
   // inherit handles if we plan to use stdout or stderr reroute
   if (sp.stdOut != INVALID_HANDLE_VALUE) {
-    si.hStdOutput  = sp.stdOut;
+    si.hStdOutput = sp.stdOut;
     inheritHandles = TRUE;
     si.dwFlags |= STARTF_USESTDHANDLES;
   }
 
   if (sp.stdErr != INVALID_HANDLE_VALUE) {
-    si.hStdError   = sp.stdErr;
+    si.hStdError = sp.stdErr;
     inheritHandles = TRUE;
     si.dwFlags |= STARTF_USESTDHANDLES;
   }
@@ -583,26 +584,26 @@ DWORD spawn(const SpawnParameters& sp, HANDLE& processHandle)
   }
 
   const QString moPath = QCoreApplication::applicationDirPath();
-  const auto oldPath   = env::appendToPath(QDir::toNativeSeparators(moPath));
+  const auto oldPath = env::appendToPath(QDir::toNativeSeparators(moPath));
 
   PROCESS_INFORMATION pi = {};
-  BOOL success           = FALSE;
+  BOOL success = FALSE;
 
   logSpawning(sp, commandLine);
 
   const auto wcommandLine = commandLine.toStdWString();
-  const auto wcwd         = cwd.toStdWString();
+  const auto wcwd = cwd.toStdWString();
 
   const DWORD flags = CREATE_BREAKAWAY_FROM_JOB;
 
   if (sp.hooked) {
     success = ::usvfsCreateProcessHooked(
-        nullptr, const_cast<wchar_t*>(wcommandLine.c_str()), nullptr, nullptr,
+        nullptr, const_cast<wchar_t *>(wcommandLine.c_str()), nullptr, nullptr,
         inheritHandles, flags, nullptr, wcwd.c_str(), &si, &pi);
   } else {
-    success = ::CreateProcess(nullptr, const_cast<wchar_t*>(wcommandLine.c_str()),
-                              nullptr, nullptr, inheritHandles, flags, nullptr,
-                              wcwd.c_str(), &si, &pi);
+    success = ::CreateProcess(
+        nullptr, const_cast<wchar_t *>(wcommandLine.c_str()), nullptr, nullptr,
+        inheritHandles, flags, nullptr, wcwd.c_str(), &si, &pi);
   }
 
   const auto e = GetLastError();
@@ -618,10 +619,11 @@ DWORD spawn(const SpawnParameters& sp, HANDLE& processHandle)
   return ERROR_SUCCESS;
 }
 #else
-int spawn(const SpawnParameters& sp, pid_t& processId)
-{
-  const QString bin = MOBase::normalizePathForHost(sp.binary.absoluteFilePath());
-  QString cwd       = MOBase::normalizePathForHost(sp.currentDirectory.absolutePath());
+int spawn(const SpawnParameters &sp, pid_t &processId) {
+  const QString bin =
+      MOBase::normalizePathForHost(sp.binary.absoluteFilePath());
+  QString cwd =
+      MOBase::normalizePathForHost(sp.currentDirectory.absolutePath());
 
   QStringList argList;
   if (!sp.arguments.isEmpty()) {
@@ -634,6 +636,21 @@ int spawn(const SpawnParameters& sp, pid_t& processId)
 
   logSpawning(sp, bin + " " + sp.arguments);
 
+  // Read per-instance settings from the instance INI (not the global
+  // QSettings).
+  const Settings *instanceForLaunch = Settings::maybeInstance();
+  bool useSteamDrm = true; // default
+  QString storeVariant;
+  if (instanceForLaunch) {
+    const QSettings instanceIni(instanceForLaunch->filename(),
+                                QSettings::IniFormat);
+    useSteamDrm = instanceIni.value("fluorine/steam_drm", true).toBool();
+    // settingName() maps "General" section keys to top-level (no section
+    // prefix), so game_edition is stored as a plain key under [General] in the
+    // INI.
+    storeVariant = instanceIni.value("game_edition").toString().trimmed();
+  }
+
   ProtonLauncher launcher;
   launcher.setBinary(bin)
       .setArguments(argList)
@@ -644,14 +661,18 @@ int spawn(const SpawnParameters& sp, pid_t& processId)
           QSettings().value("fluorine/prefer_system_umu", false).toBool())
       .setUseSteamRun(
           QSettings().value("fluorine/use_steam_run", false).toBool())
-      .setSteamDrm(QSettings().value("fluorine/steam_drm", true).toBool());
+      .setSteamDrm(useSteamDrm)
+      .setStoreVariant(storeVariant);
 
   const QString prefixPath = resolvePrefixPath();
   if (prefixPath.isEmpty()) {
-    MOBase::log::warn("No Wine prefix configured - games may not launch correctly. "
-                      "Configure a prefix in Settings > Proton or via fluorine-manager.");
+    MOBase::log::warn(
+        "No Wine prefix configured - games may not launch correctly. "
+        "Configure a prefix in Settings > Proton or via fluorine-manager.");
   } else if (!QDir(QDir(prefixPath).filePath("drive_c")).exists()) {
-    MOBase::log::warn("Wine prefix '{}' does not contain drive_c/ - prefix may be invalid", prefixPath);
+    MOBase::log::warn(
+        "Wine prefix '{}' does not contain drive_c/ - prefix may be invalid",
+        prefixPath);
   } else {
     MOBase::log::info("Using Wine prefix: {}", prefixPath);
     launcher.setPrefix(prefixPath);
@@ -662,7 +683,8 @@ int spawn(const SpawnParameters& sp, pid_t& processId)
     launcher.setProtonPath(protonPath);
   }
 
-  const QString wrapper = QSettings().value("fluorine/launch_wrapper").toString().trimmed();
+  const QString wrapper =
+      QSettings().value("fluorine/launch_wrapper").toString().trimmed();
   if (!wrapper.isEmpty()) {
     launcher.setWrapper(wrapper);
   }
@@ -678,8 +700,7 @@ int spawn(const SpawnParameters& sp, pid_t& processId)
 #endif
 
 #ifdef _WIN32
-bool restartAsAdmin(QWidget* parent)
-{
+bool restartAsAdmin(QWidget *parent) {
   WCHAR cwd[MAX_PATH] = {};
   if (!GetCurrentDirectory(MAX_PATH, cwd)) {
     cwd[0] = L'\0';
@@ -698,8 +719,7 @@ bool restartAsAdmin(QWidget* parent)
   return true;
 }
 
-void startBinaryAdmin(QWidget* parent, const SpawnParameters& sp)
-{
+void startBinaryAdmin(QWidget *parent, const SpawnParameters &sp) {
   if (!dialogs::confirmRestartAsAdmin(parent, sp)) {
     log::debug("user declined");
     return;
@@ -708,25 +728,23 @@ void startBinaryAdmin(QWidget* parent, const SpawnParameters& sp)
   log::info("restarting MO as administrator");
   restartAsAdmin(parent);
 }
-#endif  // _WIN32
+#endif // _WIN32
 
-struct SteamStatus
-{
-  bool running    = false;
+struct SteamStatus {
+  bool running = false;
   bool accessible = false;
 };
 
-SteamStatus getSteamStatus()
-{
+SteamStatus getSteamStatus() {
   SteamStatus ss;
 
 #ifdef _WIN32
   const auto ps = env::Environment().runningProcesses();
 
-  for (const auto& p : ps) {
+  for (const auto &p : ps) {
     if ((p.name().compare("Steam.exe", Qt::CaseInsensitive) == 0) ||
         (p.name().compare("SteamService.exe", Qt::CaseInsensitive) == 0)) {
-      ss.running    = true;
+      ss.running = true;
       ss.accessible = p.canAccess();
 
       log::debug("'{}' is running, accessible={}", p.name(),
@@ -742,7 +760,7 @@ SteamStatus getSteamStatus()
   pgrep.waitForFinished(3000);
 
   if (pgrep.exitCode() == 0) {
-    ss.running    = true;
+    ss.running = true;
     ss.accessible = true;
     log::debug("steam is running");
   }
@@ -751,8 +769,7 @@ SteamStatus getSteamStatus()
   return ss;
 }
 
-QString makeSteamArguments(const QString& username, const QString& password)
-{
+QString makeSteamArguments(const QString &username, const QString &password) {
   QString args;
 
   if (username != "") {
@@ -766,17 +783,17 @@ QString makeSteamArguments(const QString& username, const QString& password)
   return args;
 }
 
-bool startSteam(QWidget* parent)
-{
+bool startSteam(QWidget *parent) {
 #ifdef _WIN32
-  const QString keyName   = "HKEY_CURRENT_USER\\Software\\Valve\\Steam";
+  const QString keyName = "HKEY_CURRENT_USER\\Software\\Valve\\Steam";
   const QString valueName = "SteamExe";
 
   const QSettings steamSettings(keyName, QSettings::NativeFormat);
   const QString exe = steamSettings.value(valueName, "").toString();
 
   if (exe.isEmpty()) {
-    return (dialogs::badSteamReg(parent, keyName, valueName) == QMessageBox::Yes);
+    return (dialogs::badSteamReg(parent, keyName, valueName) ==
+            QMessageBox::Yes);
   }
 
   SpawnParameters sp;
@@ -797,10 +814,11 @@ bool startSteam(QWidget* parent)
   log::debug("starting steam process:\n"
              " . program: '{}'\n"
              " . username={}, password={}",
-             sp.binary.filePath().toStdString(), (username.isEmpty() ? "no" : "yes"),
+             sp.binary.filePath().toStdString(),
+             (username.isEmpty() ? "no" : "yes"),
              (password.isEmpty() ? "no" : "yes"));
 
-  HANDLE ph    = INVALID_HANDLE_VALUE;
+  HANDLE ph = INVALID_HANDLE_VALUE;
   const auto e = spawn(sp, ph);
   ::CloseHandle(ph);
 
@@ -809,7 +827,8 @@ bool startSteam(QWidget* parent)
     sp.arguments = makeSteamArguments((username.isEmpty() ? "" : "USERNAME"),
                                       (password.isEmpty() ? "" : "PASSWORD"));
 
-    const auto r = dialogs::startSteamFailed(parent, keyName, valueName, exe, sp, e);
+    const auto r =
+        dialogs::startSteamFailed(parent, keyName, valueName, exe, sp, e);
 
     return (r == QMessageBox::Yes);
   }
@@ -840,10 +859,11 @@ bool startSteam(QWidget* parent)
     MOBase::TaskDialog(parent, title)
         .main(title)
         .content(QObject::tr("The Steam executable could not be found. "
-                              "Make sure Steam is installed."))
+                             "Make sure Steam is installed."))
         .icon(QMessageBox::Critical)
         .button({QObject::tr("Continue without starting Steam"),
-                 QObject::tr("The program may fail to launch."), QMessageBox::Yes})
+                 QObject::tr("The program may fail to launch."),
+                 QMessageBox::Yes})
         .button({QObject::tr("Cancel"), QMessageBox::Cancel})
         .exec();
 
@@ -869,11 +889,12 @@ bool startSteam(QWidget* parent)
 #endif
 }
 
-bool checkSteam(QWidget* parent, const SpawnParameters& sp, const QDir& gameDirectory,
-                const QString& steamAppID, const Settings& settings)
-{
+bool checkSteam(QWidget *parent, const SpawnParameters &sp,
+                const QDir &gameDirectory, const QString &steamAppID,
+                const Settings &settings) {
 #ifdef _WIN32
-  static const std::vector<QString> steamFiles = {"steam_api.dll", "steam_api64.dll"};
+  static const std::vector<QString> steamFiles = {"steam_api.dll",
+                                                  "steam_api64.dll"};
 #else
   static const std::vector<QString> steamFiles = {"libsteam_api.so"};
 #endif
@@ -889,7 +910,7 @@ bool checkSteam(QWidget* parent, const SpawnParameters& sp, const QDir& gameDire
   bool steamRequired = false;
   QString details;
 
-  for (const auto& file : steamFiles) {
+  for (const auto &file : steamFiles) {
     const QFileInfo fi(gameDirectory.absoluteFilePath(file));
     if (fi.exists()) {
       details = QString("managed game is located at '%1' and file '%2' exists")
@@ -959,8 +980,8 @@ bool checkSteam(QWidget* parent, const SpawnParameters& sp, const QDir& gameDire
   return true;
 }
 
-bool checkBlacklist(QWidget* parent, const SpawnParameters& sp, Settings& settings)
-{
+bool checkBlacklist(QWidget *parent, const SpawnParameters &sp,
+                    Settings &settings) {
   for (;;) {
     if (!settings.isExecutableBlacklisted(sp.binary.fileName())) {
       return true;
@@ -975,10 +996,9 @@ bool checkBlacklist(QWidget* parent, const SpawnParameters& sp, Settings& settin
 }
 
 #ifdef _WIN32
-HANDLE startBinary(QWidget* parent, const SpawnParameters& sp)
-{
+HANDLE startBinary(QWidget *parent, const SpawnParameters &sp) {
   HANDLE handle = INVALID_HANDLE_VALUE;
-  const auto e  = spawn::spawn(sp, handle);
+  const auto e = spawn::spawn(sp, handle);
 
   switch (e) {
   case ERROR_SUCCESS: {
@@ -997,8 +1017,7 @@ HANDLE startBinary(QWidget* parent, const SpawnParameters& sp)
   }
 }
 #else
-pid_t startBinary(QWidget* parent, const SpawnParameters& sp)
-{
+pid_t startBinary(QWidget *parent, const SpawnParameters &sp) {
   pid_t pid = -1;
   const auto e = spawn::spawn(sp, pid);
 
@@ -1012,19 +1031,18 @@ pid_t startBinary(QWidget* parent, const SpawnParameters& sp)
 #endif
 
 #ifdef _WIN32
-QString getExecutableForJarFile(const QString& jarFile)
-{
+QString getExecutableForJarFile(const QString &jarFile) {
   const std::wstring jarFileW = jarFile.toStdWString();
 
   WCHAR buffer[MAX_PATH];
 
   const auto hinst = ::FindExecutableW(jarFileW.c_str(), nullptr, buffer);
-  const auto r     = static_cast<int>(reinterpret_cast<std::uintptr_t>(hinst));
+  const auto r = static_cast<int>(reinterpret_cast<std::uintptr_t>(hinst));
 
   // anything <= 32 signals failure
   if (r <= 32) {
-    log::warn("failed to find executable associated with file '{}', {}", jarFile,
-              shell::formatError(r));
+    log::warn("failed to find executable associated with file '{}', {}",
+              jarFile, shell::formatError(r));
 
     return {};
   }
@@ -1050,8 +1068,7 @@ QString getExecutableForJarFile(const QString& jarFile)
   return QString::fromWCharArray(buffer);
 }
 
-QString getJavaHome()
-{
+QString getJavaHome() {
   const QString key =
       "HKEY_LOCAL_MACHINE\\Software\\JavaSoft\\Java Runtime Environment";
   const QString value = "CurrentVersion";
@@ -1064,11 +1081,12 @@ QString getJavaHome()
   }
 
   const QString currentVersion = reg.value("CurrentVersion").toString();
-  const QString javaHome       = QString("%1/JavaHome").arg(currentVersion);
+  const QString javaHome = QString("%1/JavaHome").arg(currentVersion);
 
   if (!reg.contains(javaHome)) {
-    log::warn("java version '{}' was found at '{}\\{}', but '{}\\{}' doesn't exist",
-              currentVersion, key, value, key, javaHome);
+    log::warn(
+        "java version '{}' was found at '{}\\{}', but '{}\\{}' doesn't exist",
+        currentVersion, key, value, key, javaHome);
 
     return {};
   }
@@ -1076,10 +1094,9 @@ QString getJavaHome()
   const auto path = reg.value(javaHome).toString();
   return path + "\\bin\\javaw.exe";
 }
-#endif  // _WIN32
+#endif // _WIN32
 
-QString findJavaInstallation(const QString& jarFile)
-{
+QString findJavaInstallation(const QString &jarFile) {
 #ifdef _WIN32
   // try to find java automatically based on the given jar file
   if (!jarFile.isEmpty()) {
@@ -1108,8 +1125,7 @@ QString findJavaInstallation(const QString& jarFile)
   return {};
 }
 
-bool isBatchFile(const QFileInfo& target)
-{
+bool isBatchFile(const QFileInfo &target) {
 #ifdef _WIN32
   const auto batchExtensions = {"cmd", "bat"};
 #else
@@ -1117,7 +1133,7 @@ bool isBatchFile(const QFileInfo& target)
 #endif
 
   const QString extension = target.suffix();
-  for (auto&& e : batchExtensions) {
+  for (auto &&e : batchExtensions) {
     if (extension.compare(e, Qt::CaseInsensitive) == 0) {
       return true;
     }
@@ -1126,8 +1142,7 @@ bool isBatchFile(const QFileInfo& target)
   return false;
 }
 
-bool isExeFile(const QFileInfo& target)
-{
+bool isExeFile(const QFileInfo &target) {
 #ifdef _WIN32
   return (target.suffix().compare("exe", Qt::CaseInsensitive) == 0);
 #else
@@ -1136,13 +1151,11 @@ bool isExeFile(const QFileInfo& target)
 #endif
 }
 
-bool isJavaFile(const QFileInfo& target)
-{
+bool isJavaFile(const QFileInfo &target) {
   return (target.suffix().compare("jar", Qt::CaseInsensitive) == 0);
 }
 
-QFileInfo getCmdPath()
-{
+QFileInfo getCmdPath() {
 #ifdef _WIN32
   const auto p = env::get("COMSPEC");
   if (!p.isEmpty()) {
@@ -1151,7 +1164,7 @@ QFileInfo getCmdPath()
 
   QString systemDirectory;
 
-  const std::size_t buffer_size   = 1000;
+  const std::size_t buffer_size = 1000;
   wchar_t buffer[buffer_size + 1] = {};
 
   const auto length = ::GetSystemDirectoryW(buffer, buffer_size);
@@ -1176,8 +1189,7 @@ QFileInfo getCmdPath()
 #endif
 }
 
-FileExecutionTypes getFileExecutionType(const QFileInfo& target)
-{
+FileExecutionTypes getFileExecutionType(const QFileInfo &target) {
   if (isExeFile(target) || isBatchFile(target) || isJavaFile(target)) {
     return FileExecutionTypes::Executable;
   }
@@ -1185,23 +1197,21 @@ FileExecutionTypes getFileExecutionType(const QFileInfo& target)
   return FileExecutionTypes::Other;
 }
 
-FileExecutionContext getFileExecutionContext(QWidget* parent, const QFileInfo& target)
-{
+FileExecutionContext getFileExecutionContext(QWidget *parent,
+                                             const QFileInfo &target) {
   if (isExeFile(target)) {
     return {target, "", FileExecutionTypes::Executable};
   }
 
   if (isBatchFile(target)) {
 #ifdef _WIN32
-    return {
-        getCmdPath(),
-        QString("/C \"%1\"").arg(QDir::toNativeSeparators(target.absoluteFilePath())),
-        FileExecutionTypes::Executable};
+    return {getCmdPath(),
+            QString("/C \"%1\"")
+                .arg(QDir::toNativeSeparators(target.absoluteFilePath())),
+            FileExecutionTypes::Executable};
 #else
-    return {
-        getCmdPath(),
-        QString("\"%1\"").arg(target.absoluteFilePath()),
-        FileExecutionTypes::Executable};
+    return {getCmdPath(), QString("\"%1\"").arg(target.absoluteFilePath()),
+            FileExecutionTypes::Executable};
 #endif
   }
 
@@ -1210,13 +1220,13 @@ FileExecutionContext getFileExecutionContext(QWidget* parent, const QFileInfo& t
 
     if (java.isEmpty()) {
 #ifdef _WIN32
-      java =
-          QFileDialog::getOpenFileName(parent, QObject::tr("Select binary"), QString(),
-                                       QObject::tr("Binary") + " (*.exe)");
+      java = QFileDialog::getOpenFileName(parent, QObject::tr("Select binary"),
+                                          QString(),
+                                          QObject::tr("Binary") + " (*.exe)");
 #else
-      java =
-          QFileDialog::getOpenFileName(parent, QObject::tr("Select binary"), QString(),
-                                       QObject::tr("Binary") + " (*)");
+      java = QFileDialog::getOpenFileName(parent, QObject::tr("Select binary"),
+                                          QString(),
+                                          QObject::tr("Binary") + " (*)");
 #endif
     }
 
@@ -1231,15 +1241,13 @@ FileExecutionContext getFileExecutionContext(QWidget* parent, const QFileInfo& t
   return {{}, {}, FileExecutionTypes::Other};
 }
 
-}  // namespace spawn
+} // namespace spawn
 
 #ifdef _WIN32
-namespace helper
-{
+namespace helper {
 
-bool helperExec(QWidget* parent, const std::wstring& moDirectory,
-                const std::wstring& commandLine, BOOL async)
-{
+bool helperExec(QWidget *parent, const std::wstring &moDirectory,
+                const std::wstring &commandLine, BOOL async) {
   const std::wstring fileName = moDirectory + L"\\helper.exe";
 
   env::HandlePtr process;
@@ -1251,14 +1259,14 @@ bool helperExec(QWidget* parent, const std::wstring& moDirectory,
     if (!async)
       flags |= SEE_MASK_NOCLOSEPROCESS;
 
-    execInfo.cbSize       = sizeof(SHELLEXECUTEINFOW);
-    execInfo.fMask        = flags;
-    execInfo.hwnd         = 0;
-    execInfo.lpVerb       = L"runas";
-    execInfo.lpFile       = fileName.c_str();
+    execInfo.cbSize = sizeof(SHELLEXECUTEINFOW);
+    execInfo.fMask = flags;
+    execInfo.hwnd = 0;
+    execInfo.lpVerb = L"runas";
+    execInfo.lpFile = fileName.c_str();
     execInfo.lpParameters = commandLine.c_str();
-    execInfo.lpDirectory  = moDirectory.c_str();
-    execInfo.nShow        = SW_SHOW;
+    execInfo.lpDirectory = moDirectory.c_str();
+    execInfo.nShow = SW_SHOW;
 
     if (!::ShellExecuteExW(&execInfo) && execInfo.hProcess == 0) {
       const auto e = GetLastError();
@@ -1282,10 +1290,11 @@ bool helperExec(QWidget* parent, const std::wstring& moDirectory,
     // for WAIT_ABANDONED, the documentation doesn't mention that GetLastError()
     // returns something meaningful, but code ERROR_ABANDONED_WAIT_0 exists, so
     // use that instead
-    const auto code = (r == WAIT_ABANDONED ? ERROR_ABANDONED_WAIT_0 : GetLastError());
+    const auto code =
+        (r == WAIT_ABANDONED ? ERROR_ABANDONED_WAIT_0 : GetLastError());
 
-    spawn::dialogs::helperFailed(parent, code, "WaitForSingleObject()", fileName,
-                                 moDirectory, commandLine);
+    spawn::dialogs::helperFailed(parent, code, "WaitForSingleObject()",
+                                 fileName, moDirectory, commandLine);
 
     return false;
   }
@@ -1303,22 +1312,21 @@ bool helperExec(QWidget* parent, const std::wstring& moDirectory,
   return (exitCode == 0);
 }
 
-bool backdateBSAs(QWidget* parent, const std::wstring& moPath,
-                  const std::wstring& dataPath)
-{
+bool backdateBSAs(QWidget *parent, const std::wstring &moPath,
+                  const std::wstring &dataPath) {
   const std::wstring commandLine = std::format(L"backdateBSA \"{}\"", dataPath);
 
   return helperExec(parent, moPath, commandLine, FALSE);
 }
 
-bool adminLaunch(QWidget* parent, const std::wstring& moPath,
-                 const std::wstring& moFile, const std::wstring& workingDir)
-{
-  const std::wstring commandLine = std::format(
-      L"adminLaunch {} \"{}\" \"{}\"", ::GetCurrentProcessId(), moFile, workingDir);
+bool adminLaunch(QWidget *parent, const std::wstring &moPath,
+                 const std::wstring &moFile, const std::wstring &workingDir) {
+  const std::wstring commandLine =
+      std::format(L"adminLaunch {} \"{}\" \"{}\"", ::GetCurrentProcessId(),
+                  moFile, workingDir);
 
   return helperExec(parent, moPath, commandLine, true);
 }
 
-}  // namespace helper
-#endif  // _WIN32
+} // namespace helper
+#endif // _WIN32

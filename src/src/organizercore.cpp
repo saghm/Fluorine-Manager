@@ -904,8 +904,7 @@ QString OrganizerCore::pluginDataPath()
   // separate writable directory so mkdir() never hits a read-only FS.
   return AppConfig::basePath() + "/plugin_data";
 #else
-  return AppConfig::basePath() + "/" + ToQString(AppConfig::pluginPath()) +
-         "/data";
+  return AppConfig::pluginsPath() + "/data";
 #endif
 }
 
