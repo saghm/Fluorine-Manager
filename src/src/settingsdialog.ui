@@ -1866,29 +1866,6 @@ If you disable this feature, MO will only display official DLCs this way. Please
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_38">
           <item>
-           <widget class="QCheckBox" name="umuCheckBox">
-            <property name="text">
-             <string>Use UMU Launcher (recommended)</string>
-            </property>
-            <property name="checked">
-             <bool>true</bool>
-            </property>
-            <property name="toolTip">
-             <string>Launch games using umu-run instead of raw Proton. UMU provides better compatibility and automatic dependency handling.</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QCheckBox" name="umuSystemCheckBox">
-            <property name="text">
-             <string>Prefer system umu-run over bundled</string>
-            </property>
-            <property name="toolTip">
-             <string>Use umu-run from PATH when available (helpful for NixOS). If unavailable, falls back to bundled umu-run.</string>
-            </property>
-           </widget>
-          </item>
-          <item>
            <widget class="QCheckBox" name="steamRunCheckBox">
             <property name="text">
              <string>Wrap launches with steam-run</string>

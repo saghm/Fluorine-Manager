@@ -34,6 +34,7 @@
 #include <uibase/game_features/dataarchives.h>
 #include <uibase/game_features/localsavegames.h>
 #include <uibase/game_features/scriptextender.h>
+#include <uibase/registry.h>
 #include <uibase/report.h>
 #include <uibase/scopeguard.h>
 #include <uibase/filesystemutilities.h>
@@ -2277,6 +2278,33 @@ bool OrganizerCore::beforeRun(
           } else {
             log::debug("Deployed profile saves '{}' -> '{}' in prefix '{}'",
                        profileSavesDir, absoluteSaveDir, prefixPathStr);
+          }
+
+          // Ensure the prefix INI points to __MO_Saves so the game reads
+          // profile-specific saves, even when localSettingsEnabled() is off.
+          const QStringList iniFiles = managedGame()->iniFiles();
+          if (!iniFiles.isEmpty()) {
+            const QString prefixIni =
+                QDir(resolvePrefixGameDocumentsDir(prefix, dataDirName))
+                    .filePath(QFileInfo(iniFiles.first()).fileName());
+            MOBase::WriteRegistryValue("General", "sLocalSavePath",
+                                       "__MO_Saves\\", prefixIni);
+            MOBase::WriteRegistryValue("General", "bUseMyGamesDirectory",
+                                       "1", prefixIni);
+            log::debug("Patched prefix INI '{}': sLocalSavePath=__MO_Saves\\",
+                       prefixIni);
+          }
+        } else {
+          // Local saves disabled — restore default sLocalSavePath in prefix INI
+          const QStringList iniFiles = managedGame()->iniFiles();
+          if (!iniFiles.isEmpty()) {
+            const QString prefixIni =
+                QDir(resolvePrefixGameDocumentsDir(prefix, dataDirName))
+                    .filePath(QFileInfo(iniFiles.first()).fileName());
+            MOBase::WriteRegistryValue("General", "sLocalSavePath",
+                                       "Saves\\", prefixIni);
+            log::debug("Restored prefix INI '{}': sLocalSavePath=Saves\\",
+                       prefixIni);
           }
         }
       } else {

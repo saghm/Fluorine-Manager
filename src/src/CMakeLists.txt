@@ -203,44 +203,6 @@ if(NOT WIN32)
         endif()
     endif()
 
-    # ---------- Bundle umu-run (Python zipapp) ----------
-    option(MO2_BUNDLE_UMU "Download and bundle umu-run launcher" ON)
-    set(MO2_UMU_VERSION "1.3.0" CACHE STRING "umu-launcher release version to bundle")
-
-    if(MO2_BUNDLE_UMU)
-        set(UMU_TAR "${CMAKE_BINARY_DIR}/umu-launcher-${MO2_UMU_VERSION}-zipapp.tar")
-        set(UMU_URL "https://github.com/Open-Wine-Components/umu-launcher/releases/download/${MO2_UMU_VERSION}/umu-launcher-${MO2_UMU_VERSION}-zipapp.tar")
-        set(UMU_EXTRACT_DIR "${CMAKE_BINARY_DIR}/umu-extract")
-
-        if(NOT EXISTS "${UMU_EXTRACT_DIR}/umu/umu-run")
-            message(STATUS "[MO2] Downloading umu-launcher ${MO2_UMU_VERSION} zipapp...")
-            file(DOWNLOAD "${UMU_URL}" "${UMU_TAR}"
-                STATUS UMU_DL_STATUS
-                SHOW_PROGRESS)
-            list(GET UMU_DL_STATUS 0 UMU_DL_CODE)
-            if(NOT UMU_DL_CODE EQUAL 0)
-                message(WARNING "[MO2] Failed to download umu-launcher: ${UMU_DL_STATUS}")
-            else()
-                file(MAKE_DIRECTORY "${UMU_EXTRACT_DIR}")
-                execute_process(
-                    COMMAND ${CMAKE_COMMAND} -E tar xf "${UMU_TAR}"
-                    WORKING_DIRECTORY "${UMU_EXTRACT_DIR}")
-                message(STATUS "[MO2] Extracted umu-run zipapp")
-            endif()
-        endif()
-
-        if(EXISTS "${UMU_EXTRACT_DIR}/umu/umu-run")
-            add_custom_command(TARGET organizer POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "${UMU_EXTRACT_DIR}/umu/umu-run"
-                    "$<TARGET_FILE_DIR:organizer>/umu-run"
-                COMMAND chmod +x "$<TARGET_FILE_DIR:organizer>/umu-run")
-            message(STATUS "[MO2] Will bundle umu-run ${MO2_UMU_VERSION}")
-        else()
-            message(WARNING "[MO2] umu-run not found after extraction")
-        endif()
-    endif()
-
     # ── Deploy bundled stylesheets (themes) ──
     add_custom_command(TARGET organizer POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory

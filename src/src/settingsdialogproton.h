@@ -40,7 +40,6 @@ private:
 
   void startInstallTask(uint32_t appId, const QString& prefixPath,
                         const QString& protonName, const QString& protonPath,
-                        bool useUmuForPrefix, bool preferSystemUmu,
                         bool useSteamRun);
 
   void enqueueStatus(const QString& message);

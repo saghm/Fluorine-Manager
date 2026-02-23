@@ -388,11 +388,42 @@ namespace shell
     }
   }
 
+  // Launch an external host process with AppImage environment variables
+  // cleaned up, so tools like xdg-open/kde-open use the host's own
+  // libraries and Qt plugins instead of the bundled ones.
+  static bool startDetachedHostProcess(const QString& program,
+                                       const QStringList& args)
+  {
+    QProcess proc;
+    auto env = QProcessEnvironment::systemEnvironment();
+
+    // Restore original LD_LIBRARY_PATH (saved by AppRun.sh)
+    if (env.contains(QStringLiteral("FLUORINE_ORIG_LD_LIBRARY_PATH"))) {
+      const auto orig = env.value(QStringLiteral("FLUORINE_ORIG_LD_LIBRARY_PATH"));
+      if (orig.isEmpty())
+        env.remove(QStringLiteral("LD_LIBRARY_PATH"));
+      else
+        env.insert(QStringLiteral("LD_LIBRARY_PATH"), orig);
+    }
+
+    // Remove AppImage-specific Qt/path variables that would confuse host apps
+    env.remove(QStringLiteral("QT_PLUGIN_PATH"));
+    env.remove(QStringLiteral("QT_QPA_PLATFORM_PLUGIN_PATH"));
+    env.remove(QStringLiteral("QTWEBENGINEPROCESS_PATH"));
+    env.remove(QStringLiteral("QTWEBENGINE_RESOURCES_PATH"));
+    env.remove(QStringLiteral("QTWEBENGINE_LOCALES_PATH"));
+
+    proc.setProgram(program);
+    proc.setArguments(args);
+    proc.setProcessEnvironment(env);
+    return proc.startDetached();
+  }
+
   Result ExploreDirectory(const QFileInfo& info)
   {
     const auto path = info.absoluteFilePath();
     // Use xdg-open on Linux
-    if (QProcess::startDetached("xdg-open", {path})) {
+    if (startDetachedHostProcess("xdg-open", {path})) {
       return Result::makeSuccess();
     }
     return Result::makeFailure(ERROR_FILE_NOT_FOUND, QObject::tr("Failed to open directory"));
@@ -403,7 +434,7 @@ namespace shell
     // Try to use the system file manager to highlight the file
     // dbus method for Nautilus/Files, fallback to xdg-open on parent dir
     const auto dir = info.absolutePath();
-    if (QProcess::startDetached("xdg-open", {dir})) {
+    if (startDetachedHostProcess("xdg-open", {dir})) {
       return Result::makeSuccess();
     }
     return Result::makeFailure(ERROR_FILE_NOT_FOUND, QObject::tr("Failed to open file manager"));
@@ -437,7 +468,7 @@ namespace shell
 
   Result Open(const QString& path)
   {
-    if (QProcess::startDetached("xdg-open", {path})) {
+    if (startDetachedHostProcess("xdg-open", {path})) {
       return Result::makeSuccess();
     }
     return Result::makeFailure(ERROR_FILE_NOT_FOUND, QObject::tr("Failed to open file"));
@@ -448,7 +479,7 @@ namespace shell
     log::debug("opening url '{}'", url.toString());
 
     if (g_urlHandler.isEmpty()) {
-      if (QProcess::startDetached("xdg-open", {url.toString()})) {
+      if (startDetachedHostProcess("xdg-open", {url.toString()})) {
         return Result::makeSuccess();
       }
       return Result::makeFailure(ERROR_FILE_NOT_FOUND, QObject::tr("Failed to open URL"));
@@ -456,7 +487,7 @@ namespace shell
       // Custom URL handler
       QString cmd = g_urlHandler;
       cmd.replace("%1", url.toString());
-      if (QProcess::startDetached("/bin/sh", {"-c", cmd})) {
+      if (startDetachedHostProcess("/bin/sh", {"-c", cmd})) {
         return Result::makeSuccess();
       }
       return Result::makeFailure(ERROR_FILE_NOT_FOUND,

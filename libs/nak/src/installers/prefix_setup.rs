@@ -297,23 +297,9 @@ fn initialize_prefix_with_proton(
         ("WINEDLLOVERRIDES", "msdia80.dll=n;conhost.exe=d;cmd.exe=d".to_string()),
     ];
 
-    let (exe, args): (std::path::PathBuf, Vec<&str>) = if runtime_wrap::use_umu_for_prefix() {
-        if let Some(umu_run) = runtime_wrap::resolve_umu_run() {
-            log_install(&format!("Initializing prefix with umu-run: {:?}", umu_run));
-            envs.push(("PROTONPATH", proton.path.display().to_string()));
-            envs.push(("WINEPREFIX", prefix_root.display().to_string()));
-            envs.push(("GAMEID", app_id.to_string()));
-            (umu_run, vec!["wineboot", "-u"])
-        } else {
-            log_warning(
-                "UMU prefix mode enabled but no umu-run was found; falling back to proton wrapper",
-            );
-            (proton_script.clone(), vec!["run", "wineboot", "-u"])
-        }
-    } else {
-        log_install(&format!("Initializing prefix with proton wrapper: {:?}", proton_script));
-        (proton_script.clone(), vec!["run", "wineboot", "-u"])
-    };
+    log_install(&format!("Initializing prefix with proton wrapper: {:?}", proton_script));
+    let (exe, args): (std::path::PathBuf, Vec<&str>) =
+        (proton_script.clone(), vec!["run", "wineboot", "-u"]);
 
     let mut cmd = runtime_wrap::build_command(&exe, &envs);
     cmd.args(&args);

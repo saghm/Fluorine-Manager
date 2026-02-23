@@ -357,6 +357,15 @@ void GameGamebryo::ensureIniFilesExist(const QString& basePath)
     }
 
 #ifndef _WIN32
+    // Remove broken symlinks — QFileInfo::exists() follows symlinks and
+    // returns false for dangling ones, but QFile::copy() fails with
+    // "File exists" because the symlink inode is still there.
+    if (targetInfo.isSymLink() && !targetInfo.exists()) {
+      QFile::remove(targetPath);
+    }
+#endif
+
+#ifndef _WIN32
     // On Linux, search for a differently-cased version of this INI file
     // (e.g., FalloutPrefs.ini when we expect falloutprefs.ini).
     // We can't use resolveFileCaseInsensitive here because the exact-case
@@ -413,15 +422,21 @@ void GameGamebryo::ensureIniFilesExist(const QString& basePath)
       if (targetInfo.exists()) {
         QFile::remove(targetPath);
       }
-      if (QFile::copy(defaultIniPath, targetPath)) {
+      QFile srcFile(defaultIniPath);
+      if (srcFile.copy(targetPath)) {
         // Make the copy writable
         QFile::setPermissions(
             targetPath,
             QFile::permissions(targetPath) | QFile::WriteUser | QFile::WriteOwner);
         MOBase::log::info("Seeded '{}' from default INI '{}'", iniFile, defaultIniPath);
       } else {
-        MOBase::log::warn("Failed to copy default INI '{}' -> '{}'",
-                          defaultIniPath, targetPath);
+        MOBase::log::warn("Failed to copy default INI '{}' -> '{}': {} "
+                          "(srcExists={}, srcSize={}, targetExists={}, dirExists={})",
+                          defaultIniPath, targetPath, srcFile.errorString(),
+                          QFileInfo::exists(defaultIniPath),
+                          QFileInfo(defaultIniPath).size(),
+                          QFileInfo::exists(targetPath),
+                          QFileInfo(targetPath).dir().exists());
       }
     }
 

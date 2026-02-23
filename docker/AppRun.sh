@@ -89,6 +89,9 @@ if [ -d "${APPIMAGE_DIR}/plugins/plugin_python" ]; then
 fi
 
 # ── Environment ──
+# Save original LD_LIBRARY_PATH so child processes (xdg-open, kde-open, etc.)
+# can use host libraries instead of the bundled (potentially older) ones.
+export FLUORINE_ORIG_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
 export PATH="${HERE}/usr/bin:${HERE}/usr/libexec:${PATH}"
 export LD_LIBRARY_PATH="${HERE}/usr/lib:${HERE}/usr/libexec:${LD_LIBRARY_PATH:-}"
 
@@ -117,7 +120,7 @@ else
     export MO2_PYTHON_DIR="${APPIMAGE_DIR}/python"
 fi
 # Do not export PYTHONHOME/PYTHONPATH globally here. MO2 sets Python runtime
-# internally for plugin_python, while child processes (umu/NaK/launchers) must
+# internally for plugin_python, while child processes (NaK/launchers) must
 # use their own system Python environment.
 unset PYTHONHOME PYTHONPATH PYTHONNOUSERSITE
 

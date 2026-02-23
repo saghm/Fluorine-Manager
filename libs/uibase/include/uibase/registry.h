@@ -28,6 +28,12 @@ namespace MOBase
 QDLLEXPORT bool WriteRegistryValue(const QString& appName, const QString& keyName,
                                    const QString& value, const QString& fileName);
 
+// Removes a key from a Bethesda-style INI file without QSettings.
+// Uses a safe line-by-line approach that does not corrupt backslashes
+// or URL-encode spaces in key names.
+QDLLEXPORT bool RemoveRegistryValue(const QString& section, const QString& key,
+                                    const QString& fileName);
+
 #ifdef _WIN32
 // Windows-specific overload using wide strings
 QDLLEXPORT bool WriteRegistryValue(const wchar_t* appName, const wchar_t* keyName,

@@ -23,20 +23,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stddef.h>
 #include <string>
 
-#include <QSettings>
-
 #include "gamegamebryo.h"
-
-// Helper to remove a key from a Bethesda-style INI file
-static void removeIniValue(const QString& iniFile, const QString& section,
-                           const QString& key)
-{
-  QSettings settings(iniFile, QSettings::IniFormat);
-  settings.beginGroup(section);
-  settings.remove(key);
-  settings.endGroup();
-  settings.sync();
-}
 
 GamebryoLocalSavegames::GamebryoLocalSavegames(const GameGamebryo* game,
                                                const QString& iniFileName)
@@ -119,20 +106,20 @@ bool GamebryoLocalSavegames::prepareProfile(MOBase::IProfile* profile)
       if (savedPath != "DELETE_ME") {
         MOBase::WriteRegistryValue("General", "sLocalSavePath", savedPath, iniFilePath);
       } else {
-        removeIniValue(iniFilePath, "General", "sLocalSavePath");
+        MOBase::RemoveRegistryValue("General", "sLocalSavePath", iniFilePath);
       }
       if (savedMyGames != "DELETE_ME") {
         MOBase::WriteRegistryValue("General", "bUseMyGamesDirectory", savedMyGames,
                                    iniFilePath);
       } else {
-        removeIniValue(iniFilePath, "General", "bUseMyGamesDirectory");
+        MOBase::RemoveRegistryValue("General", "bUseMyGamesDirectory", iniFilePath);
       }
       QFile::remove(saveIni);
     }
     // Otherwise just delete the setting
     else {
-      removeIniValue(iniFilePath, "General", "sLocalSavePath");
-      removeIniValue(iniFilePath, "General", "bUseMyGamesDirectory");
+      MOBase::RemoveRegistryValue("General", "sLocalSavePath", iniFilePath);
+      MOBase::RemoveRegistryValue("General", "bUseMyGamesDirectory", iniFilePath);
     }
   }
 

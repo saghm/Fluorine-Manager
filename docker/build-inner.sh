@@ -39,7 +39,6 @@ mkdir -p "${OUT_DIR}/plugins" "${OUT_DIR}/dlls" "${OUT_DIR}/lib"
 
 # ── Main binary + helpers ──
 cp -f "${RUNDIR}/ModOrganizer" "${OUT_DIR}/ModOrganizer-core"
-[ -f "${RUNDIR}/umu-run" ] && cp -f "${RUNDIR}/umu-run" "${OUT_DIR}/umu-run"
 [ -f "${RUNDIR}/README-PORTABLE.txt" ] && cp -f "${RUNDIR}/README-PORTABLE.txt" "${OUT_DIR}/"
 [ -f "/src/src/fluorine-manager" ] && cp -f "/src/src/fluorine-manager" "${OUT_DIR}/"
 
@@ -334,7 +333,7 @@ export MO2_PLUGINS_DIR="${HERE}/plugins"
 export MO2_DLLS_DIR="${HERE}/dlls"
 export MO2_PYTHON_DIR="${PYTHON_DST}"
 # PYTHONHOME is set only for the MO2 process (not exported to children like
-# umu-run/Proton which have their own Python).  MO2_PYTHON_DIR lets the
+# Proton which has its own Python).  MO2_PYTHON_DIR lets the
 # binary reconstruct it internally.
 MO2_PYTHONHOME="${PYTHON_DST}"
 unset PYTHONPATH PYTHONNOUSERSITE PYTHONHOME
@@ -443,7 +442,7 @@ if [ -d "${PYTHON_SRC}" ]; then
 fi
 
 # Save the original (pre-AppImage) environment so game launches can restore it.
-# Without this, AppImage's LD_LIBRARY_PATH/PATH leak into umu-run/Proton and
+# Without this, AppImage's LD_LIBRARY_PATH/PATH leak into Proton and
 # cause library conflicts that make games crash.
 export FLUORINE_ORIG_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
 export FLUORINE_ORIG_PATH="${PATH}"

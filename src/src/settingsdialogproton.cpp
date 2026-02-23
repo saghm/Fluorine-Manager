@@ -6,10 +6,10 @@
 
 #include <QtConcurrent/QtConcurrentRun>
 #include <log.h>
+#include <uibase/utility.h>
 #include <nak_ffi.h>
 #include <atomic>
 #include <QComboBox>
-#include <QCoreApplication>
 #include <QDateTime>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -40,9 +40,6 @@ ProtonSettingsTab::ProtonSettingsTab(Settings& s, SettingsDialog& d)
   ui->protonProgressBar->setValue(0);
   ui->protonProgressBar->setVisible(false);
 
-  ui->umuCheckBox->setChecked(QSettings().value("fluorine/use_umu", true).toBool());
-  ui->umuSystemCheckBox->setChecked(
-      QSettings().value("fluorine/prefer_system_umu", false).toBool());
   ui->steamRunCheckBox->setChecked(
       QSettings().value("fluorine/use_steam_run", false).toBool());
 
@@ -117,9 +114,6 @@ ProtonSettingsTab::ProtonSettingsTab(Settings& s, SettingsDialog& d)
 
 void ProtonSettingsTab::update()
 {
-  QSettings().setValue("fluorine/use_umu", ui->umuCheckBox->isChecked());
-  QSettings().setValue("fluorine/prefer_system_umu",
-                       ui->umuSystemCheckBox->isChecked());
   QSettings().setValue("fluorine/use_steam_run",
                        ui->steamRunCheckBox->isChecked());
   QSettings().setValue("fluorine/launch_wrapper", ui->launchWrapperEdit->text());
@@ -154,7 +148,7 @@ void ProtonSettingsTab::populateProtons()
       ui->protonVersionCombo->setCurrentIndex(idx);
     } else if (ui->protonVersionCombo->count() > 0) {
       // Saved Proton version no longer exists — select first available and
-      // update the config so the stale path doesn't cause umu-run fallback.
+      // update the config so the stale path doesn't cause launch failures.
       MOBase::log::warn("Saved Proton '{}' not found, defaulting to '{}'",
                         cfg->proton_name,
                         ui->protonVersionCombo->itemText(0));
@@ -244,8 +238,6 @@ void ProtonSettingsTab::onCreatePrefix()
   ui->toggleInstallLog->setChecked(true);
 
   startInstallTask(0, pfxPath, protonName, protonPath,
-                   ui->umuCheckBox->isChecked(),
-                   ui->umuSystemCheckBox->isChecked(),
                    ui->steamRunCheckBox->isChecked());
 }
 
@@ -295,8 +287,7 @@ void ProtonSettingsTab::onRecreatePrefix()
   ui->toggleInstallLog->setChecked(true);
 
   startInstallTask(cfg->app_id, cfg->prefix_path, cfg->proton_name,
-                   cfg->proton_path, ui->umuCheckBox->isChecked(),
-                   ui->umuSystemCheckBox->isChecked(),
+                   cfg->proton_path,
                    ui->steamRunCheckBox->isChecked());
 }
 
@@ -308,7 +299,7 @@ void ProtonSettingsTab::onOpenPrefixFolder()
     return;
   }
 
-  QProcess::startDetached("xdg-open", {*path});
+  MOBase::shell::Explore(QDir(*path));
 }
 
 void ProtonSettingsTab::onBrowsePrefixLocation()
@@ -589,8 +580,6 @@ void ProtonSettingsTab::showGameRegistryDialog()
 void ProtonSettingsTab::startInstallTask(uint32_t appId, const QString& prefixPath,
                                          const QString& protonName,
                                          const QString& protonPath,
-                                         bool useUmuForPrefix,
-                                         bool preferSystemUmu,
                                          bool useSteamRun)
 {
   m_pendingAppId      = appId;
@@ -607,27 +596,15 @@ void ProtonSettingsTab::startInstallTask(uint32_t appId, const QString& prefixPa
       prefixPath,
       protonName,
       protonPath,
-      useUmuForPrefix,
-      preferSystemUmu,
       useSteamRun]() -> InstallResult {
     const QByteArray prefixPathUtf8 = prefixPath.toUtf8();
     const QByteArray protonNameUtf8 = protonName.toUtf8();
     const QByteArray protonPathUtf8 = protonPath.toUtf8();
-    const QByteArray bundledUmuPathUtf8 =
-        QDir(QCoreApplication::applicationDirPath()).filePath("umu-run").toUtf8();
 
-    qputenv("NAK_USE_UMU_FOR_PREFIX", useUmuForPrefix ? "1" : "0");
-    qputenv("NAK_PREFER_SYSTEM_UMU", preferSystemUmu ? "1" : "0");
     qputenv("NAK_USE_STEAM_RUN", useSteamRun ? "1" : "0");
 
-    if (QFileInfo::exists(QString::fromUtf8(bundledUmuPathUtf8))) {
-      qputenv("NAK_BUNDLED_UMU_RUN", bundledUmuPathUtf8);
-    } else {
-      qunsetenv("NAK_BUNDLED_UMU_RUN");
-    }
-
     // Set WINEPREFIX so NAK (and its child processes like winetricks) always
-    // target the correct prefix, even if Proton init via umu-run fails.
+    // target the correct prefix during Proton init.
     qputenv("WINEPREFIX", prefixPathUtf8);
 
     // Point WINE/WINESERVER at Proton's binaries so winetricks and regedit
@@ -652,10 +629,7 @@ void ProtonSettingsTab::startInstallTask(uint32_t appId, const QString& prefixPa
     }
 
     const auto restoreNakEnv = qScopeGuard([protonWineUtf8] {
-      qunsetenv("NAK_USE_UMU_FOR_PREFIX");
-      qunsetenv("NAK_PREFER_SYSTEM_UMU");
       qunsetenv("NAK_USE_STEAM_RUN");
-      qunsetenv("NAK_BUNDLED_UMU_RUN");
       qunsetenv("WINEPREFIX");
       if (!protonWineUtf8.isEmpty()) {
         qunsetenv("WINE");

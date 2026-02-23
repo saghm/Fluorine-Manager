@@ -1,20 +1,18 @@
 #include "protonlauncher.h"
 
 #include <nak_ffi.h>
-#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QProcess>
 #include <QProcessEnvironment>
-#include <QStandardPaths>
 #include <log.h>
 
 
 namespace
 {
-// Restore the pre-AppImage environment for child processes (umu-run, Proton,
-// pressure-vessel).  The AppRun script saves FLUORINE_ORIG_* vars before
+// Restore the pre-AppImage environment for child processes (Proton, Wine).
+// The AppRun script saves FLUORINE_ORIG_* vars before
 // modifying PATH, LD_LIBRARY_PATH, etc.  We restore from those saved values
 // so game processes get a clean host environment without AppImage library paths.
 void cleanAppImageEnv(QProcessEnvironment& env)
@@ -26,7 +24,7 @@ void cleanAppImageEnv(QProcessEnvironment& env)
   env.remove("MO2_PYTHON_DIR");
   env.remove("MO2_BASE_DIR");
 
-  // AppImage runtime injects these — they can confuse pressure-vessel/umu-run.
+  // AppImage runtime injects these — they can confuse Proton/Wine.
   env.remove("APPIMAGE");
   env.remove("APPDIR");
   env.remove("OWD");
@@ -135,20 +133,33 @@ QString detectSteamPath()
   return {};
 }
 
-bool startDetachedWithEnv(const QString& program, const QStringList& arguments,
-                          const QString& workingDir,
-                          const QProcessEnvironment& environment, qint64& pid)
+bool startWithEnv(const QString& program, const QStringList& arguments,
+                  const QString& workingDir,
+                  const QProcessEnvironment& environment, qint64& pid)
 {
-  QProcess process;
-  process.setProgram(program);
-  process.setArguments(arguments);
+  auto* process = new QProcess();
+  process->setProgram(program);
+  process->setArguments(arguments);
 
   if (!workingDir.isEmpty()) {
-    process.setWorkingDirectory(workingDir);
+    process->setWorkingDirectory(workingDir);
   }
 
-  process.setProcessEnvironment(environment);
-  return process.startDetached(&pid);
+  process->setProcessEnvironment(environment);
+  process->setProcessChannelMode(QProcess::ForwardedChannels);
+
+  QObject::connect(process,
+                   QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+                   process, &QProcess::deleteLater);
+
+  process->start();
+  if (!process->waitForStarted(5000)) {
+    delete process;
+    return false;
+  }
+
+  pid = process->processId();
+  return true;
 }
 
 void wrapProgram(const QStringList& wrapperCommands, const QString& program,
@@ -224,8 +235,7 @@ bool parseEnvAssignment(const QString& token, QString& keyOut, QString& valueOut
 }  // namespace
 
 ProtonLauncher::ProtonLauncher()
-    : m_steamAppId(0), m_useUmu(false), m_preferSystemUmu(false),
-      m_useSteamRun(false), m_useSteamDrm(true)
+    : m_steamAppId(0), m_useSteamRun(false), m_useSteamDrm(true)
 {}
 
 ProtonLauncher& ProtonLauncher::setBinary(const QString& path)
@@ -286,18 +296,6 @@ ProtonLauncher& ProtonLauncher::setWrapper(const QString& wrapperCmd)
   return *this;
 }
 
-ProtonLauncher& ProtonLauncher::setUmu(bool useUmu)
-{
-  m_useUmu = useUmu;
-  return *this;
-}
-
-ProtonLauncher& ProtonLauncher::setPreferSystemUmu(bool preferSystemUmu)
-{
-  m_preferSystemUmu = preferSystemUmu;
-  return *this;
-}
-
 ProtonLauncher& ProtonLauncher::setUseSteamRun(bool useSteamRun)
 {
   m_useSteamRun = useSteamRun;
@@ -328,13 +326,6 @@ ProtonLauncher& ProtonLauncher::addEnvVar(const QString& key, const QString& val
 std::pair<bool, qint64> ProtonLauncher::launch() const
 {
   qint64 pid = -1;
-
-  if (m_useUmu) {
-    if (launchWithUmu(pid)) {
-      return {true, pid};
-    }
-    MOBase::log::warn("UMU launch failed, falling back to Proton");
-  }
 
   if (!m_protonPath.isEmpty()) {
     return {launchWithProton(pid), pid};
@@ -416,173 +407,7 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
     env.insert("PWD", m_workingDir);
   }
 
-  return startDetachedWithEnv(program, arguments, m_workingDir, env, pid);
-}
-
-bool ProtonLauncher::launchWithUmu(qint64& pid) const
-{
-  if (m_binary.isEmpty()) {
-    return false;
-  }
-
-  // Steam must be running for games with Steamworks DRM (Application Load
-  // Error 5:0000065434 occurs otherwise).
-  if (m_useSteamDrm) {
-    ensureSteamRunning();
-  }
-
-  // Resolve umu-run: prefer the copy deployed to the Fluorine data dir
-  // (~/.local/share/fluorine/umu-run), then system PATH, then AppImage bundled.
-  const QString appDir = QCoreApplication::applicationDirPath();
-  const QString bundled = appDir + QStringLiteral("/umu-run");
-  const QString dataDir = QDir::home().filePath(".local/share/fluorine/umu-run");
-
-  // Search PATH for a system umu-run, excluding our own app directory
-  // (the launcher prepends it to PATH, so findExecutable would find the
-  // bundled copy otherwise).
-  QString system;
-  const QStringList pathDirs =
-      QString::fromLocal8Bit(qgetenv("PATH")).split(QLatin1Char(':'), Qt::SkipEmptyParts);
-  for (const QString& dir : pathDirs) {
-    if (QDir(dir) == QDir(appDir))
-      continue;
-    const QString candidate = QStandardPaths::findExecutable(
-        QStringLiteral("umu-run"), {dir});
-    if (!candidate.isEmpty()) {
-      system = candidate;
-      break;
-    }
-  }
-
-  // Priority: data dir > system (if preferred) > bundled > system (fallback)
-  QString umuRun;
-  if (QFileInfo::exists(dataDir)) {
-    umuRun = dataDir;
-  } else if (m_preferSystemUmu && !system.isEmpty()) {
-    umuRun = system;
-  } else if (QFileInfo::exists(bundled)) {
-    umuRun = bundled;
-  } else if (!system.isEmpty()) {
-    umuRun = system;
-  }
-
-  MOBase::log::info("umu-run: dataDir='{}' (exists={}), bundled='{}' (exists={}), system='{}', selected='{}'",
-      dataDir, QFileInfo::exists(dataDir), bundled, QFileInfo::exists(bundled), system, umuRun);
-
-  if (umuRun.isEmpty()) {
-    MOBase::log::warn("umu-run not found (bundled or in PATH)");
-    return false;
-  }
-
-  const QStringList umuArgs = QStringList() << m_binary << m_arguments;
-
-  QString program;
-  QStringList arguments;
-  wrapProgram(m_wrapperCommands, umuRun, umuArgs, program, arguments);
-  maybeWrapWithSteamRun(m_useSteamRun, program, arguments);
-
-  QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-  env.remove("PYTHONHOME");
-  cleanAppImageEnv(env);
-
-  if (!m_prefixPath.isEmpty()) {
-    env.insert("WINEPREFIX", m_prefixPath);
-  }
-
-  if (!m_protonPath.isEmpty()) {
-    env.insert("PROTONPATH", m_protonPath);
-  }
-
-  // umu-run sets STEAM_COMPAT_DATA_PATH internally from WINEPREFIX, so we
-  // do NOT set it here.  However, ensure tracked_files exists for Proton.
-  ensureTrackedFilesExist(compatDataPathFromPrefix(m_prefixPath));
-
-  uint32_t effectiveSteamAppId = m_steamAppId;
-  if (effectiveSteamAppId == 0) {
-    bool ok = false;
-    const QString inheritedSteamAppId =
-        env.value("SteamAPPId", env.value("SteamAppId")).trimmed();
-    const uint32_t parsed = inheritedSteamAppId.toUInt(&ok);
-    if (ok) {
-      effectiveSteamAppId = parsed;
-    }
-  }
-
-  // Always pass the game's Steam App ID as GAMEID for protonfixes lookup.
-  // GAMEID identifies the game (for compatibility fixes), separate from DRM.
-  if (effectiveSteamAppId != 0) {
-    env.insert("GAMEID", QStringLiteral("umu-") + QString::number(effectiveSteamAppId));
-  } else {
-    env.insert("GAMEID", QStringLiteral("umu-0"));
-  }
-
-  if (m_useSteamDrm) {
-    // Steam DRM games need the Steam client path and Steam identity env vars.
-    env.insert("STORE", QStringLiteral("steam"));
-    const QString steamPath = detectSteamPath();
-    if (!steamPath.isEmpty()) {
-      env.insert("STEAM_COMPAT_CLIENT_INSTALL_PATH", steamPath);
-    }
-    if (effectiveSteamAppId != 0) {
-      env.insert("SteamAppId", QString::number(effectiveSteamAppId));
-      env.insert("SteamGameId", QString::number(effectiveSteamAppId));
-    }
-  } else {
-    // Non-Steam games: do NOT set SteamAppId/SteamGameId — those can trigger
-    // Steamworks initialization in Wine which crashes GOG/Epic games.
-    env.remove("SteamAPPId");
-    env.remove("SteamAppId");
-    env.remove("SteamGameId");
-
-    // Set STORE so umu-run knows this is a non-Steam game.  Without STORE,
-    // umu-run may attempt Steam-specific behavior that breaks GOG/Epic titles.
-    // umu-run expects lowercase values (gog, egs, etc.).
-    if (!m_storeVariant.isEmpty()) {
-      env.insert("STORE", m_storeVariant.toLower());
-    } else {
-      env.insert("STORE", QStringLiteral("gog"));
-    }
-  }
-
-  // Remove FUSE VFS file descriptors — these are Fluorine-internal and must
-  // not leak into game processes (especially pressure-vessel containers).
-  env.remove("_FUSE_COMMFD");
-  env.remove("_FUSE_COMMFD2");
-
-  // Remove Qt/KDE theme vars that can confuse pressure-vessel/Wine.
-  env.remove("QML_DISABLE_DISK_CACHE");
-  env.remove("QT_ICON_THEME_NAME");
-  env.remove("QT_STYLE_OVERRIDE");
-  env.remove("OLDPWD");
-
-  if (!m_workingDir.isEmpty()) {
-    env.insert("PWD", m_workingDir);
-  }
-
-  for (auto it = m_wrapperEnvVars.cbegin(); it != m_wrapperEnvVars.cend(); ++it) {
-    env.insert(it.key(), it.value());
-  }
-
-  for (auto it = m_envVars.cbegin(); it != m_envVars.cend(); ++it) {
-    env.insert(it.key(), it.value());
-  }
-
-  // Set DXVK config if available
-  if (char* dxvkPath = nak_get_dxvk_conf_path(); dxvkPath != nullptr) {
-    const QString dxvkConf = QString::fromUtf8(dxvkPath);
-    nak_string_free(dxvkPath);
-    if (QFileInfo::exists(dxvkConf)) {
-      env.insert("DXVK_CONFIG_FILE", dxvkConf);
-    }
-  }
-
-  MOBase::log::info("UMU launch: '{}' '{}' (GAMEID={}, STORE={}, steam_drm={})",
-                    umuRun, m_binary,
-                    env.value("GAMEID"),
-                    env.value("STORE", "<unset>"),
-                    m_useSteamDrm);
-
-  return startDetachedWithEnv(program, arguments, m_workingDir, env, pid);
+  return startWithEnv(program, arguments, m_workingDir, env, pid);
 }
 
 bool ProtonLauncher::launchDirect(qint64& pid) const
@@ -606,7 +431,7 @@ bool ProtonLauncher::launchDirect(qint64& pid) const
     env.insert(it.key(), it.value());
   }
 
-  return startDetachedWithEnv(program, arguments, m_workingDir, env, pid);
+  return startWithEnv(program, arguments, m_workingDir, env, pid);
 }
 
 bool ProtonLauncher::ensureSteamRunning()

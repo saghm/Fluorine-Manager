@@ -174,6 +174,87 @@ bool WriteRegistryValue(const QString& appName, const QString& keyName,
   return false;
 }
 
+bool RemoveRegistryValue(const QString& section, const QString& key,
+                         const QString& fileName)
+{
+  if (!QFileInfo::exists(fileName)) {
+    return true;  // nothing to remove
+  }
+
+  QFile file(fileName);
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    return false;
+  }
+  QStringList lines;
+  QTextStream in(&file);
+  while (!in.atEnd()) {
+    lines.append(in.readLine());
+  }
+  file.close();
+
+  const QString sectionHeader = "[" + section + "]";
+  int sectionStart = -1;
+  int sectionEnd   = lines.size();
+
+  for (int i = 0; i < lines.size(); ++i) {
+    QString trimmed = lines[i].trimmed();
+    if (trimmed.compare(sectionHeader, Qt::CaseInsensitive) == 0) {
+      sectionStart = i;
+      for (int j = i + 1; j < lines.size(); ++j) {
+        QString t = lines[j].trimmed();
+        if (t.startsWith('[') && t.endsWith(']')) {
+          sectionEnd = j;
+          break;
+        }
+      }
+      break;
+    }
+  }
+
+  if (sectionStart < 0) {
+    return true;  // section not found, nothing to remove
+  }
+
+  // Find and remove the key line
+  bool found = false;
+  for (int i = sectionStart + 1; i < sectionEnd; ++i) {
+    QString trimmed = lines[i].trimmed();
+    if (trimmed.isEmpty() || trimmed.startsWith(';') || trimmed.startsWith('#')) {
+      continue;
+    }
+    int eqPos = trimmed.indexOf('=');
+    if (eqPos > 0) {
+      QString existingKey = trimmed.left(eqPos).trimmed();
+      if (existingKey.compare(key, Qt::CaseInsensitive) == 0) {
+        lines.removeAt(i);
+        found = true;
+        break;
+      }
+    }
+  }
+
+  if (!found) {
+    return true;  // key not found, nothing to remove
+  }
+
+  // Write back
+  QFile outFile(fileName);
+  if (!outFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    return false;
+  }
+  QTextStream out(&outFile);
+  for (int i = 0; i < lines.size(); ++i) {
+    out << lines[i];
+    if (i < lines.size() - 1) {
+      out << '\n';
+    }
+  }
+  out << '\n';
+  outFile.close();
+
+  return true;
+}
+
 #ifdef _WIN32
 bool WriteRegistryValue(const wchar_t* appName, const wchar_t* keyName,
                         const wchar_t* value, const wchar_t* fileName)

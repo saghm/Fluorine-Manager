@@ -1017,8 +1017,6 @@ std::optional<int> CreatePortableCommand::runEarly()
     if (vm().count("proton")) {
       ini.setValue("fluorine/proton_path", QString::fromStdString(vm()["proton"].as<std::string>()));
     }
-    ini.setValue("fluorine/use_umu", true);
-
     ini.sync();
   }
 
@@ -1145,8 +1143,6 @@ std::optional<int> InfoCommand::runEarly()
     std::cout << "  Prefix:     " << prefix.toStdString() << "\n";
   if (!proton.isEmpty())
     std::cout << "  Proton:     " << proton.toStdString() << "\n";
-  std::cout << "  UMU:        " << (ini.value("fluorine/use_umu", false).toBool() ? "yes" : "no") << "\n";
-
   return 0;
 }
 

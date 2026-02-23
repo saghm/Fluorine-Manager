@@ -656,9 +656,6 @@ int spawn(const SpawnParameters &sp, pid_t &processId) {
       .setArguments(argList)
       .setWorkingDir(cwd)
       .setSteamAppId(parseSteamAppId(sp.steamAppID))
-      .setUmu(QSettings().value("fluorine/use_umu", true).toBool())
-      .setPreferSystemUmu(
-          QSettings().value("fluorine/prefer_system_umu", false).toBool())
       .setUseSteamRun(
           QSettings().value("fluorine/use_steam_run", false).toBool())
       .setSteamDrm(useSteamDrm)
