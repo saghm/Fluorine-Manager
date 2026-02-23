@@ -8,169 +8,72 @@ on:
   workflow_dispatch:
 
 env:
-  CCACHE_DIR: /__w/.ccache
-  CCACHE_BASEDIR: /__w/Fluorine-Manager/Fluorine-Manager
-  CCACHE_COMPILERCHECK: content
-  CCACHE_NOHASHDIR: "1"
-  CCACHE_SLOPPINESS: time_macros
-  CCACHE_MAXSIZE: 2G
-  CMAKE_BUILD_TYPE: RelWithDebInfo
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghcr.io/sulfurnitride/fluorine-builder
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/sulfurnitride/fluorine-builder:latest
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Restore ccache
-        uses: actions/cache@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          path: /__w/.ccache
-          key: ccache-v1-${{ github.ref_name }}-${{ hashFiles('CMakeLists.txt', '**/CMakeLists.txt') }}
-          restore-keys: |
-            ccache-v1-${{ github.ref_name }}-
-            ccache-v1-
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
         with:
-          workspaces: |
-            libs/nak_ffi
-            libs/bsa_ffi
+          context: docker
+          file: docker/Dockerfile
+          load: true
+          tags: fluorine-builder:latest
+          cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache,mode=max
 
-      - name: Configure
+      - name: Build inside container
         run: |
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DPython3_EXECUTABLE="$(command -v python3)" \
-            -DBUILD_PLUGIN_PYTHON=ON
+          docker run --rm \
+            -v "${{ github.workspace }}:/src:rw" \
+            -w /src \
+            fluorine-builder:latest \
+            bash /src/docker/build-inner.sh
 
-      - name: Build
-        run: cmake --build build --parallel
-
-      - name: Build AppImage
+      - name: Collect artifacts
         run: |
-          set -euo pipefail
-
-          MODORG_BIN="$(find build -type f -name ModOrganizer | head -n1)"
-          if [ -z "${MODORG_BIN}" ]; then
-            echo "::error::ModOrganizer binary not found under build/"
-            exit 1
-          fi
-          RUNDIR="$(dirname "${MODORG_BIN}")"
-
-          # ── Populate AppDir ──
-          APPDIR="${GITHUB_WORKSPACE}/AppDir"
-          rm -rf "${APPDIR}"
-          mkdir -p "${APPDIR}/usr/bin" "${APPDIR}/usr/plugins" "${APPDIR}/usr/dlls" "${APPDIR}/usr/python"
-
-          cp -f "${RUNDIR}/ModOrganizer" "${APPDIR}/usr/bin/ModOrganizer"
-          [ -f "${RUNDIR}/umu-run" ] && cp -f "${RUNDIR}/umu-run" "${APPDIR}/usr/bin/"
-          [ -f "${RUNDIR}/README-PORTABLE.txt" ] && cp -f "${RUNDIR}/README-PORTABLE.txt" "${APPDIR}/usr/bin/"
-
-          # Gather built plugin .so files
-          find build/libs -type f \( \
-            -name 'libgame_*.so' -o \
-            -name 'libinstaller_*.so' -o \
-            -name 'libpreview_*.so' -o \
-            -name 'libdiagnose_*.so' -o \
-            -name 'libcheck_*.so' -o \
-            -name 'libtool_*.so' -o \
-            -name 'libinieditor.so' -o \
-            -name 'libinibakery.so' -o \
-            -name 'libbsa_extractor.so' -o \
-            -name 'libbsa_packer.so' -o \
-            -name 'libproxy.so' -o \
-            -name 'librunner.so' \
-          \) -exec cp -f {} "${APPDIR}/usr/plugins/" \;
-
-          # Python plugin payload
-          for f in libplugin_python.so lzokay.py winreg.py pyCfg.py \
-                   DDSPreview.py Form43Checker.py ScriptExtenderPluginChecker.py; do
-            [ -f "build/src/src/plugins/${f}" ] && cp -f "build/src/src/plugins/${f}" "${APPDIR}/usr/plugins/"
-          done
-          for d in basic_games data libs dlls; do
-            [ -d "build/src/src/plugins/${d}" ] && cp -a "build/src/src/plugins/${d}" "${APPDIR}/usr/plugins/"
-          done
-          rm -f "${APPDIR}/usr/plugins/FNIS"*.py
-
-          # 7z runtime
-          SO7="$(find build -type f -name 7z.so | head -n1 || true)"
-          if [ -n "${SO7}" ]; then
-            cp -f "${SO7}" "${APPDIR}/usr/dlls/7z.so"
-            cp -f "${SO7}" "${APPDIR}/usr/dlls/7zip.dll"
-          fi
-
-          # Python runtime payload
-          [ -d build/src/src/python ] && cp -a build/src/src/python/. "${APPDIR}/usr/python/"
-
-          # icoutils
-          for tool in wrestool icotool; do
-            command -v "${tool}" >/dev/null 2>&1 && cp -f "$(command -v "${tool}")" "${APPDIR}/usr/bin/"
-          done
-
-          # Desktop metadata
-          printf '%s\n' \
-            '[Desktop Entry]' \
-            'Type=Application' \
-            'Name=ModOrganizer' \
-            'Exec=ModOrganizer' \
-            'Icon=modorganizer' \
-            'Categories=Game;' \
-            'Terminal=false' \
-            > "${APPDIR}/ModOrganizer.desktop"
-          cp -f src/src/resources/mo_icon.png "${APPDIR}/modorganizer.png"
-
-          # ── Run linuxdeploy ──
-          export PATH="/opt/linuxdeploy:${PATH}"
-          export LINUXDEPLOY_PLUGIN_QT="/opt/linuxdeploy/linuxdeploy-plugin-qt.AppDir/AppRun"
-          export QMAKE=/usr/bin/qmake6
-          export NO_STRIP=1
-          export EXTRA_QT_PLUGINS="waylandcompositor;wayland-decoration-client;wayland-graphics-integration-client;wayland-shell-integration"
-
-          /opt/linuxdeploy/linuxdeploy-x86_64.AppImage --appimage-extract-and-run \
-            --appdir "${APPDIR}" \
-            --desktop-file "${APPDIR}/ModOrganizer.desktop" \
-            --icon-file "${APPDIR}/modorganizer.png" \
-            --executable "${APPDIR}/usr/bin/ModOrganizer" \
-            --plugin qt \
-            --output appimage
-
-          # ── Verify + collect artifact ──
-          APPIMAGE_FILE="$(find "${GITHUB_WORKSPACE}" -maxdepth 1 -type f -name '*.AppImage' | head -n1)"
-          if [ -z "${APPIMAGE_FILE}" ]; then
-            echo "::error::AppImage was not produced"
-            exit 1
-          fi
-
-          # Sanity checks
-          copy_relocs="$(readelf -r "${APPDIR}/usr/bin/ModOrganizer" | grep "R_X86_64_COPY" || true)"
-          if [ -n "${copy_relocs}" ]; then
-            echo "::error::ModOrganizer contains COPY relocations"
-            echo "${copy_relocs}"
-            exit 1
-          fi
-
           mkdir -p artifact
-          mv -f "${APPIMAGE_FILE}" "artifact/ModOrganizer-x86_64.AppImage"
-          echo "AppImage size: $(du -sh artifact/)"
+          if ls build/*.AppImage >/dev/null 2>&1; then
+            cp build/*.AppImage artifact/
+          fi
+          if [ -d build/staging ]; then
+            tar -czf artifact/fluorine-staging.tar.gz -C build/staging .
+          fi
+          ls -lh artifact/
 
-      - name: Upload artifact
+      - name: Upload AppImage
         uses: actions/upload-artifact@v4
         with:
-          name: ModOrganizer-AppImage
-          path: artifact/
-          if-no-files-found: error
+          name: Fluorine-AppImage
+          path: artifact/*.AppImage
+          if-no-files-found: warn
 
-      - name: ccache stats
-        if: always()
-        run: ccache -sv || true
+      - name: Upload staging
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fluorine-Staging
+          path: artifact/fluorine-staging.tar.gz
+          if-no-files-found: warn
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -180,14 +83,14 @@ jobs:
       contents: write
 
     steps:
-      - name: Download artifact
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: ModOrganizer-AppImage
+          name: Fluorine-AppImage
           path: artifact/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifact/ModOrganizer-x86_64.AppImage
+          files: artifact/*.AppImage
           generate_release_notes: true

@@ -6,11 +6,20 @@ BUILD_PY="${BUILD_PYTHON:-$(command -v python3)}"
 # ── Build ──
 PYBIND11_DIR="$("${BUILD_PY}" -c 'import pybind11; print(pybind11.get_cmake_dir())' 2>/dev/null || true)"
 
+CMAKE_EXTRA_ARGS=()
+if [ -n "${CMAKE_C_COMPILER_LAUNCHER:-}" ]; then
+    CMAKE_EXTRA_ARGS+=("-DCMAKE_C_COMPILER_LAUNCHER=${CMAKE_C_COMPILER_LAUNCHER}")
+fi
+if [ -n "${CMAKE_CXX_COMPILER_LAUNCHER:-}" ]; then
+    CMAKE_EXTRA_ARGS+=("-DCMAKE_CXX_COMPILER_LAUNCHER=${CMAKE_CXX_COMPILER_LAUNCHER}")
+fi
+
 cmake -S . -B build -G Ninja \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DPython_EXECUTABLE="${BUILD_PY}" \
     ${PYBIND11_DIR:+-Dpybind11_DIR="${PYBIND11_DIR}"} \
-    -DBUILD_PLUGIN_PYTHON=ON
+    -DBUILD_PLUGIN_PYTHON=ON \
+    "${CMAKE_EXTRA_ARGS[@]}"
 
 cmake --build build --parallel
 
