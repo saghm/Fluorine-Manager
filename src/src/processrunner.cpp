@@ -497,6 +497,64 @@ QString readProcComm(pid_t pid) {
   return QString::fromUtf8(f.readAll()).trimmed();
 }
 
+// Read /proc/<pid>/cmdline (NUL-separated) and return all argv entries.
+QStringList readProcCmdline(pid_t pid) {
+  QFile f(QString("/proc/%1/cmdline").arg(pid));
+  if (!f.open(QIODevice::ReadOnly)) {
+    return {};
+  }
+
+  const QByteArray data = f.readAll();
+  QStringList parts;
+  for (const QByteArray &part : data.split('\0')) {
+    if (!part.isEmpty()) {
+      parts.push_back(QString::fromUtf8(part));
+    }
+  }
+  return parts;
+}
+
+// Check whether any of the expected executable names appear in a process's
+// comm or cmdline.  Wine processes often show "wine64-preload" or "start.exe"
+// in /proc/comm while the actual game executable only appears in cmdline.
+// Also handles the 15-char TASK_COMM_LEN truncation in /proc/comm.
+bool processMatchesExpected(pid_t pid, const QStringList &expected,
+                            QString *matchedNameOut) {
+  // 1. Check /proc/comm (fast path).
+  const QString comm = readProcComm(pid);
+  if (!comm.isEmpty()) {
+    const QString lower = comm.toLower();
+    for (const QString &exp : expected) {
+      if (lower == exp) {
+        if (matchedNameOut) *matchedNameOut = comm;
+        return true;
+      }
+      // Handle TASK_COMM_LEN truncation (15 chars): if the expected name
+      // is longer than 15 chars, check if comm matches its first 15 chars.
+      if (exp.size() > 15 && lower == exp.left(15)) {
+        if (matchedNameOut) *matchedNameOut = exp;
+        return true;
+      }
+    }
+  }
+
+  // 2. Check /proc/cmdline — Wine/Proton processes carry the .exe name here
+  //    even when comm shows wine64-preloader or start.exe.
+  const QStringList cmdline = readProcCmdline(pid);
+  for (const QString &arg : cmdline) {
+    // Extract just the filename from paths like
+    // "c:\windows\system32\start.exe" or "/home/.../FalloutNV.exe"
+    const QString normalized = QString(arg).replace('\\', '/');
+    const QString base = QFileInfo(normalized).fileName().toLower();
+    if (expected.contains(base)) {
+      if (matchedNameOut) *matchedNameOut = QFileInfo(normalized).fileName();
+      return true;
+    }
+  }
+
+  return false;
+}
+
 std::unordered_map<pid_t, std::vector<pid_t>> buildProcChildrenMap() {
   std::unordered_map<pid_t, std::vector<pid_t>> children;
   DIR *proc = opendir("/proc");
@@ -605,14 +663,10 @@ pid_t findTrackedProcess(pid_t rootPid, const QStringList &expected,
   pid_t best = 0;
   QString bestName;
   for (pid_t pid : descendants) {
-    const QString comm = readProcComm(pid);
-    if (comm.isEmpty()) {
-      continue;
-    }
-    const QString lower = comm.toLower();
-    if (expected.contains(lower)) {
+    QString matched;
+    if (processMatchesExpected(pid, expected, &matched)) {
       best = pid;
-      bestName = comm;
+      bestName = matched;
       break;
     }
   }
