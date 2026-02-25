@@ -381,6 +381,14 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
     env.insert("SteamGameId", appId);
   }
 
+  // When Steam DRM is disabled (e.g. GOG games), set UMU_ID so that
+  // Proton-GE skips the built-in steam.exe bridge.  Without this, Proton
+  // tries to initialise the Steam client which causes an assertion failure
+  // for non-Steam executables.
+  if (!m_useSteamDrm) {
+    env.insert("UMU_ID", "fluorine");
+  }
+
   env.insert("DOTNET_ROOT", "");
   env.insert("DOTNET_MULTILEVEL_LOOKUP", "0");
 

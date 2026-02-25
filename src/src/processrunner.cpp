@@ -669,6 +669,7 @@ ProcessRunner::Results waitForPid(pid_t pid, LPDWORD exitCode,
   }
 
   bool seenTrackedProcess = false;
+  pid_t lastTrackedPid = 0;
 
   while (true) {
     QString trackedName;
@@ -677,14 +678,25 @@ ProcessRunner::Results waitForPid(pid_t pid, LPDWORD exitCode,
     const pid_t tracked = findTrackedProcess(pid, expected, &trackedName);
     if (tracked > 0) {
       seenTrackedProcess = true;
+      lastTrackedPid = tracked;
       displayPid = tracked;
       displayName = trackedName;
     } else if (seenTrackedProcess) {
-      if (exitCode != nullptr) {
-        *exitCode = 0;
+      // The tracked process is no longer a descendant of the root PID.
+      // This can happen when the root (proton) exits and wine/game processes
+      // get reparented to PID 1.  Before declaring the game exited, check
+      // if the last tracked PID is still alive.
+      if (lastTrackedPid > 0 && ::kill(lastTrackedPid, 0) == 0) {
+        displayPid = lastTrackedPid;
+        displayName = readProcComm(lastTrackedPid);
+        log::debug("tracked process {} reparented but still alive", lastTrackedPid);
+      } else {
+        if (exitCode != nullptr) {
+          *exitCode = 0;
+        }
+        log::debug("tracked child process {} for root {} exited", lastTrackedPid, pid);
+        return ProcessRunner::Completed;
       }
-      log::debug("tracked child process for root {} exited", pid);
-      return ProcessRunner::Completed;
     }
 
     if (ls != nullptr) {
@@ -693,18 +705,23 @@ ProcessRunner::Results waitForPid(pid_t pid, LPDWORD exitCode,
     }
 
     if (useKillPoll) {
-      // Poll for process existence via kill(pid, 0)
-      if (::kill(pid, 0) != 0) {
+      // Poll for process existence via kill(pid, 0).
+      // When we have a tracked game PID, monitor that instead of the root
+      // (proton) PID which may have already exited.
+      const pid_t pollPid = (seenTrackedProcess && lastTrackedPid > 0)
+                                ? lastTrackedPid
+                                : pid;
+      if (::kill(pollPid, 0) != 0) {
         if (errno == ESRCH) {
           if (exitCode != nullptr) {
             *exitCode = 0;
           }
-          log::debug("process {} completed", pid);
+          log::debug("process {} completed", pollPid);
           return ProcessRunner::Completed;
         }
         // EPERM means the process exists but we can't signal it; keep waiting
         else if (errno != EPERM) {
-          log::error("failed checking process {}, errno={}", pid, errno);
+          log::error("failed checking process {}, errno={}", pollPid, errno);
           return ProcessRunner::Error;
         }
       }
@@ -713,6 +730,16 @@ ProcessRunner::Results waitForPid(pid_t pid, LPDWORD exitCode,
       const pid_t waitResult = ::waitpid(pid, &status, WNOHANG);
 
       if (waitResult == pid) {
+        // Root process (proton) exited.  If we have a tracked game process
+        // that is still alive, switch to polling the game PID directly
+        // rather than declaring the game finished.
+        if (seenTrackedProcess && lastTrackedPid > 0 &&
+            ::kill(lastTrackedPid, 0) == 0) {
+          log::debug("root process {} exited but tracked game {} still alive, "
+                     "switching to kill-poll", pid, lastTrackedPid);
+          useKillPoll = true;
+          continue;
+        }
         if (exitCode != nullptr) {
           *exitCode = exitCodeFromWaitStatus(status);
         }
