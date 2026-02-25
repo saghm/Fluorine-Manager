@@ -42,10 +42,21 @@ jobs:
           cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache
           cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache,mode=max
 
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fluorine-ccache
+          key: ccache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
+
       - name: Build inside container
         run: |
+          mkdir -p ~/.cache/fluorine-ccache
           docker run --rm \
             -v "${{ github.workspace }}:/src:rw" \
+            -v "$HOME/.cache/fluorine-ccache:/ccache:rw" \
+            -e CCACHE_DIR=/ccache \
             -w /src \
             fluorine-builder:latest \
             bash /src/docker/build-inner.sh

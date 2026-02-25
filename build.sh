@@ -29,10 +29,16 @@ cd "${SCRIPT_DIR}"
 echo "=== Ensuring build image is up to date ==="
 ${DOCKER} build -t "${IMAGE_NAME}" docker/
 
+# Persistent ccache directory for faster rebuilds.
+CCACHE_DIR="${HOME}/.cache/fluorine-ccache"
+mkdir -p "${CCACHE_DIR}"
+
 if [ "${1:-}" = "shell" ]; then
     echo "=== Dropping into build container shell ==="
     exec ${DOCKER} run --rm -it \
         -v "${SCRIPT_DIR}:/src:rw" \
+        -v "${CCACHE_DIR}:/ccache:rw" \
+        -e CCACHE_DIR=/ccache \
         -w /src \
         --device /dev/fuse \
         --cap-add SYS_ADMIN \
@@ -43,6 +49,8 @@ fi
 echo "=== Starting build ==="
 ${DOCKER} run --rm \
     -v "${SCRIPT_DIR}:/src:rw" \
+    -v "${CCACHE_DIR}:/ccache:rw" \
+    -e CCACHE_DIR=/ccache \
     -w /src \
     --device /dev/fuse \
     --cap-add SYS_ADMIN \

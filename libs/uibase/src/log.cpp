@@ -109,11 +109,15 @@ protected:
       spdlog::memory_buf_t formatted;
       base_sink::formatter_->format(m, formatted);
 
-      if (formatted.size() >= 2) {
-        // remove \r\n
-        e.formattedMessage.assign(formatted.begin(), formatted.end() - 2);
-      } else {
-        e.formattedMessage = std::string(formatted);
+      // Strip trailing newline(s).  spdlog appends \r\n on Windows but only
+      // \n on Linux; unconditionally removing 2 chars truncates the real message.
+      {
+        auto end = formatted.end();
+        while (end != formatted.begin() &&
+               (*(end - 1) == '\n' || *(end - 1) == '\r')) {
+          --end;
+        }
+        e.formattedMessage.assign(formatted.begin(), end);
       }
 
       (*m_f)(std::move(e));

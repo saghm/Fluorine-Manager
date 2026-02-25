@@ -7,6 +7,12 @@ BUILD_PY="${BUILD_PYTHON:-$(command -v python3)}"
 PYBIND11_DIR="$("${BUILD_PY}" -c 'import pybind11; print(pybind11.get_cmake_dir())' 2>/dev/null || true)"
 
 CMAKE_EXTRA_ARGS=()
+
+# Enable ccache if available and not explicitly overridden.
+if [ -z "${CMAKE_C_COMPILER_LAUNCHER:-}" ] && command -v ccache >/dev/null 2>&1; then
+    CMAKE_C_COMPILER_LAUNCHER=ccache
+    CMAKE_CXX_COMPILER_LAUNCHER=ccache
+fi
 if [ -n "${CMAKE_C_COMPILER_LAUNCHER:-}" ]; then
     CMAKE_EXTRA_ARGS+=("-DCMAKE_C_COMPILER_LAUNCHER=${CMAKE_C_COMPILER_LAUNCHER}")
 fi
