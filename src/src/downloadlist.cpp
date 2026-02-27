@@ -37,7 +37,7 @@ DownloadList::DownloadList(OrganizerCore& core, QObject* parent)
 {
   connect(&m_manager, SIGNAL(update(int)), this, SLOT(update(int)));
   connect(&m_manager, SIGNAL(aboutToUpdate()), this, SLOT(aboutToUpdate()));
-  connect(&m_manager, SIGNAL(stateChanged(int,int)), this, SLOT(rowChanged(int)));
+  connect(&m_manager, SIGNAL(stateChanged(int,DownloadManager::DownloadState)), this, SLOT(rowChanged(int)));
 }
 
 int DownloadList::rowCount(const QModelIndex& parent) const
