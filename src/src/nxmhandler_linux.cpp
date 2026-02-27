@@ -220,7 +220,9 @@ void NxmHandlerLinux::registerHandler() const
                             QFileDevice::ExeGroup | QFileDevice::ReadOther |
                             QFileDevice::ExeOther);
 
-  const QString execLine = "mo2-nxm-handler nxm-handle %u";
+  // Use the absolute path — ~/.local/bin is often not in PATH when the
+  // browser or desktop environment invokes the URL scheme handler.
+  const QString execLine = wrapperPath + " nxm-handle %u";
 
   const QString desktopPath = appsDir + "/mo2-nxm-handler.desktop";
   const QString desktop = QString("[Desktop Entry]\n"
