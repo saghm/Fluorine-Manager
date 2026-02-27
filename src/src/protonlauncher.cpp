@@ -349,7 +349,11 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
     protonScript = QDir(m_protonPath).filePath("proton");
   }
 
-  const QStringList protonArgs = QStringList() << "run" << m_binary << m_arguments;
+  // Use "waitforexitandrun" instead of "run": this tells Proton to wait for
+  // any existing wineserver to shut down first, then launch the game.  This is
+  // what umu-launcher uses and ensures the previous session is fully cleaned up
+  // before starting a new one.
+  const QStringList protonArgs = QStringList() << "waitforexitandrun" << m_binary << m_arguments;
 
   QString program;
   QStringList arguments;

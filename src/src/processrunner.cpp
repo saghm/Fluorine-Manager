@@ -22,6 +22,7 @@
 #include <dirent.h>
 #include <fstream>
 #include <signal.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unordered_map>
 #include <unordered_set>
@@ -514,6 +515,38 @@ QStringList readProcCmdline(pid_t pid) {
   return parts;
 }
 
+// Find a wineserver process owned by the current user.  Wineserver stays
+// alive as long as any Wine process in the prefix is running, making it
+// the most reliable way to detect when a game has truly exited — even when
+// launcher .exe's (nvse_loader, skse_loader, etc.) exit before the actual game.
+pid_t findWineserver() {
+  const uid_t myUid = ::getuid();
+  DIR *proc = opendir("/proc");
+  if (!proc) return 0;
+
+  pid_t result = 0;
+  struct dirent *entry = nullptr;
+  while ((entry = readdir(proc)) != nullptr) {
+    if (entry->d_type != DT_DIR && entry->d_type != DT_UNKNOWN) continue;
+    const char *name = entry->d_name;
+    if (*name == '\0' || !std::isdigit(static_cast<unsigned char>(*name))) continue;
+
+    const pid_t pid = static_cast<pid_t>(std::strtol(name, nullptr, 10));
+    const QString comm = readProcComm(pid);
+    if (comm != "wineserver") continue;
+
+    // Verify it's owned by us.
+    struct stat st;
+    if (::stat(QString("/proc/%1").arg(pid).toStdString().c_str(), &st) == 0 &&
+        st.st_uid == myUid) {
+      result = pid;
+      break;
+    }
+  }
+  closedir(proc);
+  return result;
+}
+
 // Check whether any of the expected executable names appear in a process's
 // comm or cmdline.  Wine processes often show "wine64-preload" or "start.exe"
 // in /proc/comm while the actual game executable only appears in cmdline.
@@ -673,12 +706,8 @@ pid_t findTrackedProcess(pid_t rootPid, const QStringList &expected,
 
   if (best > 0 && trackedNameOut) {
     *trackedNameOut = bestName;
-    log::debug("findTrackedProcess: found best={}, name={}", best,
-               bestName.toStdString());
-  } else {
-    log::debug("findTrackedProcess: no tracked process found for rootPid={}",
-               rootPid);
   }
+  // Logging moved to caller to avoid spamming every 50ms poll cycle.
   return best;
 }
 
@@ -731,24 +760,41 @@ ProcessRunner::Results waitForPid(pid_t pid, LPDWORD exitCode,
     QString displayName = readProcComm(pid);
     const pid_t tracked = findTrackedProcess(pid, expected, &trackedName);
     if (tracked > 0) {
+      if (!seenTrackedProcess || tracked != lastTrackedPid) {
+        log::info("tracking game process {}: {}", tracked, trackedName.toStdString());
+      }
       seenTrackedProcess = true;
       lastTrackedPid = tracked;
       displayPid = tracked;
       displayName = trackedName;
     } else if (seenTrackedProcess) {
       // The tracked process is no longer a descendant of the root PID.
-      // This can happen when the root (proton) exits and wine/game processes
-      // get reparented to PID 1.  Before declaring the game exited, check
-      // if the last tracked PID is still alive.
+      // This can happen when:
+      //  a) The root (proton) exits and wine/game processes get reparented
+      //  b) A launcher .exe (nvse_loader, skse_loader) exits after spawning
+      //     the actual game (FalloutNV.exe, SkyrimSE.exe)
+      //
+      // Before declaring the game exited, check if the last tracked PID is
+      // still alive.  If not, fall back to waiting for wineserver — it stays
+      // alive as long as ANY wine process in the prefix is running.
       if (lastTrackedPid > 0 && ::kill(lastTrackedPid, 0) == 0) {
         displayPid = lastTrackedPid;
         displayName = readProcComm(lastTrackedPid);
-        log::debug("tracked process {} reparented but still alive", lastTrackedPid);
       } else {
+        const pid_t ws = findWineserver();
+        if (ws > 0) {
+          log::info("tracked process exited, waiting for wineserver {}", ws);
+          lastTrackedPid = ws;
+          useKillPoll = true;
+          displayPid = ws;
+          displayName = QStringLiteral("wineserver");
+          continue;
+        }
         if (exitCode != nullptr) {
           *exitCode = 0;
         }
-        log::debug("tracked child process {} for root {} exited", lastTrackedPid, pid);
+        log::debug("tracked child process {} for root {} exited (no wineserver)",
+                   lastTrackedPid, pid);
         return ProcessRunner::Completed;
       }
     }
@@ -767,6 +813,17 @@ ProcessRunner::Results waitForPid(pid_t pid, LPDWORD exitCode,
                                 : pid;
       if (::kill(pollPid, 0) != 0) {
         if (errno == ESRCH) {
+          // The polled process exited.  If it was the game (not wineserver),
+          // try falling back to wineserver — the real game may still be running
+          // (e.g. nvse_loader exits after spawning FalloutNV.exe).
+          if (seenTrackedProcess) {
+            const pid_t ws = findWineserver();
+            if (ws > 0 && ws != pollPid) {
+              log::info("polled process {} exited, falling back to wineserver {}", pollPid, ws);
+              lastTrackedPid = ws;
+              continue;
+            }
+          }
           if (exitCode != nullptr) {
             *exitCode = 0;
           }
