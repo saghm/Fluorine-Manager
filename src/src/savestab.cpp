@@ -265,7 +265,7 @@ QDir SavesTab::currentSavesDir() const
     while (savePath.endsWith('\\') || savePath.endsWith('/')) {
       savePath.chop(1);
     }
-    if (!savePath.isEmpty()) {
+    if (!savePath.isEmpty() && savePath.compare("__MO_Saves", Qt::CaseInsensitive) != 0) {
       savesDir.setPath(m_core.managedGame()->documentsDirectory().absoluteFilePath(savePath));
     } else {
       savesDir = m_core.managedGame()->savesDirectory();
