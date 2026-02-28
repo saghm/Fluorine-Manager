@@ -887,9 +887,14 @@ void ModListView::setup(OrganizerCore& core, CategoryFactory& factory, MainWindo
 
 void ModListView::restoreState(const Settings& s)
 {
+  // Restore groupBy BEFORE header state: changing the groupBy combo triggers
+  // updateGroupByProxy() which replaces the sort proxy's source model, resetting
+  // the header.  By setting it first, the model is stable when header state
+  // (column visibility, widths, order) is restored.
+  s.widgets().restoreIndex(ui.groupBy);
+
   s.geometry().restoreState(header());
 
-  s.widgets().restoreIndex(ui.groupBy);
   s.widgets().restoreTreeExpandState(this);
 
   m_filters->restoreState(s);
