@@ -396,6 +396,24 @@ QRadioButton::indicator:hover {
   border-color: #bb4287;
 }
 
+QGroupBox::indicator:unchecked,
+QTreeView::indicator:unchecked,
+QCheckBox::indicator:unchecked {
+  image: url(./vs15/checkbox.png);
+}
+
+QGroupBox::indicator:unchecked:hover,
+QTreeView::indicator:unchecked:hover,
+QCheckBox::indicator:unchecked:hover {
+  image: url(./vs15/checkbox-hover.png);
+}
+
+QGroupBox::indicator:unchecked:disabled,
+QTreeView::indicator:unchecked:disabled,
+QCheckBox::indicator:unchecked:disabled {
+  image: url(./vs15/checkbox-disabled.png);
+}
+
 QGroupBox::indicator:checked,
 QTreeView::indicator:checked,
 QCheckBox::indicator:checked {

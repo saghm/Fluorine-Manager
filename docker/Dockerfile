@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     qt6-base-dev qt6-base-dev-tools \
     qt6-webengine-dev \
     libqt6websockets6-dev \
+    qt6-svg-dev qt6-svg-plugins \
     qt6-wayland \
     kde-style-breeze \
     # Python
