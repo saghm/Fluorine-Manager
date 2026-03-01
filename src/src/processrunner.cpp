@@ -515,11 +515,33 @@ QStringList readProcCmdline(pid_t pid) {
   return parts;
 }
 
-// Find a wineserver process owned by the current user.  Wineserver stays
-// alive as long as any Wine process in the prefix is running, making it
-// the most reliable way to detect when a game has truly exited — even when
-// launcher .exe's (nvse_loader, skse_loader, etc.) exit before the actual game.
-pid_t findWineserver() {
+// Read a specific environment variable from /proc/<pid>/environ.
+// The environ file is NUL-separated KEY=VALUE pairs.
+QString readProcEnvVar(pid_t pid, const char *varName) {
+  QFile f(QString("/proc/%1/environ").arg(pid));
+  if (!f.open(QIODevice::ReadOnly)) {
+    return {};
+  }
+
+  const QByteArray data = f.readAll();
+  const QByteArray prefix = QByteArray(varName) + '=';
+  for (const QByteArray &entry : data.split('\0')) {
+    if (entry.startsWith(prefix)) {
+      return QString::fromUtf8(entry.mid(prefix.size()));
+    }
+  }
+  return {};
+}
+
+// Find a wineserver process owned by the current user that belongs to the
+// given WINEPREFIX.  When expectedPrefix is empty, returns the first
+// wineserver owned by us (legacy behaviour).
+//
+// Wineserver stays alive as long as any Wine process in the prefix is
+// running, making it the most reliable way to detect when a game has truly
+// exited — even when launcher .exe's (nvse_loader, skse_loader, etc.) exit
+// before the actual game.
+pid_t findWineserver(const QString &expectedPrefix = {}) {
   const uid_t myUid = ::getuid();
   DIR *proc = opendir("/proc");
   if (!proc) return 0;
@@ -537,11 +559,26 @@ pid_t findWineserver() {
 
     // Verify it's owned by us.
     struct stat st;
-    if (::stat(QString("/proc/%1").arg(pid).toStdString().c_str(), &st) == 0 &&
-        st.st_uid == myUid) {
-      result = pid;
-      break;
+    if (::stat(QString("/proc/%1").arg(pid).toStdString().c_str(), &st) != 0 ||
+        st.st_uid != myUid) {
+      continue;
     }
+
+    // If a prefix filter was given, verify this wineserver belongs to it.
+    // A wineserver without WINEPREFIX in its environ is using the default
+    // ~/.wine prefix, which is never the game prefix — skip it too.
+    if (!expectedPrefix.isEmpty()) {
+      const QString wsPrefix = readProcEnvVar(pid, "WINEPREFIX");
+      if (wsPrefix.isEmpty() ||
+          QDir(wsPrefix).canonicalPath() != QDir(expectedPrefix).canonicalPath()) {
+        log::debug("skipping wineserver {} (prefix '{}' != expected '{}')",
+                   pid, wsPrefix.toStdString(), expectedPrefix.toStdString());
+        continue;
+      }
+    }
+
+    result = pid;
+    break;
   }
   closedir(proc);
   return result;
@@ -730,6 +767,15 @@ ProcessRunner::Results waitForPid(pid_t pid, LPDWORD exitCode,
     return ProcessRunner::Error;
   }
 
+  // Capture the WINEPREFIX from the launched process so we can filter
+  // wineserver lookups to the correct prefix.  Without this, Fluorine
+  // would track ANY wineserver owned by the user (e.g. one running
+  // winecfg under ~/.wine while the game uses a different prefix).
+  const QString winePrefix = readProcEnvVar(pid, "WINEPREFIX");
+  if (!winePrefix.isEmpty()) {
+    log::debug("process {} has WINEPREFIX='{}'", pid, winePrefix.toStdString());
+  }
+
   // startDetached() creates a non-child process, so waitpid() will fail with
   // ECHILD. Detect this on the first call and switch to kill(pid, 0) polling
   // which works for any process owned by the same user.
@@ -781,7 +827,7 @@ ProcessRunner::Results waitForPid(pid_t pid, LPDWORD exitCode,
         displayPid = lastTrackedPid;
         displayName = readProcComm(lastTrackedPid);
       } else {
-        const pid_t ws = findWineserver();
+        const pid_t ws = findWineserver(winePrefix);
         if (ws > 0) {
           log::info("tracked process exited, waiting for wineserver {}", ws);
           lastTrackedPid = ws;
@@ -817,7 +863,7 @@ ProcessRunner::Results waitForPid(pid_t pid, LPDWORD exitCode,
           // try falling back to wineserver — the real game may still be running
           // (e.g. nvse_loader exits after spawning FalloutNV.exe).
           if (seenTrackedProcess) {
-            const pid_t ws = findWineserver();
+            const pid_t ws = findWineserver(winePrefix);
             if (ws > 0 && ws != pollPid) {
               log::info("polled process {} exited, falling back to wineserver {}", pollPid, ws);
               lastTrackedPid = ws;
