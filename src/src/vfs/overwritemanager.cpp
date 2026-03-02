@@ -53,6 +53,9 @@ std::string OverwriteManager::copyOnWrite(const std::string& source_path,
   fs::create_directories(dest.parent_path(), ec);
 
   if (fs::exists(dest, ec)) {
+    // Ensure write permission even for pre-existing staging files (e.g.
+    // orphaned from a previous crash).
+    fs::permissions(dest, fs::perms::owner_write, fs::perm_options::add, ec);
     return dest.string();
   }
 
@@ -61,6 +64,11 @@ std::string OverwriteManager::copyOnWrite(const std::string& source_path,
     if (ec) {
       throw fs::filesystem_error("copyOnWrite", fs::path(source_path), dest, ec);
     }
+    // copy_file preserves source permissions.  If the source was read-only
+    // (common for Steam game files or mods extracted from Windows archives),
+    // the staging copy would also be read-only, causing subsequent writes
+    // to fail with EACCES.  Ensure the owner can always write.
+    fs::permissions(dest, fs::perms::owner_write, fs::perm_options::add, ec);
   } else {
     std::ofstream out(dest, std::ios::binary);
     out.close();

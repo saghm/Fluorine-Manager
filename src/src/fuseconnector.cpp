@@ -384,24 +384,37 @@ void FuseConnector::updateMapping(const MappingType& mapping)
 
   auto mods = buildModsFromMapping(mapping, dataDirPath, overwriteDir);
 
-  // Check if any mapping has createTarget set — that mod directory should
-  // receive newly created files instead of the overwrite directory.
+  // Check if any data-dir mapping has createTarget set — that directory
+  // should receive newly created files instead of the overwrite directory.
+  // Only consider mappings that target the data directory; non-data-dir
+  // mappings (e.g. profile-specific saves → __MO_Saves in My Games) are
+  // deployed as real symlinks and should NOT redirect VFS staging output.
   m_customOutputDir.clear();
-  for (const auto& map : mapping) {
-    if (map.createTarget) {
-      log::debug("Found createTarget mapping: source='{}', dest='{}', isDir={}",
-                 map.source, map.destination, map.isDirectory);
-    }
-    if (map.createTarget && map.isDirectory) {
-      m_customOutputDir =
-          QDir::cleanPath(QDir::fromNativeSeparators(map.source)).toStdString();
-      log::debug("Custom output directory set to: {}",
-                 QString::fromStdString(m_customOutputDir));
-      break;
+  {
+    const QString cleanDataDir = QDir::cleanPath(dataDirPath);
+    const QString dataPrefix   = cleanDataDir + QStringLiteral("/");
+    for (const auto& map : mapping) {
+      if (!map.createTarget || !map.isDirectory) {
+        continue;
+      }
+      const QString dst =
+          QDir::cleanPath(QDir::fromNativeSeparators(map.destination));
+      const bool targetsDataDir =
+          (dst == cleanDataDir || dst.startsWith(dataPrefix));
+      log::debug("Found createTarget mapping: source='{}', dest='{}', "
+                 "targetsDataDir={}",
+                 map.source, map.destination, targetsDataDir);
+      if (targetsDataDir) {
+        m_customOutputDir =
+            QDir::cleanPath(QDir::fromNativeSeparators(map.source)).toStdString();
+        log::debug("Custom output directory set to: {}",
+                   QString::fromStdString(m_customOutputDir));
+        break;
+      }
     }
   }
   if (m_customOutputDir.empty()) {
-    log::debug("No createTarget mapping found, using overwrite dir");
+    log::debug("No data-dir createTarget mapping found, using overwrite dir");
   }
 
   // Deploy non-data-dir mappings as real symlinks and collect file-level
