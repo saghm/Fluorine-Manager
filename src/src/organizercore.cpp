@@ -47,6 +47,7 @@
 #include <nak_ffi.h>
 #endif
 
+#include <chrono>
 #include <filesystem>
 #include <QApplication>
 #include <QCoreApplication>
@@ -2342,6 +2343,7 @@ void OrganizerCore::afterRun(const QFileInfo& binary, DWORD exitCode)
   // (crashes, unclean Wine shutdown) file permissions can be changed to
   // read-only, preventing subsequent launches from working.
   {
+    const auto t0 = std::chrono::steady_clock::now();
     const QString gameDir = managedGame()->gameDirectory().absolutePath();
     namespace fs = std::filesystem;
     std::error_code ec;
@@ -2352,6 +2354,9 @@ void OrganizerCore::afterRun(const QFileInfo& binary, DWORD exitCode)
                       fs::perms::owner_read | fs::perms::owner_write | fs::perms::owner_exec,
                       fs::perm_options::add, ec);
     }
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - t0).count();
+    log::info("Post-run: restored game directory permissions in {}ms", ms);
   }
 
   if (m_CurrentProfile != nullptr) {

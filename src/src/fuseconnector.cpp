@@ -15,6 +15,7 @@
 #include <iplugingame.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
@@ -219,18 +220,23 @@ bool FuseConnector::mount(
     fs::create_directories(m_customOutputDir, ec);
   }
 
+  const auto mountStart = std::chrono::steady_clock::now();
+
   // Scan + cache base game files BEFORE mounting (after mount they're hidden).
   // Reuse the cache across mount/unmount cycles since base game files don't
   // change between runs — this avoids a full recursive directory walk on
   // every launch.
-  if (m_baseFileCache.empty() || m_dataDirPath != m_cachedDataDirPath) {
-    m_baseFileCache    = scanDataDir(m_dataDirPath);
-    m_cachedDataDirPath = m_dataDirPath;
-    log::debug("Scanned {} base game entries from {}", m_baseFileCache.size(),
-               QString::fromStdString(m_dataDirPath));
-  } else {
-    log::debug("Reusing cached {} base game entries for {}",
-               m_baseFileCache.size(), QString::fromStdString(m_dataDirPath));
+  {
+    const auto t0 = std::chrono::steady_clock::now();
+    if (m_baseFileCache.empty() || m_dataDirPath != m_cachedDataDirPath) {
+      m_baseFileCache    = scanDataDir(m_dataDirPath);
+      m_cachedDataDirPath = m_dataDirPath;
+    }
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - t0).count();
+    log::info("VFS: scanned {} base game entries in {}ms ({})",
+              m_baseFileCache.size(), ms,
+              m_dataDirPath == m_cachedDataDirPath ? "cached" : "fresh");
   }
 
   // Open fd to data dir BEFORE mounting so we can access original files
@@ -242,11 +248,18 @@ bool FuseConnector::mount(
   }
 
   // Build tree using cached base files + mods + overwrite
+  const auto treeStart = std::chrono::steady_clock::now();
   auto tree = std::make_shared<VfsTree>(
       buildDataDirVfs(m_baseFileCache, m_dataDirPath, mods, m_overwriteDir));
 
   // Inject file-level data-dir mappings (e.g. plugins.txt, loadorder.txt)
   injectExtraFiles(*tree, m_extraVfsFiles);
+  {
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - treeStart).count();
+    log::info("VFS: built tree ({} files, {} dirs) in {}ms",
+              tree->file_count, tree->dir_count, ms);
+  }
 
   m_context                 = std::make_shared<Mo2FsContext>();
   m_context->tree           = tree;
@@ -297,7 +310,12 @@ bool FuseConnector::mount(
 
   m_mounted = true;
   setFuseMountPointForCrashCleanup(m_mountPoint.c_str());
-  log::debug("FUSE mounted on data dir {}", QString::fromStdString(m_mountPoint));
+  {
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - mountStart).count();
+    log::info("VFS: mounted on '{}' in {}ms total",
+              QString::fromStdString(m_mountPoint), ms);
+  }
   return true;
 }
 
@@ -306,6 +324,8 @@ void FuseConnector::unmount()
   if (!m_mounted) {
     return;
   }
+
+  const auto unmountStart = std::chrono::steady_clock::now();
 
   if (m_session != nullptr) {
     fuse_session_exit(m_session);
@@ -321,7 +341,13 @@ void FuseConnector::unmount()
     m_session = nullptr;
   }
 
-  flushStaging();
+  {
+    const auto t0 = std::chrono::steady_clock::now();
+    flushStaging();
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - t0).count();
+    log::info("VFS: flushed staging in {}ms", ms);
+  }
 
   if (m_backingFd >= 0) {
     close(m_backingFd);
@@ -335,7 +361,12 @@ void FuseConnector::unmount()
   // Clean up symlinks created for non-data-dir mappings.
   cleanupExternalMappings();
 
-  log::debug("FUSE unmounted from {}", QString::fromStdString(m_mountPoint));
+  {
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - unmountStart).count();
+    log::info("VFS: unmounted from '{}' in {}ms total",
+              QString::fromStdString(m_mountPoint), ms);
+  }
 }
 
 bool FuseConnector::isMounted() const
@@ -372,6 +403,7 @@ void FuseConnector::rebuild(
 
 void FuseConnector::updateMapping(const MappingType& mapping)
 {
+  const auto updateStart = std::chrono::steady_clock::now();
   auto* game = qApp->property("managed_game").value<MOBase::IPluginGame*>();
   if (game == nullptr) {
     throw FuseConnectorException(QObject::tr("Managed game not available"));
@@ -419,12 +451,26 @@ void FuseConnector::updateMapping(const MappingType& mapping)
 
   // Deploy non-data-dir mappings as real symlinks and collect file-level
   // data-dir mappings for VFS tree injection.
-  deployExternalMappings(mapping, dataDirPath);
+  {
+    const auto t0 = std::chrono::steady_clock::now();
+    deployExternalMappings(mapping, dataDirPath);
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - t0).count();
+    log::info("VFS: deployed external mappings ({} symlinks, {} extra files) "
+              "in {}ms",
+              m_externalSymlinks.size(), m_extraVfsFiles.size(), ms);
+  }
 
   if (!m_mounted) {
     mount(dataDirPath, overwriteDir, gameDir, dataDirName, mods);
   } else {
     rebuild(mods, overwriteDir, dataDirName);
+  }
+
+  {
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - updateStart).count();
+    log::info("VFS: updateMapping completed in {}ms total", ms);
   }
 }
 
