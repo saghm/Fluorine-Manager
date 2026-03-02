@@ -47,6 +47,7 @@
 #include <nak_ffi.h>
 #endif
 
+#include <filesystem>
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDialog>
@@ -2336,6 +2337,22 @@ void OrganizerCore::afterRun(const QFileInfo& binary, DWORD exitCode)
   // and tears down the FUSE session.  This mirrors Windows behaviour where
   // USVFS is only active while a hooked process is running.
   m_USVFS.unmount();
+
+  // Restore write permissions on the game directory.  In rare cases
+  // (crashes, unclean Wine shutdown) file permissions can be changed to
+  // read-only, preventing subsequent launches from working.
+  {
+    const QString gameDir = managedGame()->gameDirectory().absolutePath();
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    for (auto it = fs::recursive_directory_iterator(
+             gameDir.toStdString(), fs::directory_options::skip_permission_denied);
+         it != fs::recursive_directory_iterator(); ++it) {
+      fs::permissions(it->path(),
+                      fs::perms::owner_read | fs::perms::owner_write | fs::perms::owner_exec,
+                      fs::perm_options::add, ec);
+    }
+  }
 
   if (m_CurrentProfile != nullptr) {
     const QString prefixPathStr = resolveWinePrefixPath(m_Settings, managedGame());
