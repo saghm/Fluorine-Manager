@@ -1,6 +1,7 @@
 #include "protonlauncher.h"
 
 #include <nak_ffi.h>
+#include <cstdio>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -146,7 +147,23 @@ bool startWithEnv(const QString& program, const QStringList& arguments,
   }
 
   process->setProcessEnvironment(environment);
-  process->setProcessChannelMode(QProcess::ForwardedChannels);
+  process->setProcessChannelMode(QProcess::ForwardedOutputChannel);
+
+  // Filter noisy Wine/Proton stderr (GStreamer warnings, etc.) while
+  // forwarding everything else to our stderr.
+  QObject::connect(process, &QProcess::readyReadStandardError, process, [process]() {
+    const QByteArray data = process->readAllStandardError();
+    for (const QByteArray& line : data.split('\n')) {
+      if (line.isEmpty())
+        continue;
+      if (line.contains("GStreamer-WARNING") || line.contains("Failed to load plugin") ||
+          line.contains("ProtonFixes[") || line.contains("wineserver: NTSync") ||
+          line.contains("[MANGOHUD]") || line.contains("radv is not a conformant"))
+        continue;
+      std::fwrite(line.constData(), 1, line.size(), stderr);
+      std::fputc('\n', stderr);
+    }
+  });
 
   QObject::connect(process,
                    QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),

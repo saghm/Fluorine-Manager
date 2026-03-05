@@ -48,6 +48,7 @@
 #endif
 
 #include <chrono>
+#include <cstdio>
 #include <filesystem>
 #include <QApplication>
 #include <QCoreApplication>
@@ -2356,7 +2357,8 @@ void OrganizerCore::afterRun(const QFileInfo& binary, DWORD exitCode)
     }
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - t0).count();
-    log::info("Post-run: restored game directory permissions in {}ms", ms);
+    std::fprintf(stderr, "[VFS] restored game directory permissions in %lldms\n",
+                 static_cast<long long>(ms));
   }
 
   if (m_CurrentProfile != nullptr) {

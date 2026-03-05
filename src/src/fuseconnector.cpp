@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cerrno>
+#include <cstdio>
 #include <cstring>
 #include <fcntl.h>
 #include <filesystem>
@@ -234,9 +235,9 @@ bool FuseConnector::mount(
     }
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - t0).count();
-    log::info("VFS: scanned {} base game entries in {}ms ({})",
-              m_baseFileCache.size(), ms,
-              m_dataDirPath == m_cachedDataDirPath ? "cached" : "fresh");
+    std::fprintf(stderr, "[VFS] scanned %zu base game entries in %lldms (%s)\n",
+                 m_baseFileCache.size(), static_cast<long long>(ms),
+                 m_dataDirPath == m_cachedDataDirPath ? "cached" : "fresh");
   }
 
   // Open fd to data dir BEFORE mounting so we can access original files
@@ -257,8 +258,8 @@ bool FuseConnector::mount(
   {
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - treeStart).count();
-    log::info("VFS: built tree ({} files, {} dirs) in {}ms",
-              tree->file_count, tree->dir_count, ms);
+    std::fprintf(stderr, "[VFS] built tree (%zu files, %zu dirs) in %lldms\n",
+                 tree->file_count, tree->dir_count, static_cast<long long>(ms));
   }
 
   m_context                 = std::make_shared<Mo2FsContext>();
@@ -313,8 +314,8 @@ bool FuseConnector::mount(
   {
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - mountStart).count();
-    log::info("VFS: mounted on '{}' in {}ms total",
-              QString::fromStdString(m_mountPoint), ms);
+    std::fprintf(stderr, "[VFS] mounted on '%s' in %lldms total\n",
+                 m_mountPoint.c_str(), static_cast<long long>(ms));
   }
   return true;
 }
@@ -346,7 +347,8 @@ void FuseConnector::unmount()
     flushStaging();
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - t0).count();
-    log::info("VFS: flushed staging in {}ms", ms);
+    std::fprintf(stderr, "[VFS] flushed staging in %lldms\n",
+                 static_cast<long long>(ms));
   }
 
   if (m_backingFd >= 0) {
@@ -364,8 +366,8 @@ void FuseConnector::unmount()
   {
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - unmountStart).count();
-    log::info("VFS: unmounted from '{}' in {}ms total",
-              QString::fromStdString(m_mountPoint), ms);
+    std::fprintf(stderr, "[VFS] unmounted from '%s' in %lldms total\n",
+                 m_mountPoint.c_str(), static_cast<long long>(ms));
   }
 }
 
@@ -456,9 +458,10 @@ void FuseConnector::updateMapping(const MappingType& mapping)
     deployExternalMappings(mapping, dataDirPath);
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - t0).count();
-    log::info("VFS: deployed external mappings ({} symlinks, {} extra files) "
-              "in {}ms",
-              m_externalSymlinks.size(), m_extraVfsFiles.size(), ms);
+    std::fprintf(stderr, "[VFS] deployed external mappings (%zu symlinks, %zu extra files) "
+                 "in %lldms\n",
+                 m_externalSymlinks.size(), m_extraVfsFiles.size(),
+                 static_cast<long long>(ms));
   }
 
   if (!m_mounted) {
@@ -470,7 +473,8 @@ void FuseConnector::updateMapping(const MappingType& mapping)
   {
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - updateStart).count();
-    log::info("VFS: updateMapping completed in {}ms total", ms);
+    std::fprintf(stderr, "[VFS] updateMapping completed in %lldms total\n",
+                 static_cast<long long>(ms));
   }
 }
 
