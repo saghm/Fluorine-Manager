@@ -367,14 +367,14 @@ VfsTree buildDataDirVfs(const std::vector<CachedBaseFile>& cached_files,
     }
   }
 
-  // Layer 2: Overwrite (higher priority, overwrites base game)
-  addDirectoryToTree(tree, fs::path(overwrite_dir), fs::path(overwrite_dir),
-                     "Overwrite", {});
-
-  // Layer 3: Mods in priority order (highest priority)
+  // Layer 2: Mods in priority order (higher priority)
   for (const auto& [modName, modPath] : mods) {
     addDirectoryToTree(tree, fs::path(modPath), fs::path(modPath), modName, {});
   }
+
+  // Layer 3: Overwrite (highest priority)
+  addDirectoryToTree(tree, fs::path(overwrite_dir), fs::path(overwrite_dir),
+                     "Overwrite", {});
 
   return tree;
 }
