@@ -1267,15 +1267,10 @@ static QString lootFolderName(const QString& mo2GameName)
 static void ensureLootSettings(const QString& lootDataPath,
                                const QString& mo2GameName,
                                const QString& folderName,
-                               const QString& gamePath)
+                               const QString& gamePath,
+                               const QString& localPath)
 {
   QDir().mkpath(lootDataPath);
-
-  // Create a local app data directory for this game.  LOOT needs it for
-  // load order interaction (plugins.txt / loadorder.txt).  On Linux the
-  // native local-appdata location (~/.local/share/<game>) doesn't exist
-  // because games run via Proton, so we create one under our data dir.
-  QString localPath = lootDataPath + "/local/" + folderName;
   QDir().mkpath(localPath);
 
   // Map MO2 game names to LOOT masterlist repository names.
@@ -1290,7 +1285,7 @@ static void ensureLootSettings(const QString& lootDataPath,
   };
   QString repoName  = masterlistRepos.value(mo2GameName, mo2GameName.toLower());
   QString masterlistUrl =
-      QString("https://raw.githubusercontent.com/loot/%1/v0.21/masterlist.yaml")
+      QString("https://raw.githubusercontent.com/loot/%1/v0.26/masterlist.yaml")
           .arg(repoName);
 
   // Always rewrite the settings file so the path matches the current
@@ -1330,12 +1325,31 @@ static bool launchLootGui(QWidget* parent, OrganizerCore& core)
   QString folderName  = lootFolderName(mo2GameName);
   QString gamePath    = core.managedGame()->gameDirectory().absolutePath();
   QString lootDataPath = fluorineDataDir() + "/loot";
-  QString localPath   = lootDataPath + "/local/" + folderName;
+
+  // Resolve the Fluorine prefix AppData/Local/<game> path — this is where
+  // LOOT auto-detects the plugins.txt / loadorder.txt from, so we must
+  // use it as local_path and deploy our load order files there.
+  QString localPath;
+  {
+    QString prefixBase = fluorineDataDir() + "/Prefix/pfx/drive_c/users/steamuser/AppData/Local";
+    // Use documentsDirectory leaf name as the AppData/Local subfolder —
+    // this matches how Bethesda games map their local data folder.
+    QString dataDirName = core.managedGame()->documentsDirectory().dirName();
+    if (dataDirName.isEmpty() || dataDirName == ".") {
+      dataDirName = core.managedGame()->gameShortName();
+    }
+    QString candidate = prefixBase + "/" + dataDirName;
+    if (!dataDirName.isEmpty() && QDir(prefixBase).exists()) {
+      localPath = candidate;
+    } else {
+      localPath = lootDataPath + "/local/" + folderName;
+    }
+  }
 
   // Pre-seed LOOT settings so --game resolution works on first launch.
-  ensureLootSettings(lootDataPath, mo2GameName, folderName, gamePath);
+  ensureLootSettings(lootDataPath, mo2GameName, folderName, gamePath, localPath);
 
-  // Copy the profile's load order files to LOOT's local path so LOOT sees
+  // Copy the profile's load order files to the local path so LOOT sees
   // the current load order.
   QDir().mkpath(localPath);
   QString profilePlugins   = core.profilePath() + "/plugins.txt";
@@ -1424,23 +1438,92 @@ static bool launchLootGui(QWidget* parent, OrganizerCore& core)
 
   lootProcess.waitForFinished(-1);
 
+  int exitCode = lootProcess.exitCode();
+  log::info("LOOT exited with code {}", exitCode);
+
+  // For FileTime-based games (FalloutNV, Fallout3, Oblivion), LOOT sets
+  // load order via file timestamps rather than modifying loadorder.txt.
+  // Read the plugin timestamps from the still-mounted VFS and write a
+  // sorted loadorder.txt before unmounting (timestamps are lost on unmount).
+  if (core.managedGame()->loadOrderMechanism() ==
+      MOBase::IPluginGame::LoadOrderMechanism::FileTime) {
+    QString dataPath = core.managedGame()->dataDirectory().absolutePath();
+    QDir dataDir(dataPath);
+    QStringList pluginFilters = {"*.esp", "*.esm", "*.esl"};
+
+    struct PluginMtime {
+      QString name;
+      qint64 mtime;
+    };
+    std::vector<PluginMtime> plugins;
+
+    for (const auto& entry : dataDir.entryInfoList(pluginFilters, QDir::Files)) {
+      plugins.push_back({entry.fileName(),
+                         entry.lastModified().toSecsSinceEpoch()});
+    }
+
+    std::sort(plugins.begin(), plugins.end(),
+              [](const PluginMtime& a, const PluginMtime& b) {
+                return a.mtime < b.mtime;
+              });
+
+    if (!plugins.empty()) {
+      QFile lo(profileLoadOrder);
+      if (lo.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream out(&lo);
+        for (const auto& p : plugins) {
+          out << p.name << "\n";
+        }
+        lo.close();
+        log::info("Wrote sorted load order ({} plugins) from VFS timestamps",
+                  plugins.size());
+      }
+    }
+  }
+
+  // Discard any COW'd files in staging (LOOT opens plugins with write access
+  // to set timestamps, which triggers copy-on-write — we don't want those
+  // copies ending up in overwrite).
+  core.discardVFSStagingOnUnmount();
+
   // Unmount the VFS now that LOOT has finished.
   log::info("Unmounting VFS after LOOT...");
   core.unmountVFS();
 
-  int exitCode = lootProcess.exitCode();
-  log::info("LOOT exited with code {}", exitCode);
-
   // Copy LOOT's updated load order files back to the profile.
-  if (QFile::exists(lootPlugins)) {
-    QFile::remove(profilePlugins);
-    QFile::copy(lootPlugins, profilePlugins);
-    log::info("Copied LOOT plugins.txt back to profile");
+  // For FileTime games, we already wrote loadorder.txt from VFS timestamps
+  // above — skip the copy-back so we don't overwrite it with the old order.
+  bool isFileTime = core.managedGame()->loadOrderMechanism() ==
+                    MOBase::IPluginGame::LoadOrderMechanism::FileTime;
+
+  // LOOT may write "Plugins.txt" (capital P, Windows convention) instead of
+  // "plugins.txt", so check both case variants on case-sensitive Linux.
+  QString lootPluginsActual = lootPlugins;
+  if (!QFile::exists(lootPluginsActual)) {
+    QString alt = localPath + "/Plugins.txt";
+    if (QFile::exists(alt)) {
+      lootPluginsActual = alt;
+    }
   }
-  if (QFile::exists(lootLoadOrder)) {
-    QFile::remove(profileLoadOrder);
-    QFile::copy(lootLoadOrder, profileLoadOrder);
-    log::info("Copied LOOT loadorder.txt back to profile");
+  if (QFile::exists(lootPluginsActual)) {
+    QFile::remove(profilePlugins);
+    QFile::copy(lootPluginsActual, profilePlugins);
+    log::info("Copied LOOT {} back to profile", lootPluginsActual);
+  }
+
+  if (!isFileTime) {
+    QString lootLoadOrderActual = lootLoadOrder;
+    if (!QFile::exists(lootLoadOrderActual)) {
+      QString alt = localPath + "/Loadorder.txt";
+      if (QFile::exists(alt)) {
+        lootLoadOrderActual = alt;
+      }
+    }
+    if (QFile::exists(lootLoadOrderActual)) {
+      QFile::remove(profileLoadOrder);
+      QFile::copy(lootLoadOrderActual, profileLoadOrder);
+      log::info("Copied LOOT {} back to profile", lootLoadOrderActual);
+    }
   }
 
   return true;

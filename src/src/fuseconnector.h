@@ -42,6 +42,7 @@ public:
   void setPluginLoadOrder(const std::vector<std::string>& load_order);
 
   void unmount();
+  void discardStagingOnUnmount();
   bool isMounted() const;
 
   void rebuild(const std::vector<std::pair<std::string, std::string>>& mods,
@@ -88,7 +89,8 @@ private:
 
   struct fuse_session* m_session = nullptr;
   std::thread m_fuseThread;
-  bool m_mounted = false;
+  bool m_mounted        = false;
+  bool m_discardStaging = false;
 };
 
 #endif

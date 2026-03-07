@@ -351,6 +351,7 @@ public:
 
   void prepareVFS();
   void unmountVFS();
+  void discardVFSStagingOnUnmount();
 
   void updateVFSParams(MOBase::log::Levels logLevel, env::CoreDumpTypes coreDumpType,
                        const QString& coreDumpsPath, std::chrono::seconds spawnDelay,

@@ -725,11 +725,39 @@ void mo2_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
         times[1].tv_nsec = UTIME_OMIT;
       }
 
-      utimensat(AT_FDCWD, snap.real_path.c_str(), times, 0);
+      // Only write timestamps to disk for files we own (staging/overwrite).
+      // For mod and base game files, just update the VFS tree in-memory.
+      if (!snap.is_backing) {
+        utimensat(AT_FDCWD, snap.real_path.c_str(), times, 0);
+      }
 
-      // Update the VFS tree node with the new mtime
+      // Update the VFS tree mtime without changing origin or triggering COW.
       if (to_set & (FUSE_SET_ATTR_MTIME | FUSE_SET_ATTR_MTIME_NOW)) {
-        updateFileNode(ctx, path, snap.real_path, "Staging");
+        std::chrono::system_clock::time_point newMtime;
+        if (to_set & FUSE_SET_ATTR_MTIME_NOW) {
+          newMtime = std::chrono::system_clock::now();
+        } else {
+          newMtime = std::chrono::system_clock::time_point(
+              std::chrono::seconds(attr->st_mtim.tv_sec));
+        }
+        std::unique_lock lock(ctx->tree_mutex);
+        auto components = splitPath(path);
+        VfsNode* cur    = &ctx->tree->root;
+        for (const auto& part : components) {
+          if (!cur->is_directory) {
+            cur = nullptr;
+            break;
+          }
+          auto it = cur->dir_info.children.find(normalizeForLookup(part));
+          if (it == cur->dir_info.children.end()) {
+            cur = nullptr;
+            break;
+          }
+          cur = it->second.get();
+        }
+        if (cur != nullptr && !cur->is_directory) {
+          cur->file_info.mtime = newMtime;
+        }
       }
     }
   }

@@ -350,7 +350,15 @@ void FuseConnector::unmount()
 
   {
     const auto t0 = std::chrono::steady_clock::now();
-    flushStaging();
+    if (m_discardStaging) {
+      // Discard all COW'd files instead of moving them to overwrite.
+      log::info("Discarding staging directory (discard flag set)");
+      std::error_code ec;
+      fs::remove_all(m_stagingDir, ec);
+      m_discardStaging = false;
+    } else {
+      flushStaging();
+    }
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - t0).count();
     std::fprintf(stderr, "[VFS] flushed staging in %lldms\n",
@@ -380,6 +388,11 @@ void FuseConnector::unmount()
 bool FuseConnector::isMounted() const
 {
   return m_mounted;
+}
+
+void FuseConnector::discardStagingOnUnmount()
+{
+  m_discardStaging = true;
 }
 
 void FuseConnector::setPluginLoadOrder(const std::vector<std::string>& load_order)

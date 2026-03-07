@@ -659,6 +659,13 @@ void OrganizerCore::unmountVFS()
   m_USVFS.unmount();
 }
 
+void OrganizerCore::discardVFSStagingOnUnmount()
+{
+#ifndef _WIN32
+  m_USVFS.discardStagingOnUnmount();
+#endif
+}
+
 void OrganizerCore::updateVFSParams(log::Levels logLevel,
                                     env::CoreDumpTypes coreDumpType,
                                     const QString& crashDumpsPath,
