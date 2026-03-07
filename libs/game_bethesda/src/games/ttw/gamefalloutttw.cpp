@@ -209,9 +209,8 @@ QList<PluginSetting> GameFalloutTTW::settings() const
 {
   return QList<PluginSetting>()
          << PluginSetting("enable_loot_sorting",
-                          tr("While not recommended by the TTW modding community, "
-                             "enables LOOT sorting"),
-                          false);
+                          tr("Enables LOOT sorting for Tale of Two Wastelands"),
+                          true);
 }
 
 void GameFalloutTTW::initializeProfile(const QDir& path, ProfileSettings settings) const

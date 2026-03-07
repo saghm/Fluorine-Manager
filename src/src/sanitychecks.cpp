@@ -180,9 +180,13 @@ int checkBlocked()
 int checkMissingFiles()
 {
   // files that are likely to be eaten
+#ifdef _WIN32
   static const QStringList files(
       {"helper.exe", "nxmhandler.exe", "usvfs_proxy_x64.exe", "usvfs_proxy_x86.exe",
        "usvfs_x64.dll", "usvfs_x86.dll", "loot/loot.dll", "loot/lootcli.exe"});
+#else
+  static const QStringList files({});
+#endif
 
   log::debug("  . missing files");
   const auto dir = QCoreApplication::applicationDirPath();

@@ -350,6 +350,7 @@ public:
   MOBase::DelayedFileWriter& pluginsWriter() { return m_PluginListsWriter; }
 
   void prepareVFS();
+  void unmountVFS();
 
   void updateVFSParams(MOBase::log::Levels logLevel, env::CoreDumpTypes coreDumpType,
                        const QString& coreDumpsPath, std::chrono::seconds spawnDelay,

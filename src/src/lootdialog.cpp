@@ -58,6 +58,57 @@ bool MarkdownPage::acceptNavigationRequest(const QUrl& url, NavigationType, bool
 }
 #endif
 
+// Convert simple markdown to HTML for QTextBrowser
+static QString markdownToHtml(const QString& md)
+{
+  QString html = "<html><body style='font-family: sans-serif; font-size: 10pt;'>";
+
+  const auto lines = md.split('\n');
+  bool inList = false;
+
+  for (const auto& line : lines) {
+    QString trimmed = line.trimmed();
+
+    if (trimmed.isEmpty()) {
+      if (inList) {
+        html += "</ul>";
+        inList = false;
+      }
+      html += "<br>";
+      continue;
+    }
+
+    // headers
+    if (trimmed.startsWith("#### ")) {
+      if (inList) { html += "</ul>"; inList = false; }
+      html += "<h4>" + trimmed.mid(5).toHtmlEscaped() + "</h4>";
+    } else if (trimmed.startsWith("### ")) {
+      if (inList) { html += "</ul>"; inList = false; }
+      html += "<h3>" + trimmed.mid(4).toHtmlEscaped() + "</h3>";
+    } else if (trimmed.startsWith("## ")) {
+      if (inList) { html += "</ul>"; inList = false; }
+      html += "<h2>" + trimmed.mid(3).toHtmlEscaped() + "</h2>";
+    } else if (trimmed.startsWith(" - ") || trimmed.startsWith("- ")) {
+      if (!inList) { html += "<ul>"; inList = true; }
+      QString item = trimmed.startsWith(" - ") ? trimmed.mid(3) : trimmed.mid(2);
+      // bold
+      item.replace(QRegularExpression("\\*\\*(.+?)\\*\\*"), "<b>\\1</b>");
+      html += "<li>" + item + "</li>";
+    } else {
+      if (inList) { html += "</ul>"; inList = false; }
+      // bold
+      trimmed.replace(QRegularExpression("\\*\\*(.+?)\\*\\*"), "<b>\\1</b>");
+      // code
+      trimmed.replace(QRegularExpression("`(.+?)`"), "<code>\\1</code>");
+      html += "<p>" + trimmed + "</p>";
+    }
+  }
+
+  if (inList) html += "</ul>";
+  html += "</body></html>";
+  return html;
+}
+
 LootDialog::LootDialog(QWidget* parent, OrganizerCore& core, Loot& loot)
     : QDialog(parent, Qt::WindowMaximizeButtonHint), ui(new Ui::LootDialog),
       m_core(core), m_loot(loot), m_finished(false), m_cancelling(false)
@@ -212,6 +263,11 @@ void LootDialog::createUI()
   } else {
     log::error("can't open '{}', {}", path, f.errorString());
   }
+#else
+  ui->report->setHtml(markdownToHtml(tr("Running LOOT...")));
+  connect(&m_report, &MarkdownDocument::textChanged, this, [this](const QString& md) {
+    ui->report->setHtml(markdownToHtml(md));
+  });
 #endif
 
   m_expander.set(ui->details, ui->detailsPanel);

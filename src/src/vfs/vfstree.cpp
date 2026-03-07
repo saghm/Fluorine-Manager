@@ -84,10 +84,11 @@ void addDirectoryToTree(VfsTree& tree, const fs::path& walkDir,
     }
 
     const auto size  = entry.file_size(ec);
-    const auto mtime = entry.last_write_time(ec);
-    tree.root.insertFile(components, entry.path().string(), size,
-                         ec ? std::chrono::system_clock::time_point{}
-                            : fsTimeToSystemClock(mtime),
+    std::error_code mtimeEc;
+    const auto mtime = entry.last_write_time(mtimeEc);
+    tree.root.insertFile(components, entry.path().string(), ec ? 0ULL : size,
+                         mtimeEc ? std::chrono::system_clock::time_point{}
+                                 : fsTimeToSystemClock(mtime),
                          origin, is_backing);
     ++tree.file_count;
   }
@@ -332,9 +333,10 @@ std::vector<CachedBaseFile> scanDataDir(const std::string& data_dir_path)
         continue;
       }
       cf.size  = entry.file_size(ec);
-      const auto mtime = entry.last_write_time(ec);
-      cf.mtime = ec ? std::chrono::system_clock::time_point{}
-                     : fsTimeToSystemClock(mtime);
+      std::error_code mtimeEc;
+      const auto mtime = entry.last_write_time(mtimeEc);
+      cf.mtime = mtimeEc ? std::chrono::system_clock::time_point{}
+                          : fsTimeToSystemClock(mtime);
     }
 
     cache.push_back(std::move(cf));
@@ -395,5 +397,36 @@ void injectExtraFiles(
                          std::chrono::system_clock::now(), "_profile",
                          /*is_backing=*/false);
     ++tree.file_count;
+  }
+}
+
+void stampPluginTimestamps(VfsTree& tree,
+                           const std::vector<std::string>& load_order)
+{
+  if (load_order.empty()) {
+    return;
+  }
+
+  // Start from a base time and increment by 60 seconds per plugin.
+  // This gives LOOT a clear, unambiguous ordering via file timestamps.
+  auto baseTime = std::chrono::system_clock::now() -
+                  std::chrono::seconds(static_cast<long>(load_order.size()) * 60);
+
+  for (size_t i = 0; i < load_order.size(); ++i) {
+    const auto components = splitPath(load_order[i]);
+    if (components.empty()) {
+      continue;
+    }
+
+    const std::string key = normalizeForLookup(load_order[i]);
+    auto it = tree.root.dir_info.children.find(key);
+    if (it == tree.root.dir_info.children.end()) {
+      continue;
+    }
+
+    VfsNode* node = it->second.get();
+    if (node != nullptr && !node->is_directory) {
+      node->file_info.mtime = baseTime + std::chrono::seconds(static_cast<long>(i) * 60);
+    }
   }
 }

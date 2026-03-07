@@ -6,11 +6,20 @@
 #include <log.h>
 #include <report.h>
 
+#ifndef _WIN32
+#include "fluorinepaths.h"
+#include <poll.h>
+#include <fcntl.h>
+extern char** environ;
+#endif
+
 using namespace MOBase;
 using namespace json;
 
 static QString LootReportPath  = QDir::temp().absoluteFilePath("lootreport.json");
+#ifdef _WIN32
 static const DWORD PipeTimeout = 500;
+#endif
 
 #ifdef _WIN32
 class AsyncPipe
@@ -193,12 +202,65 @@ private:
   }
 };
 #else
-// Linux stub: loot is not supported on Linux yet
+// Linux implementation using POSIX pipes
 class AsyncPipe
 {
 public:
-  env::HandlePtr create() { return {}; }
-  std::string read() { return {}; }
+  AsyncPipe() : m_readFd(-1), m_writeFd(-1) {}
+
+  ~AsyncPipe()
+  {
+    if (m_readFd >= 0)
+      ::close(m_readFd);
+    if (m_writeFd >= 0)
+      ::close(m_writeFd);
+  }
+
+  env::HandlePtr create()
+  {
+    int fds[2];
+    if (::pipe(fds) != 0) {
+      log::error("pipe() failed: {}", strerror(errno));
+      return {};
+    }
+    m_readFd  = fds[0];
+    m_writeFd = fds[1];
+
+    // set read end to non-blocking
+    int flags = ::fcntl(m_readFd, F_GETFL, 0);
+    ::fcntl(m_readFd, F_SETFL, flags | O_NONBLOCK);
+
+    // return a non-null HandlePtr to indicate success
+    return env::HandlePtr(reinterpret_cast<HANDLE>(static_cast<intptr_t>(1)));
+  }
+
+  int readFd() const { return m_readFd; }
+  int writeFd() const { return m_writeFd; }
+
+  void closeWriteEnd()
+  {
+    if (m_writeFd >= 0) {
+      ::close(m_writeFd);
+      m_writeFd = -1;
+    }
+  }
+
+  std::string read()
+  {
+    if (m_readFd < 0)
+      return {};
+
+    char buffer[50000];
+    ssize_t n = ::read(m_readFd, buffer, sizeof(buffer));
+    if (n > 0) {
+      return std::string(buffer, n);
+    }
+    return {};
+  }
+
+private:
+  int m_readFd;
+  int m_writeFd;
 };
 #endif
 
@@ -512,10 +574,79 @@ bool Loot::spawnLootcli(QWidget* parent, bool didUpdateMasterList,
   return true;
 #else
   Q_UNUSED(parent);
-  Q_UNUSED(didUpdateMasterList);
   Q_UNUSED(stdoutHandle);
-  emit log(log::Levels::Error, tr("loot is not supported on Linux"));
-  return false;
+
+  const auto logLevel = m_core.settings().diagnostics().lootLogLevel();
+
+  QStringList parameters;
+  parameters << "--game" << m_core.managedGame()->lootGameName()
+
+             << "--gamePath" << m_core.managedGame()->gameDirectory().absolutePath()
+
+             << "--pluginListPath"
+             << QString("%1/loadorder.txt").arg(m_core.profilePath())
+
+             << "--logLevel"
+             << QString::fromStdString(lootcli::logLevelToString(logLevel))
+
+             << "--out" << LootReportPath
+
+             << "--language" << m_core.settings().interface().language();
+
+  if (didUpdateMasterList) {
+    parameters << "--skipUpdateMasterlist";
+  }
+
+  QString binary = qApp->applicationDirPath() + "/lootcli";
+
+  if (!QFile::exists(binary)) {
+    emit log(log::Levels::Error, tr("lootcli not found at %1").arg(binary));
+    return false;
+  }
+
+  // build argv for posix_spawn
+  std::string binaryStr = binary.toStdString();
+  std::vector<std::string> argStrs;
+  argStrs.push_back(binaryStr);
+  for (const auto& p : parameters) {
+    argStrs.push_back(p.toStdString());
+  }
+
+  std::vector<char*> argv;
+  for (auto& s : argStrs) {
+    argv.push_back(s.data());
+  }
+  argv.push_back(nullptr);
+
+  int writeFd = m_pipe->writeFd();
+  int readFd  = m_pipe->readFd();
+
+  pid_t pid = fork();
+  if (pid == -1) {
+    emit log(log::Levels::Error,
+             tr("failed to start lootcli: %1").arg(strerror(errno)));
+    return false;
+  }
+
+  if (pid == 0) {
+    // child process — only async-signal-safe calls allowed here
+    dup2(writeFd, STDOUT_FILENO);
+    close(writeFd);
+    close(readFd);
+
+    std::string workDir = qApp->applicationDirPath().toStdString();
+    chdir(workDir.c_str());
+
+    execv(binaryStr.c_str(), argv.data());
+    _exit(127);
+  }
+
+  // parent process
+  m_childPid = pid;
+  m_pipe->closeWriteEnd();
+
+  log::debug("lootcli spawned with pid {}", pid);
+  return true;
 #endif
 }
 
@@ -629,7 +760,60 @@ bool Loot::waitForCompletion()
 
   return true;
 #else
-  return false;
+  if (m_childPid <= 0) {
+    return false;
+  }
+
+  log::debug("loot thread waiting for completion on lootcli");
+
+  for (;;) {
+    // poll the pipe for data with 100ms timeout
+    struct pollfd pfd;
+    pfd.fd     = m_pipe->readFd();
+    pfd.events = POLLIN;
+    ::poll(&pfd, 1, 100);
+
+    processStdout(m_pipe->read());
+
+    int status;
+    pid_t result = waitpid(m_childPid, &status, WNOHANG);
+
+    if (result == m_childPid) {
+      log::debug("lootcli has completed");
+
+      // read any remaining output
+      processStdout(m_pipe->read());
+
+      if (WIFEXITED(status)) {
+        int exitCode = WEXITSTATUS(status);
+        if (exitCode != 0) {
+          emit log(log::Levels::Error,
+                   tr("Loot failed. Exit code was: 0x%1").arg(exitCode, 0, 16));
+          return false;
+        }
+        return true;
+      } else {
+        emit log(log::Levels::Error, tr("lootcli terminated abnormally"));
+        return false;
+      }
+    }
+
+    if (result == -1) {
+      log::error("waitpid failed: {}", strerror(errno));
+      return false;
+    }
+
+    if (m_cancel) {
+      log::debug("terminating lootcli process");
+      ::kill(m_childPid, SIGTERM);
+
+      log::debug("waiting for lootcli process to terminate");
+      waitpid(m_childPid, &status, 0);
+
+      log::debug("lootcli terminated");
+      return false;
+    }
+  }
 #endif
 }
 
@@ -916,10 +1100,372 @@ std::vector<QString> Loot::reportStringArray(const QJsonArray& array) const
   return v;
 }
 
+#ifndef _WIN32
+
+static const QString LootGitHubRepo =
+    "SulfurNitride/loot-linux-build-for-fluorine";
+
+static QString lootAppImagePath()
+{
+  return fluorineDataDir() + "/bin/LOOT.AppImage";
+}
+
+// Fetch the download URL for the latest Linux AppImage from GitHub releases.
+static QString fetchLootDownloadUrl()
+{
+  QNetworkAccessManager nam;
+  QEventLoop loop;
+
+  QUrl apiUrl(QString("https://api.github.com/repos/%1/releases/latest")
+                  .arg(LootGitHubRepo));
+  QNetworkRequest req(apiUrl);
+  req.setRawHeader("Accept", "application/vnd.github.v3+json");
+  req.setRawHeader("User-Agent", "Fluorine-Manager");
+  req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                   QNetworkRequest::NoLessSafeRedirectPolicy);
+
+  auto* reply = nam.get(req);
+  QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+  loop.exec();
+
+  if (reply->error() != QNetworkReply::NoError) {
+    log::error("Failed to query GitHub releases: {} (HTTP {})",
+               reply->errorString(),
+               reply->attribute(QNetworkRequest::HttpStatusCodeAttribute)
+                   .toInt());
+    reply->deleteLater();
+    return {};
+  }
+
+  auto doc = QJsonDocument::fromJson(reply->readAll());
+  reply->deleteLater();
+
+  auto assets = doc.object()["assets"].toArray();
+  for (const auto& asset : assets) {
+    auto obj  = asset.toObject();
+    auto name = obj["name"].toString();
+    if (name.contains("linux", Qt::CaseInsensitive) &&
+        name.endsWith(".AppImage", Qt::CaseInsensitive)) {
+      return obj["browser_download_url"].toString();
+    }
+  }
+
+  // fallback: try any .AppImage
+  for (const auto& asset : assets) {
+    auto obj  = asset.toObject();
+    auto name = obj["name"].toString();
+    if (name.endsWith(".AppImage", Qt::CaseInsensitive)) {
+      return obj["browser_download_url"].toString();
+    }
+  }
+
+  log::error("No Linux AppImage found in latest release of {}", LootGitHubRepo);
+  return {};
+}
+
+// Download the LOOT AppImage with a progress dialog.
+static bool downloadLootAppImage(QWidget* parent, const QString& url,
+                                 const QString& destPath)
+{
+  QNetworkAccessManager nam;
+  QEventLoop loop;
+  QProgressDialog progress(QObject::tr("Downloading LOOT..."), QObject::tr("Cancel"),
+                           0, 100, parent);
+  progress.setWindowModality(Qt::WindowModal);
+  progress.setMinimumDuration(0);
+  progress.setValue(0);
+
+  QNetworkRequest req{QUrl(url)};
+  req.setRawHeader("User-Agent", "Fluorine-Manager");
+  req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                   QNetworkRequest::NoLessSafeRedirectPolicy);
+
+  auto* reply = nam.get(req);
+
+  QObject::connect(reply, &QNetworkReply::downloadProgress,
+                   [&](qint64 received, qint64 total) {
+                     if (total > 0) {
+                       progress.setMaximum(static_cast<int>(total / 1024));
+                       progress.setValue(static_cast<int>(received / 1024));
+                     }
+                   });
+
+  QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+  QObject::connect(&progress, &QProgressDialog::canceled, reply, &QNetworkReply::abort);
+  loop.exec();
+
+  if (reply->error() != QNetworkReply::NoError) {
+    if (reply->error() != QNetworkReply::OperationCanceledError) {
+      log::error("Failed to download LOOT: {}", reply->errorString());
+    }
+    reply->deleteLater();
+    return false;
+  }
+
+  QDir().mkpath(QFileInfo(destPath).absolutePath());
+
+  QFile f(destPath);
+  if (!f.open(QIODevice::WriteOnly)) {
+    log::error("Failed to write LOOT AppImage: {}", f.errorString());
+    reply->deleteLater();
+    return false;
+  }
+
+  f.write(reply->readAll());
+  f.close();
+  reply->deleteLater();
+
+  // Make executable
+  QFile::setPermissions(destPath,
+                        QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                            QFileDevice::ExeOwner | QFileDevice::ReadGroup |
+                            QFileDevice::ExeGroup);
+
+  log::info("LOOT AppImage downloaded to {}", destPath);
+  return true;
+}
+
+// Ensure the LOOT AppImage is available, downloading if necessary.
+static bool ensureLootAvailable(QWidget* parent)
+{
+  QString path = lootAppImagePath();
+  if (QFile::exists(path)) {
+    return true;
+  }
+
+  log::info("LOOT AppImage not found, downloading from GitHub...");
+
+  QString url = fetchLootDownloadUrl();
+  if (url.isEmpty()) {
+    QMessageBox::critical(
+        parent, QObject::tr("LOOT"),
+        QObject::tr("Could not find a LOOT release to download.\n\n"
+                     "Please check https://github.com/%1/releases")
+            .arg(LootGitHubRepo));
+    return false;
+  }
+
+  return downloadLootAppImage(parent, url, path);
+}
+
+// Map MO2's lootGameName() to LOOT's internal folder name (used by --game).
+// LOOT's getDefaultLootFolderName() uses full names for some games.
+static QString lootFolderName(const QString& mo2GameName)
+{
+  static const QMap<QString, QString> map = {
+      {"SkyrimSE", "Skyrim Special Edition"},
+      {"SkyrimVR", "Skyrim VR"},
+      {"EnderalSE", "Enderal Special Edition"},
+      {"Fallout4VR", "Fallout4VR"},
+  };
+  return map.value(mo2GameName, mo2GameName);
+}
+
+// Write (or update) LOOT's settings.toml so that --game / --game-path work.
+// We always overwrite the game path and local_path to match the current
+// Fluorine instance, since the user may switch between instances.
+static void ensureLootSettings(const QString& lootDataPath,
+                               const QString& mo2GameName,
+                               const QString& folderName,
+                               const QString& gamePath)
+{
+  QDir().mkpath(lootDataPath);
+
+  // Create a local app data directory for this game.  LOOT needs it for
+  // load order interaction (plugins.txt / loadorder.txt).  On Linux the
+  // native local-appdata location (~/.local/share/<game>) doesn't exist
+  // because games run via Proton, so we create one under our data dir.
+  QString localPath = lootDataPath + "/local/" + folderName;
+  QDir().mkpath(localPath);
+
+  // Map MO2 game names to LOOT masterlist repository names.
+  static const QMap<QString, QString> masterlistRepos = {
+      {"FalloutNV", "falloutnv"},   {"Fallout3", "fallout3"},
+      {"Fallout4", "fallout4"},     {"Fallout4VR", "fallout4vr"},
+      {"Skyrim", "skyrim"},         {"SkyrimSE", "skyrimse"},
+      {"SkyrimVR", "skyrimvr"},     {"Enderal", "enderal"},
+      {"EnderalSE", "enderalse"},   {"Oblivion", "oblivion"},
+      {"Morrowind", "morrowind"},   {"Starfield", "starfield"},
+      {"Nehrim", "oblivion"},
+  };
+  QString repoName  = masterlistRepos.value(mo2GameName, mo2GameName.toLower());
+  QString masterlistUrl =
+      QString("https://raw.githubusercontent.com/loot/%1/v0.21/masterlist.yaml")
+          .arg(repoName);
+
+  // Always rewrite the settings file so the path matches the current
+  // Fluorine instance.  Use the "type" key (not "gameId") because LOOT's
+  // type parser accepts MO2's short names like "SkyrimSE".
+  QString toml = QString(
+      "updateMasterlist = true\n"
+      "\n"
+      "[[games]]\n"
+      "type = \"%1\"\n"
+      "name = \"%2\"\n"
+      "folder = \"%2\"\n"
+      "path = \"%3\"\n"
+      "local_path = \"%4\"\n"
+      "masterlistSource = \"%5\"\n"
+      "\n")
+      .arg(mo2GameName, folderName, gamePath, localPath, masterlistUrl);
+
+  QString settingsPath = lootDataPath + "/settings.toml";
+  QFile f(settingsPath);
+  if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    f.write(toml.toUtf8());
+    f.close();
+    log::info("Created LOOT settings at {}", settingsPath);
+  }
+}
+
+// Launch the full LOOT GUI and wait for it to exit.
+static bool launchLootGui(QWidget* parent, OrganizerCore& core)
+{
+  QString appImage = lootAppImagePath();
+  if (!QFile::exists(appImage)) {
+    return false;
+  }
+
+  QString mo2GameName = core.managedGame()->lootGameName();
+  QString folderName  = lootFolderName(mo2GameName);
+  QString gamePath    = core.managedGame()->gameDirectory().absolutePath();
+  QString lootDataPath = fluorineDataDir() + "/loot";
+  QString localPath   = lootDataPath + "/local/" + folderName;
+
+  // Pre-seed LOOT settings so --game resolution works on first launch.
+  ensureLootSettings(lootDataPath, mo2GameName, folderName, gamePath);
+
+  // Copy the profile's load order files to LOOT's local path so LOOT sees
+  // the current load order.
+  QDir().mkpath(localPath);
+  QString profilePlugins   = core.profilePath() + "/plugins.txt";
+  QString profileLoadOrder = core.profilePath() + "/loadorder.txt";
+  QString lootPlugins      = localPath + "/plugins.txt";
+  QString lootLoadOrder    = localPath + "/loadorder.txt";
+
+  QFile::remove(lootPlugins);
+  QFile::remove(lootLoadOrder);
+  if (QFile::exists(profilePlugins)) {
+    QFile::copy(profilePlugins, lootPlugins);
+  }
+  if (QFile::exists(profileLoadOrder)) {
+    QFile::copy(profileLoadOrder, lootLoadOrder);
+  }
+
+  // Mount the FUSE VFS so LOOT sees the merged mod files in the Data directory.
+  log::info("Mounting VFS for LOOT...");
+  core.prepareVFS();
+
+  QStringList args;
+  args << "--game" << folderName
+       << "--game-path" << gamePath
+       << "--loot-data-path" << lootDataPath;
+
+  log::info("Launching LOOT GUI: {} {}", appImage, args.join(" "));
+
+  QProcess lootProcess;
+  lootProcess.setProgram(appImage);
+  lootProcess.setArguments(args);
+
+  // Restore the original environment if running from AppImage so LOOT
+  // doesn't inherit Fluorine's bundled library paths.
+  QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+  QString origLdPath = env.value("FLUORINE_ORIG_LD_LIBRARY_PATH");
+  if (!origLdPath.isEmpty()) {
+    env.insert("LD_LIBRARY_PATH", origLdPath);
+  }
+  QString origPath = env.value("FLUORINE_ORIG_PATH");
+  if (!origPath.isEmpty()) {
+    env.insert("PATH", origPath);
+  }
+  lootProcess.setProcessEnvironment(env);
+
+  lootProcess.start();
+  if (!lootProcess.waitForStarted(5000)) {
+    log::error("Failed to start LOOT: {}", lootProcess.errorString());
+    QMessageBox::critical(
+        parent, QObject::tr("LOOT"),
+        QObject::tr("Failed to start LOOT:\n%1").arg(lootProcess.errorString()));
+    core.unmountVFS();
+    return false;
+  }
+
+  // Show a non-modal message while LOOT is running.
+  QMessageBox infoBox(QMessageBox::Information, QObject::tr("LOOT"),
+                      QObject::tr("LOOT is running.\n\n"
+                                  "Sort your load order in LOOT, then close it "
+                                  "to apply the changes in Fluorine."),
+                      QMessageBox::Cancel, parent);
+  infoBox.setWindowModality(Qt::WindowModal);
+
+  // Poll for LOOT to exit or user to cancel.
+  QTimer pollTimer;
+  QObject::connect(&pollTimer, &QTimer::timeout, [&]() {
+    if (lootProcess.state() == QProcess::NotRunning) {
+      infoBox.accept();
+    }
+  });
+  pollTimer.start(500);
+
+  int dialogResult = infoBox.exec();
+  pollTimer.stop();
+
+  if (dialogResult != QMessageBox::Accepted &&
+      lootProcess.state() == QProcess::Running) {
+    // User cancelled — kill LOOT
+    lootProcess.terminate();
+    if (!lootProcess.waitForFinished(3000)) {
+      lootProcess.kill();
+      lootProcess.waitForFinished(2000);
+    }
+    core.unmountVFS();
+    return false;
+  }
+
+  lootProcess.waitForFinished(-1);
+
+  // Unmount the VFS now that LOOT has finished.
+  log::info("Unmounting VFS after LOOT...");
+  core.unmountVFS();
+
+  int exitCode = lootProcess.exitCode();
+  log::info("LOOT exited with code {}", exitCode);
+
+  // Copy LOOT's updated load order files back to the profile.
+  if (QFile::exists(lootPlugins)) {
+    QFile::remove(profilePlugins);
+    QFile::copy(lootPlugins, profilePlugins);
+    log::info("Copied LOOT plugins.txt back to profile");
+  }
+  if (QFile::exists(lootLoadOrder)) {
+    QFile::remove(profileLoadOrder);
+    QFile::copy(lootLoadOrder, profileLoadOrder);
+    log::info("Copied LOOT loadorder.txt back to profile");
+  }
+
+  return true;
+}
+#endif
+
 bool runLoot(QWidget* parent, OrganizerCore& core, bool didUpdateMasterList)
 {
   core.savePluginList();
 
+#ifndef _WIN32
+  // Linux: download and launch the full LOOT GUI
+  Q_UNUSED(didUpdateMasterList);
+
+  try {
+    if (!ensureLootAvailable(parent)) {
+      return false;
+    }
+
+    return launchLootGui(parent, core);
+  } catch (const std::exception& e) {
+    reportError(QObject::tr("failed to run loot: %1").arg(e.what()));
+    return false;
+  }
+#else
   try {
     Loot loot(core);
     LootDialog dialog(parent, core, loot);
@@ -931,13 +1477,12 @@ bool runLoot(QWidget* parent, OrganizerCore& core, bool didUpdateMasterList)
     dialog.exec();
 
     return dialog.result();
-#ifdef _WIN32
   } catch (const UsvfsConnectorException& e) {
     log::debug("{}", e.what());
     return false;
-#endif
   } catch (const std::exception& e) {
     reportError(QObject::tr("failed to run loot: %1").arg(e.what()));
     return false;
   }
+#endif
 }

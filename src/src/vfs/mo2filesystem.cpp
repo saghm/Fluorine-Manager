@@ -129,6 +129,12 @@ void fillStatForDir(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid)
   st->st_nlink = 2;
   st->st_uid   = uid;
   st->st_gid   = gid;
+
+  const auto now = std::chrono::duration_cast<std::chrono::seconds>(
+      std::chrono::system_clock::now().time_since_epoch());
+  st->st_mtim.tv_sec = now.count();
+  st->st_atim.tv_sec = now.count();
+  st->st_ctim.tv_sec = now.count();
 }
 
 void fillStatForFile(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid,

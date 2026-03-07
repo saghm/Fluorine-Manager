@@ -7,6 +7,8 @@
 #include <lootcli/lootcli.h>
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <sys/types.h>
 #endif
 
 Q_DECLARE_METATYPE(lootcli::Progress);
@@ -110,6 +112,9 @@ private:
   std::atomic<bool> m_cancel;
   std::atomic<bool> m_result;
   env::HandlePtr m_lootProcess;
+#ifndef _WIN32
+  pid_t m_childPid = -1;
+#endif
   std::unique_ptr<AsyncPipe> m_pipe;
   std::string m_outputBuffer;
   std::vector<QString> m_errors, m_warnings;

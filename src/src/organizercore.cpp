@@ -625,7 +625,38 @@ void OrganizerCore::createOverwriteDirectories()
 
 void OrganizerCore::prepareVFS()
 {
+#ifndef _WIN32
+  // Read the load order and pass it to the FUSE VFS so plugin files get
+  // incrementing timestamps matching their position.  This prevents LOOT
+  // from reporting "ambiguous load order".
+  {
+    std::vector<std::string> loadOrder;
+    QFile loFile(m_CurrentProfile->getLoadOrderFileName());
+    if (!loFile.exists()) {
+      loFile.setFileName(m_CurrentProfile->getPluginsFileName());
+    }
+    if (loFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+      QTextStream in(&loFile);
+      while (!in.atEnd()) {
+        QString line = in.readLine().trimmed();
+        if (line.isEmpty() || line.startsWith('#')) {
+          continue;
+        }
+        if (line.startsWith('*')) {
+          line = line.mid(1);
+        }
+        loadOrder.push_back(line.toStdString());
+      }
+    }
+    m_USVFS.setPluginLoadOrder(loadOrder);
+  }
+#endif
   m_USVFS.updateMapping(fileMapping(m_CurrentProfile->name(), QString()));
+}
+
+void OrganizerCore::unmountVFS()
+{
+  m_USVFS.unmount();
 }
 
 void OrganizerCore::updateVFSParams(log::Levels logLevel,

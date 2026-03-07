@@ -84,4 +84,11 @@ void injectExtraFiles(
     VfsTree& tree,
     const std::vector<std::pair<std::string, std::string>>& extra_files);
 
+// Stamp plugin files (.esp/.esm/.esl) in the VFS with incrementing
+// timestamps matching their position in the load order.  This ensures
+// tools like LOOT see an unambiguous timestamp-based ordering that
+// matches plugins.txt.
+void stampPluginTimestamps(VfsTree& tree,
+                           const std::vector<std::string>& load_order);
+
 #endif

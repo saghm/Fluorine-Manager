@@ -101,7 +101,7 @@ target_link_libraries(organizer PRIVATE
     mo2::nak_ffi
     # Qt6
     Qt6::Widgets
-    $<$<BOOL:${Qt6WebEngineWidgets_FOUND}>:Qt6::WebEngineWidgets>
+    $<$<TARGET_EXISTS:Qt6::WebEngineWidgets>:Qt6::WebEngineWidgets>
     Qt6::WebSockets
     Qt6::Network
     # Boost
@@ -116,7 +116,7 @@ target_link_libraries(organizer PRIVATE
 target_compile_definitions(organizer PRIVATE
     SPDLOG_USE_STD_FORMAT
     FUSE_USE_VERSION=35
-    $<$<BOOL:${Qt6WebEngineWidgets_FOUND}>:MO2_WEBENGINE>)
+    $<$<TARGET_EXISTS:Qt6::WebEngineWidgets>:MO2_WEBENGINE>)
 
 if(NOT WIN32)
     option(MO2_BUNDLE_7Z_RUNTIME "Copy a Linux 7z module into organizer/dlls" ON)

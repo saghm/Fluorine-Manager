@@ -255,6 +255,12 @@ bool FuseConnector::mount(
 
   // Inject file-level data-dir mappings (e.g. plugins.txt, loadorder.txt)
   injectExtraFiles(*tree, m_extraVfsFiles);
+
+  // Stamp plugin timestamps to match load order so LOOT sees unambiguous ordering
+  if (!m_pluginLoadOrder.empty()) {
+    stampPluginTimestamps(*tree, m_pluginLoadOrder);
+  }
+
   {
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - treeStart).count();
@@ -376,6 +382,11 @@ bool FuseConnector::isMounted() const
   return m_mounted;
 }
 
+void FuseConnector::setPluginLoadOrder(const std::vector<std::string>& load_order)
+{
+  m_pluginLoadOrder = load_order;
+}
+
 void FuseConnector::rebuild(
     const std::vector<std::pair<std::string, std::string>>& mods,
     const QString& overwrite_dir, const QString& data_dir_name)
@@ -398,6 +409,11 @@ void FuseConnector::rebuild(
 
   // Inject file-level data-dir mappings (e.g. plugins.txt, loadorder.txt)
   injectExtraFiles(*newTree, m_extraVfsFiles);
+
+  // Stamp plugin timestamps to match load order
+  if (!m_pluginLoadOrder.empty()) {
+    stampPluginTimestamps(*newTree, m_pluginLoadOrder);
+  }
 
   std::unique_lock lock(m_context->tree_mutex);
   m_context->tree.swap(newTree);

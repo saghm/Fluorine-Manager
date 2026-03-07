@@ -200,9 +200,8 @@ QList<PluginSetting> GameFalloutNV::settings() const
 {
   return QList<PluginSetting>()
          << PluginSetting("enable_loot_sorting",
-                          tr("While not recommended by the FNV modding community, "
-                             "enables LOOT sorting"),
-                          false);
+                          tr("Enables LOOT sorting for Fallout New Vegas"),
+                          true);
 }
 
 void GameFalloutNV::initializeProfile(const QDir& path, ProfileSettings settings) const

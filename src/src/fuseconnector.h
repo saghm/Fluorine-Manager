@@ -39,6 +39,8 @@ public:
              const QString& game_dir, const QString& data_dir_name,
              const std::vector<std::pair<std::string, std::string>>& mods);
 
+  void setPluginLoadOrder(const std::vector<std::string>& load_order);
+
   void unmount();
   bool isMounted() const;
 
@@ -74,6 +76,7 @@ private:
   std::string m_cachedDataDirPath;
 
   std::vector<std::pair<std::string, std::string>> m_lastMods;
+  std::vector<std::string> m_pluginLoadOrder;
 
   // Symlinks created for non-data-dir mappings (e.g. Paks, OBSE, UE4SS).
   std::vector<std::string> m_externalSymlinks;
