@@ -1,5 +1,7 @@
 #include "moshortcut.h"
 
+#include <QDir>
+
 MOShortcut::MOShortcut(const QString& link)
     : m_valid(link.startsWith("moshortcut://")), m_hasInstance(false),
       m_hasExecutable(false)
@@ -59,7 +61,15 @@ bool MOShortcut::isForInstance(const Instance& i) const
     // empty instance name means portable
     return i.isPortable();
   } else {
-    return (i.displayName() == m_instance);
+    // Compare by display name, or by absolute directory path for portable
+    // instances identified by their filesystem path.
+    if (i.displayName() == m_instance) {
+      return true;
+    }
+    if (QDir::isAbsolutePath(m_instance) && i.isPortable()) {
+      return QDir(i.directory()).absolutePath() == QDir(m_instance).absolutePath();
+    }
+    return false;
   }
 }
 

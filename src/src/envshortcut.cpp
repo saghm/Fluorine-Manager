@@ -155,7 +155,7 @@ Shortcut::Shortcut(const Executable& exe) : Shortcut()
 
 Shortcut& Shortcut::name(const QString& s)
 {
-  m_name = MOBase::sanitizeFileName(s);
+  m_name = s;
   return *this;
 }
 
@@ -353,16 +353,76 @@ QString toString(Shortcut::Locations loc)
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QProcessEnvironment>
+#include <QStandardPaths>
 #include <QString>
+#include <QTextStream>
 
-class Executable;
+#include "executableslist.h"
+#include "instancemanager.h"
 
 namespace env
 {
 
+// Returns the path to the AppImage file itself, or falls back to the
+// running binary if not running from an AppImage.
+static QString appImageOrBinary()
+{
+  QString appImage = QProcessEnvironment::systemEnvironment().value("APPIMAGE");
+  if (!appImage.isEmpty() && QFile::exists(appImage)) {
+    return appImage;
+  }
+  return QFileInfo(qApp->applicationFilePath()).absoluteFilePath();
+}
+
 Shortcut::Shortcut() : m_iconIndex(0) {}
 
-Shortcut::Shortcut(const Executable&) : Shortcut() {}
+Shortcut::Shortcut(const Executable& exe) : Shortcut()
+{
+  const auto i = *InstanceManager::singleton().currentInstance();
+
+  m_name   = exe.title();
+  m_target = appImageOrBinary();
+
+  // For portable instances, use the absolute directory path so MO2 can
+  // find it (line 595 in instancemanager.cpp handles abs path lookup).
+  // For global instances, use the display name.
+  QString instanceId = i.isPortable() ? QDir(i.directory()).absolutePath()
+                                      : i.displayName();
+  m_arguments = QString("\"moshortcut://%1:%2\"")
+                    .arg(instanceId)
+                    .arg(exe.title());
+
+  m_description = QString("Run %1 with Fluorine").arg(exe.title());
+
+  // .exe icons can't be used on Linux — only use native icon formats.
+  // Fall back to the Fluorine app icon bundled in the AppImage.
+  if (exe.usesOwnIcon()) {
+    QString iconPath = exe.binaryInfo().absoluteFilePath();
+    if (!iconPath.endsWith(".exe", Qt::CaseInsensitive)) {
+      m_icon = iconPath;
+    }
+  }
+  if (m_icon.isEmpty()) {
+    // Install the Fluorine icon to the user's icon theme so it persists
+    // after the AppImage unmounts, then reference it by icon name.
+    QString appDir = QProcessEnvironment::systemEnvironment().value("APPDIR");
+    if (!appDir.isEmpty()) {
+      QString bundled = appDir + "/usr/share/icons/hicolor/256x256/apps/com.fluorine.manager.png";
+      if (QFile::exists(bundled)) {
+        QString destDir = QDir::homePath() + "/.local/share/icons/hicolor/256x256/apps";
+        QString dest    = destDir + "/com.fluorine.manager.png";
+        if (!QFile::exists(dest)) {
+          QDir().mkpath(destDir);
+          QFile::copy(bundled, dest);
+        }
+      }
+    }
+    m_icon = "com.fluorine.manager";
+  }
+
+  m_workingDirectory = QFileInfo(m_target).absolutePath();
+}
 
 Shortcut& Shortcut::name(const QString& s)
 {
@@ -401,41 +461,105 @@ Shortcut& Shortcut::workingDirectory(const QString& s)
   return *this;
 }
 
-bool Shortcut::exists(Locations) const
+bool Shortcut::exists(Locations loc) const
 {
-  // .lnk shortcuts are a Windows concept; no-op on Linux
-  return false;
+  return QFile::exists(shortcutPath(loc));
 }
 
-bool Shortcut::toggle(Locations)
+bool Shortcut::toggle(Locations loc)
 {
-  return false;
+  if (exists(loc)) {
+    return remove(loc);
+  } else {
+    return add(loc);
+  }
 }
 
-bool Shortcut::add(Locations)
+bool Shortcut::add(Locations loc)
 {
-  // TODO: could create .desktop files on Linux in the future
-  return false;
+  if (loc != Desktop) {
+    return false;
+  }
+
+  const QString path = shortcutPath(loc);
+  if (path.isEmpty()) {
+    return false;
+  }
+
+  QDir().mkpath(QFileInfo(path).absolutePath());
+
+  QFile file(path);
+  if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    return false;
+  }
+
+  QTextStream out(&file);
+  out << "[Desktop Entry]\n";
+  out << "Type=Application\n";
+  out << "Name=" << (m_name.isEmpty() ? "Fluorine" : m_name) << "\n";
+  if (!m_description.isEmpty()) {
+    out << "Comment=" << m_description << "\n";
+  }
+  // .desktop Exec values require quoting paths that contain spaces
+  out << "Exec=\"" << m_target << "\"";
+  if (!m_arguments.isEmpty()) {
+    out << " " << m_arguments;
+  }
+  out << "\n";
+  if (!m_workingDirectory.isEmpty()) {
+    out << "Path=" << m_workingDirectory << "\n";
+  }
+  if (!m_icon.isEmpty()) {
+    out << "Icon=" << m_icon << "\n";
+  }
+  out << "Terminal=false\n";
+  out << "Categories=Game;\n";
+
+  file.close();
+
+  // Make it executable (required by some desktop environments)
+  file.setPermissions(file.permissions() | QFileDevice::ExeUser);
+
+  return true;
 }
 
-bool Shortcut::remove(Locations)
+bool Shortcut::remove(Locations loc)
 {
-  return false;
+  const QString path = shortcutPath(loc);
+  if (path.isEmpty()) {
+    return false;
+  }
+  return QFile::remove(path);
 }
 
-QString Shortcut::shortcutPath(Locations) const
+QString Shortcut::shortcutPath(Locations loc) const
 {
-  return {};
+  const QString dir = shortcutDirectory(loc);
+  if (dir.isEmpty()) {
+    return {};
+  }
+  return dir + "/" + shortcutFilename();
 }
 
-QString Shortcut::shortcutDirectory(Locations) const
+QString Shortcut::shortcutDirectory(Locations loc) const
 {
+  if (loc == Desktop) {
+    // XDG desktop directory
+    QString desktop = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
+    if (!desktop.isEmpty()) {
+      return desktop;
+    }
+    return QDir::homePath() + "/Desktop";
+  }
   return {};
 }
 
 QString Shortcut::shortcutFilename() const
 {
-  return {};
+  if (m_name.isEmpty()) {
+    return "fluorine.desktop";
+  }
+  return m_name + ".desktop";
 }
 
 QString toString(Shortcut::Locations loc)

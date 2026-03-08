@@ -372,8 +372,12 @@ MainWindow::MainWindow(Settings& settings, OrganizerCore& organizerCore,
                                         this, SLOT(linkToolbar()));
   m_LinkDesktop   = linkMenu->addAction(QIcon(":/MO/gui/link"), tr("Desktop"), this,
                                         SLOT(linkDesktop()));
+#ifdef _WIN32
   m_LinkStartMenu = linkMenu->addAction(QIcon(":/MO/gui/link"), tr("Start Menu"), this,
                                         SLOT(linkMenu()));
+#else
+  m_LinkStartMenu = nullptr;
+#endif
   ui->linkButton->setMenu(linkMenu);
 
   ui->listOptionsBtn->setMenu(
@@ -2823,8 +2827,10 @@ void MainWindow::on_linkButton_pressed()
   m_LinkDesktop->setIcon(shortcut.exists(env::Shortcut::Desktop) ? removeIcon
                                                                  : addIcon);
 
-  m_LinkStartMenu->setIcon(shortcut.exists(env::Shortcut::StartMenu) ? removeIcon
-                                                                     : addIcon);
+  if (m_LinkStartMenu) {
+    m_LinkStartMenu->setIcon(shortcut.exists(env::Shortcut::StartMenu) ? removeIcon
+                                                                       : addIcon);
+  }
 }
 
 void MainWindow::on_actionSettings_triggered()

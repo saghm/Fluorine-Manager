@@ -1496,30 +1496,37 @@ static bool launchLootGui(QWidget* parent, OrganizerCore& core)
   bool isFileTime = core.managedGame()->loadOrderMechanism() ==
                     MOBase::IPluginGame::LoadOrderMechanism::FileTime;
 
-  // LOOT may write "Plugins.txt" (capital P, Windows convention) instead of
-  // "plugins.txt", so check both case variants on case-sensitive Linux.
-  QString lootPluginsActual = lootPlugins;
-  if (!QFile::exists(lootPluginsActual)) {
-    QString alt = localPath + "/Plugins.txt";
-    if (QFile::exists(alt)) {
-      lootPluginsActual = alt;
+  // LOOT may write "Plugins.txt" (capital P) while we deployed "plugins.txt"
+  // (lowercase).  On case-sensitive Linux these are two different files — the
+  // lowercase one is our pre-LOOT copy, the capital-P one is LOOT's output.
+  // Prefer the capital-P variant when it exists; otherwise fall back to the
+  // lowercase file (in case a future LOOT version writes lowercase).
+  QString lootPluginsActual;
+  {
+    QString capitalP = localPath + "/Plugins.txt";
+    if (QFile::exists(capitalP)) {
+      lootPluginsActual = capitalP;
+    } else if (QFile::exists(lootPlugins)) {
+      lootPluginsActual = lootPlugins;
     }
   }
-  if (QFile::exists(lootPluginsActual)) {
+  if (!lootPluginsActual.isEmpty()) {
     QFile::remove(profilePlugins);
     QFile::copy(lootPluginsActual, profilePlugins);
     log::info("Copied LOOT {} back to profile", lootPluginsActual);
   }
 
   if (!isFileTime) {
-    QString lootLoadOrderActual = lootLoadOrder;
-    if (!QFile::exists(lootLoadOrderActual)) {
-      QString alt = localPath + "/Loadorder.txt";
-      if (QFile::exists(alt)) {
-        lootLoadOrderActual = alt;
+    QString lootLoadOrderActual;
+    {
+      QString capitalL = localPath + "/Loadorder.txt";
+      if (QFile::exists(capitalL)) {
+        lootLoadOrderActual = capitalL;
+      } else if (QFile::exists(lootLoadOrder)) {
+        lootLoadOrderActual = lootLoadOrder;
       }
     }
-    if (QFile::exists(lootLoadOrderActual)) {
+    if (!lootLoadOrderActual.isEmpty()) {
       QFile::remove(profileLoadOrder);
       QFile::copy(lootLoadOrderActual, profileLoadOrder);
       log::info("Copied LOOT {} back to profile", lootLoadOrderActual);

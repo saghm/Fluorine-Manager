@@ -216,7 +216,7 @@ void PluginListView::onSortButtonClicked()
       m_didUpdateMasterList = true;
     }
 
-    m_core->refreshESPList(false);
+    m_core->refreshESPList(true);
     m_core->savePluginList();
   }
 }
