@@ -42,7 +42,7 @@ bool ByOffset(const File::Ptr& LHS, const File::Ptr& RHS)
   return LHS->getDataOffset() < RHS->getDataOffset();
 }
 
-static const unsigned long CHUNK_SIZE = 128 * 1024;
+static const BSAULong CHUNK_SIZE = 128 * 1024;
 
 File::File(std::fstream& file, Folder* folder)
     : m_Folder(folder), m_New(false), m_FileSize(0), m_UncompressedFileSize(0),
@@ -107,7 +107,7 @@ EErrorCode File::writeData(fstream& sourceArchive, fstream& targetArchive) const
     sourceArchive.seekg(m_DataOffset, fstream::beg);
 
     try {
-      unsigned long sizeLeft = m_FileSize;
+      BSAULong sizeLeft = m_FileSize;
       while (sizeLeft > 0) {
         int chunkSize = (std::min)(sizeLeft, CHUNK_SIZE);
         sourceArchive.read(inBuffer.get(), chunkSize);
@@ -126,7 +126,7 @@ EErrorCode File::writeData(fstream& sourceArchive, fstream& targetArchive) const
     }
     sourceFile.seekg(0, fstream::end);
     m_FileSize             = static_cast<BSAULong>(sourceFile.tellg());
-    unsigned long sizeLeft = m_FileSize;
+    BSAULong sizeLeft = m_FileSize;
     sourceFile.seekg(0, fstream::beg);
     while (sizeLeft > 0) {
       int chunkSize = (std::min)(sizeLeft, CHUNK_SIZE);

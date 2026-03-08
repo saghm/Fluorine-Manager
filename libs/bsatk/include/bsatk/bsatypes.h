@@ -45,7 +45,7 @@ typedef unsigned long long BSAHash;
 typedef unsigned char BSAUChar;
 typedef unsigned short BSAUShort;
 typedef unsigned int BSAUInt;
-typedef unsigned long BSAULong;
+typedef uint32_t BSAULong;
 typedef unsigned long long BSAHash;
 
 #endif  // WIN32

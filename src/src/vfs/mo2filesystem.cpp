@@ -509,8 +509,10 @@ void updateFileNode(Mo2FsContext* ctx, const std::string& relative,
 
 }  // namespace
 
-void mo2_init(void* /*userdata*/, struct fuse_conn_info* conn)
+void mo2_init(void* userdata, struct fuse_conn_info* conn)
 {
+  auto* ctx = static_cast<Mo2FsContext*>(userdata);
+
   // Keep kernel page cache valid across open/close as long as mtime/size are
   // unchanged.  Mod files are immutable during a game session, so this avoids
   // re-reading file data from userspace on every open().
@@ -904,6 +906,7 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
   }
 
   int fd = -1;
+
   if (writable) {
     const int openFlags = O_RDWR;
     if (isBacking && ctx->backing_dir_fd >= 0) {
@@ -929,7 +932,7 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
     ctx->open_files[fh] = std::move(of);
   }
 
-  fi->fh         = fh;
+  fi->fh = fh;
   fi->keep_cache = 1;
   fuse_reply_open(req, fi);
 }
