@@ -1109,6 +1109,16 @@
                 </widget>
                </item>
                <item>
+                <widget class="QPushButton" name="dataTabBrowseVFS">
+                 <property name="toolTip">
+                  <string>Mount the virtual filesystem and open the game Data folder in a file manager.</string>
+                 </property>
+                 <property name="text">
+                  <string>Browse VFS</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
                 <spacer name="horizontalSpacer_4">
                  <property name="orientation">
                   <enum>Qt::Horizontal</enum>

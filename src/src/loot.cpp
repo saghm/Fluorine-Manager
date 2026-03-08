@@ -1516,7 +1516,12 @@ static bool launchLootGui(QWidget* parent, OrganizerCore& core)
     log::info("Copied LOOT {} back to profile", lootPluginsActual);
   }
 
-  if (!isFileTime) {
+  bool isPluginsTxt = core.managedGame()->loadOrderMechanism() ==
+                      MOBase::IPluginGame::LoadOrderMechanism::PluginsTxt;
+
+  if (!isFileTime && !isPluginsTxt) {
+    // For games that use a separate loadorder.txt (not FileTime, not
+    // PluginsTxt), copy LOOT's loadorder.txt back.
     QString lootLoadOrderActual;
     {
       QString capitalL = localPath + "/Loadorder.txt";
@@ -1530,6 +1535,42 @@ static bool launchLootGui(QWidget* parent, OrganizerCore& core)
       QFile::remove(profileLoadOrder);
       QFile::copy(lootLoadOrderActual, profileLoadOrder);
       log::info("Copied LOOT {} back to profile", lootLoadOrderActual);
+    }
+  }
+
+  if (isPluginsTxt && !lootPluginsActual.isEmpty()) {
+    // For PluginsTxt games (FO4, SkyrimSE, etc.), LOOT writes the sorted
+    // order into plugins.txt but does NOT update loadorder.txt.  If we
+    // blindly copy the stale loadorder.txt back, readPluginLists() will
+    // prefer the old order from loadorder.txt over the freshly-sorted
+    // plugins.txt.  Fix this by regenerating loadorder.txt from the
+    // sorted plugins.txt so both files are consistent.
+    QFile pluginsFile(profilePlugins);
+    if (pluginsFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+      QStringList sortedOrder;
+      while (!pluginsFile.atEnd()) {
+        QString line = QString::fromUtf8(pluginsFile.readLine()).trimmed();
+        if (line.isEmpty() || line.startsWith('#'))
+          continue;
+        if (line.startsWith('*'))
+          line.remove(0, 1);
+        if (!line.isEmpty())
+          sortedOrder.append(line);
+      }
+      pluginsFile.close();
+
+      if (!sortedOrder.isEmpty()) {
+        QFile lo(profileLoadOrder);
+        if (lo.open(QIODevice::WriteOnly | QIODevice::Text)) {
+          QTextStream out(&lo);
+          for (const auto& p : sortedOrder) {
+            out << p << "\n";
+          }
+          lo.close();
+          log::info("Regenerated loadorder.txt from LOOT-sorted plugins.txt "
+                    "({} plugins)", sortedOrder.size());
+        }
+      }
     }
   }
 

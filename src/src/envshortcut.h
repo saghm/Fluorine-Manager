@@ -22,8 +22,11 @@ public:
     // on the desktop
     Desktop,
 
-    // in the start menu
-    StartMenu
+    // in the start menu (Windows only)
+    StartMenu,
+
+    // in ~/.local/share/applications/ (Linux only)
+    ApplicationMenu
   };
 
   // empty shortcut
@@ -78,6 +81,7 @@ public:
 
 private:
   QString m_name;
+  QString m_instanceName;
   QString m_target;
   QString m_arguments;
   QString m_description;

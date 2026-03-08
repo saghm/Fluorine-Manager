@@ -341,6 +341,9 @@ QString toString(Shortcut::Locations loc)
   case Shortcut::StartMenu:
     return "start menu";
 
+  case Shortcut::ApplicationMenu:
+    return "application menu";
+
   default:
     return QString("? (%1)").arg(static_cast<int>(loc));
   }
@@ -377,12 +380,62 @@ static QString appImageOrBinary()
 
 Shortcut::Shortcut() : m_iconIndex(0) {}
 
+// Sanitize a string for use in a .desktop filename (replace spaces/special chars).
+static QString sanitizeDesktopName(const QString& s)
+{
+  QString result;
+  for (const QChar& c : s) {
+    if (c.isLetterOrNumber() || c == '-' || c == '_' || c == '.') {
+      result += c;
+    } else if (c == ' ') {
+      result += '-';
+    }
+  }
+  return result;
+}
+
+// Install a game-specific icon to ~/.local/share/icons/fluorine/ and return
+// the absolute path.  Falls back to the bundled Fluorine icon.
+static QString installIcon(const QString& iconBaseName)
+{
+  QString iconDir  = QDir::homePath() + "/.local/share/icons/fluorine";
+  QString iconDest = iconDir + "/" + iconBaseName + ".png";
+
+  if (QFile::exists(iconDest)) {
+    return iconDest;
+  }
+
+  // No game-specific icon available — install the bundled Fluorine icon
+  // under the game-specific name so each shortcut gets its own file.
+  QDir().mkpath(iconDir);
+
+  QString appDir = QProcessEnvironment::systemEnvironment().value("APPDIR");
+  if (!appDir.isEmpty()) {
+    QString bundled = appDir + "/usr/share/icons/hicolor/256x256/apps/com.fluorine.manager.png";
+    if (QFile::exists(bundled)) {
+      QFile::copy(bundled, iconDest);
+      return iconDest;
+    }
+  }
+
+  // Also keep the hicolor copy for compatibility.
+  QString hicolorDir  = QDir::homePath() + "/.local/share/icons/hicolor/256x256/apps";
+  QString hicolorDest = hicolorDir + "/com.fluorine.manager.png";
+  if (QFile::exists(hicolorDest)) {
+    QFile::copy(hicolorDest, iconDest);
+    return iconDest;
+  }
+
+  return "com.fluorine.manager";
+}
+
 Shortcut::Shortcut(const Executable& exe) : Shortcut()
 {
   const auto i = *InstanceManager::singleton().currentInstance();
 
-  m_name   = exe.title();
-  m_target = appImageOrBinary();
+  m_name         = exe.title();
+  m_instanceName = i.displayName();
+  m_target       = appImageOrBinary();
 
   // For portable instances, use the absolute directory path so MO2 can
   // find it (line 595 in instancemanager.cpp handles abs path lookup).
@@ -396,7 +449,7 @@ Shortcut::Shortcut(const Executable& exe) : Shortcut()
   m_description = QString("Run %1 with Fluorine").arg(exe.title());
 
   // .exe icons can't be used on Linux — only use native icon formats.
-  // Fall back to the Fluorine app icon bundled in the AppImage.
+  // Install a game-specific icon to ~/.local/share/icons/fluorine/.
   if (exe.usesOwnIcon()) {
     QString iconPath = exe.binaryInfo().absoluteFilePath();
     if (!iconPath.endsWith(".exe", Qt::CaseInsensitive)) {
@@ -404,21 +457,11 @@ Shortcut::Shortcut(const Executable& exe) : Shortcut()
     }
   }
   if (m_icon.isEmpty()) {
-    // Install the Fluorine icon to the user's icon theme so it persists
-    // after the AppImage unmounts, then reference it by icon name.
-    QString appDir = QProcessEnvironment::systemEnvironment().value("APPDIR");
-    if (!appDir.isEmpty()) {
-      QString bundled = appDir + "/usr/share/icons/hicolor/256x256/apps/com.fluorine.manager.png";
-      if (QFile::exists(bundled)) {
-        QString destDir = QDir::homePath() + "/.local/share/icons/hicolor/256x256/apps";
-        QString dest    = destDir + "/com.fluorine.manager.png";
-        if (!QFile::exists(dest)) {
-          QDir().mkpath(destDir);
-          QFile::copy(bundled, dest);
-        }
-      }
-    }
-    m_icon = "com.fluorine.manager";
+    // Build a unique icon name from the instance + executable title,
+    // e.g. "NewVegas-NVSE" → ~/.local/share/icons/fluorine/NewVegas-NVSE.png
+    QString iconBase = sanitizeDesktopName(m_instanceName) + "-" +
+                       sanitizeDesktopName(m_name);
+    m_icon = installIcon(iconBase);
   }
 
   m_workingDirectory = QFileInfo(m_target).absolutePath();
@@ -477,7 +520,7 @@ bool Shortcut::toggle(Locations loc)
 
 bool Shortcut::add(Locations loc)
 {
-  if (loc != Desktop) {
+  if (loc != Desktop && loc != ApplicationMenu) {
     return false;
   }
 
@@ -493,10 +536,18 @@ bool Shortcut::add(Locations loc)
     return false;
   }
 
+  // Include instance name in the display name to distinguish shortcuts
+  // for the same executable across different instances (e.g. "NVSE (New Vegas)"
+  // vs "NVSE (New Vegas 2)").
+  QString displayName = m_name.isEmpty() ? "Fluorine" : m_name;
+  if (!m_instanceName.isEmpty()) {
+    displayName += " (" + m_instanceName + ")";
+  }
+
   QTextStream out(&file);
   out << "[Desktop Entry]\n";
   out << "Type=Application\n";
-  out << "Name=" << (m_name.isEmpty() ? "Fluorine" : m_name) << "\n";
+  out << "Name=" << displayName << "\n";
   if (!m_description.isEmpty()) {
     out << "Comment=" << m_description << "\n";
   }
@@ -551,6 +602,9 @@ QString Shortcut::shortcutDirectory(Locations loc) const
     }
     return QDir::homePath() + "/Desktop";
   }
+  if (loc == ApplicationMenu) {
+    return QDir::homePath() + "/.local/share/applications";
+  }
   return {};
 }
 
@@ -559,7 +613,14 @@ QString Shortcut::shortcutFilename() const
   if (m_name.isEmpty()) {
     return "fluorine.desktop";
   }
-  return m_name + ".desktop";
+  // Include instance name in the filename to avoid collisions when
+  // multiple instances have the same executable (e.g. BodySlide_x64
+  // for both FNV and SkyrimSE).  Example: "New Vegas-NVSE.desktop"
+  QString base = m_name;
+  if (!m_instanceName.isEmpty()) {
+    base = sanitizeDesktopName(m_instanceName) + "-" + base;
+  }
+  return base + ".desktop";
 }
 
 QString toString(Shortcut::Locations loc)
@@ -573,6 +634,9 @@ QString toString(Shortcut::Locations loc)
 
   case Shortcut::StartMenu:
     return "start menu";
+
+  case Shortcut::ApplicationMenu:
+    return "application menu";
 
   default:
     return QString("? (%1)").arg(static_cast<int>(loc));

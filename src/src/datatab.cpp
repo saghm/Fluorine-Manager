@@ -9,6 +9,9 @@
 #include <log.h>
 #include <report.h>
 
+#include <QMessageBox>
+#include <utility.h>
+
 using namespace MOShared;
 using namespace MOBase;
 
@@ -21,6 +24,7 @@ DataTab::DataTab(OrganizerCore& core, PluginContainer& pc, QWidget* parent,
       ui{mwui->tabWidget,
          mwui->dataTab,
          mwui->dataTabRefresh,
+         mwui->dataTabBrowseVFS,
          mwui->dataTree,
          mwui->dataTabShowOnlyConflicts,
          mwui->dataTabShowFromArchives,
@@ -41,6 +45,14 @@ DataTab::DataTab(OrganizerCore& core, PluginContainer& pc, QWidget* parent,
   connect(&m_filter, &FilterWidget::aboutToChange, [&] {
     ensureFullyLoaded();
   });
+
+#ifdef _WIN32
+  ui.browseVFS->setVisible(false);
+#else
+  connect(ui.browseVFS, &QPushButton::clicked, [&] {
+    onBrowseVFS();
+  });
+#endif
 
   connect(ui.refresh, &QPushButton::clicked, [&] {
     onRefresh();
@@ -121,6 +133,36 @@ void DataTab::onRefresh()
   }
 
   m_core.refreshDirectoryStructure();
+}
+
+void DataTab::onBrowseVFS()
+{
+#ifndef _WIN32
+  QString dataPath = m_core.managedGame()->dataDirectory().absolutePath();
+
+  // Mount the FUSE VFS so the file manager sees the merged mod files.
+  log::info("Mounting VFS for Browse...");
+  m_core.prepareVFS();
+
+  // Open the game data folder in the system file manager.
+  shell::Explore(dataPath);
+
+  // Show a modal dialog that keeps the VFS mounted.  When the user
+  // closes it, we unmount.
+  QMessageBox box(QMessageBox::Information,
+                  QObject::tr("Browse VFS"),
+                  QObject::tr("The virtual filesystem is mounted.\n\n"
+                              "The game Data folder has been opened in your "
+                              "file manager.  You can browse the merged mod "
+                              "files as the game would see them.\n\n"
+                              "Close this dialog to unmount the VFS."),
+                  QMessageBox::Close, m_parent);
+  box.setWindowModality(Qt::WindowModal);
+  box.exec();
+
+  log::info("Unmounting VFS after Browse...");
+  m_core.unmountVFS();
+#endif
 }
 
 void DataTab::updateTree()

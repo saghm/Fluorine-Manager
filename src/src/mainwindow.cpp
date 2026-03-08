@@ -376,7 +376,9 @@ MainWindow::MainWindow(Settings& settings, OrganizerCore& organizerCore,
   m_LinkStartMenu = linkMenu->addAction(QIcon(":/MO/gui/link"), tr("Start Menu"), this,
                                         SLOT(linkMenu()));
 #else
-  m_LinkStartMenu = nullptr;
+  m_LinkStartMenu = linkMenu->addAction(QIcon(":/MO/gui/link"),
+                                        tr("Application Launcher"), this,
+                                        SLOT(linkMenu()));
 #endif
   ui->linkButton->setMenu(linkMenu);
 
@@ -2806,7 +2808,11 @@ void MainWindow::linkDesktop()
 void MainWindow::linkMenu()
 {
   if (auto* exe = getSelectedExecutable()) {
+#ifdef _WIN32
     env::Shortcut(*exe).toggle(env::Shortcut::StartMenu);
+#else
+    env::Shortcut(*exe).toggle(env::Shortcut::ApplicationMenu);
+#endif
   }
 }
 
@@ -2828,8 +2834,14 @@ void MainWindow::on_linkButton_pressed()
                                                                  : addIcon);
 
   if (m_LinkStartMenu) {
+#ifdef _WIN32
     m_LinkStartMenu->setIcon(shortcut.exists(env::Shortcut::StartMenu) ? removeIcon
                                                                        : addIcon);
+#else
+    m_LinkStartMenu->setIcon(shortcut.exists(env::Shortcut::ApplicationMenu)
+                                 ? removeIcon
+                                 : addIcon);
+#endif
   }
 }
 

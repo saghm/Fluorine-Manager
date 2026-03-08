@@ -4,6 +4,7 @@
 #include "modinfo.h"
 #include "modinfodialogfwd.h"
 #include <QCheckBox>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QTreeWidget>
 #include <filterwidget.h>
@@ -51,6 +52,7 @@ private:
     QTabWidget* tabs;
     QWidget* tab;
     QPushButton* refresh;
+    QPushButton* browseVFS;
     QTreeView* tree;
     QCheckBox* conflicts;
     QCheckBox* archives;
@@ -67,6 +69,7 @@ private:
   bool m_needUpdate;
 
   void onRefresh();
+  void onBrowseVFS();
   void onItemExpanded(QTreeWidgetItem* item);
   void onConflicts();
   void onArchives();
