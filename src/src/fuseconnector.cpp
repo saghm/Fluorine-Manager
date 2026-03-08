@@ -22,6 +22,7 @@
 #include <fcntl.h>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
 #include <set>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -156,8 +157,10 @@ buildModsFromMapping(const MappingType& mapping, const QString& dataDir,
 void setupFuseOps(struct fuse_lowlevel_ops* ops)
 {
   std::memset(ops, 0, sizeof(struct fuse_lowlevel_ops));
+  ops->init    = mo2_init;
   ops->lookup  = mo2_lookup;
   ops->getattr = mo2_getattr;
+  ops->opendir = mo2_opendir;
   ops->readdir = mo2_readdir;
   ops->open    = mo2_open;
   ops->read    = mo2_read;
@@ -168,6 +171,7 @@ void setupFuseOps(struct fuse_lowlevel_ops* ops)
   ops->unlink  = mo2_unlink;
   ops->mkdir   = mo2_mkdir;
   ops->release = mo2_release;
+  ops->releasedir = mo2_releasedir;
 }
 
 }  // namespace
@@ -280,8 +284,7 @@ bool FuseConnector::mount(
   // separately to fuse_session_mount(). Including it here causes
   // "fuse: unknown option(s)" error.
   std::vector<std::string> argvStorage = {
-      "mo2fuse", "-o", "fsname=mo2linux", "-o", "default_permissions",
-      "-o",      "noatime"};
+      "mo2fuse", "-o", "fsname=mo2linux", "-o", "noatime"};
 
   std::vector<char*> argv;
   argv.reserve(argvStorage.size());
@@ -428,8 +431,14 @@ void FuseConnector::rebuild(
     stampPluginTimestamps(*newTree, m_pluginLoadOrder);
   }
 
-  std::unique_lock lock(m_context->tree_mutex);
-  m_context->tree.swap(newTree);
+  {
+    std::unique_lock lock(m_context->tree_mutex);
+    m_context->tree.swap(newTree);
+  }
+  {
+    std::scoped_lock lock(m_context->open_dirs_mutex);
+    m_context->open_dirs.clear();
+  }
 }
 
 void FuseConnector::updateMapping(const MappingType& mapping)
@@ -721,6 +730,10 @@ void FuseConnector::flushStagingLive()
     std::unique_lock lock(m_context->tree_mutex);
     m_context->tree.swap(newTree);
   }
+  {
+    std::scoped_lock lock(m_context->open_dirs_mutex);
+    m_context->open_dirs.clear();
+  }
 
   // Re-create OverwriteManager with fresh staging dir
   m_context->overwrite = std::make_unique<OverwriteManager>(m_stagingDir, m_overwriteDir);
@@ -771,8 +784,48 @@ static void doUnmount(const QString& path)
   }
 }
 
+static void cleanupStaleMo2Mounts(const QString& keepPath)
+{
+  QFile mounts(QStringLiteral("/proc/mounts"));
+  if (!mounts.open(QIODevice::ReadOnly)) {
+    return;
+  }
+
+  const QString cleanKeep = QDir::cleanPath(keepPath);
+  const QString trashRoot =
+      QDir::cleanPath(QDir::homePath() + "/.local/share/Trash/files");
+
+  while (!mounts.atEnd()) {
+    const auto line  = QString::fromUtf8(mounts.readLine()).trimmed();
+    const auto parts = line.split(' ', Qt::SkipEmptyParts);
+    if (parts.size() < 3) {
+      continue;
+    }
+    if (parts[0] != QStringLiteral("mo2linux")) {
+      continue;
+    }
+
+    const QString mp = QDir::cleanPath(QString::fromStdString(
+        decodeProcMountField(parts[1].toStdString())));
+    if (mp == cleanKeep) {
+      continue;
+    }
+
+    const bool underTrash =
+        mp == trashRoot || mp.startsWith(trashRoot + QDir::separator());
+    if (!underTrash && !isStaleOrMounted(mp)) {
+      continue;
+    }
+
+    log::warn("cleaning stale mo2linux mount at '{}'", mp);
+    doUnmount(mp);
+  }
+}
+
 void FuseConnector::tryCleanupStaleMount(const QString& path)
 {
+  cleanupStaleMo2Mounts(path);
+
   if (!isStaleOrMounted(path)) {
     return;
   }
@@ -780,4 +833,3 @@ void FuseConnector::tryCleanupStaleMount(const QString& path)
   log::warn("stale FUSE mount detected at '{}', attempting cleanup", path);
   doUnmount(path);
 }
-

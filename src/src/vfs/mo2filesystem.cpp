@@ -1,6 +1,7 @@
 #include "mo2filesystem.h"
 
 #include <fcntl.h>
+#include <linux/fs.h>
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -8,13 +9,111 @@
 #include <chrono>
 #include <cstring>
 #include <filesystem>
-#include <fstream>
+
+#if __has_include(<linux/msdos_fs.h>)
+#include <linux/msdos_fs.h>
+#endif
 
 namespace
 {
 namespace fs = std::filesystem;
 
-constexpr double TTL_SECONDS = 1.0;
+constexpr double TTL_SECONDS = 30.0;
+constexpr double NEGATIVE_TTL_SECONDS = 5.0;
+constexpr double ATTR_CACHE_SECONDS = 30.0;
+
+void fillStatForDir(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid);
+void fillStatForFile(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid,
+                     uint64_t size,
+                     const std::chrono::system_clock::time_point& mtime);
+
+void maybeLogCounters(Mo2FsContext* ctx)
+{
+  if (ctx == nullptr) {
+    return;
+  }
+
+  const uint64_t tick = ctx->op_tick.fetch_add(1, std::memory_order_relaxed) + 1;
+  if ((tick % 50000) != 0) {
+    return;
+  }
+
+  std::fprintf(stderr,
+               "[VFS] ops lookup=%llu getattr=%llu readdir=%llu open=%llu read=%llu ioctl=%llu",
+               static_cast<unsigned long long>(
+                   ctx->lookup_count.load(std::memory_order_relaxed)),
+               static_cast<unsigned long long>(
+                   ctx->getattr_count.load(std::memory_order_relaxed)),
+               static_cast<unsigned long long>(
+                   ctx->readdir_count.load(std::memory_order_relaxed)),
+               static_cast<unsigned long long>(
+                   ctx->open_count.load(std::memory_order_relaxed)),
+               static_cast<unsigned long long>(
+                   ctx->read_count.load(std::memory_order_relaxed)),
+               static_cast<unsigned long long>(
+                   ctx->ioctl_count.load(std::memory_order_relaxed)));
+  {
+    std::scoped_lock lock(ctx->open_files_mutex);
+    std::fprintf(stderr, " open_handles=%zu\n", ctx->open_files.size());
+  }
+
+  auto logTop = [](const char* label, const std::unordered_map<std::string, uint64_t>& m) {
+    if (m.empty()) {
+      return;
+    }
+
+    std::vector<std::pair<std::string, uint64_t>> top(m.begin(), m.end());
+    const size_t keep = std::min<size_t>(3, top.size());
+    std::partial_sort(
+        top.begin(), top.begin() + static_cast<std::ptrdiff_t>(keep), top.end(),
+        [](const auto& a, const auto& b) { return a.second > b.second; });
+
+    std::fprintf(stderr, "[VFS] hot %s:", label);
+    for (size_t i = 0; i < keep; ++i) {
+      std::fprintf(stderr, " [%llu] %s",
+                   static_cast<unsigned long long>(top[i].second),
+                   top[i].first.c_str());
+    }
+    std::fputc('\n', stderr);
+  };
+
+  {
+    std::scoped_lock lock(ctx->path_stats_mutex);
+    logTop("lookup_hit", ctx->lookup_hit_paths);
+    logTop("lookup_miss", ctx->lookup_miss_paths);
+    logTop("getattr", ctx->getattr_paths);
+    logTop("readdir", ctx->readdir_paths);
+    ctx->lookup_hit_paths.clear();
+    ctx->lookup_miss_paths.clear();
+    ctx->getattr_paths.clear();
+    ctx->readdir_paths.clear();
+  }
+}
+
+void invalidateDirCache(Mo2FsContext* ctx, const std::string& dirPath)
+{
+  if (ctx == nullptr) {
+    return;
+  }
+
+  // Invalidate only the affected directory (and its open-dir handles), not all.
+  {
+    std::scoped_lock lock(ctx->open_dirs_mutex);
+    for (auto it = ctx->open_dirs.begin(); it != ctx->open_dirs.end();) {
+      if (it->second.path == dirPath) {
+        it = ctx->open_dirs.erase(it);
+      } else {
+        ++it;
+      }
+    }
+  }
+  {
+    std::scoped_lock cacheLock(ctx->dir_cache_mutex);
+    ctx->dir_cache.erase(dirPath);
+    ctx->readdir_blob_cache.erase(dirPath);
+    ctx->readdirplus_blob_cache.erase(dirPath);
+  }
+}
 
 struct NodeSnapshot
 {
@@ -67,7 +166,7 @@ std::string joinPath(const std::string& base, const std::string& name)
 
 std::string inodeToPath(const Mo2FsContext* ctx, fuse_ino_t ino, bool* ok)
 {
-  std::scoped_lock lock(ctx->inode_mutex);
+  std::shared_lock lock(ctx->inode_mutex);
   const std::string path = ctx->inodes->getPath(ino);
 
   if (ino == 1) {
@@ -101,10 +200,18 @@ NodeSnapshot snapshotForPath(const Mo2FsContext* ctx, const std::string& path)
   return snap;
 }
 
-std::vector<std::pair<std::string, bool>> listChildrenSnapshot(
+struct ChildSnapshot
+{
+  std::string name;
+  bool is_dir = false;
+  uint64_t size = 0;
+  std::chrono::system_clock::time_point mtime{};
+};
+
+std::vector<ChildSnapshot> listChildrenSnapshot(
     const Mo2FsContext* ctx, const std::string& path, bool* ok)
 {
-  std::vector<std::pair<std::string, bool>> out;
+  std::vector<ChildSnapshot> out;
   std::shared_lock lock(ctx->tree_mutex);
 
   const VfsNode* node = path.empty() ? &ctx->tree->root : ctx->tree->root.resolve(splitPath(path));
@@ -115,10 +222,205 @@ std::vector<std::pair<std::string, bool>> listChildrenSnapshot(
 
   *ok = true;
   for (const auto& [name, child] : node->listChildren()) {
-    out.emplace_back(name, child->is_directory);
+    ChildSnapshot snap;
+    snap.name   = name;
+    snap.is_dir = child->is_directory;
+    if (!child->is_directory) {
+      snap.size  = child->file_info.size;
+      snap.mtime = child->file_info.mtime;
+    }
+    out.push_back(std::move(snap));
   }
 
   return out;
+}
+
+std::vector<Mo2FsContext::DirEntry> buildDirEntries(
+    Mo2FsContext* ctx, const std::string& path, fuse_ino_t selfIno, bool* ok)
+{
+  auto children = listChildrenSnapshot(ctx, path, ok);
+  if (!*ok) {
+    return {};
+  }
+
+  std::vector<Mo2FsContext::DirEntry> entries;
+  entries.reserve(children.size() + 2);
+  entries.push_back(Mo2FsContext::DirEntry{selfIno, ".", true});
+  entries.push_back(Mo2FsContext::DirEntry{1, "..", true});
+
+  std::unique_lock lock(ctx->inode_mutex);
+  for (const auto& child : children) {
+    const std::string childPath = joinPath(path, child.name);
+    entries.push_back(
+        Mo2FsContext::DirEntry{ctx->inodes->getOrCreate(childPath), child.name,
+                               child.is_dir, child.size, child.mtime});
+  }
+
+  return entries;
+}
+
+void samplePathStat(Mo2FsContext* ctx, const char* op, const std::string& path,
+                    bool miss = false)
+{
+  if (ctx == nullptr) {
+    return;
+  }
+
+  const uint64_t sampleTick =
+      ctx->path_sample_tick.fetch_add(1, std::memory_order_relaxed) + 1;
+  if ((sampleTick % 128) != 0) {
+    return;
+  }
+
+  std::scoped_lock lock(ctx->path_stats_mutex);
+  if (std::strcmp(op, "lookup") == 0) {
+    if (miss) {
+      ++ctx->lookup_miss_paths[path];
+    } else {
+      ++ctx->lookup_hit_paths[path];
+    }
+    return;
+  }
+  if (std::strcmp(op, "getattr") == 0) {
+    ++ctx->getattr_paths[path];
+    return;
+  }
+  if (std::strcmp(op, "readdir") == 0) {
+    ++ctx->readdir_paths[path];
+  }
+}
+
+std::shared_ptr<std::vector<Mo2FsContext::DirEntry>> getOrBuildDirEntries(
+    Mo2FsContext* ctx, const std::string& path, fuse_ino_t ino, bool* ok)
+{
+  {
+    std::scoped_lock lock(ctx->dir_cache_mutex);
+    auto it = ctx->dir_cache.find(path);
+    if (it != ctx->dir_cache.end()) {
+      *ok = true;
+      return it->second;
+    }
+  }
+
+  auto entries = std::make_shared<std::vector<Mo2FsContext::DirEntry>>(
+      buildDirEntries(ctx, path, ino, ok));
+  if (!*ok) {
+    return {};
+  }
+
+  {
+    std::scoped_lock lock(ctx->dir_cache_mutex);
+    auto [it, inserted] = ctx->dir_cache.emplace(path, entries);
+    if (!inserted) {
+      return it->second;
+    }
+  }
+
+  return entries;
+}
+
+std::vector<char> buildReaddirBlob(
+    fuse_req_t req, const std::vector<Mo2FsContext::DirEntry>& entries)
+{
+  std::vector<char> blob;
+  for (const auto& entry : entries) {
+    struct stat st;
+    std::memset(&st, 0, sizeof(st));
+    st.st_ino  = entry.ino;
+    st.st_mode = entry.is_dir ? (S_IFDIR | 0755) : (S_IFREG | 0644);
+
+    const size_t entSize =
+        fuse_add_direntry(req, nullptr, 0, entry.name.c_str(), &st, 0);
+    if (entSize == 0) {
+      continue;
+    }
+    const off_t nextOff = static_cast<off_t>(blob.size() + entSize);
+    const size_t oldLen = blob.size();
+    blob.resize(oldLen + entSize);
+    fuse_add_direntry(req, blob.data() + oldLen, entSize, entry.name.c_str(), &st,
+                      nextOff);
+  }
+  return blob;
+}
+
+std::vector<char> buildReaddirPlusBlob(
+    fuse_req_t req, const Mo2FsContext* ctx,
+    const std::vector<Mo2FsContext::DirEntry>& entries)
+{
+  std::vector<char> blob;
+  for (const auto& entry : entries) {
+    struct fuse_entry_param e;
+    std::memset(&e, 0, sizeof(e));
+    e.ino           = entry.ino;
+    e.attr_timeout  = TTL_SECONDS;
+    e.entry_timeout = TTL_SECONDS;
+
+    if (entry.is_dir) {
+      fillStatForDir(&e.attr, entry.ino, ctx->uid, ctx->gid);
+    } else {
+      fillStatForFile(&e.attr, entry.ino, ctx->uid, ctx->gid, entry.size,
+                      entry.mtime);
+    }
+
+    const size_t entSize =
+        fuse_add_direntry_plus(req, nullptr, 0, entry.name.c_str(), &e, 0);
+    if (entSize == 0) {
+      continue;
+    }
+    const off_t nextOff = static_cast<off_t>(blob.size() + entSize);
+    const size_t oldLen = blob.size();
+    blob.resize(oldLen + entSize);
+    fuse_add_direntry_plus(req, blob.data() + oldLen, entSize, entry.name.c_str(),
+                           &e, nextOff);
+  }
+  return blob;
+}
+
+std::shared_ptr<std::vector<char>> getOrBuildReaddirBlob(
+    Mo2FsContext* ctx, fuse_req_t req, const std::string& path,
+    const std::shared_ptr<std::vector<Mo2FsContext::DirEntry>>& entries)
+{
+  {
+    std::scoped_lock lock(ctx->dir_cache_mutex);
+    auto it = ctx->readdir_blob_cache.find(path);
+    if (it != ctx->readdir_blob_cache.end()) {
+      return it->second;
+    }
+  }
+
+  auto built = std::make_shared<std::vector<char>>(buildReaddirBlob(req, *entries));
+  {
+    std::scoped_lock lock(ctx->dir_cache_mutex);
+    auto [it, inserted] = ctx->readdir_blob_cache.emplace(path, built);
+    if (!inserted) {
+      return it->second;
+    }
+  }
+  return built;
+}
+
+std::shared_ptr<std::vector<char>> getOrBuildReaddirPlusBlob(
+    Mo2FsContext* ctx, fuse_req_t req, const std::string& path,
+    const std::shared_ptr<std::vector<Mo2FsContext::DirEntry>>& entries)
+{
+  {
+    std::scoped_lock lock(ctx->dir_cache_mutex);
+    auto it = ctx->readdirplus_blob_cache.find(path);
+    if (it != ctx->readdirplus_blob_cache.end()) {
+      return it->second;
+    }
+  }
+
+  auto built = std::make_shared<std::vector<char>>(
+      buildReaddirPlusBlob(req, ctx, *entries));
+  {
+    std::scoped_lock lock(ctx->dir_cache_mutex);
+    auto [it, inserted] = ctx->readdirplus_blob_cache.emplace(path, built);
+    if (!inserted) {
+      return it->second;
+    }
+  }
+  return built;
 }
 
 void fillStatForDir(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid)
@@ -129,12 +431,12 @@ void fillStatForDir(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid)
   st->st_nlink = 2;
   st->st_uid   = uid;
   st->st_gid   = gid;
-
-  const auto now = std::chrono::duration_cast<std::chrono::seconds>(
-      std::chrono::system_clock::now().time_since_epoch());
-  st->st_mtim.tv_sec = now.count();
-  st->st_atim.tv_sec = now.count();
-  st->st_ctim.tv_sec = now.count();
+  // Keep synthetic directory timestamps stable so kernel/user-space attr caching
+  // stays effective across repeated getattr/readdir probes.
+  constexpr time_t kVirtualDirTime = 946684800;  // 2000-01-01 00:00:00 UTC
+  st->st_mtim.tv_sec = kVirtualDirTime;
+  st->st_atim.tv_sec = kVirtualDirTime;
+  st->st_ctim.tv_sec = kVirtualDirTime;
 }
 
 void fillStatForFile(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid,
@@ -207,6 +509,31 @@ void updateFileNode(Mo2FsContext* ctx, const std::string& relative,
 
 }  // namespace
 
+void mo2_init(void* /*userdata*/, struct fuse_conn_info* conn)
+{
+  // Keep kernel page cache valid across open/close as long as mtime/size are
+  // unchanged.  Mod files are immutable during a game session, so this avoids
+  // re-reading file data from userspace on every open().
+  if (conn->capable & FUSE_CAP_AUTO_INVAL_DATA) {
+    conn->want |= FUSE_CAP_AUTO_INVAL_DATA;
+  }
+
+  // Increase max read/write buffer to 1MB (kernel 4.20+ supports this).
+  // Reduces FUSE round-trips for large file reads (textures, meshes, BSAs).
+  constexpr unsigned int ONE_MB = 1048576;
+  if (conn->max_readahead < ONE_MB) {
+    conn->max_readahead = ONE_MB;
+  }
+  if (conn->max_write < ONE_MB) {
+    conn->max_write = ONE_MB;
+  }
+
+  std::fprintf(stderr,
+               "[VFS] init: auto_inval=%d max_readahead=%u max_write=%u\n",
+               (conn->want & FUSE_CAP_AUTO_INVAL_DATA) ? 1 : 0,
+               conn->max_readahead, conn->max_write);
+}
+
 void mo2_lookup(fuse_req_t req, fuse_ino_t parent, const char* name)
 {
   Mo2FsContext* ctx = getContext(req);
@@ -214,6 +541,8 @@ void mo2_lookup(fuse_req_t req, fuse_ino_t parent, const char* name)
     fuse_reply_err(req, EINVAL);
     return;
   }
+  ctx->lookup_count.fetch_add(1, std::memory_order_relaxed);
+  maybeLogCounters(ctx);
 
   bool ok = false;
   const std::string parentPath = inodeToPath(ctx, parent, &ok);
@@ -225,13 +554,24 @@ void mo2_lookup(fuse_req_t req, fuse_ino_t parent, const char* name)
   const std::string childPath = joinPath(parentPath, name);
   const auto snap             = snapshotForPath(ctx, childPath);
   if (!snap.found) {
-    fuse_reply_err(req, ENOENT);
+    samplePathStat(ctx, "lookup", childPath, true);
+    struct fuse_entry_param e;
+    std::memset(&e, 0, sizeof(e));
+    e.ino           = 0;
+    e.attr_timeout  = NEGATIVE_TTL_SECONDS;
+    e.entry_timeout = NEGATIVE_TTL_SECONDS;
+    fuse_reply_entry(req, &e);
     return;
   }
+  samplePathStat(ctx, "lookup", childPath, false);
 
-  fuse_ino_t childIno;
+  fuse_ino_t childIno = 0;
   {
-    std::scoped_lock lock(ctx->inode_mutex);
+    std::shared_lock lock(ctx->inode_mutex);
+    childIno = ctx->inodes->get(childPath);
+  }
+  if (childIno == 0) {
+    std::unique_lock lock(ctx->inode_mutex);
     childIno = ctx->inodes->getOrCreate(childPath);
   }
 
@@ -245,10 +585,31 @@ void mo2_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* /*fi*/)
     fuse_reply_err(req, EINVAL);
     return;
   }
+  ctx->getattr_count.fetch_add(1, std::memory_order_relaxed);
+  maybeLogCounters(ctx);
+
+  {
+    std::scoped_lock lock(ctx->attr_cache_mutex);
+    auto it = ctx->attr_cache.find(ino);
+    if (it != ctx->attr_cache.end() && it->second.valid &&
+        std::chrono::steady_clock::now() < it->second.expires_at) {
+      fuse_reply_attr(req, &it->second.st, TTL_SECONDS);
+      return;
+    }
+  }
 
   if (ino == 1) {
     struct stat st;
     fillStatForDir(&st, 1, ctx->uid, ctx->gid);
+    {
+      std::scoped_lock lock(ctx->attr_cache_mutex);
+      auto& c       = ctx->attr_cache[1];
+      c.st          = st;
+      c.expires_at  = std::chrono::steady_clock::now() +
+                     std::chrono::milliseconds(
+                         static_cast<int>(ATTR_CACHE_SECONDS * 1000.0));
+      c.valid       = true;
+    }
     fuse_reply_attr(req, &st, TTL_SECONDS);
     return;
   }
@@ -259,6 +620,7 @@ void mo2_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* /*fi*/)
     fuse_reply_err(req, ENOENT);
     return;
   }
+  samplePathStat(ctx, "getattr", path);
 
   const auto snap = snapshotForPath(ctx, path);
   if (!snap.found) {
@@ -273,14 +635,23 @@ void mo2_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* /*fi*/)
     fillStatForFile(&st, ino, ctx->uid, ctx->gid, snap.size, snap.mtime);
   }
 
+  {
+    std::scoped_lock lock(ctx->attr_cache_mutex);
+    auto& c      = ctx->attr_cache[ino];
+    c.st         = st;
+    c.expires_at = std::chrono::steady_clock::now() +
+                  std::chrono::milliseconds(
+                      static_cast<int>(ATTR_CACHE_SECONDS * 1000.0));
+    c.valid      = true;
+  }
+
   fuse_reply_attr(req, &st, TTL_SECONDS);
 }
 
-void mo2_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
-                 struct fuse_file_info* /*fi*/)
+void mo2_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
 {
   Mo2FsContext* ctx = getContext(req);
-  if (ctx == nullptr || off < 0) {
+  if (ctx == nullptr || fi == nullptr) {
     fuse_reply_err(req, EINVAL);
     return;
   }
@@ -293,44 +664,194 @@ void mo2_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
   }
 
   bool listOk = false;
-  auto children = listChildrenSnapshot(ctx, path, &listOk);
-  if (!listOk) {
+  auto entries = getOrBuildDirEntries(ctx, path, ino, &listOk);
+  if (!listOk || !entries) {
     fuse_reply_err(req, ENOTDIR);
     return;
   }
+  samplePathStat(ctx, "readdir", path);
 
-  struct Entry
+  const uint64_t dh = ctx->next_dh.fetch_add(1, std::memory_order_relaxed);
   {
-    fuse_ino_t ino;
-    std::string name;
-    bool isDir;
-  };
+    std::scoped_lock lock(ctx->open_dirs_mutex);
+    Mo2FsContext::OpenDir od;
+    od.path          = path;
+    od.entries       = std::move(entries);
+    od.readdir_blob  = getOrBuildReaddirBlob(ctx, req, path, od.entries);
+    od.readdirplus_blob.reset();
+    ctx->open_dirs[dh] = std::move(od);
+  }
 
-  std::vector<Entry> entries;
-  entries.reserve(children.size() + 2);
-  entries.push_back({ino, ".", true});
-  entries.push_back({1, "..", true});
+  fi->fh            = dh;
+  fi->cache_readdir = 1;
+  fuse_reply_open(req, fi);
+}
 
-  {
-    std::scoped_lock lock(ctx->inode_mutex);
-    for (const auto& [name, isDir] : children) {
-      const std::string childPath = joinPath(path, name);
-      entries.push_back({ctx->inodes->getOrCreate(childPath), name, isDir});
+void mo2_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
+                 struct fuse_file_info* fi)
+{
+  Mo2FsContext* ctx = getContext(req);
+  if (ctx == nullptr || off < 0) {
+    fuse_reply_err(req, EINVAL);
+    return;
+  }
+  ctx->readdir_count.fetch_add(1, std::memory_order_relaxed);
+  maybeLogCounters(ctx);
+
+  std::shared_ptr<std::vector<Mo2FsContext::DirEntry>> entries;
+  std::shared_ptr<std::vector<char>> readdirBlob;
+  std::string path;
+  bool haveCached = false;
+  if (fi != nullptr) {
+    std::scoped_lock lock(ctx->open_dirs_mutex);
+    auto it = ctx->open_dirs.find(fi->fh);
+    if (it != ctx->open_dirs.end()) {
+      path        = it->second.path;
+      entries     = it->second.entries;
+      readdirBlob = it->second.readdir_blob;
+      haveCached  = true;
     }
   }
+
+  if (readdirBlob != nullptr) {
+    samplePathStat(ctx, "readdir", path);
+    const size_t start = static_cast<size_t>(off);
+    if (start >= readdirBlob->size()) {
+      fuse_reply_buf(req, nullptr, 0);
+      return;
+    }
+    const size_t n = std::min<size_t>(size, readdirBlob->size() - start);
+    fuse_reply_buf(req, readdirBlob->data() + start, n);
+    return;
+  }
+
+  if (!haveCached) {
+    bool ok = false;
+    path = inodeToPath(ctx, ino, &ok);
+    if (!ok) {
+      fuse_reply_err(req, ENOENT);
+      return;
+    }
+
+    bool listOk = false;
+    entries = getOrBuildDirEntries(ctx, path, ino, &listOk);
+    if (!listOk || !entries) {
+      fuse_reply_err(req, ENOTDIR);
+      return;
+    }
+  }
+  samplePathStat(ctx, "readdir", path);
 
   std::vector<char> buf(size);
   size_t used = 0;
 
-  for (size_t i = static_cast<size_t>(off); i < entries.size(); ++i) {
+  for (size_t i = static_cast<size_t>(off); i < entries->size(); ++i) {
     struct stat st;
     std::memset(&st, 0, sizeof(st));
-    st.st_ino  = entries[i].ino;
-    st.st_mode = entries[i].isDir ? (S_IFDIR | 0755) : (S_IFREG | 0644);
+    st.st_ino  = (*entries)[i].ino;
+    st.st_mode = (*entries)[i].is_dir ? (S_IFDIR | 0755) : (S_IFREG | 0644);
 
     const size_t ent = fuse_add_direntry(req, buf.data() + used, size - used,
-                                         entries[i].name.c_str(), &st,
+                                         (*entries)[i].name.c_str(), &st,
                                          static_cast<off_t>(i + 1));
+    if (ent > size - used) {
+      break;
+    }
+    used += ent;
+  }
+
+  fuse_reply_buf(req, buf.data(), used);
+}
+
+void mo2_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
+                     struct fuse_file_info* fi)
+{
+  Mo2FsContext* ctx = getContext(req);
+  if (ctx == nullptr || off < 0) {
+    fuse_reply_err(req, EINVAL);
+    return;
+  }
+  ctx->readdir_count.fetch_add(1, std::memory_order_relaxed);
+  maybeLogCounters(ctx);
+
+  std::shared_ptr<std::vector<Mo2FsContext::DirEntry>> entries;
+  std::shared_ptr<std::vector<char>> readdirPlusBlob;
+  std::string path;
+  bool haveCached = false;
+  if (fi != nullptr) {
+    std::scoped_lock lock(ctx->open_dirs_mutex);
+    auto it = ctx->open_dirs.find(fi->fh);
+    if (it != ctx->open_dirs.end()) {
+      path           = it->second.path;
+      entries        = it->second.entries;
+      readdirPlusBlob = it->second.readdirplus_blob;
+      haveCached     = true;
+    }
+  }
+
+  if (readdirPlusBlob == nullptr && haveCached && entries != nullptr) {
+    auto built = getOrBuildReaddirPlusBlob(ctx, req, path, entries);
+    std::scoped_lock lock(ctx->open_dirs_mutex);
+    auto it = ctx->open_dirs.find(fi->fh);
+    if (it != ctx->open_dirs.end()) {
+      if (it->second.readdirplus_blob == nullptr) {
+        it->second.readdirplus_blob = built;
+      }
+      readdirPlusBlob = it->second.readdirplus_blob;
+    } else {
+      readdirPlusBlob = std::move(built);
+    }
+  }
+
+  if (readdirPlusBlob != nullptr) {
+    samplePathStat(ctx, "readdir", path);
+    const size_t start = static_cast<size_t>(off);
+    if (start >= readdirPlusBlob->size()) {
+      fuse_reply_buf(req, nullptr, 0);
+      return;
+    }
+    const size_t n = std::min<size_t>(size, readdirPlusBlob->size() - start);
+    fuse_reply_buf(req, readdirPlusBlob->data() + start, n);
+    return;
+  }
+
+  if (!haveCached) {
+    bool ok = false;
+    path = inodeToPath(ctx, ino, &ok);
+    if (!ok) {
+      fuse_reply_err(req, ENOENT);
+      return;
+    }
+
+    bool listOk = false;
+    entries = getOrBuildDirEntries(ctx, path, ino, &listOk);
+    if (!listOk || !entries) {
+      fuse_reply_err(req, ENOTDIR);
+      return;
+    }
+  }
+  samplePathStat(ctx, "readdir", path);
+
+  std::vector<char> buf(size);
+  size_t used = 0;
+
+  for (size_t i = static_cast<size_t>(off); i < entries->size(); ++i) {
+    struct fuse_entry_param e;
+    std::memset(&e, 0, sizeof(e));
+    e.ino           = (*entries)[i].ino;
+    e.attr_timeout  = TTL_SECONDS;
+    e.entry_timeout = TTL_SECONDS;
+
+    if ((*entries)[i].is_dir) {
+      fillStatForDir(&e.attr, (*entries)[i].ino, ctx->uid, ctx->gid);
+    } else {
+      fillStatForFile(&e.attr, (*entries)[i].ino, ctx->uid, ctx->gid,
+                      (*entries)[i].size, (*entries)[i].mtime);
+    }
+
+    const size_t ent = fuse_add_direntry_plus(
+        req, buf.data() + used, size - used, (*entries)[i].name.c_str(), &e,
+        static_cast<off_t>(i + 1));
     if (ent > size - used) {
       break;
     }
@@ -347,6 +868,8 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
     fuse_reply_err(req, EINVAL);
     return;
   }
+  ctx->open_count.fetch_add(1, std::memory_order_relaxed);
+  maybeLogCounters(ctx);
 
   bool ok = false;
   const std::string path = inodeToPath(ctx, ino, &ok);
@@ -380,10 +903,25 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
     }
   }
 
+  int fd = -1;
+  if (writable) {
+    const int openFlags = O_RDWR;
+    if (isBacking && ctx->backing_dir_fd >= 0) {
+      fd = openat(ctx->backing_dir_fd, realPath.c_str(), openFlags);
+    } else {
+      fd = open(realPath.c_str(), openFlags);
+    }
+    if (fd < 0) {
+      fuse_reply_err(req, EIO);
+      return;
+    }
+  }
+
   const uint64_t fh = ctx->next_fh.fetch_add(1, std::memory_order_relaxed);
   {
     std::scoped_lock lock(ctx->open_files_mutex);
     Mo2FsContext::OpenFile of;
+    of.fd           = fd;
     of.real_path     = realPath;
     of.writable      = writable;
     of.is_backing    = isBacking;
@@ -404,35 +942,44 @@ void mo2_read(fuse_req_t req, fuse_ino_t /*ino*/, size_t size, off_t off,
     fuse_reply_err(req, EINVAL);
     return;
   }
+  ctx->read_count.fetch_add(1, std::memory_order_relaxed);
+  maybeLogCounters(ctx);
 
+  int fd = -1;
   std::string realPath;
   bool isBacking = false;
   {
-    std::scoped_lock lock(ctx->open_files_mutex);
+    std::shared_lock lock(ctx->open_files_mutex);
     auto it = ctx->open_files.find(fi->fh);
     if (it == ctx->open_files.end()) {
       fuse_reply_err(req, EBADF);
       return;
     }
-    realPath   = it->second.real_path;
-    isBacking  = it->second.is_backing;
+    fd       = it->second.fd;
+    realPath = it->second.real_path;
+    isBacking = it->second.is_backing;
   }
 
-  int fd = -1;
-  if (isBacking && ctx->backing_dir_fd >= 0) {
-    fd = openat(ctx->backing_dir_fd, realPath.c_str(), O_RDONLY);
-  } else {
-    fd = open(realPath.c_str(), O_RDONLY);
-  }
-
-  if (fd < 0) {
-    fuse_reply_err(req, EIO);
-    return;
+  int localFd = fd;
+  bool openedTempFd = false;
+  if (localFd < 0) {
+    if (isBacking && ctx->backing_dir_fd >= 0) {
+      localFd = openat(ctx->backing_dir_fd, realPath.c_str(), O_RDONLY);
+    } else {
+      localFd = open(realPath.c_str(), O_RDONLY);
+    }
+    if (localFd < 0) {
+      fuse_reply_err(req, EIO);
+      return;
+    }
+    openedTempFd = true;
   }
 
   std::vector<char> out(size);
-  const ssize_t n = pread(fd, out.data(), size, off);
-  close(fd);
+  const ssize_t n = pread(localFd, out.data(), size, off);
+  if (openedTempFd) {
+    close(localFd);
+  }
 
   if (n < 0) {
     fuse_reply_err(req, EIO);
@@ -451,44 +998,41 @@ void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,
     return;
   }
 
-  Mo2FsContext::OpenFile open;
+  int fd = -1;
+  std::string relativePath;
+  std::string realPath;
+  bool writable = false;
   {
-    std::scoped_lock lock(ctx->open_files_mutex);
+    std::shared_lock lock(ctx->open_files_mutex);
     auto it = ctx->open_files.find(fi->fh);
     if (it == ctx->open_files.end()) {
       fuse_reply_err(req, EBADF);
       return;
     }
-    open = it->second;
+    fd           = it->second.fd;
+    writable     = it->second.writable;
+    relativePath = it->second.relative_path;
+    realPath     = it->second.real_path;
   }
 
-  if (!open.writable) {
+  if (!writable) {
     fuse_reply_err(req, EACCES);
     return;
   }
 
-  std::fstream io(open.real_path, std::ios::binary | std::ios::in | std::ios::out);
-  if (!io) {
-    io.open(open.real_path, std::ios::binary | std::ios::out);
-    io.close();
-    io.open(open.real_path, std::ios::binary | std::ios::in | std::ios::out);
+  if (fd < 0) {
+    fuse_reply_err(req, EBADF);
+    return;
   }
 
-  if (!io) {
+  const ssize_t written = pwrite(fd, buf, size, off);
+  if (written < 0) {
     fuse_reply_err(req, EIO);
     return;
   }
 
-  io.seekp(off, std::ios::beg);
-  io.write(buf, static_cast<std::streamsize>(size));
-  io.flush();
-  if (!io) {
-    fuse_reply_err(req, EIO);
-    return;
-  }
-
-  updateFileNode(ctx, open.relative_path, open.real_path, "Staging");
-  fuse_reply_write(req, size);
+  updateFileNode(ctx, relativePath, realPath, "Staging");
+  fuse_reply_write(req, static_cast<size_t>(written));
 }
 
 void mo2_create(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t /*mode*/,
@@ -518,6 +1062,7 @@ void mo2_create(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t /*mo
   }
 
   updateFileNode(ctx, relative, realPath, "Staging");
+  invalidateDirCache(ctx, parentPath);
   {
     std::unique_lock lock(ctx->tree_mutex);
     ++ctx->tree->file_count;
@@ -525,7 +1070,7 @@ void mo2_create(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t /*mo
 
   fuse_ino_t newIno;
   {
-    std::scoped_lock lock(ctx->inode_mutex);
+    std::unique_lock lock(ctx->inode_mutex);
     newIno = ctx->inodes->getOrCreate(relative);
   }
 
@@ -536,9 +1081,16 @@ void mo2_create(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t /*mo
   }
 
   const uint64_t fh = ctx->next_fh.fetch_add(1, std::memory_order_relaxed);
+  const int fd      = open(realPath.c_str(), O_RDWR);
+  if (fd < 0) {
+    fuse_reply_err(req, EIO);
+    return;
+  }
+
   {
     std::scoped_lock lock(ctx->open_files_mutex);
     Mo2FsContext::OpenFile of;
+    of.fd           = fd;
     of.real_path     = realPath;
     of.writable      = true;
     of.is_backing    = false;
@@ -607,8 +1159,12 @@ void mo2_rename(fuse_req_t req, fuse_ino_t parent, const char* name,
   }
 
   {
-    std::scoped_lock lock(ctx->inode_mutex);
+    std::unique_lock lock(ctx->inode_mutex);
     ctx->inodes->rename(oldRelative, newRelative);
+  }
+  invalidateDirCache(ctx, parentPath);
+  if (newParentPath != parentPath) {
+    invalidateDirCache(ctx, newParentPath);
   }
 
   fuse_reply_err(req, 0);
@@ -644,7 +1200,7 @@ void mo2_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
 
     if (fi != nullptr) {
       fh = fi->fh;
-      std::scoped_lock lock(ctx->open_files_mutex);
+      std::shared_lock lock(ctx->open_files_mutex);
       auto it = ctx->open_files.find(fh);
       if (it != ctx->open_files.end()) {
         target          = it->second.real_path;
@@ -680,17 +1236,42 @@ void mo2_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
         std::scoped_lock lock(ctx->open_files_mutex);
         auto it = ctx->open_files.find(fh);
         if (it != ctx->open_files.end()) {
+          const int newFd = open(target.c_str(), O_RDWR);
+          if (newFd < 0) {
+            fuse_reply_err(req, EIO);
+            return;
+          }
+          if (it->second.fd >= 0) {
+            close(it->second.fd);
+          }
+          it->second.fd       = newFd;
           it->second.real_path = target;
           it->second.writable  = true;
+          it->second.is_backing = false;
         }
       }
     }
 
-    std::error_code ec;
-    fs::resize_file(target, static_cast<uint64_t>(attr->st_size), ec);
-    if (ec) {
-      fuse_reply_err(req, EIO);
-      return;
+    bool resized = false;
+    if (fi != nullptr) {
+      std::scoped_lock lock(ctx->open_files_mutex);
+      auto it = ctx->open_files.find(fh);
+      if (it != ctx->open_files.end() && it->second.fd >= 0) {
+        if (ftruncate(it->second.fd, static_cast<off_t>(attr->st_size)) != 0) {
+          fuse_reply_err(req, EIO);
+          return;
+        }
+        resized = true;
+      }
+    }
+
+    if (!resized) {
+      std::error_code ec;
+      fs::resize_file(target, static_cast<uint64_t>(attr->st_size), ec);
+      if (ec) {
+        fuse_reply_err(req, EIO);
+        return;
+      }
     }
 
     updateFileNode(ctx, path, target, "Staging");
@@ -804,6 +1385,7 @@ void mo2_unlink(fuse_req_t req, fuse_ino_t parent, const char* name)
       ctx->tree->file_count = ctx->tree->file_count > 0 ? ctx->tree->file_count - 1 : 0;
     }
   }
+  invalidateDirCache(ctx, parentPath);
 
   fuse_reply_err(req, 0);
 }
@@ -834,10 +1416,11 @@ void mo2_mkdir(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t /*mod
     ctx->tree->root.insertDirectory(splitPath(relative));
     ++ctx->tree->dir_count;
   }
+  invalidateDirCache(ctx, parentPath);
 
   fuse_ino_t dirIno;
   {
-    std::scoped_lock lock(ctx->inode_mutex);
+    std::unique_lock lock(ctx->inode_mutex);
     dirIno = ctx->inodes->getOrCreate(relative);
   }
 
@@ -860,8 +1443,74 @@ void mo2_release(fuse_req_t req, fuse_ino_t /*ino*/, struct fuse_file_info* fi)
 
   {
     std::scoped_lock lock(ctx->open_files_mutex);
-    ctx->open_files.erase(fi->fh);
+    auto it = ctx->open_files.find(fi->fh);
+    if (it != ctx->open_files.end()) {
+      if (it->second.fd >= 0) {
+        close(it->second.fd);
+      }
+      ctx->open_files.erase(it);
+    }
   }
 
   fuse_reply_err(req, 0);
+}
+
+void mo2_releasedir(fuse_req_t req, fuse_ino_t /*ino*/, struct fuse_file_info* fi)
+{
+  Mo2FsContext* ctx = getContext(req);
+  if (ctx == nullptr || fi == nullptr) {
+    fuse_reply_err(req, EINVAL);
+    return;
+  }
+
+  {
+    std::scoped_lock lock(ctx->open_dirs_mutex);
+    ctx->open_dirs.erase(fi->fh);
+  }
+
+  fuse_reply_err(req, 0);
+}
+
+#if FUSE_USE_VERSION < 35
+void mo2_ioctl(fuse_req_t req, fuse_ino_t /*ino*/, int cmd, void* /*arg*/,
+               struct fuse_file_info* /*fi*/, unsigned /*flags*/,
+               const void* /*in_buf*/, size_t /*in_bufsz*/, size_t out_bufsz)
+#else
+void mo2_ioctl(fuse_req_t req, fuse_ino_t /*ino*/, unsigned int cmd, void* /*arg*/,
+               struct fuse_file_info* /*fi*/, unsigned /*flags*/,
+               const void* /*in_buf*/, size_t /*in_bufsz*/, size_t out_bufsz)
+#endif
+{
+  static std::atomic<uint64_t> ioctlSeen{0};
+  static std::atomic<unsigned int> lastCmd{0};
+
+  Mo2FsContext* ctx = getContext(req);
+  if (ctx != nullptr) {
+    ctx->ioctl_count.fetch_add(1, std::memory_order_relaxed);
+    maybeLogCounters(ctx);
+  }
+
+  const unsigned int ucmd = static_cast<unsigned int>(cmd);
+  lastCmd.store(ucmd, std::memory_order_relaxed);
+  const uint64_t seen = ioctlSeen.fetch_add(1, std::memory_order_relaxed) + 1;
+  if ((seen % 500000) == 0) {
+    std::fprintf(stderr, "[VFS] ioctl hotloop cmd=0x%x out=%zu\n",
+                 lastCmd.load(std::memory_order_relaxed), out_bufsz);
+  }
+
+#ifdef VFAT_IOCTL_READDIR_BOTH
+  if (ucmd == static_cast<unsigned int>(VFAT_IOCTL_READDIR_BOTH)) {
+    // Force Wine fallback path for vfat-specific ioctl probes.
+    fuse_reply_err(req, ENOTTY);
+    return;
+  }
+#endif
+
+  if (ucmd == static_cast<unsigned int>(FS_IOC_GETFLAGS)) {
+    // Some callers probe this heavily; ENOTTY avoids fake-success loops.
+    fuse_reply_err(req, ENOTTY);
+    return;
+  }
+
+  fuse_reply_err(req, ENOTTY);
 }

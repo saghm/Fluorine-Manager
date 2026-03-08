@@ -10,6 +10,7 @@ class InodeTable
 public:
   InodeTable();
 
+  uint64_t get(const std::string& path) const;
   uint64_t getOrCreate(const std::string& path);
   std::string getPath(uint64_t ino) const;
   void rename(const std::string& old_path, const std::string& new_path);
