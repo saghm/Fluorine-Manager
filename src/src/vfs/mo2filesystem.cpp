@@ -889,30 +889,34 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
   std::string realPath = snap.real_path;
   const bool writable  = isWritableOpen(fi->flags);
   bool isBacking       = snap.is_backing;
+  bool cowPending       = false;
 
-  if (writable) {
-    try {
-      if (isBacking && ctx->backing_dir_fd >= 0) {
-        realPath = ctx->overwrite->copyOnWriteFromFd(ctx->backing_dir_fd, path);
-      } else {
-        realPath = ctx->overwrite->copyOnWrite(realPath, path);
-      }
-      isBacking = false;
-      updateFileNode(ctx, path, realPath, "Staging");
-    } catch (...) {
-      fuse_reply_err(req, EIO);
-      return;
-    }
-  }
-
+  // Lazy COW: don't copy the file on open — wait until an actual write()
+  // occurs.  This avoids polluting the overwrite folder when Wine/Proton
+  // opens files O_RDWR for metadata ops without actually writing to them
+  // (common with SKSE plugin .ini/.log files).
+  //
+  // Files already in staging/overwrite don't need COW, so open them R/W
+  // immediately.  For mod/base-game files opened writable, open read-only
+  // for now and mark COW as pending.
   int fd = -1;
 
   if (writable) {
-    const int openFlags = O_RDWR;
-    if (isBacking && ctx->backing_dir_fd >= 0) {
-      fd = openat(ctx->backing_dir_fd, realPath.c_str(), openFlags);
+    const std::string stagedPath = ctx->overwrite->stagingPath(path);
+    const std::string owPath     = ctx->overwrite->overwritePath(path);
+
+    bool alreadyStaged = (realPath == stagedPath || realPath == owPath);
+    if (alreadyStaged) {
+      // File is already in staging/overwrite — open read-write directly.
+      fd = open(realPath.c_str(), O_RDWR);
     } else {
-      fd = open(realPath.c_str(), openFlags);
+      // Mod or base-game file — open read-only, defer COW to write time.
+      if (isBacking && ctx->backing_dir_fd >= 0) {
+        fd = openat(ctx->backing_dir_fd, realPath.c_str(), O_RDONLY);
+      } else {
+        fd = open(realPath.c_str(), O_RDONLY);
+      }
+      cowPending = true;
     }
     if (fd < 0) {
       fuse_reply_err(req, EIO);
@@ -928,6 +932,7 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
     of.real_path     = realPath;
     of.writable      = writable;
     of.is_backing    = isBacking;
+    of.cow_pending   = cowPending;
     of.relative_path = path;
     ctx->open_files[fh] = std::move(of);
   }
@@ -1004,7 +1009,9 @@ void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,
   int fd = -1;
   std::string relativePath;
   std::string realPath;
-  bool writable = false;
+  bool writable   = false;
+  bool cowPending  = false;
+  bool isBacking   = false;
   {
     std::shared_lock lock(ctx->open_files_mutex);
     auto it = ctx->open_files.find(fi->fh);
@@ -1014,6 +1021,8 @@ void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,
     }
     fd           = it->second.fd;
     writable     = it->second.writable;
+    cowPending   = it->second.cow_pending;
+    isBacking    = it->second.is_backing;
     relativePath = it->second.relative_path;
     realPath     = it->second.real_path;
   }
@@ -1021,6 +1030,45 @@ void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,
   if (!writable) {
     fuse_reply_err(req, EACCES);
     return;
+  }
+
+  // Lazy COW: this is the first actual write — perform the deferred copy
+  // now and reopen the file descriptor read-write on the staging copy.
+  if (cowPending) {
+    try {
+      std::string newPath;
+      if (isBacking && ctx->backing_dir_fd >= 0) {
+        newPath = ctx->overwrite->copyOnWriteFromFd(ctx->backing_dir_fd, relativePath);
+      } else {
+        newPath = ctx->overwrite->copyOnWrite(realPath, relativePath);
+      }
+
+      int newFd = open(newPath.c_str(), O_RDWR);
+      if (newFd < 0) {
+        fuse_reply_err(req, EIO);
+        return;
+      }
+
+      // Close the old read-only fd and update the open file record.
+      if (fd >= 0) close(fd);
+      fd = newFd;
+
+      {
+        std::scoped_lock lock(ctx->open_files_mutex);
+        auto it = ctx->open_files.find(fi->fh);
+        if (it != ctx->open_files.end()) {
+          it->second.fd          = newFd;
+          it->second.real_path   = newPath;
+          it->second.is_backing  = false;
+          it->second.cow_pending = false;
+        }
+      }
+      realPath = newPath;
+      updateFileNode(ctx, relativePath, newPath, "Staging");
+    } catch (...) {
+      fuse_reply_err(req, EIO);
+      return;
+    }
   }
 
   if (fd < 0) {
@@ -1247,10 +1295,11 @@ void mo2_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
           if (it->second.fd >= 0) {
             close(it->second.fd);
           }
-          it->second.fd       = newFd;
-          it->second.real_path = target;
-          it->second.writable  = true;
-          it->second.is_backing = false;
+          it->second.fd          = newFd;
+          it->second.real_path   = target;
+          it->second.writable    = true;
+          it->second.is_backing  = false;
+          it->second.cow_pending = false;
         }
       }
     }
