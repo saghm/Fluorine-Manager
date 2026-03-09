@@ -33,7 +33,6 @@ struct Mo2FsContext
     std::string real_path;
     bool writable    = false;
     bool is_backing  = false;
-    bool cow_pending = false;  // true if opened writable but COW deferred
     std::string relative_path;
   };
 

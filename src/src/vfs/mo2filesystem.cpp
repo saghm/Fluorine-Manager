@@ -889,34 +889,16 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
   std::string realPath = snap.real_path;
   const bool writable  = isWritableOpen(fi->flags);
   bool isBacking       = snap.is_backing;
-  bool cowPending       = false;
 
-  // Lazy COW: don't copy the file on open — wait until an actual write()
-  // occurs.  This avoids polluting the overwrite folder when Wine/Proton
-  // opens files O_RDWR for metadata ops without actually writing to them
-  // (common with SKSE plugin .ini/.log files).
-  //
-  // Files already in staging/overwrite don't need COW, so open them R/W
-  // immediately.  For mod/base-game files opened writable, open read-only
-  // for now and mark COW as pending.
+  // Mod/staging/overwrite files opened writable → open R/W in-place so
+  // writes go back to the original mod folder (no copying to Overwrite).
   int fd = -1;
 
   if (writable) {
-    const std::string stagedPath = ctx->overwrite->stagingPath(path);
-    const std::string owPath     = ctx->overwrite->overwritePath(path);
-
-    bool alreadyStaged = (realPath == stagedPath || realPath == owPath);
-    if (alreadyStaged) {
-      // File is already in staging/overwrite — open read-write directly.
-      fd = open(realPath.c_str(), O_RDWR);
+    if (isBacking && ctx->backing_dir_fd >= 0) {
+      fd = openat(ctx->backing_dir_fd, realPath.c_str(), O_RDWR);
     } else {
-      // Mod or base-game file — open read-only, defer COW to write time.
-      if (isBacking && ctx->backing_dir_fd >= 0) {
-        fd = openat(ctx->backing_dir_fd, realPath.c_str(), O_RDONLY);
-      } else {
-        fd = open(realPath.c_str(), O_RDONLY);
-      }
-      cowPending = true;
+      fd = open(realPath.c_str(), O_RDWR);
     }
     if (fd < 0) {
       fuse_reply_err(req, EIO);
@@ -932,7 +914,6 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
     of.real_path     = realPath;
     of.writable      = writable;
     of.is_backing    = isBacking;
-    of.cow_pending   = cowPending;
     of.relative_path = path;
     ctx->open_files[fh] = std::move(of);
   }
@@ -1009,9 +990,7 @@ void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,
   int fd = -1;
   std::string relativePath;
   std::string realPath;
-  bool writable   = false;
-  bool cowPending  = false;
-  bool isBacking   = false;
+  bool writable = false;
   {
     std::shared_lock lock(ctx->open_files_mutex);
     auto it = ctx->open_files.find(fi->fh);
@@ -1021,8 +1000,6 @@ void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,
     }
     fd           = it->second.fd;
     writable     = it->second.writable;
-    cowPending   = it->second.cow_pending;
-    isBacking    = it->second.is_backing;
     relativePath = it->second.relative_path;
     realPath     = it->second.real_path;
   }
@@ -1030,45 +1007,6 @@ void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,
   if (!writable) {
     fuse_reply_err(req, EACCES);
     return;
-  }
-
-  // Lazy COW: this is the first actual write — perform the deferred copy
-  // now and reopen the file descriptor read-write on the staging copy.
-  if (cowPending) {
-    try {
-      std::string newPath;
-      if (isBacking && ctx->backing_dir_fd >= 0) {
-        newPath = ctx->overwrite->copyOnWriteFromFd(ctx->backing_dir_fd, relativePath);
-      } else {
-        newPath = ctx->overwrite->copyOnWrite(realPath, relativePath);
-      }
-
-      int newFd = open(newPath.c_str(), O_RDWR);
-      if (newFd < 0) {
-        fuse_reply_err(req, EIO);
-        return;
-      }
-
-      // Close the old read-only fd and update the open file record.
-      if (fd >= 0) close(fd);
-      fd = newFd;
-
-      {
-        std::scoped_lock lock(ctx->open_files_mutex);
-        auto it = ctx->open_files.find(fi->fh);
-        if (it != ctx->open_files.end()) {
-          it->second.fd          = newFd;
-          it->second.real_path   = newPath;
-          it->second.is_backing  = false;
-          it->second.cow_pending = false;
-        }
-      }
-      realPath = newPath;
-      updateFileNode(ctx, relativePath, newPath, "Staging");
-    } catch (...) {
-      fuse_reply_err(req, EIO);
-      return;
-    }
   }
 
   if (fd < 0) {
@@ -1082,7 +1020,7 @@ void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,
     return;
   }
 
-  updateFileNode(ctx, relativePath, realPath, "Staging");
+  updateFileNode(ctx, relativePath, realPath, "Mod");
   fuse_reply_write(req, static_cast<size_t>(written));
 }
 
@@ -1269,41 +1207,6 @@ void mo2_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
       targetIsBacking = snap.is_backing;
     }
 
-    const std::string stagedPath = ctx->overwrite->stagingPath(path);
-    if (fs::path(target).lexically_normal().string() !=
-        fs::path(stagedPath).lexically_normal().string()) {
-      try {
-        if (targetIsBacking && ctx->backing_dir_fd >= 0) {
-          target = ctx->overwrite->copyOnWriteFromFd(ctx->backing_dir_fd, path);
-        } else {
-          target = ctx->overwrite->copyOnWrite(target, path);
-        }
-      } catch (...) {
-        fuse_reply_err(req, EIO);
-        return;
-      }
-
-      if (fi != nullptr) {
-        std::scoped_lock lock(ctx->open_files_mutex);
-        auto it = ctx->open_files.find(fh);
-        if (it != ctx->open_files.end()) {
-          const int newFd = open(target.c_str(), O_RDWR);
-          if (newFd < 0) {
-            fuse_reply_err(req, EIO);
-            return;
-          }
-          if (it->second.fd >= 0) {
-            close(it->second.fd);
-          }
-          it->second.fd          = newFd;
-          it->second.real_path   = target;
-          it->second.writable    = true;
-          it->second.is_backing  = false;
-          it->second.cow_pending = false;
-        }
-      }
-    }
-
     bool resized = false;
     if (fi != nullptr) {
       std::scoped_lock lock(ctx->open_files_mutex);
@@ -1326,7 +1229,7 @@ void mo2_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
       }
     }
 
-    updateFileNode(ctx, path, target, "Staging");
+    updateFileNode(ctx, path, target, "Mod");
   }
 
   // Handle explicit timestamp changes (utimensat / Wine SetFileTime)
