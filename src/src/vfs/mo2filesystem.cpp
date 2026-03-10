@@ -889,16 +889,58 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
   std::string realPath = snap.real_path;
   const bool writable  = isWritableOpen(fi->flags);
   bool isBacking       = snap.is_backing;
+  bool cowPending      = false;
+  bool isTracked       = false;
 
-  // Mod/staging/overwrite files opened writable → open R/W in-place so
-  // writes go back to the original mod folder (no copying to Overwrite).
+  // Write strategy:
+  //   1. Files already in staging/overwrite → open R/W directly.
+  //   2. Tracked files (user moved from Overwrite to a mod) → open R/W
+  //      in-place so writes go back to the user's dedicated mod folder.
+  //   3. Everything else (untracked mod files, base-game files) → open R/O
+  //      now, lazy COW to Overwrite on first actual write().  This avoids
+  //      COW from Wine metadata ops (O_RDWR without writing).
   int fd = -1;
 
   if (writable) {
-    if (isBacking && ctx->backing_dir_fd >= 0) {
-      fd = openat(ctx->backing_dir_fd, realPath.c_str(), O_RDWR);
-    } else {
+    const std::string stagedPath = ctx->overwrite->stagingPath(path);
+    const std::string owPath     = ctx->overwrite->overwritePath(path);
+    bool alreadyStaged = (realPath == stagedPath || realPath == owPath);
+
+    // Check if this file is tracked to a mod folder — even if the VFS
+    // resolves it to overwrite (overwrite wins in priority), the write
+    // should go to the mod folder so the user's dedicated mod stays updated.
+    std::string trackedMod;
+    if (ctx->tracked_writes) {
+      trackedMod = ctx->tracked_writes->modFolderFor(path);
+    }
+
+    if (!trackedMod.empty()) {
+      // Tracked file — open R/W in-place in the mod folder.
+      const std::string modFilePath = trackedMod + "/" + path;
+      fd = open(modFilePath.c_str(), O_RDWR);
+      if (fd >= 0) {
+        realPath  = modFilePath;
+        isTracked = true;
+      } else {
+        // Mod file disappeared — fall through to normal handling
+        trackedMod.clear();
+      }
+    }
+
+    if (fd < 0 && alreadyStaged) {
+      // Already in staging/overwrite — open R/W directly.
       fd = open(realPath.c_str(), O_RDWR);
+    } else if (fd < 0 && !trackedMod.empty()) {
+      // Should not reach here, but safety fallback
+      fd = open(realPath.c_str(), O_RDWR);
+    } else if (fd < 0) {
+      // Untracked file — open R/O, defer COW to first write().
+      if (isBacking && ctx->backing_dir_fd >= 0) {
+        fd = openat(ctx->backing_dir_fd, realPath.c_str(), O_RDONLY);
+      } else {
+        fd = open(realPath.c_str(), O_RDONLY);
+      }
+      cowPending = true;
     }
     if (fd < 0) {
       fuse_reply_err(req, EIO);
@@ -914,6 +956,8 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
     of.real_path     = realPath;
     of.writable      = writable;
     of.is_backing    = isBacking;
+    of.cow_pending   = cowPending;
+    of.is_tracked    = isTracked;
     of.relative_path = path;
     ctx->open_files[fh] = std::move(of);
   }
@@ -990,7 +1034,9 @@ void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,
   int fd = -1;
   std::string relativePath;
   std::string realPath;
-  bool writable = false;
+  bool writable   = false;
+  bool cowPending  = false;
+  bool isBacking   = false;
   {
     std::shared_lock lock(ctx->open_files_mutex);
     auto it = ctx->open_files.find(fi->fh);
@@ -1000,6 +1046,8 @@ void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,
     }
     fd           = it->second.fd;
     writable     = it->second.writable;
+    cowPending   = it->second.cow_pending;
+    isBacking    = it->second.is_backing;
     relativePath = it->second.relative_path;
     realPath     = it->second.real_path;
   }
@@ -1007,6 +1055,44 @@ void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,
   if (!writable) {
     fuse_reply_err(req, EACCES);
     return;
+  }
+
+  // Lazy COW: first actual write on an untracked file — copy to Overwrite
+  // staging and reopen the fd read-write on the new copy.
+  if (cowPending) {
+    try {
+      std::string newPath;
+      if (isBacking && ctx->backing_dir_fd >= 0) {
+        newPath = ctx->overwrite->copyOnWriteFromFd(ctx->backing_dir_fd, relativePath);
+      } else {
+        newPath = ctx->overwrite->copyOnWrite(realPath, relativePath);
+      }
+
+      int newFd = open(newPath.c_str(), O_RDWR);
+      if (newFd < 0) {
+        fuse_reply_err(req, EIO);
+        return;
+      }
+
+      if (fd >= 0) close(fd);
+      fd = newFd;
+
+      {
+        std::scoped_lock lock(ctx->open_files_mutex);
+        auto it = ctx->open_files.find(fi->fh);
+        if (it != ctx->open_files.end()) {
+          it->second.fd          = newFd;
+          it->second.real_path   = newPath;
+          it->second.is_backing  = false;
+          it->second.cow_pending = false;
+        }
+      }
+      realPath = newPath;
+      updateFileNode(ctx, relativePath, newPath, "Staging");
+    } catch (...) {
+      fuse_reply_err(req, EIO);
+      return;
+    }
   }
 
   if (fd < 0) {
@@ -1020,7 +1106,10 @@ void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,
     return;
   }
 
-  updateFileNode(ctx, relativePath, realPath, "Mod");
+  if (!cowPending) {
+    // Update VFS tree size/mtime for in-place writes (tracked files)
+    updateFileNode(ctx, relativePath, realPath, "Mod");
+  }
   fuse_reply_write(req, static_cast<size_t>(written));
 }
 
@@ -1043,14 +1132,38 @@ void mo2_create(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t /*mo
   const std::string relative = joinPath(parentPath, name);
 
   std::string realPath;
-  try {
-    realPath = ctx->overwrite->writeFile(relative, {});
-  } catch (...) {
-    fuse_reply_err(req, EIO);
-    return;
+
+  // If this file is tracked to a mod folder, create it there instead of staging
+  std::string trackedMod;
+  if (ctx->tracked_writes) {
+    trackedMod = ctx->tracked_writes->modFolderFor(relative);
   }
 
-  updateFileNode(ctx, relative, realPath, "Staging");
+  if (!trackedMod.empty()) {
+    realPath = trackedMod + "/" + relative;
+    // Ensure parent directories exist in the mod folder
+    std::error_code ec;
+    fs::create_directories(fs::path(realPath).parent_path(), ec);
+    // Create the file
+    int tmpFd = open(realPath.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (tmpFd < 0) {
+      // Fall back to staging
+      trackedMod.clear();
+    } else {
+      close(tmpFd);
+    }
+  }
+
+  if (trackedMod.empty()) {
+    try {
+      realPath = ctx->overwrite->writeFile(relative, {});
+    } catch (...) {
+      fuse_reply_err(req, EIO);
+      return;
+    }
+  }
+
+  updateFileNode(ctx, relative, realPath, trackedMod.empty() ? "Staging" : "TrackedMod");
   invalidateDirCache(ctx, parentPath);
   {
     std::unique_lock lock(ctx->tree_mutex);
@@ -1185,6 +1298,7 @@ void mo2_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
   if ((to_set & FUSE_SET_ATTR_SIZE) != 0 && attr != nullptr) {
     std::string target;
     bool targetIsBacking = false;
+    bool targetIsTracked = false;
     uint64_t fh = 0;
 
     if (fi != nullptr) {
@@ -1194,6 +1308,7 @@ void mo2_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
       if (it != ctx->open_files.end()) {
         target          = it->second.real_path;
         targetIsBacking = it->second.is_backing;
+        targetIsTracked = it->second.is_tracked;
       }
     }
 
@@ -1205,6 +1320,55 @@ void mo2_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
       }
       target          = snap.real_path;
       targetIsBacking = snap.is_backing;
+    }
+
+    // If file is tracked to a mod, redirect target to mod folder
+    if (ctx->tracked_writes) {
+      const std::string trackedMod = ctx->tracked_writes->modFolderFor(path);
+      if (!trackedMod.empty()) {
+        const std::string modFilePath = trackedMod + "/" + path;
+        if (fs::exists(modFilePath)) {
+          target          = modFilePath;
+          targetIsTracked = true;
+          targetIsBacking = false;
+        }
+      }
+    }
+
+    // COW for untracked files: copy to staging before truncating.
+    // Tracked files and files already in staging are truncated in-place.
+    const std::string stagedPath = ctx->overwrite->stagingPath(path);
+    if (!targetIsTracked &&
+        fs::path(target).lexically_normal().string() !=
+            fs::path(stagedPath).lexically_normal().string()) {
+      try {
+        if (targetIsBacking && ctx->backing_dir_fd >= 0) {
+          target = ctx->overwrite->copyOnWriteFromFd(ctx->backing_dir_fd, path);
+        } else {
+          target = ctx->overwrite->copyOnWrite(target, path);
+        }
+      } catch (...) {
+        fuse_reply_err(req, EIO);
+        return;
+      }
+
+      if (fi != nullptr) {
+        std::scoped_lock lock(ctx->open_files_mutex);
+        auto it = ctx->open_files.find(fh);
+        if (it != ctx->open_files.end()) {
+          const int newFd = open(target.c_str(), O_RDWR);
+          if (newFd < 0) {
+            fuse_reply_err(req, EIO);
+            return;
+          }
+          if (it->second.fd >= 0) close(it->second.fd);
+          it->second.fd          = newFd;
+          it->second.real_path   = target;
+          it->second.writable    = true;
+          it->second.is_backing  = false;
+          it->second.cow_pending = false;
+        }
+      }
     }
 
     bool resized = false;
@@ -1229,7 +1393,7 @@ void mo2_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
       }
     }
 
-    updateFileNode(ctx, path, target, "Mod");
+    updateFileNode(ctx, path, target, targetIsTracked ? "Mod" : "Staging");
   }
 
   // Handle explicit timestamp changes (utimensat / Wine SetFileTime)

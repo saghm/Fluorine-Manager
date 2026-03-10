@@ -3,6 +3,7 @@
 
 #include "envdump.h"
 #include "vfs/mo2filesystem.h"
+#include "vfs/trackedwrites.h"
 
 #include <QObject>
 #include <QString>
@@ -40,6 +41,8 @@ public:
              const std::vector<std::pair<std::string, std::string>>& mods);
 
   void setPluginLoadOrder(const std::vector<std::string>& load_order);
+  void setTrackingFilePath(const std::string& path);
+  std::shared_ptr<TrackedWrites> trackedWrites() const;
 
   void unmount();
   void discardStagingOnUnmount();
@@ -86,6 +89,8 @@ private:
   std::vector<std::pair<std::string, std::string>> m_extraVfsFiles;
 
   std::shared_ptr<Mo2FsContext> m_context;
+  std::shared_ptr<TrackedWrites> m_trackedWrites;
+  std::string m_trackingFilePath;
 
   struct fuse_session* m_session = nullptr;
   std::thread m_fuseThread;

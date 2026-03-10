@@ -272,13 +272,33 @@ bool FuseConnector::mount(
                  tree->file_count, tree->dir_count, static_cast<long long>(ms));
   }
 
-  m_context                 = std::make_shared<Mo2FsContext>();
-  m_context->tree           = tree;
-  m_context->inodes         = std::make_unique<InodeTable>();
-  m_context->overwrite      = std::make_unique<OverwriteManager>(m_stagingDir, m_overwriteDir);
-  m_context->backing_dir_fd = m_backingFd;
-  m_context->uid            = ::getuid();
-  m_context->gid            = ::getgid();
+  // Load tracked writes (files user moved from Overwrite to a mod)
+  m_trackedWrites = std::make_shared<TrackedWrites>();
+  std::fprintf(stderr, "[VFS] tracking file path: '%s' (overwrite: '%s', %zu mods)\n",
+               m_trackingFilePath.c_str(), m_overwriteDir.c_str(), mods.size());
+  if (!m_trackingFilePath.empty()) {
+    const bool existed = fs::exists(m_trackingFilePath);
+    std::fprintf(stderr, "[VFS] tracking file %s\n", existed ? "exists" : "does NOT exist (first run)");
+    m_trackedWrites->load(m_trackingFilePath);
+    if (existed) {
+      m_trackedWrites->detectManualMoves(m_overwriteDir, mods);
+    } else {
+      // First run: scan overwrite for files that also exist in a mod
+      m_trackedWrites->initialScan(m_overwriteDir, mods);
+    }
+    m_trackedWrites->save(m_trackingFilePath);
+  } else {
+    std::fprintf(stderr, "[VFS] WARNING: tracking file path is empty!\n");
+  }
+
+  m_context                   = std::make_shared<Mo2FsContext>();
+  m_context->tree             = tree;
+  m_context->inodes           = std::make_unique<InodeTable>();
+  m_context->overwrite        = std::make_unique<OverwriteManager>(m_stagingDir, m_overwriteDir);
+  m_context->tracked_writes   = m_trackedWrites;
+  m_context->backing_dir_fd   = m_backingFd;
+  m_context->uid              = ::getuid();
+  m_context->gid              = ::getgid();
 
   // NOTE: Do NOT include mount_point here — low-level API passes it
   // separately to fuse_session_mount(). Including it here causes
@@ -368,6 +388,15 @@ void FuseConnector::unmount()
                  static_cast<long long>(ms));
   }
 
+  // After flush: scan overwrite for files that also exist in mods (bootstraps
+  // tracking on first run), snapshot overwrite contents for next session's
+  // manual-move detection, then save tracking data.
+  if (m_trackedWrites && !m_trackingFilePath.empty()) {
+    m_trackedWrites->initialScan(m_overwriteDir, m_lastMods);
+    m_trackedWrites->snapshotOverwrite(m_overwriteDir);
+    m_trackedWrites->save(m_trackingFilePath);
+  }
+
   if (m_backingFd >= 0) {
     close(m_backingFd);
     m_backingFd = -1;
@@ -401,6 +430,17 @@ void FuseConnector::discardStagingOnUnmount()
 void FuseConnector::setPluginLoadOrder(const std::vector<std::string>& load_order)
 {
   m_pluginLoadOrder = load_order;
+}
+
+void FuseConnector::setTrackingFilePath(const std::string& path)
+{
+  m_trackingFilePath = path;
+  std::fprintf(stderr, "[VFS] setTrackingFilePath: '%s'\n", path.c_str());
+}
+
+std::shared_ptr<TrackedWrites> FuseConnector::trackedWrites() const
+{
+  return m_trackedWrites;
 }
 
 void FuseConnector::rebuild(
@@ -453,6 +493,15 @@ void FuseConnector::updateMapping(const MappingType& mapping)
   const QString dataDirPath  = game->dataDirectory().absolutePath();
   const QString dataDirName  = game->dataDirectory().dirName();
   const QString overwriteDir = Settings::instance().paths().overwrite();
+
+  // Auto-derive tracking file path if not explicitly set
+  if (m_trackingFilePath.empty() && !overwriteDir.isEmpty()) {
+    QDir owDir(overwriteDir);
+    QString trackPath = QDir::cleanPath(owDir.absoluteFilePath("../tracked_writes.json"));
+    m_trackingFilePath = trackPath.toStdString();
+    std::fprintf(stderr, "[VFS] auto-derived tracking path: '%s'\n",
+                 m_trackingFilePath.c_str());
+  }
 
   auto mods = buildModsFromMapping(mapping, dataDirPath, overwriteDir);
 

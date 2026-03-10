@@ -650,6 +650,17 @@ void OrganizerCore::prepareVFS()
     }
     m_USVFS.setPluginLoadOrder(loadOrder);
   }
+
+  // Set up tracked writes file (per-profile, next to the overwrite folder)
+  {
+    QString owPath = settings().paths().overwrite();
+    QDir owDir(owPath);
+    QString trackPath = owDir.absoluteFilePath("../tracked_writes.json");
+    trackPath = QDir::cleanPath(trackPath);
+    std::fprintf(stderr, "[VFS] prepareVFS: owPath='%s' trackPath='%s'\n",
+                 owPath.toStdString().c_str(), trackPath.toStdString().c_str());
+    m_USVFS.setTrackingFilePath(trackPath.toStdString());
+  }
 #endif
   m_USVFS.updateMapping(fileMapping(m_CurrentProfile->name(), QString()));
 }
@@ -657,6 +668,17 @@ void OrganizerCore::prepareVFS()
 void OrganizerCore::unmountVFS()
 {
   m_USVFS.unmount();
+}
+
+void OrganizerCore::trackOverwriteMove(const QString& relativePath,
+                                       const QString& modFolderPath)
+{
+#ifndef _WIN32
+  auto tw = m_USVFS.trackedWrites();
+  if (tw) {
+    tw->track(relativePath.toStdString(), modFolderPath.toStdString());
+  }
+#endif
 }
 
 void OrganizerCore::discardVFSStagingOnUnmount()
@@ -2056,10 +2078,46 @@ void OrganizerCore::loginFailedUpdate(const QString& message)
 void OrganizerCore::syncOverwrite()
 {
   ModInfo::Ptr modInfo = ModInfo::getOverwrite();
+
+#ifndef _WIN32
+  // Snapshot overwrite before sync so we can detect what was moved
+  QStringList beforeFiles;
+  {
+    QDirIterator it(modInfo->absolutePath(), QDir::Files | QDir::NoDotAndDotDot,
+                    QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+      it.next();
+      beforeFiles << QDir(modInfo->absolutePath()).relativeFilePath(it.filePath());
+    }
+  }
+#endif
+
   SyncOverwriteDialog syncDialog(modInfo->absolutePath(), m_DirectoryStructure,
                                  qApp->activeWindow());
   if (syncDialog.exec() == QDialog::Accepted) {
     syncDialog.apply(QDir::fromNativeSeparators(m_Settings.paths().mods()));
+
+#ifndef _WIN32
+    // Track files that were moved out of overwrite to mods.
+    // Files that existed before but are gone now were synced to a mod.
+    const QString modsDir = QDir::fromNativeSeparators(m_Settings.paths().mods());
+    for (const auto& relPath : beforeFiles) {
+      const QString owFile = modInfo->absolutePath() + "/" + relPath;
+      if (!QFile::exists(owFile)) {
+        // Find which mod folder it ended up in
+        QDirIterator modDirIter(modsDir, QDir::Dirs | QDir::NoDotAndDotDot);
+        while (modDirIter.hasNext()) {
+          modDirIter.next();
+          const QString candidate = modDirIter.filePath() + "/" + relPath;
+          if (QFile::exists(candidate)) {
+            trackOverwriteMove(relPath, modDirIter.filePath());
+            break;
+          }
+        }
+      }
+    }
+#endif
+
     modInfo->diskContentModified();
     refreshDirectoryStructure();
   }

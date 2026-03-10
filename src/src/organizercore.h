@@ -352,6 +352,7 @@ public:
   void prepareVFS();
   void unmountVFS();
   void discardVFSStagingOnUnmount();
+  void trackOverwriteMove(const QString& relativePath, const QString& modFolderPath);
 
   void updateVFSParams(MOBase::log::Levels logLevel, env::CoreDumpTypes coreDumpType,
                        const QString& coreDumpsPath, std::chrono::seconds spawnDelay,

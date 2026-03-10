@@ -1379,6 +1379,15 @@ void ModListViewActions::moveOverwriteContentsTo(const QString& absolutePath) co
   }
 
   if (successful) {
+    // Track all files now in the target mod so future VFS writes go
+    // back to this mod instead of creating new copies in Overwrite.
+    QDirIterator trackIter(absolutePath, QDir::Files | QDir::NoDotAndDotDot,
+                           QDirIterator::Subdirectories);
+    while (trackIter.hasNext()) {
+      trackIter.next();
+      QString relPath = QDir(absolutePath).relativeFilePath(trackIter.filePath());
+      m_core.trackOverwriteMove(relPath, absolutePath);
+    }
     MessageDialog::showMessage(tr("Move successful."), m_parent);
   } else {
     const auto e = GetLastError();
