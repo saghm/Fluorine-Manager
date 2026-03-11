@@ -663,9 +663,49 @@ void OrganizerCore::prepareVFS()
   }
 
   // FUSE passthrough: read the per-instance setting and pass it to the VFS.
+  // The binary needs CAP_SYS_ADMIN for passthrough to work — it can be lost
+  // when the binary is copied, updated, or extracted to a new location.
   {
-    const bool passthrough =
+    bool passthrough =
         QSettings().value("fluorine/fuse_passthrough", false).toBool();
+
+    if (passthrough) {
+      // Check if the binary actually has cap_sys_admin right now.
+      const QString binary = QCoreApplication::applicationFilePath();
+      QProcess getcap;
+      getcap.setProgram("getcap");
+      getcap.setArguments({binary});
+      getcap.start();
+      getcap.waitForFinished(5000);
+      const QString caps = QString::fromUtf8(getcap.readAllStandardOutput());
+      const bool hasCap  = caps.contains("cap_sys_admin");
+
+      if (!hasCap) {
+        std::fprintf(stderr,
+                     "[VFS] passthrough enabled but binary lacks cap_sys_admin "
+                     "— requesting via pkexec...\n");
+        QProcess setcap;
+        setcap.setProgram("pkexec");
+        setcap.setArguments({"setcap", "cap_sys_admin+ep", binary});
+        setcap.start();
+        setcap.waitForFinished(60000);
+
+        if (setcap.exitCode() != 0) {
+          std::fprintf(stderr,
+                       "[VFS] failed to set cap_sys_admin — disabling passthrough\n");
+          passthrough = false;
+        } else {
+          // The capability is on the file now, but the running process won't
+          // have it until next exec.  Disable passthrough for this session —
+          // it will work automatically on next launch.
+          std::fprintf(stderr,
+                       "[VFS] cap_sys_admin applied to binary — passthrough "
+                       "will activate on next launch\n");
+          passthrough = false;
+        }
+      }
+    }
+
     m_USVFS.setPassthroughEnabled(passthrough);
   }
 #endif

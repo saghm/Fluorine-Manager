@@ -39,6 +39,7 @@ struct Mo2FsContext
   struct OpenFile
   {
     int fd = -1;
+    int backing_id = 0;         // FUSE passthrough backing ID (0 = not using passthrough)
     std::string real_path;
     bool writable    = false;
     bool is_backing  = false;

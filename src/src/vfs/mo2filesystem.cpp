@@ -1056,12 +1056,25 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
         ptFd = open(realPath.c_str(), O_RDONLY);
       }
       if (ptFd >= 0) {
-        fi->backing_id = static_cast<uint32_t>(ptFd);
-        // Store the fd so we can close it on release
-        std::scoped_lock lock(ctx->open_files_mutex);
-        auto it = ctx->open_files.find(fh);
-        if (it != ctx->open_files.end()) {
-          it->second.fd = ptFd;
+        int backingId = fuse_passthrough_open(req, ptFd);
+        if (backingId > 0) {
+          fi->backing_id = backingId;
+          // Store the fd so we can close it on release
+          std::scoped_lock lock(ctx->open_files_mutex);
+          auto it = ctx->open_files.find(fh);
+          if (it != ctx->open_files.end()) {
+            it->second.fd          = ptFd;
+            it->second.backing_id  = backingId;
+          }
+        } else {
+          // Passthrough registration failed (e.g. missing cap_sys_admin at
+          // runtime).  Disable passthrough for the rest of this session to
+          // avoid spamming "Operation not permitted" on every open.
+          close(ptFd);
+          ctx->passthrough_active = false;
+          std::fprintf(stderr,
+                       "[VFS] fuse_passthrough_open failed — disabling "
+                       "passthrough for this session\n");
         }
       }
     }
@@ -1667,6 +1680,11 @@ void mo2_release(fuse_req_t req, fuse_ino_t /*ino*/, struct fuse_file_info* fi)
     std::scoped_lock lock(ctx->open_files_mutex);
     auto it = ctx->open_files.find(fi->fh);
     if (it != ctx->open_files.end()) {
+      if constexpr (FUSE_CAP_PASSTHROUGH != 0) {
+        if (it->second.backing_id > 0) {
+          fuse_passthrough_close(req, it->second.backing_id);
+        }
+      }
       if (it->second.fd >= 0) {
         close(it->second.fd);
       }

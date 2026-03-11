@@ -142,7 +142,7 @@
 
           # System libraries
           sqlite
-          tinyxml2
+          tinyxml-2
           spdlog
           fuse3
           lz4
@@ -382,7 +382,8 @@ RUN="''${BIN_DST}"
 PYTHON_DIR="''${RUN}/python"
 
 export PATH="''${RUN}:''${PATH}"
-export LD_LIBRARY_PATH="''${RUN}/lib:''${PYTHON_DIR}/lib:''${LD_LIBRARY_PATH:-}"
+# NOTE: Do NOT set LD_LIBRARY_PATH — DT_RPATH handles library resolution.
+# Setting it on a capability-bearing binary drops file capabilities (AT_SECURE).
 export MO2_BASE_DIR="''${RUN}"
 export MO2_PLUGINS_DIR="''${RUN}/plugins"
 export MO2_DLLS_DIR="''${RUN}/dlls"
@@ -443,19 +444,19 @@ LAUNCH
           vulkan-loader
           mesa
 
-          xorg.libX11
-          xorg.libxcb
-          xorg.libXext
-          xorg.libXrandr
-          xorg.libXcursor
-          xorg.libXi
-          xorg.libXfixes
-          xorg.libXrender
-          xorg.libXcomposite
-          xorg.libXdamage
-          xorg.libXtst
-          xorg.libXScrnSaver
-          xorg.libXinerama
+          libx11
+          libxcb
+          libxext
+          libxrandr
+          libxcursor
+          libxi
+          libxfixes
+          libxrender
+          libxcomposite
+          libxdamage
+          libxtst
+          libxscrnsaver
+          libxinerama
           libxkbcommon
 
           wayland
@@ -490,18 +491,18 @@ LAUNCH
           fontconfig
           zlib
           glib
-          xorg.libX11
-          xorg.libxcb
-          xorg.libXext
-          xorg.libXrandr
-          xorg.libXcursor
-          xorg.libXi
-          xorg.libXfixes
-          xorg.libXrender
-          xorg.libXcomposite
-          xorg.libXdamage
-          xorg.libXtst
-          xorg.libXinerama
+          libx11
+          libxcb
+          libxext
+          libxrandr
+          libxcursor
+          libxi
+          libxfixes
+          libxrender
+          libxcomposite
+          libxdamage
+          libxtst
+          libxinerama
           wayland
           libxkbcommon
           gnutls

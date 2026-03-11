@@ -349,7 +349,10 @@ RUN="${BIN_DST}"
 PYTHON_DIR="${RUN}/python"
 
 export PATH="${RUN}:${PATH}"
-export LD_LIBRARY_PATH="${RUN}/lib:${PYTHON_DIR}/lib:${LD_LIBRARY_PATH:-}"
+# NOTE: Do NOT set LD_LIBRARY_PATH here.  The binary uses DT_RPATH
+# ($ORIGIN/lib:$ORIGIN/python/lib) to find its libraries.  Setting
+# LD_LIBRARY_PATH on a capability-bearing binary (cap_sys_admin for FUSE
+# passthrough) triggers AT_SECURE mode, which drops all file capabilities.
 export MO2_BASE_DIR="${RUN}"
 export MO2_PLUGINS_DIR="${RUN}/plugins"
 export MO2_DLLS_DIR="${RUN}/dlls"
