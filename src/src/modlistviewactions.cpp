@@ -1377,14 +1377,18 @@ void ModListViewActions::moveOverwriteContentsTo(const QString& absolutePath) co
   }
 
   // Clean up empty directories left behind in overwrite.
+  // Sort by path length descending so leaf dirs are removed before parents.
   if (movedCount > 0) {
     QDirIterator dirIter(overwritePath, QDir::Dirs | QDir::NoDotAndDotDot,
                          QDirIterator::Subdirectories);
-    QStringList emptyDirs;
+    QStringList dirs;
     while (dirIter.hasNext()) {
-      emptyDirs.prepend(dirIter.next());  // Reverse order for leaf-first deletion.
+      dirs.append(dirIter.next());
     }
-    for (const auto& dir : emptyDirs) {
+    std::sort(dirs.begin(), dirs.end(), [](const QString& a, const QString& b) {
+      return a.length() > b.length();
+    });
+    for (const auto& dir : dirs) {
       QDir(dir).rmdir(".");  // Only removes if empty.
     }
   }
