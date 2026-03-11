@@ -78,12 +78,15 @@ ProtonSettingsTab::ProtonSettingsTab(Settings& s, SettingsDialog& d)
                      const QString binDir = fi.absolutePath();
                      const QString absRpath = binDir + "/lib:" + binDir + "/python/lib";
 
+                     // The binary may be running (text file busy), so copy → patch → replace.
                      QProcess proc;
                      proc.setProgram("pkexec");
                      proc.setArguments({"bash", "-c",
-                         QString("patchelf --force-rpath --set-rpath '%1' '%2' && "
-                                 "setcap cap_sys_admin+ep '%2'")
-                             .arg(absRpath, binary)});
+                         QString("cp '%1' '%1.tmp' && "
+                                 "patchelf --force-rpath --set-rpath '%2' '%1.tmp' && "
+                                 "setcap cap_sys_admin+ep '%1.tmp' && "
+                                 "mv -f '%1.tmp' '%1'")
+                             .arg(binary, absRpath)});
                      proc.start();
                      proc.waitForFinished(60000);  // 60s timeout for user to auth
 
