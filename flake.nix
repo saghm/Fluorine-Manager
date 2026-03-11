@@ -23,7 +23,7 @@
           owner = "loot";
           repo = "libloot";
           rev = "master";
-          hash = "";  # nix will tell you the correct hash on first build
+          hash = "sha256-ay8ZA5ANXc5ylKOzr66rjQc1/LclW2+0CObtjprn0ms=";
           fetchSubmodules = true;
         };
 
