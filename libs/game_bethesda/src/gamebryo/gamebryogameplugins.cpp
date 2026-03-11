@@ -218,16 +218,40 @@ QStringList GamebryoGamePlugins::readPluginList(MOBase::IPluginList* pluginList)
 
   QStringList activePlugins;
   if (pluginsTxtExists) {
+    // Two-pass read: first detect whether the file uses the Bethesda/LOOT
+    // asterisk format (*Plugin.esp = enabled, Plugin.esp = disabled) vs
+    // MO2's own format (only active plugins listed, no asterisks).
+    struct PluginEntry {
+      QString name;
+      bool hadAsterisk;
+    };
+    QList<PluginEntry> entries;
+    bool hasAsterisks = false;
+
     while (!file.atEnd()) {
       QByteArray line = file.readLine();
-      QString pluginName;
-      if ((line.size() > 0) && (line.at(0) != '#')) {
+      if (line.size() > 0 && line.at(0) != '#') {
         QStringEncoder encoder(QStringConverter::Encoding::System);
-        pluginName = encoder.encode(line.trimmed().constData());
+        QString pluginName = encoder.encode(line.trimmed().constData());
+        bool asterisk = false;
+        if (pluginName.startsWith('*')) {
+          pluginName = pluginName.mid(1);
+          asterisk = true;
+          hasAsterisks = true;
+        }
+        if (!pluginName.isEmpty()) {
+          entries.append({pluginName, asterisk});
+        }
       }
-      if (pluginName.size() > 0) {
-        pluginList->setState(pluginName, IPluginList::STATE_ACTIVE);
-        activePlugins.push_back(pluginName);
+    }
+
+    // If file uses asterisks (LOOT/Bethesda format): only *-prefixed are active.
+    // If no asterisks (MO2 format): all listed plugins are active.
+    for (const auto& entry : entries) {
+      bool isActive = hasAsterisks ? entry.hadAsterisk : true;
+      if (isActive) {
+        pluginList->setState(entry.name, IPluginList::STATE_ACTIVE);
+        activePlugins.push_back(entry.name);
       }
     }
 
