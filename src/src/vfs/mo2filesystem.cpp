@@ -2,6 +2,7 @@
 
 #include <fcntl.h>
 #include <linux/fs.h>
+#include <sys/capability.h>
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -573,11 +574,29 @@ void mo2_init(void* userdata, struct fuse_conn_info* conn)
   // Requires: kernel 6.9+, libfuse 3.16+, CAP_SYS_ADMIN on the binary.
   ctx->passthrough_active = false;
   if constexpr (FUSE_CAP_PASSTHROUGH != 0) {
-    if (ctx->passthrough_requested &&
+    // Check if the process actually has CAP_SYS_ADMIN in its effective set.
+    // Without it, fuse_passthrough_open will fail with EPERM, and negotiating
+    // passthrough at the kernel level can break Wine/Proton DLL loading.
+    bool hasCap = false;
+    {
+      cap_t caps = cap_get_proc();
+      if (caps) {
+        cap_flag_value_t val = CAP_CLEAR;
+        cap_get_flag(caps, CAP_SYS_ADMIN, CAP_EFFECTIVE, &val);
+        hasCap = (val == CAP_SET);
+        cap_free(caps);
+      }
+    }
+
+    if (ctx->passthrough_requested && hasCap &&
         (conn->capable & FUSE_CAP_PASSTHROUGH)) {
       conn->want |= FUSE_CAP_PASSTHROUGH;
       ctx->passthrough_active = true;
       std::fprintf(stderr, "[VFS] FUSE passthrough enabled (kernel supports it)\n");
+    } else if (ctx->passthrough_requested && !hasCap) {
+      std::fprintf(stderr,
+                   "[VFS] FUSE passthrough requested but process lacks "
+                   "CAP_SYS_ADMIN. Falling back to userspace I/O.\n");
     } else if (ctx->passthrough_requested) {
       std::fprintf(stderr,
                    "[VFS] FUSE passthrough requested but NOT supported by kernel "

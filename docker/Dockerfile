@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libtinyxml2-dev \
     libfontconfig1-dev \
     libspdlog-dev \
-    libfuse3-dev fuse3 \
+    libfuse3-dev fuse3 libcap-dev \
     liblz4-dev zlib1g-dev libzstd-dev libbz2-dev liblzma-dev \
     libssl-dev libcurl4-openssl-dev \
     libtomlplusplus-dev \

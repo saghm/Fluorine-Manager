@@ -371,6 +371,15 @@ exec env PYTHONHOME="${MO2_PYTHONHOME}" "${RUN}/ModOrganizer-core" "$@"
 LAUNCH
 chmod +x "${OUT_DIR}/fluorine-manager"
 
+# ── qt.conf — tells Qt where to find plugins without QT_PLUGIN_PATH env ──
+# This is required when the binary has file capabilities (cap_sys_admin for
+# FUSE passthrough), because glibc strips environment variables in AT_SECURE
+# mode.  qt.conf is read by Qt at startup regardless of env.
+cat > "${OUT_DIR}/qt.conf" <<'QTCONF'
+[Paths]
+Plugins = qt6plugins
+QTCONF
+
 # ── Desktop integration files ──
 cp -f /src/data/com.fluorine.manager.desktop "${OUT_DIR}/"
 cp -f /src/data/com.fluorine.manager.png "${OUT_DIR}/"
