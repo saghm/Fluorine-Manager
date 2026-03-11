@@ -662,66 +662,6 @@ void OrganizerCore::prepareVFS()
     m_USVFS.setTrackingFilePath(trackPath.toStdString());
   }
 
-  // FUSE passthrough: read the per-instance setting and pass it to the VFS.
-  // The binary needs CAP_SYS_ADMIN for passthrough to work — it can be lost
-  // when the binary is copied, updated, or extracted to a new location.
-  {
-    bool passthrough =
-        QSettings().value("fluorine/fuse_passthrough", false).toBool();
-
-    if (passthrough) {
-      // Check if the binary actually has cap_sys_admin right now.
-      const QString binary = QCoreApplication::applicationFilePath();
-      QProcess getcap;
-      getcap.setProgram("getcap");
-      getcap.setArguments({binary});
-      getcap.start();
-      getcap.waitForFinished(5000);
-      const QString caps = QString::fromUtf8(getcap.readAllStandardOutput());
-      const bool hasCap  = caps.contains("cap_sys_admin");
-
-      if (!hasCap) {
-        std::fprintf(stderr,
-                     "[VFS] passthrough enabled but binary lacks cap_sys_admin "
-                     "— requesting via pkexec...\n");
-
-        // When cap_sys_admin is set on a binary, glibc's ld.so enters
-        // AT_SECURE mode and ignores $ORIGIN in RPATH.  Patch RPATH to
-        // absolute paths before applying the capability.
-        const QFileInfo fi(binary);
-        const QString binDir = fi.absolutePath();
-        const QString absRpath = binDir + "/lib:" + binDir + "/python/lib";
-
-        // The binary may be running (text file busy), so copy → patch → replace.
-        QProcess patchelf;
-        patchelf.setProgram("pkexec");
-        patchelf.setArguments({"bash", "-c",
-            QString("cp '%1' '%1.tmp' && "
-                    "patchelf --force-rpath --set-rpath '%2' '%1.tmp' && "
-                    "setcap cap_sys_admin+ep '%1.tmp' && "
-                    "mv -f '%1.tmp' '%1'")
-                .arg(binary, absRpath)});
-        patchelf.start();
-        patchelf.waitForFinished(60000);
-
-        if (patchelf.exitCode() != 0) {
-          std::fprintf(stderr,
-                       "[VFS] failed to set cap_sys_admin — disabling passthrough\n");
-          passthrough = false;
-        } else {
-          // The capability is on the file now, but the running process won't
-          // have it until next exec.  Disable passthrough for this session —
-          // it will work automatically on next launch.
-          std::fprintf(stderr,
-                       "[VFS] cap_sys_admin + absolute RPATH applied — passthrough "
-                       "will activate on next launch\n");
-          passthrough = false;
-        }
-      }
-    }
-
-    m_USVFS.setPassthroughEnabled(passthrough);
-  }
 #endif
   m_USVFS.updateMapping(fileMapping(m_CurrentProfile->name(), QString()));
 }

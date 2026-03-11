@@ -45,64 +45,6 @@ ProtonSettingsTab::ProtonSettingsTab(Settings& s, SettingsDialog& d)
   ui->launchWrapperEdit->setPlaceholderText("mangohud --dlsym");
   ui->launchWrapperEdit->setText(QSettings().value("fluorine/launch_wrapper").toString());
 
-  // FUSE passthrough toggle — requires CAP_SYS_ADMIN on the binary.
-  ui->fusePassthroughCheckBox->setChecked(
-      QSettings().value("fluorine/fuse_passthrough", false).toBool());
-  ui->passthroughStatusLabel->setText(QString());
-
-  QObject::connect(ui->fusePassthroughCheckBox, &QCheckBox::toggled, this,
-                   [this](bool checked) {
-                     if (!checked) {
-                       // Disabling doesn't need sudo — just save the setting.
-                       QSettings().setValue("fluorine/fuse_passthrough", false);
-                       ui->passthroughStatusLabel->setText(tr("Passthrough disabled. Takes effect on next game launch."));
-                       return;
-                     }
-
-                     // Enabling requires setting CAP_SYS_ADMIN on the binary.
-                     // Find the actual binary path (ModOrganizer-core).
-                     const QString binary = QCoreApplication::applicationFilePath();
-                     if (binary.isEmpty()) {
-                       ui->fusePassthroughCheckBox->setChecked(false);
-                       ui->passthroughStatusLabel->setText(tr("Could not determine binary path."));
-                       return;
-                     }
-
-                     ui->passthroughStatusLabel->setText(
-                         tr("Granting FUSE passthrough capability... (sudo prompt)"));
-
-                     // Use pkexec to patch RPATH to absolute paths and set
-                     // the file capability.  $ORIGIN in RPATH is ignored by
-                     // glibc for capability binaries (AT_SECURE mode).
-                     const QFileInfo fi(binary);
-                     const QString binDir = fi.absolutePath();
-                     const QString absRpath = binDir + "/lib:" + binDir + "/python/lib";
-
-                     // The binary may be running (text file busy), so copy → patch → replace.
-                     QProcess proc;
-                     proc.setProgram("pkexec");
-                     proc.setArguments({"bash", "-c",
-                         QString("cp '%1' '%1.tmp' && "
-                                 "patchelf --force-rpath --set-rpath '%2' '%1.tmp' && "
-                                 "setcap cap_sys_admin+ep '%1.tmp' && "
-                                 "mv -f '%1.tmp' '%1'")
-                             .arg(binary, absRpath)});
-                     proc.start();
-                     proc.waitForFinished(60000);  // 60s timeout for user to auth
-
-                     if (proc.exitCode() == 0) {
-                       QSettings().setValue("fluorine/fuse_passthrough", true);
-                       ui->passthroughStatusLabel->setText(
-                           tr("Passthrough enabled. Takes effect on next game launch."));
-                     } else {
-                       ui->fusePassthroughCheckBox->setChecked(false);
-                       const QString err = QString::fromUtf8(proc.readAllStandardError()).trimmed();
-                       ui->passthroughStatusLabel->setText(
-                           tr("Failed to set capability: %1").arg(
-                               err.isEmpty() ? tr("authorization denied or pkexec not found") : err));
-                     }
-                   });
-
   populateProtons();
 
   QObject::connect(ui->protonVersionCombo, &QComboBox::currentIndexChanged, this,

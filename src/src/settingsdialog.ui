@@ -1883,40 +1883,6 @@ If you disable this feature, MO will only display official DLCs this way. Please
         </widget>
        </item>
        <item>
-        <widget class="QGroupBox" name="groupBox_vfsPerformance">
-         <property name="title">
-          <string>VFS Performance</string>
-         </property>
-         <layout class="QVBoxLayout" name="verticalLayout_vfsPerf">
-          <item>
-           <widget class="QCheckBox" name="fusePassthroughCheckBox">
-            <property name="text">
-             <string>Enable FUSE Passthrough (near-native I/O)</string>
-            </property>
-            <property name="toolTip">
-             <string>Let the kernel serve game file reads directly, bypassing userspace. Dramatically improves I/O performance for loading textures, meshes, and archives. Requires a one-time privilege grant (sudo prompt). Needs kernel 6.9+ and libfuse 3.16+.</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="passthroughStatusLabel">
-            <property name="text">
-             <string/>
-            </property>
-            <property name="wordWrap">
-             <bool>true</bool>
-            </property>
-            <property name="font">
-             <font>
-              <pointsize>9</pointsize>
-             </font>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
         <spacer name="verticalSpacer_16">
          <property name="orientation">
           <enum>Qt::Vertical</enum>

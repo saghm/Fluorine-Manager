@@ -10,7 +10,6 @@ find_package(Boost CONFIG REQUIRED COMPONENTS
 find_package(spdlog CONFIG REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(FUSE3 REQUIRED IMPORTED_TARGET fuse3)
-pkg_check_modules(LIBCAP REQUIRED IMPORTED_TARGET libcap)
 find_package(Threads REQUIRED)
 
 qt_standard_project_setup()
@@ -111,8 +110,6 @@ target_link_libraries(organizer PRIVATE
     spdlog::spdlog_header_only
     # FUSE3 (low-level API)
     PkgConfig::FUSE3
-    # libcap (runtime capability check for passthrough)
-    PkgConfig::LIBCAP
     # Linux system libs
     dl)
 

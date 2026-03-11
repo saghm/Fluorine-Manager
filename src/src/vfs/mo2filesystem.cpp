@@ -2,7 +2,6 @@
 
 #include <fcntl.h>
 #include <linux/fs.h>
-#include <sys/capability.h>
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -567,50 +566,6 @@ void mo2_init(void* userdata, struct fuse_conn_info* conn)
   conn->max_background      = 128;
   conn->congestion_threshold = 96;
 
-  // FUSE passthrough: if requested by the user and supported by the kernel,
-  // enable kernel-level passthrough for read-only file opens.  This lets the
-  // kernel serve reads directly from the backing file without round-tripping
-  // through userspace — near-native I/O performance for game file reads.
-  // Requires: kernel 6.9+, libfuse 3.16+, CAP_SYS_ADMIN on the binary.
-  ctx->passthrough_active = false;
-  if constexpr (FUSE_CAP_PASSTHROUGH != 0) {
-    // Check if the process actually has CAP_SYS_ADMIN in its effective set.
-    // Without it, fuse_passthrough_open will fail with EPERM, and negotiating
-    // passthrough at the kernel level can break Wine/Proton DLL loading.
-    bool hasCap = false;
-    {
-      cap_t caps = cap_get_proc();
-      if (caps) {
-        cap_flag_value_t val = CAP_CLEAR;
-        cap_get_flag(caps, CAP_SYS_ADMIN, CAP_EFFECTIVE, &val);
-        hasCap = (val == CAP_SET);
-        cap_free(caps);
-      }
-    }
-
-    if (ctx->passthrough_requested && hasCap &&
-        (conn->capable & FUSE_CAP_PASSTHROUGH)) {
-      conn->want |= FUSE_CAP_PASSTHROUGH;
-      ctx->passthrough_active = true;
-      std::fprintf(stderr, "[VFS] FUSE passthrough enabled (kernel supports it)\n");
-    } else if (ctx->passthrough_requested && !hasCap) {
-      std::fprintf(stderr,
-                   "[VFS] FUSE passthrough requested but process lacks "
-                   "CAP_SYS_ADMIN. Falling back to userspace I/O.\n");
-    } else if (ctx->passthrough_requested) {
-      std::fprintf(stderr,
-                   "[VFS] FUSE passthrough requested but NOT supported by kernel "
-                   "(capable=0x%x). Falling back to userspace I/O.\n",
-                   conn->capable);
-    }
-  } else {
-    if (ctx->passthrough_requested) {
-      std::fprintf(stderr,
-                   "[VFS] FUSE passthrough requested but NOT available at compile time "
-                   "(libfuse too old). Falling back to userspace I/O.\n");
-    }
-  }
-
   // Increase max read/write buffer to 1MB (kernel 4.20+ supports this).
   // Reduces FUSE round-trips for large file reads (textures, meshes, BSAs).
   constexpr unsigned int ONE_MB = 1048576;
@@ -623,11 +578,10 @@ void mo2_init(void* userdata, struct fuse_conn_info* conn)
 
   std::fprintf(stderr,
                "[VFS] init: auto_inval=%d explicit_inval=%d readdirplus=%d "
-               "passthrough=%d max_bg=%u max_readahead=%u\n",
+               "max_bg=%u max_readahead=%u\n",
                (conn->want & FUSE_CAP_AUTO_INVAL_DATA) ? 1 : 0,
                (conn->want & FUSE_CAP_EXPLICIT_INVAL_DATA) ? 1 : 0,
                (conn->want & FUSE_CAP_READDIRPLUS) ? 1 : 0,
-               ctx->passthrough_active ? 1 : 0,
                conn->max_background, conn->max_readahead);
 }
 
@@ -1060,44 +1014,6 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
 
   fi->fh = fh;
   fi->keep_cache = 1;
-
-  // FUSE passthrough: for read-only opens, let the kernel serve reads directly
-  // from the backing file.  This bypasses userspace entirely — the kernel handles
-  // read() syscalls by reading the real file, giving near-native I/O performance.
-  // Only eligible for non-writable, non-COW files (pure reads).
-  if constexpr (FUSE_CAP_PASSTHROUGH != 0) {
-    if (ctx->passthrough_active && !writable && !cowPending && fd < 0) {
-      // Open the real file so the kernel can passthrough reads from it.
-      int ptFd = -1;
-      if (isBacking && ctx->backing_dir_fd >= 0) {
-        ptFd = openat(ctx->backing_dir_fd, realPath.c_str(), O_RDONLY);
-      } else {
-        ptFd = open(realPath.c_str(), O_RDONLY);
-      }
-      if (ptFd >= 0) {
-        int backingId = fuse_passthrough_open(req, ptFd);
-        if (backingId > 0) {
-          fi->backing_id = backingId;
-          // Store the fd so we can close it on release
-          std::scoped_lock lock(ctx->open_files_mutex);
-          auto it = ctx->open_files.find(fh);
-          if (it != ctx->open_files.end()) {
-            it->second.fd          = ptFd;
-            it->second.backing_id  = backingId;
-          }
-        } else {
-          // Passthrough registration failed (e.g. missing cap_sys_admin at
-          // runtime).  Disable passthrough for the rest of this session to
-          // avoid spamming "Operation not permitted" on every open.
-          close(ptFd);
-          ctx->passthrough_active = false;
-          std::fprintf(stderr,
-                       "[VFS] fuse_passthrough_open failed — disabling "
-                       "passthrough for this session\n");
-        }
-      }
-    }
-  }
 
   fuse_reply_open(req, fi);
 }
@@ -1687,7 +1603,7 @@ void mo2_mkdir(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t /*mod
   replyEntryFromSnapshot(req, ctx, dirIno, snap);
 }
 
-void mo2_release(fuse_req_t req, fuse_ino_t /*ino*/, struct fuse_file_info* fi)
+void mo2_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
 {
   Mo2FsContext* ctx = getContext(req);
   if (ctx == nullptr || fi == nullptr) {
@@ -1699,11 +1615,6 @@ void mo2_release(fuse_req_t req, fuse_ino_t /*ino*/, struct fuse_file_info* fi)
     std::scoped_lock lock(ctx->open_files_mutex);
     auto it = ctx->open_files.find(fi->fh);
     if (it != ctx->open_files.end()) {
-      if constexpr (FUSE_CAP_PASSTHROUGH != 0) {
-        if (it->second.backing_id > 0) {
-          fuse_passthrough_close(req, it->second.backing_id);
-        }
-      }
       if (it->second.fd >= 0) {
         close(it->second.fd);
       }

@@ -300,8 +300,6 @@ bool FuseConnector::mount(
   m_context->backing_dir_fd        = m_backingFd;
   m_context->uid                   = ::getuid();
   m_context->gid                   = ::getgid();
-  m_context->passthrough_requested = m_passthroughEnabled;
-
   // NOTE: Do NOT include mount_point here — low-level API passes it
   // separately to fuse_session_mount(). Including it here causes
   // "fuse: unknown option(s)" error.
@@ -444,13 +442,6 @@ void FuseConnector::setTrackingFilePath(const std::string& path)
 {
   m_trackingFilePath = path;
   std::fprintf(stderr, "[VFS] setTrackingFilePath: '%s'\n", path.c_str());
-}
-
-void FuseConnector::setPassthroughEnabled(bool enabled)
-{
-  m_passthroughEnabled = enabled;
-  std::fprintf(stderr, "[VFS] passthrough %s by user\n",
-               enabled ? "enabled" : "disabled");
 }
 
 std::shared_ptr<TrackedWrites> FuseConnector::trackedWrites() const

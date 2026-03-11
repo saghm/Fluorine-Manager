@@ -42,7 +42,6 @@ public:
 
   void setPluginLoadOrder(const std::vector<std::string>& load_order);
   void setTrackingFilePath(const std::string& path);
-  void setPassthroughEnabled(bool enabled);
   std::shared_ptr<TrackedWrites> trackedWrites() const;
 
   void unmount();
@@ -97,7 +96,6 @@ private:
   std::thread m_fuseThread;
   bool m_mounted        = false;
   bool m_discardStaging = false;
-  bool m_passthroughEnabled = false;
 };
 
 #endif

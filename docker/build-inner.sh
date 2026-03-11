@@ -290,10 +290,8 @@ for tool in wrestool icotool lootcli; do
 done
 
 # ── Fix RPATH so binaries find libs without LD_LIBRARY_PATH ──
-# IMPORTANT: Use --force-rpath to set DT_RPATH (not DT_RUNPATH).
-# DT_RPATH is honored even when the binary has file capabilities
-# (e.g. cap_sys_admin for FUSE passthrough).  DT_RUNPATH and
-# LD_LIBRARY_PATH are both ignored by the kernel for capability binaries.
+# Use --force-rpath to set DT_RPATH (not DT_RUNPATH) for reliable
+# library resolution regardless of LD_LIBRARY_PATH.
 echo "Patching RPATH..."
 patchelf --force-rpath --set-rpath '$ORIGIN/lib:$ORIGIN/python/lib' "${OUT_DIR}/ModOrganizer-core"
 [ -f "${OUT_DIR}/lootcli" ] && patchelf --force-rpath --set-rpath '$ORIGIN/lib' "${OUT_DIR}/lootcli"
@@ -350,9 +348,7 @@ PYTHON_DIR="${RUN}/python"
 
 export PATH="${RUN}:${PATH}"
 # NOTE: Do NOT set LD_LIBRARY_PATH here.  The binary uses DT_RPATH
-# ($ORIGIN/lib:$ORIGIN/python/lib) to find its libraries.  Setting
-# LD_LIBRARY_PATH on a capability-bearing binary (cap_sys_admin for FUSE
-# passthrough) triggers AT_SECURE mode, which drops all file capabilities.
+# ($ORIGIN/lib:$ORIGIN/python/lib) to find its libraries.
 export MO2_BASE_DIR="${RUN}"
 export MO2_PLUGINS_DIR="${RUN}/plugins"
 export MO2_DLLS_DIR="${RUN}/dlls"
@@ -372,9 +368,6 @@ LAUNCH
 chmod +x "${OUT_DIR}/fluorine-manager"
 
 # ── qt.conf — tells Qt where to find plugins without QT_PLUGIN_PATH env ──
-# This is required when the binary has file capabilities (cap_sys_admin for
-# FUSE passthrough), because glibc strips environment variables in AT_SECURE
-# mode.  qt.conf is read by Qt at startup regardless of env.
 cat > "${OUT_DIR}/qt.conf" <<'QTCONF'
 [Paths]
 Plugins = qt6plugins
@@ -389,19 +382,17 @@ cp -f /src/data/com.fluorine.manager.metainfo.xml "${OUT_DIR}/"
 # BUILD_MODE is passed from build.sh: tarball (default), installer, appimage, all
 BUILD_MODE="${BUILD_MODE:-tarball}"
 
-# ── Build tarball (portable distribution) ──
+# ── Build portable distribution (directory) ──
+# No archive created — GitHub zips release assets automatically.
 build_tarball() {
     echo ""
-    echo "=== Building tarball ==="
+    echo "=== Building portable distribution ==="
     cd /src/build
-    # Create a clean directory name for the archive
     TARBALL_NAME="fluorine-manager"
     rm -rf "${TARBALL_NAME}"
     cp -a staging "${TARBALL_NAME}"
-    tar czf "${TARBALL_NAME}.tar.gz" "${TARBALL_NAME}"/
-    rm -rf "${TARBALL_NAME}"
-    echo "Tarball: /src/build/${TARBALL_NAME}.tar.gz"
-    ls -lh "/src/build/${TARBALL_NAME}.tar.gz"
+    echo "Output: /src/build/${TARBALL_NAME}/"
+    du -sh "/src/build/${TARBALL_NAME}"
 }
 
 # ── Build self-extracting installer (.bin frontloader) ──
@@ -686,4 +677,4 @@ echo "=== Build Summary ==="
 du -sh "${OUT_DIR}"/*/ "${OUT_DIR}"/ModOrganizer-core 2>/dev/null | sort -rh
 echo ""
 echo "Build outputs:"
-ls -lh /src/build/fluorine-manager.tar.gz /src/build/fluorine-manager.bin /src/build/*.AppImage 2>/dev/null || echo "  (none found)"
+ls -dh /src/build/fluorine-manager/ /src/build/fluorine-manager.bin /src/build/*.AppImage 2>/dev/null || echo "  (none found)"
