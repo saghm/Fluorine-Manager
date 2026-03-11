@@ -1341,57 +1341,67 @@ void ModListViewActions::restoreBackup(const QModelIndex& index) const
 void ModListViewActions::moveOverwriteContentsTo(const QString& absolutePath) const
 {
   ModInfo::Ptr overwriteInfo = ModInfo::getOverwrite();
-  bool successful            = false;
-  if (m_core.managedGame()->getModMappings().count() > 1 ||
-      m_core.managedGame()->getModMappings().keys().first() != "") {
-    QDirIterator iter(overwriteInfo->absolutePath(),
-                      QDir::AllDirs | QDir::Files | QDir::NoDotAndDotDot);
-    while (iter.hasNext()) {
-      auto entry = iter.nextFileInfo();
-      if (entry.isDir() && m_core.managedGame()->getModMappings().keys().contains(
-                               entry.fileName(), Qt::CaseInsensitive)) {
-        successful =
-            shellCopy((QDir::toNativeSeparators(entry.absolutePath())),
-                      (QDir::toNativeSeparators(absolutePath)), false, m_parent);
-        QDirIterator subDirIter(entry.absoluteFilePath(),
-                                QDir::AllDirs | QDir::Files | QDir::NoDotAndDotDot);
-        while (subDirIter.hasNext()) {
-          auto subDirEntry = subDirIter.nextFileInfo();
-          if (subDirEntry.isDir()) {
-            QDir(subDirEntry.absoluteFilePath()).removeRecursively();
-          } else {
-            QFile(subDirEntry.absoluteFilePath()).remove();
-          }
-        }
-      } else {
-        successful =
-            shellMove((QDir::toNativeSeparators(iter.filePath())),
-                      (QDir::toNativeSeparators(absolutePath)), false, m_parent);
-      }
-      if (!successful)
-        break;
+  const QString overwritePath = overwriteInfo->absolutePath();
+  const QDir overwriteDir(overwritePath);
+  const QDir destDir(absolutePath);
+
+  // Recursively move every file from overwrite into the destination mod,
+  // preserving the directory structure.
+  bool successful = true;
+  int movedCount = 0;
+
+  QDirIterator iter(overwritePath, QDir::Files | QDir::NoDotAndDotDot,
+                    QDirIterator::Subdirectories);
+  while (iter.hasNext()) {
+    iter.next();
+    const QString relPath = overwriteDir.relativeFilePath(iter.filePath());
+    const QString destFile = destDir.filePath(relPath);
+
+    // Ensure destination subdirectory exists.
+    QDir().mkpath(QFileInfo(destFile).absolutePath());
+
+    // Remove existing file at destination (overwrite semantics).
+    if (QFile::exists(destFile)) {
+      QFile::remove(destFile);
     }
 
-  } else {
-    successful =
-        shellMove((QDir::toNativeSeparators(overwriteInfo->absolutePath()) + QDir::separator() + "*"),
-                  (QDir::toNativeSeparators(absolutePath)), false, m_parent);
+    if (!QFile::rename(iter.filePath(), destFile)) {
+      // Fallback: copy + delete (cross-filesystem).
+      if (!QFile::copy(iter.filePath(), destFile) || !QFile::remove(iter.filePath())) {
+        log::error("Failed to move {} -> {}", relPath, destFile);
+        successful = false;
+        break;
+      }
+    }
+    ++movedCount;
   }
 
-  if (successful) {
+  // Clean up empty directories left behind in overwrite.
+  if (movedCount > 0) {
+    QDirIterator dirIter(overwritePath, QDir::Dirs | QDir::NoDotAndDotDot,
+                         QDirIterator::Subdirectories);
+    QStringList emptyDirs;
+    while (dirIter.hasNext()) {
+      emptyDirs.prepend(dirIter.next());  // Reverse order for leaf-first deletion.
+    }
+    for (const auto& dir : emptyDirs) {
+      QDir(dir).rmdir(".");  // Only removes if empty.
+    }
+  }
+
+  if (successful && movedCount > 0) {
     // Track all files now in the target mod so future VFS writes go
     // back to this mod instead of creating new copies in Overwrite.
     QDirIterator trackIter(absolutePath, QDir::Files | QDir::NoDotAndDotDot,
                            QDirIterator::Subdirectories);
     while (trackIter.hasNext()) {
       trackIter.next();
-      QString relPath = QDir(absolutePath).relativeFilePath(trackIter.filePath());
+      QString relPath = destDir.relativeFilePath(trackIter.filePath());
       m_core.trackOverwriteMove(relPath, absolutePath);
     }
     MessageDialog::showMessage(tr("Move successful."), m_parent);
-  } else {
-    const auto e = GetLastError();
-    log::error("Move operation failed: {}", formatSystemMessage(e));
+  } else if (!successful) {
+    log::error("Move operation failed");
   }
 
   m_core.refresh();
