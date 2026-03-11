@@ -684,13 +684,24 @@ void OrganizerCore::prepareVFS()
         std::fprintf(stderr,
                      "[VFS] passthrough enabled but binary lacks cap_sys_admin "
                      "— requesting via pkexec...\n");
-        QProcess setcap;
-        setcap.setProgram("pkexec");
-        setcap.setArguments({"setcap", "cap_sys_admin+ep", binary});
-        setcap.start();
-        setcap.waitForFinished(60000);
 
-        if (setcap.exitCode() != 0) {
+        // When cap_sys_admin is set on a binary, glibc's ld.so enters
+        // AT_SECURE mode and ignores $ORIGIN in RPATH.  Patch RPATH to
+        // absolute paths before applying the capability.
+        const QFileInfo fi(binary);
+        const QString binDir = fi.absolutePath();
+        const QString absRpath = binDir + "/lib:" + binDir + "/python/lib";
+
+        QProcess patchelf;
+        patchelf.setProgram("pkexec");
+        patchelf.setArguments({"bash", "-c",
+            QString("patchelf --force-rpath --set-rpath '%1' '%2' && "
+                    "setcap cap_sys_admin+ep '%2'")
+                .arg(absRpath, binary)});
+        patchelf.start();
+        patchelf.waitForFinished(60000);
+
+        if (patchelf.exitCode() != 0) {
           std::fprintf(stderr,
                        "[VFS] failed to set cap_sys_admin — disabling passthrough\n");
           passthrough = false;
@@ -699,7 +710,7 @@ void OrganizerCore::prepareVFS()
           // have it until next exec.  Disable passthrough for this session —
           // it will work automatically on next launch.
           std::fprintf(stderr,
-                       "[VFS] cap_sys_admin applied to binary — passthrough "
+                       "[VFS] cap_sys_admin + absolute RPATH applied — passthrough "
                        "will activate on next launch\n");
           passthrough = false;
         }

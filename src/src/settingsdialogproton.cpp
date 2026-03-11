@@ -71,11 +71,19 @@ ProtonSettingsTab::ProtonSettingsTab(Settings& s, SettingsDialog& d)
                      ui->passthroughStatusLabel->setText(
                          tr("Granting FUSE passthrough capability... (sudo prompt)"));
 
-                     // Use pkexec (graphical sudo) to set the file capability.
-                     // This is a one-time operation — the capability persists across runs.
+                     // Use pkexec to patch RPATH to absolute paths and set
+                     // the file capability.  $ORIGIN in RPATH is ignored by
+                     // glibc for capability binaries (AT_SECURE mode).
+                     const QFileInfo fi(binary);
+                     const QString binDir = fi.absolutePath();
+                     const QString absRpath = binDir + "/lib:" + binDir + "/python/lib";
+
                      QProcess proc;
                      proc.setProgram("pkexec");
-                     proc.setArguments({"setcap", "cap_sys_admin+ep", binary});
+                     proc.setArguments({"bash", "-c",
+                         QString("patchelf --force-rpath --set-rpath '%1' '%2' && "
+                                 "setcap cap_sys_admin+ep '%2'")
+                             .arg(absRpath, binary)});
                      proc.start();
                      proc.waitForFinished(60000);  // 60s timeout for user to auth
 
