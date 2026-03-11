@@ -1366,49 +1366,46 @@ static bool launchLootGui(QWidget* parent, OrganizerCore& core)
     QFile::copy(profileLoadOrder, lootLoadOrder);
   }
   if (QFile::exists(profilePlugins) && QFile::exists(profileLoadOrder)) {
-    // Build a set of plugins already in plugins.txt (case-insensitive).
+    // Build a set of active plugins from plugins.txt (case-insensitive).
     QFile pluginsFile(profilePlugins);
-    QSet<QString> pluginsListed;
-    QStringList pluginsLines;
+    QSet<QString> activePlugins;
     if (pluginsFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
       QTextStream in(&pluginsFile);
       while (!in.atEnd()) {
-        QString line = in.readLine();
-        pluginsLines.append(line);
-        QString name = line.trimmed();
-        if (name.startsWith('*'))
-          name = name.mid(1);
-        if (!name.isEmpty() && !name.startsWith('#'))
-          pluginsListed.insert(name.toLower());
+        QString line = in.readLine().trimmed();
+        if (line.startsWith('*'))
+          line = line.mid(1);
+        if (!line.isEmpty() && !line.startsWith('#'))
+          activePlugins.insert(line.toLower());
       }
       pluginsFile.close();
     }
 
-    // Read loadorder.txt to find plugins not in plugins.txt (base ESMs).
+    // Use loadorder.txt as the canonical order.  Mark each plugin as
+    // active (*) or inactive based on plugins.txt.  Base game ESMs that
+    // aren't in plugins.txt are always active.
     QFile loFile(profileLoadOrder);
-    QStringList missingPlugins;
-    if (loFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    QFile outFile(lootPlugins);
+    if (loFile.open(QIODevice::ReadOnly | QIODevice::Text) &&
+        outFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
       QTextStream in(&loFile);
+      QTextStream out(&outFile);
       while (!in.atEnd()) {
         QString line = in.readLine().trimmed();
         if (line.isEmpty() || line.startsWith('#'))
           continue;
-        if (!pluginsListed.contains(line.toLower())) {
-          // Base game ESMs are always active — mark with *.
-          missingPlugins.append("*" + line);
+        bool active = activePlugins.contains(line.toLower());
+        // Base game ESMs (not in plugins.txt) are implicitly active.
+        if (!active && !activePlugins.isEmpty() &&
+            (line.endsWith(".esm", Qt::CaseInsensitive) ||
+             line.endsWith(".esl", Qt::CaseInsensitive))) {
+          // Check if it's missing from plugins.txt entirely (base game file).
+          if (!activePlugins.contains(line.toLower()))
+            active = true;
         }
+        out << (active ? "*" : "") << line << "\n";
       }
       loFile.close();
-    }
-
-    // Write merged plugins.txt: missing base ESMs first, then original.
-    QFile outFile(lootPlugins);
-    if (outFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-      QTextStream out(&outFile);
-      for (const auto& line : missingPlugins)
-        out << line << "\n";
-      for (const auto& line : pluginsLines)
-        out << line << "\n";
       outFile.close();
     }
   } else if (QFile::exists(profilePlugins)) {
