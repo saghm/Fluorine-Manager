@@ -1389,7 +1389,7 @@ void ModListViewActions::moveOverwriteContentsTo(const QString& absolutePath) co
       return a.length() > b.length();
     });
     for (const auto& dir : dirs) {
-      QDir(dir).rmdir(".");  // Only removes if empty.
+      QDir().rmdir(dir);  // Only removes if empty.
     }
   }
 
