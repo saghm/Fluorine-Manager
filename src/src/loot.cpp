@@ -1350,7 +1350,10 @@ static bool launchLootGui(QWidget* parent, OrganizerCore& core)
   ensureLootSettings(lootDataPath, mo2GameName, folderName, gamePath, localPath);
 
   // Copy the profile's load order files to the local path so LOOT sees
-  // the current load order.
+  // the current load order.  MO2's plugins.txt omits implicitly-active
+  // plugins (base game ESMs) — LOOT needs every plugin listed or it warns
+  // about an "ambiguous load order".  Merge loadorder.txt entries into
+  // plugins.txt so LOOT sees the complete picture.
   QDir().mkpath(localPath);
   QString profilePlugins   = core.profilePath() + "/plugins.txt";
   QString profileLoadOrder = core.profilePath() + "/loadorder.txt";
@@ -1359,11 +1362,57 @@ static bool launchLootGui(QWidget* parent, OrganizerCore& core)
 
   QFile::remove(lootPlugins);
   QFile::remove(lootLoadOrder);
-  if (QFile::exists(profilePlugins)) {
-    QFile::copy(profilePlugins, lootPlugins);
-  }
   if (QFile::exists(profileLoadOrder)) {
     QFile::copy(profileLoadOrder, lootLoadOrder);
+  }
+  if (QFile::exists(profilePlugins) && QFile::exists(profileLoadOrder)) {
+    // Build a set of plugins already in plugins.txt (case-insensitive).
+    QFile pluginsFile(profilePlugins);
+    QSet<QString> pluginsListed;
+    QStringList pluginsLines;
+    if (pluginsFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+      QTextStream in(&pluginsFile);
+      while (!in.atEnd()) {
+        QString line = in.readLine();
+        pluginsLines.append(line);
+        QString name = line.trimmed();
+        if (name.startsWith('*'))
+          name = name.mid(1);
+        if (!name.isEmpty() && !name.startsWith('#'))
+          pluginsListed.insert(name.toLower());
+      }
+      pluginsFile.close();
+    }
+
+    // Read loadorder.txt to find plugins not in plugins.txt (base ESMs).
+    QFile loFile(profileLoadOrder);
+    QStringList missingPlugins;
+    if (loFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+      QTextStream in(&loFile);
+      while (!in.atEnd()) {
+        QString line = in.readLine().trimmed();
+        if (line.isEmpty() || line.startsWith('#'))
+          continue;
+        if (!pluginsListed.contains(line.toLower())) {
+          // Base game ESMs are always active — mark with *.
+          missingPlugins.append("*" + line);
+        }
+      }
+      loFile.close();
+    }
+
+    // Write merged plugins.txt: missing base ESMs first, then original.
+    QFile outFile(lootPlugins);
+    if (outFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+      QTextStream out(&outFile);
+      for (const auto& line : missingPlugins)
+        out << line << "\n";
+      for (const auto& line : pluginsLines)
+        out << line << "\n";
+      outFile.close();
+    }
+  } else if (QFile::exists(profilePlugins)) {
+    QFile::copy(profilePlugins, lootPlugins);
   }
 
   // Mount the FUSE VFS so LOOT sees the merged mod files in the Data directory.
