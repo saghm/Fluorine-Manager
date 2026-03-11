@@ -356,41 +356,44 @@
 set -euo pipefail
 SELF="$(readlink -f "$0")"
 HERE="$(cd "$(dirname "$SELF")" && pwd)"
-export PATH="${HERE}:${PATH}"
 
 export FLUORINE_ORIG_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
 export FLUORINE_ORIG_PATH="${PATH}"
 export FLUORINE_ORIG_XDG_DATA_DIRS="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
 export FLUORINE_ORIG_QT_PLUGIN_PATH="${QT_PLUGIN_PATH:-}"
 
+# Sync entire app to ~/.local/share/fluorine/bin/ so instance plugin
+# symlinks always point to a stable location.
 FLUORINE_DATA="${HOME}/.local/share/fluorine"
-PYTHON_DST="${FLUORINE_DATA}/python"
-PYTHON_SRC="${HERE}/python"
+BIN_DST="${FLUORINE_DATA}/bin"
 
-if [ -d "${PYTHON_SRC}" ]; then
-  CURRENT_VER="$(stat -c '%i:%Y' "${PYTHON_SRC}/bin/python3" 2>/dev/null || echo "unknown")"
-  MARKER="${PYTHON_DST}/.version"
-  if [ ! -f "${MARKER}" ] || [ "$(cat "${MARKER}" 2>/dev/null)" != "${CURRENT_VER}" ]; then
-    echo "Syncing Python runtime to ${PYTHON_DST}..." >&2
-    rm -rf "${PYTHON_DST}"
-    mkdir -p "${PYTHON_DST}"
-    (cd "${PYTHON_SRC}" && tar --exclude-vcs -cf - .) | (cd "${PYTHON_DST}" && tar -xf -)
-    echo "${CURRENT_VER}" > "${MARKER}"
-  fi
+CURRENT_VER="$(stat -c '%i:%Y' "${HERE}/ModOrganizer-core" 2>/dev/null || echo "unknown")"
+MARKER="${BIN_DST}/.version"
+
+if [ ! -f "${MARKER}" ] || [ "$(cat "${MARKER}" 2>/dev/null)" != "${CURRENT_VER}" ]; then
+  echo "Syncing Fluorine to ${BIN_DST}..." >&2
+  rm -rf "${BIN_DST}"
+  mkdir -p "${BIN_DST}"
+  (cd "${HERE}" && tar --exclude-vcs -cf - .) | (cd "${BIN_DST}" && tar -xf -)
+  echo "${CURRENT_VER}" > "${MARKER}"
 fi
 
-export LD_LIBRARY_PATH="${HERE}/lib:${PYTHON_DST}/lib:${LD_LIBRARY_PATH:-}"
-export MO2_BASE_DIR="${HERE}"
-export MO2_PLUGINS_DIR="${HERE}/plugins"
-export MO2_DLLS_DIR="${HERE}/dlls"
-export MO2_PYTHON_DIR="${PYTHON_DST}"
-MO2_PYTHONHOME="${PYTHON_DST}"
+RUN="${BIN_DST}"
+PYTHON_DIR="${RUN}/python"
+
+export PATH="${RUN}:${PATH}"
+export LD_LIBRARY_PATH="${RUN}/lib:${PYTHON_DIR}/lib:${LD_LIBRARY_PATH:-}"
+export MO2_BASE_DIR="${RUN}"
+export MO2_PLUGINS_DIR="${RUN}/plugins"
+export MO2_DLLS_DIR="${RUN}/dlls"
+export MO2_PYTHON_DIR="${PYTHON_DIR}"
+MO2_PYTHONHOME="${PYTHON_DIR}"
 unset PYTHONPATH PYTHONNOUSERSITE PYTHONHOME
 
-export QT_PLUGIN_PATH="${HERE}/qt6plugins"
+export QT_PLUGIN_PATH="${RUN}/qt6plugins"
 
-cd "${HERE}"
-exec env PYTHONHOME="${MO2_PYTHONHOME}" "${HERE}/ModOrganizer-core" "$@"
+cd "${RUN}"
+exec env PYTHONHOME="${MO2_PYTHONHOME}" "${RUN}/ModOrganizer-core" "$@"
 LAUNCH
           chmod +x $out/opt/fluorine-manager/fluorine-manager
 
