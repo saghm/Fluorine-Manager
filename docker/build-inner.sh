@@ -299,7 +299,7 @@ patchelf --force-rpath --set-rpath '$ORIGIN/lib:$ORIGIN/python/lib' "${OUT_DIR}/
 [ -f "${OUT_DIR}/lootcli" ] && patchelf --force-rpath --set-rpath '$ORIGIN/lib' "${OUT_DIR}/lootcli"
 find "${OUT_DIR}/plugins" -name "*.so" -exec patchelf --force-rpath --set-rpath '$ORIGIN/../lib:$ORIGIN/../python/lib' {} \; 2>/dev/null || true
 # Libraries in lib/ (e.g. librunner.so) need to find sibling libs and python/lib.
-find "${OUT_DIR}/lib" -name "*.so" -exec patchelf --force-rpath --set-rpath '$ORIGIN:$ORIGIN/../python/lib' {} \; 2>/dev/null || true
+find "${OUT_DIR}/lib" \( -name "*.so" -o -name "*.so.*" \) -exec patchelf --force-rpath --set-rpath '$ORIGIN:$ORIGIN/../python/lib' {} \; 2>/dev/null || true
 
 # ── Validate embedded Python runtime ──
 if ! PYTHONHOME="${OUT_DIR}/python" \
