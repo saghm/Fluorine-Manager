@@ -16,6 +16,13 @@
 #include <unordered_map>
 #include <vector>
 
+// FUSE passthrough support (kernel 6.9+, libfuse 3.16+).
+// When available, the kernel serves reads directly from the backing file
+// without round-tripping through userspace — near-native I/O performance.
+#ifndef FUSE_CAP_PASSTHROUGH
+#define FUSE_CAP_PASSTHROUGH 0
+#endif
+
 struct Mo2FsContext
 {
   std::shared_ptr<VfsTree> tree;
@@ -90,6 +97,11 @@ struct Mo2FsContext
 
   uid_t uid = 0;
   gid_t gid = 0;
+
+  // FUSE passthrough: when true AND kernel supports it, read-only file opens
+  // use kernel-level passthrough (zero-copy I/O bypassing userspace).
+  bool passthrough_requested = false;
+  bool passthrough_active    = false;  // set in mo2_init after capability check
 };
 
 void mo2_init(void* userdata, struct fuse_conn_info* conn);

@@ -200,19 +200,6 @@ void wrapProgram(const QStringList& wrapperCommands, const QString& program,
   wrappedArguments.append(arguments);
 }
 
-void maybeWrapWithSteamRun(bool useSteamRun, QString& program, QStringList& arguments)
-{
-  if (!useSteamRun) {
-    return;
-  }
-
-  QStringList wrappedArgs;
-  wrappedArgs.append(program);
-  wrappedArgs.append(arguments);
-  program   = QStringLiteral("steam-run");
-  arguments = wrappedArgs;
-}
-
 bool isValidEnvKey(const QString& key)
 {
   if (key.isEmpty()) {
@@ -252,7 +239,7 @@ bool parseEnvAssignment(const QString& token, QString& keyOut, QString& valueOut
 }  // namespace
 
 ProtonLauncher::ProtonLauncher()
-    : m_steamAppId(0), m_useSteamRun(false), m_useSteamDrm(true)
+    : m_steamAppId(0), m_useSteamDrm(true)
 {}
 
 ProtonLauncher& ProtonLauncher::setBinary(const QString& path)
@@ -313,12 +300,6 @@ ProtonLauncher& ProtonLauncher::setWrapper(const QString& wrapperCmd)
   return *this;
 }
 
-ProtonLauncher& ProtonLauncher::setUseSteamRun(bool useSteamRun)
-{
-  m_useSteamRun = useSteamRun;
-  return *this;
-}
-
 ProtonLauncher& ProtonLauncher::setSteamDrm(bool useSteamDrm)
 {
   m_useSteamDrm = useSteamDrm;
@@ -375,7 +356,6 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
   QString program;
   QStringList arguments;
   wrapProgram(m_wrapperCommands, protonScript, protonArgs, program, arguments);
-  maybeWrapWithSteamRun(m_useSteamRun, program, arguments);
 
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
   env.remove("PYTHONHOME");
@@ -448,7 +428,6 @@ bool ProtonLauncher::launchDirect(qint64& pid) const
   QString program;
   QStringList arguments;
   wrapProgram(m_wrapperCommands, m_binary, m_arguments, program, arguments);
-  maybeWrapWithSteamRun(m_useSteamRun, program, arguments);
 
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
   env.remove("PYTHONHOME");

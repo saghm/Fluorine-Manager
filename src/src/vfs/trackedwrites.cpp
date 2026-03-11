@@ -272,7 +272,8 @@ void TrackedWrites::detectManualMoves(
   if (missing.empty())
     return;
 
-  // For each missing file, check if it now exists in any mod folder
+  // For each missing file, check if it now exists in any mod folder.
+  // Use the LAST match (highest priority — mods are ordered low→high).
   int detected = 0;
   for (const auto& relPath : missing) {
     const std::string key = toLower(relPath);
@@ -280,15 +281,22 @@ void TrackedWrites::detectManualMoves(
     if (m_tracked.count(key))
       continue;
 
+    std::string matchedMod;
+    std::string matchedPath;
     for (const auto& [modName, modPath] : mods) {
       std::error_code ec;
       if (fs::exists(fs::path(modPath) / relPath, ec)) {
-        m_tracked[key] = modPath;
-        ++detected;
-        std::fprintf(stderr, "[VFS] detected manual move: %s -> %s\n",
-                     relPath.c_str(), modName.c_str());
-        break;
+        matchedMod  = modName;
+        matchedPath = modPath;
+        // Don't break — keep going to find the highest-priority match.
       }
+    }
+
+    if (!matchedPath.empty()) {
+      m_tracked[key] = matchedPath;
+      ++detected;
+      std::fprintf(stderr, "[VFS] detected manual move: %s -> %s\n",
+                   relPath.c_str(), matchedMod.c_str());
     }
   }
 

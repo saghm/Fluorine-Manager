@@ -661,6 +661,13 @@ void OrganizerCore::prepareVFS()
                  owPath.toStdString().c_str(), trackPath.toStdString().c_str());
     m_USVFS.setTrackingFilePath(trackPath.toStdString());
   }
+
+  // FUSE passthrough: read the per-instance setting and pass it to the VFS.
+  {
+    const bool passthrough =
+        QSettings().value("fluorine/fuse_passthrough", false).toBool();
+    m_USVFS.setPassthroughEnabled(passthrough);
+  }
 #endif
   m_USVFS.updateMapping(fileMapping(m_CurrentProfile->name(), QString()));
 }
@@ -2100,19 +2107,28 @@ void OrganizerCore::syncOverwrite()
 #ifndef _WIN32
     // Track files that were moved out of overwrite to mods.
     // Files that existed before but are gone now were synced to a mod.
+    // Use profile priority order (highest-priority mod wins) so writes
+    // go to the correct mod when multiple mods contain the same path.
     const QString modsDir = QDir::fromNativeSeparators(m_Settings.paths().mods());
+
+    // Mod names in ascending priority order (last = highest priority).
+    const QStringList modsByPriority =
+        m_ModList.allModsByProfilePriority(m_CurrentProfile.get());
+
     for (const auto& relPath : beforeFiles) {
       const QString owFile = modInfo->absolutePath() + "/" + relPath;
       if (!QFile::exists(owFile)) {
-        // Find which mod folder it ended up in
-        QDirIterator modDirIter(modsDir, QDir::Dirs | QDir::NoDotAndDotDot);
-        while (modDirIter.hasNext()) {
-          modDirIter.next();
-          const QString candidate = modDirIter.filePath() + "/" + relPath;
-          if (QFile::exists(candidate)) {
-            trackOverwriteMove(relPath, modDirIter.filePath());
-            break;
+        // Find highest-priority mod that has this file.
+        QString bestModPath;
+        for (const auto& modName : modsByPriority) {
+          const QString modPath = modsDir + "/" + modName;
+          if (QFile::exists(modPath + "/" + relPath)) {
+            bestModPath = modPath;
+            // Don't break — keep going to find the highest-priority match.
           }
+        }
+        if (!bestModPath.isEmpty()) {
+          trackOverwriteMove(relPath, bestModPath);
         }
       }
     }

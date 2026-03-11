@@ -160,9 +160,10 @@ void setupFuseOps(struct fuse_lowlevel_ops* ops)
   ops->init    = mo2_init;
   ops->lookup  = mo2_lookup;
   ops->getattr = mo2_getattr;
-  ops->opendir = mo2_opendir;
-  ops->readdir = mo2_readdir;
-  ops->open    = mo2_open;
+  ops->opendir     = mo2_opendir;
+  ops->readdir     = mo2_readdir;
+  ops->readdirplus = mo2_readdirplus;
+  ops->open        = mo2_open;
   ops->read    = mo2_read;
   ops->write   = mo2_write;
   ops->create  = mo2_create;
@@ -291,14 +292,15 @@ bool FuseConnector::mount(
     std::fprintf(stderr, "[VFS] WARNING: tracking file path is empty!\n");
   }
 
-  m_context                   = std::make_shared<Mo2FsContext>();
-  m_context->tree             = tree;
-  m_context->inodes           = std::make_unique<InodeTable>();
-  m_context->overwrite        = std::make_unique<OverwriteManager>(m_stagingDir, m_overwriteDir);
-  m_context->tracked_writes   = m_trackedWrites;
-  m_context->backing_dir_fd   = m_backingFd;
-  m_context->uid              = ::getuid();
-  m_context->gid              = ::getgid();
+  m_context                        = std::make_shared<Mo2FsContext>();
+  m_context->tree                  = tree;
+  m_context->inodes                = std::make_unique<InodeTable>();
+  m_context->overwrite             = std::make_unique<OverwriteManager>(m_stagingDir, m_overwriteDir);
+  m_context->tracked_writes        = m_trackedWrites;
+  m_context->backing_dir_fd        = m_backingFd;
+  m_context->uid                   = ::getuid();
+  m_context->gid                   = ::getgid();
+  m_context->passthrough_requested = m_passthroughEnabled;
 
   // NOTE: Do NOT include mount_point here — low-level API passes it
   // separately to fuse_session_mount(). Including it here causes
@@ -335,7 +337,13 @@ bool FuseConnector::mount(
   }
 
   m_fuseThread = std::thread([this]() {
-    fuse_session_loop_mt(m_session, nullptr);
+    // Enable clone_fd: each worker thread gets its own /dev/fuse fd,
+    // eliminating contention on a single fd lock under heavy parallel I/O.
+    struct fuse_loop_config* cfg = fuse_loop_cfg_create();
+    fuse_loop_cfg_set_clone_fd(cfg, 1);
+    fuse_loop_cfg_set_max_threads(cfg, 16);
+    fuse_session_loop_mt(m_session, cfg);
+    fuse_loop_cfg_destroy(cfg);
   });
 
   m_mounted = true;
@@ -436,6 +444,13 @@ void FuseConnector::setTrackingFilePath(const std::string& path)
 {
   m_trackingFilePath = path;
   std::fprintf(stderr, "[VFS] setTrackingFilePath: '%s'\n", path.c_str());
+}
+
+void FuseConnector::setPassthroughEnabled(bool enabled)
+{
+  m_passthroughEnabled = enabled;
+  std::fprintf(stderr, "[VFS] passthrough %s by user\n",
+               enabled ? "enabled" : "disabled");
 }
 
 std::shared_ptr<TrackedWrites> FuseConnector::trackedWrites() const

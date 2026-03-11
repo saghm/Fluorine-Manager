@@ -39,8 +39,7 @@ private:
   QString findProtonWine(const QString& protonPath);
 
   void startInstallTask(uint32_t appId, const QString& prefixPath,
-                        const QString& protonName, const QString& protonPath,
-                        bool useSteamRun);
+                        const QString& protonName, const QString& protonPath);
 
   void enqueueStatus(const QString& message);
   void enqueueProgress(float progress);

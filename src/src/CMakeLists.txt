@@ -115,7 +115,7 @@ target_link_libraries(organizer PRIVATE
 
 target_compile_definitions(organizer PRIVATE
     SPDLOG_USE_STD_FORMAT
-    FUSE_USE_VERSION=35
+    FUSE_USE_VERSION=312
     $<$<TARGET_EXISTS:Qt6::WebEngineWidgets>:MO2_WEBENGINE>)
 
 if(NOT WIN32)

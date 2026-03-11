@@ -4,7 +4,11 @@ set -euo pipefail
 # Build Fluorine Manager using Docker.
 #
 # Usage:
-#   ./build.sh              # Build AppImage + staging dir
+#   ./build.sh              # Build portable .tar.gz (default)
+#   ./build.sh tarball      # Build portable .tar.gz only
+#   ./build.sh installer    # Build self-extracting .bin installer only
+#   ./build.sh appimage     # Build AppImage (legacy)
+#   ./build.sh all          # Build tarball + AppImage (if available)
 #   ./build.sh shell        # Drop into the build container for debugging
 #
 # Prerequisites: Docker or Podman
@@ -25,15 +29,36 @@ CONTAINER_NAME="fluorine-build-$$"
 
 cd "${SCRIPT_DIR}"
 
-# Build the Docker image if it doesn't exist or Dockerfile changed
+# Determine build mode from first argument
+BUILD_MODE="${1:-tarball}"
+case "${BUILD_MODE}" in
+    tarball|installer|appimage|all|shell) ;;
+    *)
+        echo "Usage: ./build.sh [tarball|installer|appimage|all|shell]"
+        echo ""
+        echo "  tarball    Build portable .tar.gz"
+        echo "  installer  Build self-extracting .bin installer"
+        echo "  appimage   Build AppImage (legacy)"
+        echo "  all        Build tarball (+ AppImage if available)"
+        echo "  shell      Drop into build container"
+        exit 1
+        ;;
+esac
+
+# Build the Docker image if it doesn't exist or Dockerfile changed.
+# Pass BUILD_APPIMAGE=1 only when AppImage builds are requested.
 echo "=== Ensuring build image is up to date ==="
-${DOCKER} build -t "${IMAGE_NAME}" docker/
+DOCKER_BUILD_ARGS=()
+if [ "${BUILD_MODE}" = "appimage" ] || [ "${BUILD_MODE}" = "all" ]; then
+    DOCKER_BUILD_ARGS+=(--build-arg BUILD_APPIMAGE=1)
+fi
+${DOCKER} build "${DOCKER_BUILD_ARGS[@]}" -t "${IMAGE_NAME}" docker/
 
 # Persistent ccache directory for faster rebuilds.
 CCACHE_DIR="${HOME}/.cache/fluorine-ccache"
 mkdir -p "${CCACHE_DIR}"
 
-if [ "${1:-}" = "shell" ]; then
+if [ "${BUILD_MODE}" = "shell" ]; then
     echo "=== Dropping into build container shell ==="
     exec ${DOCKER} run --rm -it \
         -v "${SCRIPT_DIR}:/src:rw" \
@@ -46,11 +71,12 @@ if [ "${1:-}" = "shell" ]; then
         bash
 fi
 
-echo "=== Starting build ==="
+echo "=== Starting build (mode: ${BUILD_MODE}) ==="
 ${DOCKER} run --rm \
     -v "${SCRIPT_DIR}:/src:rw" \
     -v "${CCACHE_DIR}:/ccache:rw" \
     -e CCACHE_DIR=/ccache \
+    -e BUILD_MODE="${BUILD_MODE}" \
     -w /src \
     --device /dev/fuse \
     --cap-add SYS_ADMIN \
@@ -60,7 +86,6 @@ ${DOCKER} run --rm \
 
 echo ""
 echo "=== Done ==="
-if ls build/*.AppImage >/dev/null 2>&1; then
-    echo "AppImage:  $(ls build/*.AppImage)"
-fi
-echo "Staging:   build/staging/"
+echo "Build outputs:"
+ls -lh build/fluorine-manager.tar.gz build/fluorine-manager.bin build/*.AppImage 2>/dev/null || echo "  (none found)"
+echo "Staging: build/staging/"

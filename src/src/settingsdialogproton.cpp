@@ -9,7 +9,9 @@
 #include <uibase/utility.h>
 #include <nak_ffi.h>
 #include <atomic>
+#include <QCheckBox>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -40,11 +42,55 @@ ProtonSettingsTab::ProtonSettingsTab(Settings& s, SettingsDialog& d)
   ui->protonProgressBar->setValue(0);
   ui->protonProgressBar->setVisible(false);
 
-  ui->steamRunCheckBox->setChecked(
-      QSettings().value("fluorine/use_steam_run", false).toBool());
-
   ui->launchWrapperEdit->setPlaceholderText("mangohud --dlsym");
   ui->launchWrapperEdit->setText(QSettings().value("fluorine/launch_wrapper").toString());
+
+  // FUSE passthrough toggle — requires CAP_SYS_ADMIN on the binary.
+  ui->fusePassthroughCheckBox->setChecked(
+      QSettings().value("fluorine/fuse_passthrough", false).toBool());
+  ui->passthroughStatusLabel->setText(QString());
+
+  QObject::connect(ui->fusePassthroughCheckBox, &QCheckBox::toggled, this,
+                   [this](bool checked) {
+                     if (!checked) {
+                       // Disabling doesn't need sudo — just save the setting.
+                       QSettings().setValue("fluorine/fuse_passthrough", false);
+                       ui->passthroughStatusLabel->setText(tr("Passthrough disabled. Takes effect on next game launch."));
+                       return;
+                     }
+
+                     // Enabling requires setting CAP_SYS_ADMIN on the binary.
+                     // Find the actual binary path (ModOrganizer-core).
+                     const QString binary = QCoreApplication::applicationFilePath();
+                     if (binary.isEmpty()) {
+                       ui->fusePassthroughCheckBox->setChecked(false);
+                       ui->passthroughStatusLabel->setText(tr("Could not determine binary path."));
+                       return;
+                     }
+
+                     ui->passthroughStatusLabel->setText(
+                         tr("Granting FUSE passthrough capability... (sudo prompt)"));
+
+                     // Use pkexec (graphical sudo) to set the file capability.
+                     // This is a one-time operation — the capability persists across runs.
+                     QProcess proc;
+                     proc.setProgram("pkexec");
+                     proc.setArguments({"setcap", "cap_sys_admin+ep", binary});
+                     proc.start();
+                     proc.waitForFinished(60000);  // 60s timeout for user to auth
+
+                     if (proc.exitCode() == 0) {
+                       QSettings().setValue("fluorine/fuse_passthrough", true);
+                       ui->passthroughStatusLabel->setText(
+                           tr("Passthrough enabled. Takes effect on next game launch."));
+                     } else {
+                       ui->fusePassthroughCheckBox->setChecked(false);
+                       const QString err = QString::fromUtf8(proc.readAllStandardError()).trimmed();
+                       ui->passthroughStatusLabel->setText(
+                           tr("Failed to set capability: %1").arg(
+                               err.isEmpty() ? tr("authorization denied or pkexec not found") : err));
+                     }
+                   });
 
   populateProtons();
 
@@ -114,8 +160,6 @@ ProtonSettingsTab::ProtonSettingsTab(Settings& s, SettingsDialog& d)
 
 void ProtonSettingsTab::update()
 {
-  QSettings().setValue("fluorine/use_steam_run",
-                       ui->steamRunCheckBox->isChecked());
   QSettings().setValue("fluorine/launch_wrapper", ui->launchWrapperEdit->text());
 }
 
@@ -237,8 +281,7 @@ void ProtonSettingsTab::onCreatePrefix()
   ui->nakInstallLog->setVisible(true);
   ui->toggleInstallLog->setChecked(true);
 
-  startInstallTask(0, pfxPath, protonName, protonPath,
-                   ui->steamRunCheckBox->isChecked());
+  startInstallTask(0, pfxPath, protonName, protonPath);
 }
 
 void ProtonSettingsTab::onDeletePrefix()
@@ -287,8 +330,7 @@ void ProtonSettingsTab::onRecreatePrefix()
   ui->toggleInstallLog->setChecked(true);
 
   startInstallTask(cfg->app_id, cfg->prefix_path, cfg->proton_name,
-                   cfg->proton_path,
-                   ui->steamRunCheckBox->isChecked());
+                   cfg->proton_path);
 }
 
 void ProtonSettingsTab::onOpenPrefixFolder()
@@ -579,8 +621,7 @@ void ProtonSettingsTab::showGameRegistryDialog()
 
 void ProtonSettingsTab::startInstallTask(uint32_t appId, const QString& prefixPath,
                                          const QString& protonName,
-                                         const QString& protonPath,
-                                         bool useSteamRun)
+                                         const QString& protonPath)
 {
   m_pendingAppId      = appId;
   m_pendingPrefixPath = prefixPath;
@@ -595,13 +636,10 @@ void ProtonSettingsTab::startInstallTask(uint32_t appId, const QString& prefixPa
       appId,
       prefixPath,
       protonName,
-      protonPath,
-      useSteamRun]() -> InstallResult {
+      protonPath]() -> InstallResult {
     const QByteArray prefixPathUtf8 = prefixPath.toUtf8();
     const QByteArray protonNameUtf8 = protonName.toUtf8();
     const QByteArray protonPathUtf8 = protonPath.toUtf8();
-
-    qputenv("NAK_USE_STEAM_RUN", useSteamRun ? "1" : "0");
 
     // Set WINEPREFIX so NAK (and its child processes like winetricks) always
     // target the correct prefix during Proton init.
@@ -629,7 +667,6 @@ void ProtonSettingsTab::startInstallTask(uint32_t appId, const QString& prefixPa
     }
 
     const auto restoreNakEnv = qScopeGuard([protonWineUtf8] {
-      qunsetenv("NAK_USE_STEAM_RUN");
       qunsetenv("WINEPREFIX");
       if (!protonWineUtf8.isEmpty()) {
         qunsetenv("WINE");

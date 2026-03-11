@@ -18,9 +18,12 @@ namespace
 {
 namespace fs = std::filesystem;
 
-constexpr double TTL_SECONDS = 30.0;
-constexpr double NEGATIVE_TTL_SECONDS = 5.0;
-constexpr double ATTR_CACHE_SECONDS = 30.0;
+// Mod files are immutable during a game session, so cache aggressively.
+// The VFS tree is built once at mount time and only mutated by our own
+// create/rename/unlink handlers (which invalidate affected entries).
+constexpr double TTL_SECONDS          = 86400.0;  // 24 hours
+constexpr double NEGATIVE_TTL_SECONDS = 3600.0;   // 1 hour — Wine probes many non-existent files
+constexpr double ATTR_CACHE_SECONDS   = 86400.0;
 
 void fillStatForDir(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid);
 void fillStatForFile(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid,
@@ -513,11 +516,80 @@ void mo2_init(void* userdata, struct fuse_conn_info* conn)
 {
   auto* ctx = static_cast<Mo2FsContext*>(userdata);
 
-  // Keep kernel page cache valid across open/close as long as mtime/size are
-  // unchanged.  Mod files are immutable during a game session, so this avoids
-  // re-reading file data from userspace on every open().
-  if (conn->capable & FUSE_CAP_AUTO_INVAL_DATA) {
-    conn->want |= FUSE_CAP_AUTO_INVAL_DATA;
+  // ── Disable AUTO_INVAL_DATA (CRITICAL for performance) ──
+  // AUTO_INVAL_DATA forces a getattr() on EVERY read() to check mtime,
+  // completely bypassing attr_timeout.  This alone causes ~4x throughput
+  // reduction.  Our VFS tree is immutable during a session — we handle
+  // invalidation ourselves via fuse_lowlevel_notify_inval_inode() when
+  // files are created/renamed/deleted through our own handlers.
+  conn->want &= ~FUSE_CAP_AUTO_INVAL_DATA;
+
+  // Let us control page cache invalidation explicitly.
+  if (conn->capable & FUSE_CAP_EXPLICIT_INVAL_DATA) {
+    conn->want |= FUSE_CAP_EXPLICIT_INVAL_DATA;
+  }
+
+  // Force readdirplus always (unset adaptive mode).  Our stat info is
+  // free (in-memory tree), so always return full entries to pre-populate
+  // the kernel dentry + attr caches on every directory listing.
+  if (conn->capable & FUSE_CAP_READDIRPLUS) {
+    conn->want |= FUSE_CAP_READDIRPLUS;
+    conn->want &= ~FUSE_CAP_READDIRPLUS_AUTO;
+  }
+
+  // NOTE: FUSE_CAP_WRITEBACK_CACHE intentionally NOT enabled.
+  // It causes extra getattr calls for cache coherency, which hurts
+  // our read-heavy VFS more than the write buffering helps.
+
+  // Cache symlink targets in the kernel page cache.
+  if (conn->capable & FUSE_CAP_CACHE_SYMLINKS) {
+    conn->want |= FUSE_CAP_CACHE_SYMLINKS;
+  }
+
+  // Allow concurrent lookup()/readdir() on the same directory.
+  if (conn->capable & FUSE_CAP_PARALLEL_DIROPS) {
+    conn->want |= FUSE_CAP_PARALLEL_DIROPS;
+  }
+
+  // Splice: reduce kernel↔userspace data copies for reads and writes.
+  if (conn->capable & FUSE_CAP_SPLICE_WRITE) {
+    conn->want |= FUSE_CAP_SPLICE_WRITE;
+  }
+  if (conn->capable & FUSE_CAP_SPLICE_MOVE) {
+    conn->want |= FUSE_CAP_SPLICE_MOVE;
+  }
+  if (conn->capable & FUSE_CAP_SPLICE_READ) {
+    conn->want |= FUSE_CAP_SPLICE_READ;
+  }
+
+  // More async readahead/writeback slots (default is 12, far too low).
+  conn->max_background      = 128;
+  conn->congestion_threshold = 96;
+
+  // FUSE passthrough: if requested by the user and supported by the kernel,
+  // enable kernel-level passthrough for read-only file opens.  This lets the
+  // kernel serve reads directly from the backing file without round-tripping
+  // through userspace — near-native I/O performance for game file reads.
+  // Requires: kernel 6.9+, libfuse 3.16+, CAP_SYS_ADMIN on the binary.
+  ctx->passthrough_active = false;
+  if constexpr (FUSE_CAP_PASSTHROUGH != 0) {
+    if (ctx->passthrough_requested &&
+        (conn->capable & FUSE_CAP_PASSTHROUGH)) {
+      conn->want |= FUSE_CAP_PASSTHROUGH;
+      ctx->passthrough_active = true;
+      std::fprintf(stderr, "[VFS] FUSE passthrough enabled (kernel supports it)\n");
+    } else if (ctx->passthrough_requested) {
+      std::fprintf(stderr,
+                   "[VFS] FUSE passthrough requested but NOT supported by kernel "
+                   "(capable=0x%x). Falling back to userspace I/O.\n",
+                   conn->capable);
+    }
+  } else {
+    if (ctx->passthrough_requested) {
+      std::fprintf(stderr,
+                   "[VFS] FUSE passthrough requested but NOT available at compile time "
+                   "(libfuse too old). Falling back to userspace I/O.\n");
+    }
   }
 
   // Increase max read/write buffer to 1MB (kernel 4.20+ supports this).
@@ -531,9 +603,13 @@ void mo2_init(void* userdata, struct fuse_conn_info* conn)
   }
 
   std::fprintf(stderr,
-               "[VFS] init: auto_inval=%d max_readahead=%u max_write=%u\n",
+               "[VFS] init: auto_inval=%d explicit_inval=%d readdirplus=%d "
+               "passthrough=%d max_bg=%u max_readahead=%u\n",
                (conn->want & FUSE_CAP_AUTO_INVAL_DATA) ? 1 : 0,
-               conn->max_readahead, conn->max_write);
+               (conn->want & FUSE_CAP_EXPLICIT_INVAL_DATA) ? 1 : 0,
+               (conn->want & FUSE_CAP_READDIRPLUS) ? 1 : 0,
+               ctx->passthrough_active ? 1 : 0,
+               conn->max_background, conn->max_readahead);
 }
 
 void mo2_lookup(fuse_req_t req, fuse_ino_t parent, const char* name)
@@ -685,7 +761,8 @@ void mo2_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
   }
 
   fi->fh            = dh;
-  fi->cache_readdir = 1;
+  fi->keep_cache    = 1;   // Don't invalidate cached readdir on reopen
+  fi->cache_readdir = 1;   // Let kernel cache directory entries
   fuse_reply_open(req, fi);
 }
 
@@ -964,6 +1041,32 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
 
   fi->fh = fh;
   fi->keep_cache = 1;
+
+  // FUSE passthrough: for read-only opens, let the kernel serve reads directly
+  // from the backing file.  This bypasses userspace entirely — the kernel handles
+  // read() syscalls by reading the real file, giving near-native I/O performance.
+  // Only eligible for non-writable, non-COW files (pure reads).
+  if constexpr (FUSE_CAP_PASSTHROUGH != 0) {
+    if (ctx->passthrough_active && !writable && !cowPending && fd < 0) {
+      // Open the real file so the kernel can passthrough reads from it.
+      int ptFd = -1;
+      if (isBacking && ctx->backing_dir_fd >= 0) {
+        ptFd = openat(ctx->backing_dir_fd, realPath.c_str(), O_RDONLY);
+      } else {
+        ptFd = open(realPath.c_str(), O_RDONLY);
+      }
+      if (ptFd >= 0) {
+        fi->backing_id = static_cast<uint32_t>(ptFd);
+        // Store the fd so we can close it on release
+        std::scoped_lock lock(ctx->open_files_mutex);
+        auto it = ctx->open_files.find(fh);
+        if (it != ctx->open_files.end()) {
+          it->second.fd = ptFd;
+        }
+      }
+    }
+  }
+
   fuse_reply_open(req, fi);
 }
 

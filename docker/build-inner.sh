@@ -98,7 +98,6 @@ fi
 SO7="build/src/src/dlls/7z.so"
 if [ -f "${SO7}" ]; then
     cp -f "${SO7}" "${OUT_DIR}/dlls/7z.so"
-    cp -f "${SO7}" "${OUT_DIR}/dlls/7zip.dll"
 fi
 
 # ── Project-specific shared libraries ──
@@ -291,12 +290,16 @@ for tool in wrestool icotool lootcli; do
 done
 
 # ── Fix RPATH so binaries find libs without LD_LIBRARY_PATH ──
+# IMPORTANT: Use --force-rpath to set DT_RPATH (not DT_RUNPATH).
+# DT_RPATH is honored even when the binary has file capabilities
+# (e.g. cap_sys_admin for FUSE passthrough).  DT_RUNPATH and
+# LD_LIBRARY_PATH are both ignored by the kernel for capability binaries.
 echo "Patching RPATH..."
-patchelf --set-rpath '$ORIGIN/lib:$ORIGIN/python/lib' "${OUT_DIR}/ModOrganizer-core"
-[ -f "${OUT_DIR}/lootcli" ] && patchelf --set-rpath '$ORIGIN/lib' "${OUT_DIR}/lootcli"
-find "${OUT_DIR}/plugins" -name "*.so" -exec patchelf --set-rpath '$ORIGIN/../lib:$ORIGIN/../python/lib' {} \; 2>/dev/null || true
+patchelf --force-rpath --set-rpath '$ORIGIN/lib:$ORIGIN/python/lib' "${OUT_DIR}/ModOrganizer-core"
+[ -f "${OUT_DIR}/lootcli" ] && patchelf --force-rpath --set-rpath '$ORIGIN/lib' "${OUT_DIR}/lootcli"
+find "${OUT_DIR}/plugins" -name "*.so" -exec patchelf --force-rpath --set-rpath '$ORIGIN/../lib:$ORIGIN/../python/lib' {} \; 2>/dev/null || true
 # Libraries in lib/ (e.g. librunner.so) need to find sibling libs and python/lib.
-find "${OUT_DIR}/lib" -name "*.so" -exec patchelf --set-rpath '$ORIGIN:$ORIGIN/../python/lib' {} \; 2>/dev/null || true
+find "${OUT_DIR}/lib" -name "*.so" -exec patchelf --force-rpath --set-rpath '$ORIGIN:$ORIGIN/../python/lib' {} \; 2>/dev/null || true
 
 # ── Validate embedded Python runtime ──
 if ! PYTHONHOME="${OUT_DIR}/python" \
@@ -315,6 +318,14 @@ set -euo pipefail
 SELF="$(readlink -f "$0")"
 HERE="$(cd "$(dirname "$SELF")" && pwd)"
 export PATH="${HERE}:${PATH}"
+
+# Save the original environment so game launches (Proton/Wine) can restore it.
+# Without this, our bundled LD_LIBRARY_PATH leaks into game processes and
+# causes library conflicts.
+export FLUORINE_ORIG_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
+export FLUORINE_ORIG_PATH="${PATH}"
+export FLUORINE_ORIG_XDG_DATA_DIRS="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+export FLUORINE_ORIG_QT_PLUGIN_PATH="${QT_PLUGIN_PATH:-}"
 
 # ── Sync portable Python to data dir (only when outdated) ──
 FLUORINE_DATA="${HOME}/.local/share/fluorine"
@@ -353,73 +364,200 @@ exec env PYTHONHOME="${MO2_PYTHONHOME}" "${HERE}/ModOrganizer-core" "$@"
 LAUNCH
 chmod +x "${OUT_DIR}/fluorine-manager"
 
-# ── Desktop integration files (for AppImage) ──
+# ── Desktop integration files ──
 cp -f /src/data/com.fluorine.manager.desktop "${OUT_DIR}/"
 cp -f /src/data/com.fluorine.manager.png "${OUT_DIR}/"
 cp -f /src/data/com.fluorine.manager.metainfo.xml "${OUT_DIR}/"
 
-# ── Build AppImage ──
+# ── Determine build mode ──
+# BUILD_MODE is passed from build.sh: tarball (default), installer, appimage, all
+BUILD_MODE="${BUILD_MODE:-tarball}"
+
+# ── Build tarball (portable distribution) ──
+build_tarball() {
+    echo ""
+    echo "=== Building tarball ==="
+    cd /src/build
+    # Create a clean directory name for the archive
+    TARBALL_NAME="fluorine-manager"
+    rm -rf "${TARBALL_NAME}"
+    cp -a staging "${TARBALL_NAME}"
+    tar czf "${TARBALL_NAME}.tar.gz" "${TARBALL_NAME}"/
+    rm -rf "${TARBALL_NAME}"
+    echo "Tarball: /src/build/${TARBALL_NAME}.tar.gz"
+    ls -lh "/src/build/${TARBALL_NAME}.tar.gz"
+}
+
+# ── Build self-extracting installer (.bin frontloader) ──
+build_installer() {
+    echo ""
+    echo "=== Building installer ==="
+
+    # Create the installer header script
+    INSTALLER_SCRIPT="/src/build/installer-header.sh"
+    cat > "${INSTALLER_SCRIPT}" <<'INSTALLER_HEADER'
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_NAME="Fluorine Manager"
+INSTALL_DIR="${HOME}/.local/share/fluorine/bin"
+DESKTOP_DIR="${HOME}/.local/share/applications"
+ICON_DIR="${HOME}/.local/share/icons/hicolor/256x256/apps"
+
 echo ""
-echo "=== Building AppImage ==="
+echo "╔══════════════════════════════════════════╗"
+echo "║        Fluorine Manager Installer        ║"
+echo "╚══════════════════════════════════════════╝"
+echo ""
 
-APPDIR="/src/build/AppDir"
-rm -rf "${APPDIR}"
-mkdir -p "${APPDIR}/usr/bin" "${APPDIR}/usr/lib" "${APPDIR}/usr/share/applications" \
-         "${APPDIR}/usr/plugins" \
-         "${APPDIR}/usr/share/icons/hicolor/256x256/apps" \
-         "${APPDIR}/usr/share/metainfo"
-
-# Copy staging into AppDir layout
-cp -a "${OUT_DIR}"/. "${APPDIR}/usr/bin/"
-# Move libs to standard location
-mv "${APPDIR}/usr/bin/lib"/* "${APPDIR}/usr/lib/" 2>/dev/null || true
-rmdir "${APPDIR}/usr/bin/lib" 2>/dev/null || true
-# Flatpak runtime exposed Qt plugins from a stable system location. Mirror that
-# layout in AppImage by placing bundled Qt plugins under /usr/plugins.
-if [ -d "${APPDIR}/usr/bin/qt6plugins" ]; then
-    cp -a "${APPDIR}/usr/bin/qt6plugins"/. "${APPDIR}/usr/plugins/"
+# Detect existing installation
+if [ -d "${INSTALL_DIR}" ] && [ -f "${INSTALL_DIR}/ModOrganizer-core" ]; then
+    echo "Existing installation detected at: ${INSTALL_DIR}"
+    echo ""
+    echo "  1) Update existing installation"
+    echo "  2) Extract portable copy here (./fluorine-manager/)"
+    echo "  3) Cancel"
+    echo ""
+    read -rp "Choose [1/2/3]: " CHOICE
+else
+    echo "  1) Install to ${INSTALL_DIR} (global)"
+    echo "  2) Extract portable copy here (./fluorine-manager/)"
+    echo "  3) Cancel"
+    echo ""
+    read -rp "Choose [1/2/3]: " CHOICE
 fi
 
-# Symlink the portable Python's libpython into usr/lib/ so that:
-# 1) linuxdeploy sees the dependency as already satisfied and doesn't bundle
-#    the container's system libpython (which lacks static built-in modules)
-# 2) librunner.so (which lives in usr/lib/) can resolve libpython via $ORIGIN
-PP_APPDIR_LIB="${APPDIR}/usr/bin/python/lib"
-for pp_lib in "${PP_APPDIR_LIB}"/libpython*.so*; do
-    [ -e "${pp_lib}" ] || continue
-    pp_name="$(basename "${pp_lib}")"
-    # Remove any copy linuxdeploy might have placed, then symlink to portable.
-    rm -f "${APPDIR}/usr/lib/${pp_name}"
-    ln -sf ../bin/python/lib/"${pp_name}" "${APPDIR}/usr/lib/${pp_name}"
-done
+case "${CHOICE}" in
+    1)
+        echo ""
+        echo "Installing to ${INSTALL_DIR}..."
+        mkdir -p "${INSTALL_DIR}"
+        # Extract payload (everything after the __PAYLOAD__ marker)
+        ARCHIVE_START=$(awk '/^__PAYLOAD__$/{print NR + 1; exit 0;}' "$0")
+        tail -n +"${ARCHIVE_START}" "$0" | tar xzf - -C "${INSTALL_DIR}" --strip-components=1
 
-# Desktop integration
-cp -f "${OUT_DIR}/com.fluorine.manager.desktop" "${APPDIR}/usr/share/applications/"
-cp -f "${OUT_DIR}/com.fluorine.manager.png" "${APPDIR}/usr/share/icons/hicolor/256x256/apps/"
-cp -f "${OUT_DIR}/com.fluorine.manager.metainfo.xml" "${APPDIR}/usr/share/metainfo/"
+        # Create desktop shortcut
+        mkdir -p "${DESKTOP_DIR}" "${ICON_DIR}"
+        cp -f "${INSTALL_DIR}/com.fluorine.manager.png" "${ICON_DIR}/"
 
-# Bundle icon themes so QIcon::fromTheme() calls resolve inside the AppImage.
-# Flatpak runtime provided this globally; AppImage must carry it explicitly.
-mkdir -p "${APPDIR}/usr/share/icons"
-for theme_dir in /usr/share/icons/*; do
-    [ -d "${theme_dir}" ] || continue
-    cp -a "${theme_dir}" "${APPDIR}/usr/share/icons/"
-done
-if [ -f "/usr/share/icons/default/index.theme" ]; then
-    mkdir -p "${APPDIR}/usr/share/icons/default"
-    cp -f "/usr/share/icons/default/index.theme" "${APPDIR}/usr/share/icons/default/"
-fi
+        cat > "${DESKTOP_DIR}/com.fluorine.manager.desktop" <<DESKTOP_EOF
+[Desktop Entry]
+Type=Application
+Name=Fluorine Manager
+Comment=Mod Organizer for Linux
+Exec=${INSTALL_DIR}/fluorine-manager %u
+Icon=com.fluorine.manager
+Terminal=false
+Categories=Game;Utility;
+StartupWMClass=ModOrganizer
+MimeType=x-scheme-handler/nxm;x-scheme-handler/nxm-hierarchical;
+DESKTOP_EOF
+        chmod +x "${DESKTOP_DIR}/com.fluorine.manager.desktop"
 
-# Update RPATH for new lib location.
-# usr/lib/ contains librunner.so and other MO2 libs.  The symlinks above make
-# libpython resolvable via $ORIGIN for libraries in usr/lib/.
-patchelf --set-rpath '$ORIGIN/../lib:$ORIGIN/python/lib' "${APPDIR}/usr/bin/ModOrganizer-core"
-[ -f "${APPDIR}/usr/bin/lootcli" ] && patchelf --set-rpath '$ORIGIN/../lib' "${APPDIR}/usr/bin/lootcli"
-find "${APPDIR}/usr/bin/plugins" -name "*.so" -exec patchelf --set-rpath '$ORIGIN/../../lib' {} \; 2>/dev/null || true
-find "${APPDIR}/usr/lib" -name "*.so" -not -name "libpython*" -exec patchelf --set-rpath '$ORIGIN' {} \; 2>/dev/null || true
+        # Update desktop database if available
+        command -v update-desktop-database >/dev/null 2>&1 && \
+            update-desktop-database "${DESKTOP_DIR}" 2>/dev/null || true
 
-# Create AppRun wrapper
-cat > "${APPDIR}/AppRun" <<'APPRUN'
+        echo ""
+        echo "Installation complete!"
+        echo "  Binary:   ${INSTALL_DIR}/fluorine-manager"
+        echo "  Shortcut: ${DESKTOP_DIR}/com.fluorine.manager.desktop"
+        echo ""
+        read -rp "Launch now? [Y/n]: " LAUNCH
+        if [ "${LAUNCH,,}" != "n" ]; then
+            exec "${INSTALL_DIR}/fluorine-manager" "$@"
+        fi
+        ;;
+    2)
+        echo ""
+        PORTABLE_DIR="$(pwd)/fluorine-manager"
+        echo "Extracting portable copy to ${PORTABLE_DIR}..."
+        mkdir -p "${PORTABLE_DIR}"
+        ARCHIVE_START=$(awk '/^__PAYLOAD__$/{print NR + 1; exit 0;}' "$0")
+        tail -n +"${ARCHIVE_START}" "$0" | tar xzf - -C "${PORTABLE_DIR}" --strip-components=1
+
+        echo ""
+        echo "Portable extraction complete!"
+        echo "  Run: ${PORTABLE_DIR}/fluorine-manager"
+        ;;
+    *)
+        echo "Cancelled."
+        exit 0
+        ;;
+esac
+exit 0
+__PAYLOAD__
+INSTALLER_HEADER
+
+    # Build the tarball payload
+    cd /src/build
+    TARBALL_NAME="fluorine-manager"
+    rm -rf "${TARBALL_NAME}"
+    cp -a staging "${TARBALL_NAME}"
+    tar czf "${TARBALL_NAME}-payload.tar.gz" "${TARBALL_NAME}"/
+    rm -rf "${TARBALL_NAME}"
+
+    # Combine header + payload into self-extracting .bin
+    cat "${INSTALLER_SCRIPT}" "${TARBALL_NAME}-payload.tar.gz" > "${TARBALL_NAME}.bin"
+    chmod +x "${TARBALL_NAME}.bin"
+    rm -f "${INSTALLER_SCRIPT}" "${TARBALL_NAME}-payload.tar.gz"
+
+    echo "Installer: /src/build/${TARBALL_NAME}.bin"
+    ls -lh "/src/build/${TARBALL_NAME}.bin"
+}
+
+# ── Build AppImage (legacy, optional) ──
+build_appimage() {
+    echo ""
+    echo "=== Building AppImage ==="
+
+    if [ ! -d /opt/linuxdeploy ]; then
+        echo "ERROR: linuxdeploy not available. Rebuild Docker image with --build-arg BUILD_APPIMAGE=1"
+        return 1
+    fi
+
+    APPDIR="/src/build/AppDir"
+    rm -rf "${APPDIR}"
+    mkdir -p "${APPDIR}/usr/bin" "${APPDIR}/usr/lib" "${APPDIR}/usr/share/applications" \
+             "${APPDIR}/usr/plugins" \
+             "${APPDIR}/usr/share/icons/hicolor/256x256/apps" \
+             "${APPDIR}/usr/share/metainfo"
+
+    cp -a "${OUT_DIR}"/. "${APPDIR}/usr/bin/"
+    mv "${APPDIR}/usr/bin/lib"/* "${APPDIR}/usr/lib/" 2>/dev/null || true
+    rmdir "${APPDIR}/usr/bin/lib" 2>/dev/null || true
+    if [ -d "${APPDIR}/usr/bin/qt6plugins" ]; then
+        cp -a "${APPDIR}/usr/bin/qt6plugins"/. "${APPDIR}/usr/plugins/"
+    fi
+
+    PP_APPDIR_LIB="${APPDIR}/usr/bin/python/lib"
+    for pp_lib in "${PP_APPDIR_LIB}"/libpython*.so*; do
+        [ -e "${pp_lib}" ] || continue
+        pp_name="$(basename "${pp_lib}")"
+        rm -f "${APPDIR}/usr/lib/${pp_name}"
+        ln -sf ../bin/python/lib/"${pp_name}" "${APPDIR}/usr/lib/${pp_name}"
+    done
+
+    cp -f "${OUT_DIR}/com.fluorine.manager.desktop" "${APPDIR}/usr/share/applications/"
+    cp -f "${OUT_DIR}/com.fluorine.manager.png" "${APPDIR}/usr/share/icons/hicolor/256x256/apps/"
+    cp -f "${OUT_DIR}/com.fluorine.manager.metainfo.xml" "${APPDIR}/usr/share/metainfo/"
+
+    mkdir -p "${APPDIR}/usr/share/icons"
+    for theme_dir in /usr/share/icons/*; do
+        [ -d "${theme_dir}" ] || continue
+        cp -a "${theme_dir}" "${APPDIR}/usr/share/icons/"
+    done
+    if [ -f "/usr/share/icons/default/index.theme" ]; then
+        mkdir -p "${APPDIR}/usr/share/icons/default"
+        cp -f "/usr/share/icons/default/index.theme" "${APPDIR}/usr/share/icons/default/"
+    fi
+
+    patchelf --force-rpath --set-rpath '$ORIGIN/../lib:$ORIGIN/python/lib' "${APPDIR}/usr/bin/ModOrganizer-core"
+    [ -f "${APPDIR}/usr/bin/lootcli" ] && patchelf --force-rpath --set-rpath '$ORIGIN/../lib' "${APPDIR}/usr/bin/lootcli"
+    find "${APPDIR}/usr/bin/plugins" -name "*.so" -exec patchelf --force-rpath --set-rpath '$ORIGIN/../../lib' {} \; 2>/dev/null || true
+    find "${APPDIR}/usr/lib" -name "*.so" -not -name "libpython*" -exec patchelf --force-rpath --set-rpath '$ORIGIN' {} \; 2>/dev/null || true
+
+    cat > "${APPDIR}/AppRun" <<'APPRUN'
 #!/usr/bin/env bash
 set -euo pipefail
 SELF="$(readlink -f "$0")"
@@ -427,9 +565,6 @@ HERE="$(cd "$(dirname "$SELF")" && pwd)"
 BIN="${HERE}/usr/bin"
 APPIMAGE_DIR="$(dirname "$(readlink -f "${APPIMAGE:-$0}")")"
 
-# ── Sync portable Python to data dir (only when outdated) ──
-# Plugins and dlls are read-only and loaded directly from the squashfs mount.
-# Python needs a writable copy because pip/plugins may modify site-packages.
 FLUORINE_DATA="${HOME}/.local/share/fluorine"
 PYTHON_DST="${FLUORINE_DATA}/python"
 PYTHON_SRC="${BIN}/python"
@@ -448,9 +583,6 @@ if [ -d "${PYTHON_SRC}" ]; then
     fi
 fi
 
-# Save the original (pre-AppImage) environment so game launches can restore it.
-# Without this, AppImage's LD_LIBRARY_PATH/PATH leak into Proton and
-# cause library conflicts that make games crash.
 export FLUORINE_ORIG_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
 export FLUORINE_ORIG_PATH="${PATH}"
 export FLUORINE_ORIG_XDG_DATA_DIRS="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
@@ -466,7 +598,6 @@ export MO2_PYTHON_DIR="${PYTHON_DST}"
 
 unset PYTHONPATH PYTHONNOUSERSITE PYTHONHOME
 
-# Use bundled Qt6 plugins.
 export QT_PLUGIN_PATH="${HERE}/usr/plugins"
 export QT_QPA_PLATFORM_PLUGIN_PATH="${HERE}/usr/plugins/platforms"
 export XDG_DATA_DIRS="${HERE}/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
@@ -477,57 +608,66 @@ export XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-KDE}"
 cd "${APPIMAGE_DIR}"
 exec "${BIN}/ModOrganizer-core" "$@"
 APPRUN
-chmod +x "${APPDIR}/AppRun"
+    chmod +x "${APPDIR}/AppRun"
 
-# Symlinks required by AppImage spec
-ln -sf usr/share/applications/com.fluorine.manager.desktop "${APPDIR}/com.fluorine.manager.desktop"
-ln -sf usr/share/icons/hicolor/256x256/apps/com.fluorine.manager.png "${APPDIR}/com.fluorine.manager.png"
-ln -sf usr/share/icons/hicolor/256x256/apps/com.fluorine.manager.png "${APPDIR}/.DirIcon"
+    ln -sf usr/share/applications/com.fluorine.manager.desktop "${APPDIR}/com.fluorine.manager.desktop"
+    ln -sf usr/share/icons/hicolor/256x256/apps/com.fluorine.manager.png "${APPDIR}/com.fluorine.manager.png"
+    ln -sf usr/share/icons/hicolor/256x256/apps/com.fluorine.manager.png "${APPDIR}/.DirIcon"
 
-# Extract linuxdeploy (can't use FUSE inside Docker)
-DEPLOY_DIR="/tmp/linuxdeploy-extract"
-if [ ! -d "${DEPLOY_DIR}" ]; then
-    cd /opt/linuxdeploy
-    ./linuxdeploy-x86_64.AppImage --appimage-extract >/dev/null
-    mv squashfs-root "${DEPLOY_DIR}"
-    chmod +x "${DEPLOY_DIR}/AppRun"
-fi
+    DEPLOY_DIR="/tmp/linuxdeploy-extract"
+    if [ ! -d "${DEPLOY_DIR}" ]; then
+        cd /opt/linuxdeploy
+        ./linuxdeploy-x86_64.AppImage --appimage-extract >/dev/null
+        mv squashfs-root "${DEPLOY_DIR}"
+        chmod +x "${DEPLOY_DIR}/AppRun"
+    fi
 
-# Use linuxdeploy to generate the AppImage.
-# We skip the Qt plugin since we already handle Qt plugin paths at runtime
-# and our deps are already staged.
-#
-# linuxdeploy scans binary deps and bundles them.  We must prevent it from
-# bundling the container's system libpython (which lacks statically-compiled
-# extension modules like _ctypes, resource, _lzma).  The portable Python
-# runtime in usr/bin/python/lib/ is the correct copy.  Symlinks in usr/lib/
-# point to it, and --exclude-library prevents linuxdeploy from overwriting them.
-export ARCH=x86_64
-# Tell linuxdeploy to skip libpython — we bundle the portable Python's copy
-# via symlinks in usr/lib/ and must not replace it with the container's version.
-export LINUXDEPLOY_EXCLUDE_MODULES="libpython"
-"${DEPLOY_DIR}/AppRun" \
-    --appdir "${APPDIR}" \
-    --output appimage \
-    --desktop-file "${APPDIR}/usr/share/applications/com.fluorine.manager.desktop" \
-    --icon-file "${APPDIR}/usr/share/icons/hicolor/256x256/apps/com.fluorine.manager.png" \
-    --exclude-library "libpython*" \
-    2>&1 || {
-    echo "WARNING: linuxdeploy AppImage generation failed, falling back to staging dir output"
+    export ARCH=x86_64
+    export LINUXDEPLOY_EXCLUDE_MODULES="libpython"
+    "${DEPLOY_DIR}/AppRun" \
+        --appdir "${APPDIR}" \
+        --output appimage \
+        --desktop-file "${APPDIR}/usr/share/applications/com.fluorine.manager.desktop" \
+        --icon-file "${APPDIR}/usr/share/icons/hicolor/256x256/apps/com.fluorine.manager.png" \
+        --exclude-library "libpython*" \
+        2>&1 || {
+        echo "WARNING: linuxdeploy AppImage generation failed"
+    }
+
+    APPIMAGE_FILE=$(ls -1 Fluorine*.AppImage 2>/dev/null || ls -1 *.AppImage 2>/dev/null || true)
+    if [ -n "${APPIMAGE_FILE}" ]; then
+        mv "${APPIMAGE_FILE}" "/src/build/"
+        echo "AppImage: /src/build/${APPIMAGE_FILE}"
+        ls -lh "/src/build/"*.AppImage
+    fi
 }
 
-# Move AppImage to output
-APPIMAGE_FILE=$(ls -1 Fluorine*.AppImage 2>/dev/null || ls -1 *.AppImage 2>/dev/null || true)
-if [ -n "${APPIMAGE_FILE}" ]; then
-    mv "${APPIMAGE_FILE}" "/src/build/"
-    echo ""
-    echo "=== AppImage built ==="
-    ls -lh "/src/build/"*.AppImage
-else
-    echo ""
-    echo "=== Staging complete (AppImage generation skipped) ==="
-fi
+# ── Execute requested build mode ──
+case "${BUILD_MODE}" in
+    tarball)
+        build_tarball
+        ;;
+    installer)
+        build_installer
+        ;;
+    appimage)
+        build_appimage
+        ;;
+    all)
+        build_tarball
+        if [ -d /opt/linuxdeploy ]; then
+            build_appimage
+        fi
+        ;;
+    *)
+        echo "ERROR: Unknown BUILD_MODE '${BUILD_MODE}'. Use: tarball, installer, appimage, all"
+        exit 1
+        ;;
+esac
 
 echo ""
 echo "=== Build Summary ==="
 du -sh "${OUT_DIR}"/*/ "${OUT_DIR}"/ModOrganizer-core 2>/dev/null | sort -rh
+echo ""
+echo "Build outputs:"
+ls -lh /src/build/fluorine-manager.tar.gz /src/build/fluorine-manager.bin /src/build/*.AppImage 2>/dev/null || echo "  (none found)"
