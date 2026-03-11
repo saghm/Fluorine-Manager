@@ -84,6 +84,9 @@ void TrackedWrites::load(const std::string& path)
   const std::string data = ss.str();
   f.close();
 
+  // Base directory for resolving relative mod paths.
+  const std::string baseDir = fs::path(path).parent_path().string();
+
   std::lock_guard lock(m_mutex);
   m_tracked.clear();
   m_overwriteSnapshot.clear();
@@ -136,7 +139,17 @@ void TrackedWrites::load(const std::string& path)
           ++pos;
           std::string modPath = parseJsonString(data, pos);
 
-          m_tracked[toLower(relPath)] = modPath;
+          // Resolve mod path: if it's relative, resolve against base dir.
+          // If it's absolute (legacy format), use as-is for backwards compat.
+          std::error_code ec;
+          std::string resolved;
+          if (!modPath.empty() && modPath[0] != '/') {
+            resolved = fs::weakly_canonical(fs::path(baseDir) / modPath, ec).string();
+          } else {
+            resolved = modPath;
+          }
+
+          m_tracked[toLower(relPath)] = resolved;
 
           skipWhitespace(data, pos);
           if (pos < data.size() && data[pos] == ',')
@@ -171,6 +184,9 @@ void TrackedWrites::load(const std::string& path)
   }
 
   std::fprintf(stderr, "[VFS] loaded %zu tracked write mappings\n", m_tracked.size());
+
+  // Prune entries whose mod folder no longer exists (e.g. user deleted the mod).
+  pruneStaleUnlocked();
 }
 
 void TrackedWrites::save(const std::string& path) const
@@ -187,12 +203,22 @@ void TrackedWrites::save(const std::string& path) const
     return;
   }
 
+  // Base directory for making mod paths relative (portable).
+  const fs::path baseDir = fs::path(path).parent_path();
+
   f << "{\n  \"tracked\": {";
   bool first = true;
   for (const auto& [relPath, modPath] : m_tracked) {
     if (!first)
       f << ",";
-    f << "\n    \"" << jsonEscape(relPath) << "\": \"" << jsonEscape(modPath) << "\"";
+    // Convert absolute mod path to relative for portability.
+    std::string storedPath = modPath;
+    if (!modPath.empty() && modPath[0] == '/') {
+      auto rel = fs::relative(fs::path(modPath), baseDir, ec);
+      if (!ec && !rel.empty())
+        storedPath = rel.string();
+    }
+    f << "\n    \"" << jsonEscape(relPath) << "\": \"" << jsonEscape(storedPath) << "\"";
     first = false;
   }
   f << "\n  },\n  \"overwrite_snapshot\": [";
@@ -207,6 +233,30 @@ void TrackedWrites::save(const std::string& path) const
   f << "\n  ]\n}\n";
 
   std::fprintf(stderr, "[VFS] saved %zu tracked write mappings\n", m_tracked.size());
+}
+
+void TrackedWrites::pruneStale()
+{
+  std::lock_guard lock(m_mutex);
+  pruneStaleUnlocked();
+}
+
+void TrackedWrites::pruneStaleUnlocked()
+{
+  std::error_code ec;
+  int pruned = 0;
+  for (auto it = m_tracked.begin(); it != m_tracked.end(); ) {
+    if (!fs::is_directory(it->second, ec)) {
+      std::fprintf(stderr, "[VFS] pruning stale tracking: %s -> %s (mod folder gone)\n",
+                   it->first.c_str(), it->second.c_str());
+      it = m_tracked.erase(it);
+      ++pruned;
+    } else {
+      ++it;
+    }
+  }
+  if (pruned > 0)
+    std::fprintf(stderr, "[VFS] pruned %d stale tracked write entries\n", pruned);
 }
 
 void TrackedWrites::track(const std::string& relative_path,

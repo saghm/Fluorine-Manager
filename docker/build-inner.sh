@@ -330,16 +330,22 @@ export FLUORINE_ORIG_QT_PLUGIN_PATH="${QT_PLUGIN_PATH:-}"
 FLUORINE_DATA="${HOME}/.local/share/fluorine"
 BIN_DST="${FLUORINE_DATA}/bin"
 
-# Use the main binary's mtime as a version fingerprint.
-CURRENT_VER="$(stat -c '%i:%Y' "${HERE}/ModOrganizer-core" 2>/dev/null || echo "unknown")"
-MARKER="${BIN_DST}/.version"
+# Guard: if we ARE already running from the installed location, skip the sync.
+# Without this, running the binary directly from BIN_DST would rm -rf itself.
+HERE_REAL="$(readlink -f "${HERE}")"
+DST_REAL="$(readlink -f "${BIN_DST}" 2>/dev/null || echo "")"
+if [ "${HERE_REAL}" != "${DST_REAL}" ]; then
+    # Use the main binary's mtime as a version fingerprint.
+    CURRENT_VER="$(stat -c '%i:%Y' "${HERE}/ModOrganizer-core" 2>/dev/null || echo "unknown")"
+    MARKER="${BIN_DST}/.version"
 
-if [ ! -f "${MARKER}" ] || [ "$(cat "${MARKER}" 2>/dev/null)" != "${CURRENT_VER}" ]; then
-    echo "Syncing Fluorine to ${BIN_DST}..." >&2
-    rm -rf "${BIN_DST}"
-    mkdir -p "${BIN_DST}"
-    (cd "${HERE}" && tar --exclude-vcs -cf - .) | (cd "${BIN_DST}" && tar -xf -)
-    echo "${CURRENT_VER}" > "${MARKER}"
+    if [ ! -f "${MARKER}" ] || [ "$(cat "${MARKER}" 2>/dev/null)" != "${CURRENT_VER}" ]; then
+        echo "Syncing Fluorine to ${BIN_DST}..." >&2
+        rm -rf "${BIN_DST}"
+        mkdir -p "${BIN_DST}"
+        (cd "${HERE}" && tar --exclude-vcs -cf - .) | (cd "${BIN_DST}" && tar -xf -)
+        echo "${CURRENT_VER}" > "${MARKER}"
+    fi
 fi
 
 # Run from the synced location.

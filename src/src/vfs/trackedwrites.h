@@ -24,10 +24,18 @@ public:
   TrackedWrites() = default;
 
   // Load tracking data from a JSON file.
+  // Mod paths are stored relative to the JSON file's parent directory for
+  // portability.  They are resolved to absolute paths on load.
   void load(const std::string& path);
 
   // Save tracking data to a JSON file.
+  // Absolute mod paths are converted to relative (relative to the JSON file's
+  // parent directory) before writing.
   void save(const std::string& path) const;
+
+  // Remove entries whose mod folder no longer exists on disk.
+  // Called automatically after load(), but can also be called explicitly.
+  void pruneStale();
 
   // Record that a file at relative_path now lives in mod_folder_path.
   // mod_folder_path is the absolute path to the mod's root directory.
@@ -62,6 +70,9 @@ public:
   std::unordered_map<std::string, std::string> allMappings() const;
 
 private:
+  // Prune without locking (caller must hold m_mutex).
+  void pruneStaleUnlocked();
+
   // relative_path (lowercase) -> absolute mod folder path
   mutable std::mutex m_mutex;
   std::unordered_map<std::string, std::string> m_tracked;

@@ -283,10 +283,13 @@ bool FuseConnector::mount(
     m_trackedWrites->load(m_trackingFilePath);
     if (existed) {
       m_trackedWrites->detectManualMoves(m_overwriteDir, mods);
-    } else {
-      // First run: scan overwrite for files that also exist in a mod
-      m_trackedWrites->initialScan(m_overwriteDir, mods);
     }
+    // NOTE: initialScan() is no longer called on first run.  Its heuristic
+    // ("file exists in both overwrite and a mod → track it") produces false
+    // positives: game-generated overwrite files that happen to share a name
+    // with a mod file get incorrectly tracked.  Tracking now only happens
+    // through explicit user actions (UI move/sync/drag-drop) or the
+    // snapshot-based detectManualMoves().
     m_trackedWrites->save(m_trackingFilePath);
   } else {
     std::fprintf(stderr, "[VFS] WARNING: tracking file path is empty!\n");
@@ -394,11 +397,16 @@ void FuseConnector::unmount()
                  static_cast<long long>(ms));
   }
 
-  // After flush: scan overwrite for files that also exist in mods (bootstraps
-  // tracking on first run), snapshot overwrite contents for next session's
-  // manual-move detection, then save tracking data.
+  // Snapshot overwrite contents for next session's manual-move detection,
+  // then save tracking data.
+  //
+  // NOTE: initialScan() is intentionally NOT called here.  It was previously
+  // run at every unmount, which caused false-positive tracking: any file that
+  // exists in both overwrite and a mod got auto-tracked, even if the overwrite
+  // copy was a game-generated modification (not a user move).  Tracking should
+  // only happen through explicit user actions (UI move/sync) or the
+  // snapshot-based detectManualMoves() at mount time.
   if (m_trackedWrites && !m_trackingFilePath.empty()) {
-    m_trackedWrites->initialScan(m_overwriteDir, m_lastMods);
     m_trackedWrites->snapshotOverwrite(m_overwriteDir);
     m_trackedWrites->save(m_trackingFilePath);
   }
