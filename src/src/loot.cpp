@@ -1381,12 +1381,21 @@ static bool launchLootGui(QWidget* parent, OrganizerCore& core)
   lootProcess.setProgram(appImage);
   lootProcess.setArguments(args);
 
-  // Restore the original environment if running from AppImage so LOOT
-  // doesn't inherit Fluorine's bundled library paths.
+  // Restore the original environment so LOOT's AppImage doesn't inherit
+  // Fluorine's bundled library/plugin paths (which are incompatible with
+  // LOOT's own bundled Qt).
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
   QString origLdPath = env.value("FLUORINE_ORIG_LD_LIBRARY_PATH");
   if (!origLdPath.isEmpty()) {
     env.insert("LD_LIBRARY_PATH", origLdPath);
+  } else {
+    env.remove("LD_LIBRARY_PATH");
+  }
+  QString origQtPluginPath = env.value("FLUORINE_ORIG_QT_PLUGIN_PATH");
+  if (!origQtPluginPath.isEmpty()) {
+    env.insert("QT_PLUGIN_PATH", origQtPluginPath);
+  } else {
+    env.remove("QT_PLUGIN_PATH");
   }
   QString origPath = env.value("FLUORINE_ORIG_PATH");
   if (!origPath.isEmpty()) {
