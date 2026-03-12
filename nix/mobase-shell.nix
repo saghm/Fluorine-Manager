@@ -26,8 +26,9 @@ pkgs.mkShell {
     qt6.qtsvg
     qt6.qtwayland
 
-    # Python
+    # Python (withPackages for runtime, base python313 for dev headers/libpython)
     pythonWithPkgs
+    python313
 
     # Libraries
     boost
@@ -49,6 +50,9 @@ pkgs.mkShell {
   ];
 
   shellHook = ''
+    # Save the real nix Python before venv overrides PATH (cmake needs this)
+    export NIX_PYTHON3="$(command -v python3)"
+
     # Create a temporary venv to install pinned pybind11 (nixpkgs version is too new)
     if [ ! -d .nix-venv ]; then
       python3 -m venv .nix-venv --system-site-packages

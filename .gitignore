@@ -35,3 +35,7 @@ __pycache__/
 
 # Generated settings files
 fomod-plus-settings.ini
+
+# Nix
+.nix-venv/
+result
