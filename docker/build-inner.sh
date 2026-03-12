@@ -71,7 +71,9 @@ find build/libs -type f \( \
     -name "libform43_checker_native.so" -o \
     -name "libscript_extender_checker_native.so" -o \
     -name "libpreview_dds_native.so" -o \
-    -name "libbasic_games_native.so" \
+    -name "libbasic_games_native.so" -o \
+    -name "librootbuilder_native.so" -o \
+    -name "libinstaller_omod_native.so" \
 \) -exec cp -f {} "${OUT_DIR}/plugins/" \;
 
 # Python plugin loader (small — kept for optional Python support).
