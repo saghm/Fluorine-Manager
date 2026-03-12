@@ -461,7 +461,7 @@ void fillStatForDir(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid)
 void fillStatForFile(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid,
                      uint64_t size,
                      const std::chrono::system_clock::time_point& mtime,
-                     const std::string& real_path = {})
+                     const std::string& real_path)
 {
   std::memset(st, 0, sizeof(struct stat));
   st->st_ino   = ino;
