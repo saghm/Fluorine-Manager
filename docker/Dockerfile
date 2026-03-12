@@ -21,18 +21,34 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     liblz4-dev zlib1g-dev libzstd-dev libbz2-dev liblzma-dev \
     libssl-dev libcurl4-openssl-dev \
     libtomlplusplus-dev \
-    # Qt 6
-    qt6-base-dev qt6-base-dev-tools \
-    qt6-webengine-dev \
-    libqt6websockets6-dev \
-    qt6-svg-dev qt6-svg-plugins \
-    qt6-wayland \
+    # Qt 6 runtime deps (aqtinstall provides Qt 6.10 headers/tools/libs for build)
     kde-style-breeze \
+    libgl-dev libopengl-dev libvulkan-dev libxkbcommon-dev libfontconfig1-dev \
+    libfreetype-dev libx11-dev libxext-dev libxfixes-dev \
+    libxi-dev libxrender-dev libxcb1-dev libxcb-cursor-dev \
+    libxcb-glx0-dev libxcb-keysyms1-dev libxcb-image0-dev \
+    libxcb-shm0-dev libxcb-icccm4-dev libxcb-sync-dev \
+    libxcb-xfixes0-dev libxcb-shape0-dev libxcb-randr0-dev \
+    libxcb-render-util0-dev libxcb-xinerama0-dev \
+    libxcb-xkb-dev libxkbcommon-x11-dev libatspi2.0-dev \
+    libwayland-dev \
     # Python
-    python3 python3-pyqt6 \
+    python3 python3-pip python3-pyqt6 \
     # Misc
     icoutils zip unzip \
     && rm -rf /var/lib/apt/lists/*
+
+# ── Qt 6.10 via aqtinstall ──
+RUN pip3 install --break-system-packages aqtinstall && \
+    aqt install-qt linux desktop 6.10.2 linux_gcc_64 \
+      -m qtwebsockets qtwaylandcompositor \
+      --outputdir /opt/qt6 && \
+    ls /opt/qt6/6.10.2/gcc_64/bin/qmake && \
+    (pip3 uninstall -y aqtinstall --break-system-packages 2>/dev/null || true)
+ENV Qt6_DIR=/opt/qt6/6.10.2/gcc_64
+ENV CMAKE_PREFIX_PATH="/opt/qt6/6.10.2/gcc_64:${CMAKE_PREFIX_PATH}"
+ENV PATH="/opt/qt6/6.10.2/gcc_64/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/opt/qt6/6.10.2/gcc_64/lib:${LD_LIBRARY_PATH}"
 
 # ── uv (Python package manager) ──
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh

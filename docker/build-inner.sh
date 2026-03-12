@@ -160,8 +160,18 @@ rm -f "${ALL_DEPS}"
 echo "Dependencies bundled."
 
 # ── Qt6 platform plugins ──
-QT6_PLUGIN_DIR="/usr/lib/x86_64-linux-gnu/qt6/plugins"
-if [ ! -d "${QT6_PLUGIN_DIR}" ]; then
+# Prefer aqtinstall location (Docker), then system, then qtpaths6 fallback.
+QT6_PLUGIN_DIR=""
+for _candidate in \
+    "${Qt6_DIR:-}/plugins" \
+    "/opt/qt6/6.10.2/gcc_64/plugins" \
+    "/usr/lib/x86_64-linux-gnu/qt6/plugins"; do
+    if [ -d "${_candidate}" ]; then
+        QT6_PLUGIN_DIR="${_candidate}"
+        break
+    fi
+done
+if [ -z "${QT6_PLUGIN_DIR}" ]; then
     QT6_PLUGIN_DIR="$(qtpaths6 --plugin-dir 2>/dev/null || echo "")"
 fi
 if [ -d "${QT6_PLUGIN_DIR}" ]; then
