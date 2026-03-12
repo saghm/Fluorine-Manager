@@ -23,6 +23,7 @@ public:
   ProtonLauncher& setSteamDrm(bool useSteamDrm);
   ProtonLauncher& setStoreVariant(const QString& variant);
   ProtonLauncher& addEnvVar(const QString& key, const QString& value);
+  ProtonLauncher& setUseTerminal(bool useTerminal);
 
   // Launch dispatch: Proton -> Direct
   std::pair<bool, qint64> launch() const;
@@ -43,6 +44,7 @@ private:
   QString m_storeVariant; // "GOG", "Epic", or empty for Steam
   QMap<QString, QString> m_envVars;
   QMap<QString, QString> m_wrapperEnvVars;
+  bool m_useTerminal = false;
 };
 
 #endif  // PROTONLAUNCHER_H

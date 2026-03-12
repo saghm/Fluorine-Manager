@@ -88,6 +88,14 @@ void ExecutablesList::load(const MOBase::IPluginGame* game, const Settings& s)
     if (map["hide"].toBool())
       flags |= Executable::Hide;
 
+    // Default to UseProton=true for backward compat (existing executables
+    // were always launched with Proton).  Only set false if explicitly saved.
+    if (map.contains("useProton") ? map["useProton"].toBool() : true)
+      flags |= Executable::UseProton;
+
+    if (map["useTerminal"].toBool())
+      flags |= Executable::UseTerminal;
+
     if (map.contains("custom")) {
       // the "custom" setting only exists in older versions
       needsUpgrade = true;
@@ -126,6 +134,8 @@ void ExecutablesList::store(Settings& s)
     map["workingDirectory"]     = item.workingDirectory();
     map["steamAppID"]           = item.steamAppID();
     map["minimizeToSystemTray"] = item.minimizeToSystemTray();
+    map["useProton"]            = item.useProton();
+    map["useTerminal"]          = item.useTerminal();
 
     v.push_back(std::move(map));
   }
@@ -480,6 +490,16 @@ bool Executable::minimizeToSystemTray() const
 bool Executable::hide() const
 {
   return m_flags.testFlag(Hide);
+}
+
+bool Executable::useProton() const
+{
+  return m_flags.testFlag(UseProton);
+}
+
+bool Executable::useTerminal() const
+{
+  return m_flags.testFlag(UseTerminal);
 }
 
 void Executable::mergeFrom(const Executable& other)

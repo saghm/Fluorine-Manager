@@ -465,6 +465,29 @@ Right now the only case I know of where this needs to be overwritten is for the 
               </widget>
              </item>
              <item>
+              <widget class="QCheckBox" name="useProton">
+               <property name="toolTip">
+                <string>Launch this executable through Proton (Wine compatibility layer). Disable for native Linux executables.</string>
+               </property>
+               <property name="text">
+                <string>Use Proton</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="useTerminal">
+               <property name="toolTip">
+                <string>Open a terminal window showing the executable's output. Useful for debugging.</string>
+               </property>
+               <property name="text">
+                <string>Open in terminal</string>
+               </property>
+              </widget>
+             </item>
+             <item>
               <widget class="QLabel" name="label_5">
                <property name="text">
                 <string>(*) Profile specific</string>

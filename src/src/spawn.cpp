@@ -636,53 +636,57 @@ int spawn(const SpawnParameters &sp, pid_t &processId) {
 
   logSpawning(sp, bin + " " + sp.arguments);
 
-  // Read per-instance settings from the instance INI (not the global
-  // QSettings).
-  const Settings *instanceForLaunch = Settings::maybeInstance();
-  bool useSteamDrm = true; // default
-  QString storeVariant;
-  if (instanceForLaunch) {
-    const QSettings instanceIni(instanceForLaunch->filename(),
-                                QSettings::IniFormat);
-    useSteamDrm = instanceIni.value("fluorine/steam_drm", true).toBool();
-    // settingName() maps "General" section keys to top-level (no section
-    // prefix), so game_edition is stored as a plain key under [General] in the
-    // INI.
-    storeVariant = instanceIni.value("game_edition").toString().trimmed();
-  }
-
   ProtonLauncher launcher;
   launcher.setBinary(bin)
       .setArguments(argList)
       .setWorkingDir(cwd)
-      .setSteamAppId(parseSteamAppId(sp.steamAppID))
-      .setSteamDrm(useSteamDrm)
-      .setStoreVariant(storeVariant);
+      .setSteamAppId(parseSteamAppId(sp.steamAppID));
 
-  const QString prefixPath = resolvePrefixPath();
-  if (prefixPath.isEmpty()) {
-    MOBase::log::warn(
-        "No Wine prefix configured - games may not launch correctly. "
-        "Configure a prefix in Settings > Proton or via fluorine-manager.");
-  } else if (!QDir(QDir(prefixPath).filePath("drive_c")).exists()) {
-    MOBase::log::warn(
-        "Wine prefix '{}' does not contain drive_c/ - prefix may be invalid",
-        prefixPath);
+  if (sp.useProton) {
+    // Read per-instance settings from the instance INI (not the global
+    // QSettings).
+    const Settings *instanceForLaunch = Settings::maybeInstance();
+    bool useSteamDrm = true; // default
+    QString storeVariant;
+    if (instanceForLaunch) {
+      const QSettings instanceIni(instanceForLaunch->filename(),
+                                  QSettings::IniFormat);
+      useSteamDrm = instanceIni.value("fluorine/steam_drm", true).toBool();
+      storeVariant = instanceIni.value("game_edition").toString().trimmed();
+    }
+
+    launcher.setSteamDrm(useSteamDrm)
+        .setStoreVariant(storeVariant);
+
+    const QString prefixPath = resolvePrefixPath();
+    if (prefixPath.isEmpty()) {
+      MOBase::log::warn(
+          "No Wine prefix configured - games may not launch correctly. "
+          "Configure a prefix in Settings > Proton or via fluorine-manager.");
+    } else if (!QDir(QDir(prefixPath).filePath("drive_c")).exists()) {
+      MOBase::log::warn(
+          "Wine prefix '{}' does not contain drive_c/ - prefix may be invalid",
+          prefixPath);
+    } else {
+      MOBase::log::info("Using Wine prefix: {}", prefixPath);
+      launcher.setPrefix(prefixPath);
+    }
+
+    const QString protonPath = resolveProtonPath();
+    if (!protonPath.isEmpty()) {
+      launcher.setProtonPath(protonPath);
+    }
+
+    const QString wrapper =
+        QSettings().value("fluorine/launch_wrapper").toString().trimmed();
+    if (!wrapper.isEmpty()) {
+      launcher.setWrapper(wrapper);
+    }
   } else {
-    MOBase::log::info("Using Wine prefix: {}", prefixPath);
-    launcher.setPrefix(prefixPath);
+    MOBase::log::info("Proton disabled for this executable, launching directly");
   }
 
-  const QString protonPath = resolveProtonPath();
-  if (!protonPath.isEmpty()) {
-    launcher.setProtonPath(protonPath);
-  }
-
-  const QString wrapper =
-      QSettings().value("fluorine/launch_wrapper").toString().trimmed();
-  if (!wrapper.isEmpty()) {
-    launcher.setWrapper(wrapper);
-  }
+  launcher.setUseTerminal(sp.useTerminal);
 
   const auto [ok, pid] = launcher.launch();
   if (!ok) {

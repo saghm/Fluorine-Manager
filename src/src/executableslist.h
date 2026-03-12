@@ -48,7 +48,9 @@ public:
     ShowInToolbar        = 0x02,
     UseApplicationIcon   = 0x04,
     Hide                 = 0x08,
-    MinimizeToSystemTray = 0x16
+    MinimizeToSystemTray = 0x16,
+    UseProton            = 0x20,
+    UseTerminal          = 0x40
   };
 
   Q_DECLARE_FLAGS(Flags, Flag);
@@ -79,6 +81,8 @@ public:
   bool usesOwnIcon() const;
   bool minimizeToSystemTray() const;
   bool hide() const;
+  bool useProton() const;
+  bool useTerminal() const;
 
   void mergeFrom(const Executable& other);
 

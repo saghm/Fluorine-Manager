@@ -7,6 +7,7 @@
 #include <QFileInfo>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QStandardPaths>
 #include <log.h>
 
 
@@ -132,6 +133,64 @@ QString detectSteamPath()
   }
 
   return {};
+}
+
+// Detect an available terminal emulator on the system.
+QString findTerminal()
+{
+  static const char* candidates[] = {
+      "konsole", "gnome-terminal", "xfce4-terminal", "alacritty",
+      "kitty", "foot", "xterm"};
+  for (const auto* name : candidates) {
+    const QString path = QStandardPaths::findExecutable(name);
+    if (!path.isEmpty())
+      return path;
+  }
+  return {};
+}
+
+// Wrap a program + args in a terminal emulator.
+// Modifies program and arguments in-place.
+void wrapInTerminal(QString& program, QStringList& arguments)
+{
+  const QString term = findTerminal();
+  if (term.isEmpty()) {
+    MOBase::log::warn("No terminal emulator found; launching without terminal");
+    return;
+  }
+
+  const QString termName = QFileInfo(term).fileName();
+
+  // Build a shell command for the inner program + args.
+  // Append a read prompt so the terminal stays open after exit.
+  QString innerCmd = "'" + QString(program).replace("'", "'\\''") + "'";
+  for (const auto& a : arguments)
+    innerCmd += " '" + QString(a).replace("'", "'\\''") + "'";
+  innerCmd += "; echo; echo '--- Process exited with code '$?' ---'; "
+              "echo 'Press Enter to close...'; read";
+
+  QStringList termArgs;
+  if (termName == "konsole") {
+    termArgs << "--hold" << "-e" << "bash" << "-c" << innerCmd;
+  } else if (termName == "gnome-terminal") {
+    termArgs << "--" << "bash" << "-c" << innerCmd;
+  } else if (termName == "xfce4-terminal") {
+    termArgs << "--hold" << "-e" << ("bash -c " + innerCmd);
+  } else if (termName == "alacritty") {
+    termArgs << "-e" << "bash" << "-c" << innerCmd;
+  } else if (termName == "kitty") {
+    termArgs << "bash" << "-c" << innerCmd;
+  } else if (termName == "foot") {
+    termArgs << "bash" << "-c" << innerCmd;
+  } else {
+    // xterm and others
+    termArgs << "-e" << "bash" << "-c" << innerCmd;
+  }
+
+  MOBase::log::info("Launching in terminal: {} {}", term,
+                     termArgs.join(' '));
+  program   = term;
+  arguments = termArgs;
 }
 
 bool startWithEnv(const QString& program, const QStringList& arguments,
@@ -321,6 +380,12 @@ ProtonLauncher& ProtonLauncher::addEnvVar(const QString& key, const QString& val
   return *this;
 }
 
+ProtonLauncher& ProtonLauncher::setUseTerminal(bool useTerminal)
+{
+  m_useTerminal = useTerminal;
+  return *this;
+}
+
 std::pair<bool, qint64> ProtonLauncher::launch() const
 {
   qint64 pid = -1;
@@ -416,6 +481,10 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
     env.insert("PWD", m_workingDir);
   }
 
+  if (m_useTerminal) {
+    wrapInTerminal(program, arguments);
+  }
+
   return startWithEnv(program, arguments, m_workingDir, env, pid);
 }
 
@@ -437,6 +506,10 @@ bool ProtonLauncher::launchDirect(qint64& pid) const
   }
   for (auto it = m_envVars.cbegin(); it != m_envVars.cend(); ++it) {
     env.insert(it.key(), it.value());
+  }
+
+  if (m_useTerminal) {
+    wrapInTerminal(program, arguments);
   }
 
   return startWithEnv(program, arguments, m_workingDir, env, pid);

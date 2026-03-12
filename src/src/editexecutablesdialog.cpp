@@ -126,6 +126,12 @@ EditExecutablesDialog::EditExecutablesDialog(OrganizerCore& oc, int sel,
   connect(ui->hide, &QCheckBox::toggled, [&] {
     save();
   });
+  connect(ui->useProton, &QCheckBox::toggled, [&] {
+    save();
+  });
+  connect(ui->useTerminal, &QCheckBox::toggled, [&] {
+    save();
+  });
   connect(ui->list->model(), &QAbstractItemModel::rowsMoved, [&] {
     saveOrder();
   });
@@ -391,6 +397,10 @@ void EditExecutablesDialog::clearEdits()
   ui->minimizeToSystemTray->setChecked(false);
   ui->hide->setEnabled(false);
   ui->hide->setChecked(false);
+  ui->useProton->setEnabled(false);
+  ui->useProton->setChecked(true);
+  ui->useTerminal->setEnabled(false);
+  ui->useTerminal->setChecked(false);
 
   m_lastGoodTitle = "";
 }
@@ -407,6 +417,8 @@ void EditExecutablesDialog::setEdits(const Executable& e)
   ui->useApplicationIcon->setChecked(e.usesOwnIcon());
   ui->minimizeToSystemTray->setChecked(e.minimizeToSystemTray());
   ui->hide->setChecked(e.hide());
+  ui->useProton->setChecked(e.useProton());
+  ui->useTerminal->setChecked(e.useTerminal());
 
   m_lastGoodTitle = e.title();
 
@@ -453,6 +465,8 @@ void EditExecutablesDialog::setEdits(const Executable& e)
   ui->forceLoadLibraries->setEnabled(true);
   ui->minimizeToSystemTray->setEnabled(true);
   ui->hide->setEnabled(true);
+  ui->useProton->setEnabled(true);
+  ui->useTerminal->setEnabled(true);
 }
 
 void EditExecutablesDialog::save()
@@ -522,6 +536,18 @@ void EditExecutablesDialog::save()
     e->flags(e->flags() | Executable::Hide);
   } else {
     e->flags(e->flags() & (~Executable::Hide));
+  }
+
+  if (ui->useProton->isChecked()) {
+    e->flags(e->flags() | Executable::UseProton);
+  } else {
+    e->flags(e->flags() & (~Executable::UseProton));
+  }
+
+  if (ui->useTerminal->isChecked()) {
+    e->flags(e->flags() | Executable::UseTerminal);
+  } else {
+    e->flags(e->flags() & (~Executable::UseTerminal));
   }
 
   setDirty(true);
