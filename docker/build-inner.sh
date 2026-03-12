@@ -78,6 +78,11 @@ find build/libs -type f \( \
 
 # Python plugin loader (small — kept for optional Python support).
 [ -f "build/src/src/plugins/libplugin_python.so" ] && cp -f "build/src/src/plugins/libplugin_python.so" "${OUT_DIR}/plugins/"
+# mobase pybind11 module — the Python proxy expects it in plugins/libs/.
+if [ -d "build/src/src/plugins/libs" ]; then
+    mkdir -p "${OUT_DIR}/plugins/libs"
+    cp -f build/src/src/plugins/libs/mobase*.so "${OUT_DIR}/plugins/libs/" 2>/dev/null || true
+fi
 # Python helper shims (needed by Python plugins when Python is enabled).
 for f in lzokay.py winreg.py pyCfg.py; do
     [ -f "build/src/src/plugins/${f}" ] && cp -f "build/src/src/plugins/${f}" "${OUT_DIR}/plugins/"
