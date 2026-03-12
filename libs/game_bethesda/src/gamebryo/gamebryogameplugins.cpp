@@ -231,8 +231,7 @@ QStringList GamebryoGamePlugins::readPluginList(MOBase::IPluginList* pluginList)
     while (!file.atEnd()) {
       QByteArray line = file.readLine();
       if (line.size() > 0 && line.at(0) != '#') {
-        QStringEncoder encoder(QStringConverter::Encoding::System);
-        QString pluginName = encoder.encode(line.trimmed().constData());
+        QString pluginName = QString::fromLocal8Bit(line.trimmed());
         bool asterisk = false;
         if (pluginName.startsWith('*')) {
           pluginName = pluginName.mid(1);
