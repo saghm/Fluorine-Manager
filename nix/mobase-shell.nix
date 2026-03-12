@@ -6,6 +6,8 @@ pkgs.mkShell {
     ninja
     pkg-config
     git
+    rustc
+    cargo
   ];
 
   buildInputs = with pkgs; [
