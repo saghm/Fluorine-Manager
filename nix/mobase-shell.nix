@@ -26,7 +26,7 @@ pkgs.mkShell {
     # Libraries
     boost
     sqlite
-    tinyxml2
+    tinyxml-2
     fontconfig
     spdlog
     fuse3
