@@ -21,6 +21,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <uibase/utility.h>
 #include <uibase/log.h>
 #include <uibase/report.h>
+#ifndef _WIN32
+#include <nak_ffi.h>
+#endif
 #include <QApplication>
 #include <QBuffer>
 #include <QCollator>
@@ -943,80 +946,39 @@ QIcon iconForExecutable(const QString& filePath)
   cache.insert(cacheKey, icon);
   return icon;
 #else
-  // Try to extract icon resources from PE executables via icoutils/wrestool.
-  // If this fails, return a generic executable icon.
+  // Extract icon from PE executable via NaK (pelite-based, no external tools).
   QIcon icon;
 
-  const QString wrestool = QStandardPaths::findExecutable("wrestool");
-  if (!wrestool.isEmpty()) {
-    const QString cacheRoot =
-        QStandardPaths::writableLocation(QStandardPaths::CacheLocation) +
-        "/exe_icons";
-    QDir().mkpath(cacheRoot);
+  {
+    const QByteArray pathUtf8 = fi.absoluteFilePath().toUtf8();
+    NakIconData icoData = nak_extract_exe_icon(pathUtf8.constData());
+    if (icoData.data && icoData.len > 0) {
+      QByteArray ba(reinterpret_cast<const char*>(icoData.data),
+                    static_cast<qsizetype>(icoData.len));
+      QBuffer buf(&ba);
+      buf.open(QIODevice::ReadOnly);
+      QImageReader reader(&buf, "ico");
 
-    const QString outDirPath = cacheRoot + "/" + QString::number(qHash(cacheKey), 16);
-    QDir outDir(outDirPath);
-    if (!outDir.exists()) {
-      QDir().mkpath(outDirPath);
-    }
-
-    auto findBestIcon = [&](const QString& dirPath) -> QIcon {
-      QString bestFile;
-      int bestArea = -1;
-
-      QDirIterator it(dirPath,
-                      QStringList() << "*.png"
-                                    << "*.ico"
-                                    << "*.bmp",
-                      QDir::Files, QDirIterator::Subdirectories);
-      while (it.hasNext()) {
-        const QString path = it.next();
-        QImageReader reader(path);
-        const QSize size = reader.size();
-        const int area   = size.width() * size.height();
-        if (area > bestArea) {
-          bestArea = area;
-          bestFile = path;
-        } else if (bestArea < 0) {
-          // Unknown image size (e.g. multi-size ico); keep first viable file.
-          bestFile = path;
-        }
-      }
-
-      if (!bestFile.isEmpty()) {
-        QIcon candidate(bestFile);
-        if (!candidate.pixmap(24, 24).isNull() || !candidate.pixmap(32, 32).isNull()) {
-          return candidate;
-        }
-      }
-
-      return QIcon();
-    };
-
-    // Reuse previous extraction if present.
-    icon = findBestIcon(outDirPath);
-
-    if (icon.isNull()) {
-      const QList<QStringList> tries = {
-          {"-x", "--type=group_icon", "-o", outDirPath, fi.absoluteFilePath()},
-          {"-x", "--type=14", "-o", outDirPath, fi.absoluteFilePath()},
-          {"-x", "-t14", "-o", outDirPath, fi.absoluteFilePath()},
-      };
-
-      for (const auto& args : tries) {
-        QProcess p;
-        p.start(wrestool, args);
-        if (!p.waitForFinished(4000)) {
-          p.kill();
-          continue;
-        }
-        if (p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0) {
-          icon = findBestIcon(outDirPath);
-          if (!icon.isNull()) {
-            break;
+      // ICO files contain multiple sizes/depths — read all and add to QIcon
+      // so Qt picks the best one for each requested size.
+      if (reader.canRead()) {
+        const int imageCount = reader.imageCount();
+        if (imageCount > 1) {
+          for (int i = 0; i < imageCount; ++i) {
+            reader.jumpToImage(i);
+            QImage img = reader.read();
+            if (!img.isNull()) {
+              icon.addPixmap(QPixmap::fromImage(img));
+            }
+          }
+        } else {
+          QImage img = reader.read();
+          if (!img.isNull()) {
+            icon = QIcon(QPixmap::fromImage(img));
           }
         }
       }
+      nak_icon_data_free(icoData);
     }
   }
 

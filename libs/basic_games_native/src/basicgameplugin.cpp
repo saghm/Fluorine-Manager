@@ -1,6 +1,7 @@
 #include "basicgameplugin.h"
 #include "steamutils.h"
 
+#include <uibase/utility.h>
 #include <uibase/versioninfo.h>
 
 #include <QDateTime>
@@ -166,7 +167,8 @@ bool BasicGamePlugin::isInstalled() const
 
 QIcon BasicGamePlugin::gameIcon() const
 {
-  return QIcon();
+  return MOBase::iconForExecutable(
+      gameDirectory().absoluteFilePath(binaryName()));
 }
 
 QDir BasicGamePlugin::gameDirectory() const

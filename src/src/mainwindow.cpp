@@ -263,7 +263,8 @@ MainWindow::MainWindow(Settings& settings, OrganizerCore& organizerCore,
   QApplication::setEffectEnabled(Qt::UI_AnimateCombo, false);
   QApplication::setEffectEnabled(Qt::UI_AnimateTooltip, false);
   QApplication::setEffectEnabled(Qt::UI_FadeTooltip, false);
-  QApplication::setDesktopFileName(QString("com.fluorine.manager"));
+  // setDesktopFileName moved to MOApplication constructor (must be set before
+  // first window surface for Wayland app_id to take effect)
 
 #ifdef MO2_WEBENGINE
   QWebEngineProfile::defaultProfile()->setPersistentCookiesPolicy(

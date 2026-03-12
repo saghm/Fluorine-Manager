@@ -154,11 +154,12 @@ add_subdirectory(libs/libbsarch)  # shared + static, needs dds-header
 add_subdirectory(libs/7zip)        # builds 7z.so from source (Linux only)
 add_subdirectory(libs/archive)    # shared lib, needs dl
 add_subdirectory(libs/lootcli)    # executable, needs Qt6 + boost + libloot + curl
-add_subdirectory(libs/uibase)     # shared lib, needs Qt6 + spdlog
 
 if(BUILD_NAK_FFI)
-    add_subdirectory(libs/nak_ffi)
+    add_subdirectory(libs/nak_ffi)   # Rust FFI lib, before uibase (icon extraction)
 endif()
+
+add_subdirectory(libs/uibase)     # shared lib, needs Qt6 + spdlog + nak_ffi (Linux)
 
 if(BUILD_BSA_FFI)
     add_subdirectory(libs/bsa_ffi)

@@ -35,7 +35,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Python
     python3 python3-pip python3-pyqt6 \
     # Misc
-    icoutils zip unzip \
+    zip unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Qt 6.10 via aqtinstall ──

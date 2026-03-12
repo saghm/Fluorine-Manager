@@ -50,9 +50,7 @@ cp -f "${RUNDIR}/ModOrganizer" "${OUT_DIR}/ModOrganizer-core"
 LOOTCLI="build/libs/lootcli/src/lootcli"
 [ -f "${LOOTCLI}" ] && cp -f "${LOOTCLI}" "${OUT_DIR}/"
 
-for tool in wrestool icotool; do
-    command -v "${tool}" >/dev/null 2>&1 && cp -f "$(command -v "${tool}")" "${OUT_DIR}/"
-done
+# wrestool/icotool no longer needed — icon extraction is built into libnak_ffi.so (pelite)
 
 # ── MO2 plugins (.so) ──
 find build/libs -type f \( \
@@ -216,7 +214,7 @@ strip --strip-unneeded "${OUT_DIR}/ModOrganizer-core" 2>/dev/null || true
 find "${OUT_DIR}/plugins" -name "*.so" -exec strip --strip-unneeded {} \; 2>/dev/null || true
 find "${OUT_DIR}/dlls" -name "*.so" -o -name "*.dll" | xargs -r strip --strip-unneeded 2>/dev/null || true
 find "${OUT_DIR}/lib" -name "*.so" -exec strip --strip-unneeded {} \; 2>/dev/null || true
-for tool in wrestool icotool lootcli; do
+for tool in lootcli; do
     [ -f "${OUT_DIR}/${tool}" ] && strip --strip-unneeded "${OUT_DIR}/${tool}" 2>/dev/null || true
 done
 
@@ -269,6 +267,21 @@ if [ "${HERE_REAL}" != "${DST_REAL}" ]; then
     fi
 fi
 
+# ── Install icon + desktop file for Wayland taskbar/decoration ──
+ICON_SRC="${BIN_DST}/icons/com.fluorine.manager.png"
+ICON_DST="${HOME}/.local/share/icons/hicolor/256x256/apps/com.fluorine.manager.png"
+DESKTOP_SRC="${BIN_DST}/icons/com.fluorine.manager.desktop"
+DESKTOP_DST="${HOME}/.local/share/applications/com.fluorine.manager.desktop"
+if [ -f "${ICON_SRC}" ] && [ ! -f "${ICON_DST}" ]; then
+    mkdir -p "$(dirname "${ICON_DST}")"
+    cp -f "${ICON_SRC}" "${ICON_DST}"
+fi
+if [ -f "${DESKTOP_SRC}" ] && [ ! -f "${DESKTOP_DST}" ]; then
+    mkdir -p "$(dirname "${DESKTOP_DST}")"
+    sed "s|^Exec=fluorine-manager|Exec=${BIN_DST}/fluorine-manager|" "${DESKTOP_SRC}" > "${DESKTOP_DST}"
+    chmod +x "${DESKTOP_DST}"
+fi
+
 # Run from the synced location.
 RUN="${BIN_DST}"
 
@@ -295,9 +308,10 @@ Plugins = qt6plugins
 QTCONF
 
 # ── Desktop integration files ──
-cp -f /src/data/com.fluorine.manager.desktop "${OUT_DIR}/"
-cp -f /src/data/com.fluorine.manager.png "${OUT_DIR}/"
-cp -f /src/data/com.fluorine.manager.metainfo.xml "${OUT_DIR}/"
+mkdir -p "${OUT_DIR}/icons"
+cp -f /src/data/icons/com.fluorine.manager.desktop "${OUT_DIR}/icons/"
+cp -f /src/data/icons/com.fluorine.manager.png "${OUT_DIR}/icons/"
+cp -f /src/data/icons/com.fluorine.manager.metainfo.xml "${OUT_DIR}/icons/"
 
 # ── Determine build mode ──
 # BUILD_MODE is passed from build.sh: tarball (default), installer, appimage, all
@@ -366,7 +380,7 @@ case "${CHOICE}" in
 
         # Create desktop shortcut
         mkdir -p "${DESKTOP_DIR}" "${ICON_DIR}"
-        cp -f "${INSTALL_DIR}/com.fluorine.manager.png" "${ICON_DIR}/"
+        cp -f "${INSTALL_DIR}/icons/com.fluorine.manager.png" "${ICON_DIR}/"
 
         cat > "${DESKTOP_DIR}/com.fluorine.manager.desktop" <<DESKTOP_EOF
 [Desktop Entry]
@@ -458,9 +472,9 @@ build_appimage() {
         cp -a "${APPDIR}/usr/bin/qt6plugins"/. "${APPDIR}/usr/plugins/"
     fi
 
-    cp -f "${OUT_DIR}/com.fluorine.manager.desktop" "${APPDIR}/usr/share/applications/"
-    cp -f "${OUT_DIR}/com.fluorine.manager.png" "${APPDIR}/usr/share/icons/hicolor/256x256/apps/"
-    cp -f "${OUT_DIR}/com.fluorine.manager.metainfo.xml" "${APPDIR}/usr/share/metainfo/"
+    cp -f "${OUT_DIR}/icons/com.fluorine.manager.desktop" "${APPDIR}/usr/share/applications/"
+    cp -f "${OUT_DIR}/icons/com.fluorine.manager.png" "${APPDIR}/usr/share/icons/hicolor/256x256/apps/"
+    cp -f "${OUT_DIR}/icons/com.fluorine.manager.metainfo.xml" "${APPDIR}/usr/share/metainfo/"
 
     mkdir -p "${APPDIR}/usr/share/icons"
     for theme_dir in /usr/share/icons/*; do

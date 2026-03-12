@@ -187,6 +187,10 @@ target_link_libraries(uibase
 	PUBLIC Qt6::Widgets Qt6::Network Qt6::QuickWidgets
 	PRIVATE spdlog::spdlog_header_only Qt6::Qml Qt6::Quick)
 
+if(NOT WIN32 AND TARGET mo2::nak_ffi)
+	target_link_libraries(uibase PRIVATE mo2::nak_ffi)
+endif()
+
 # installation
 install(TARGETS uibase EXPORT uibaseTargets
 	LIBRARY DESTINATION lib

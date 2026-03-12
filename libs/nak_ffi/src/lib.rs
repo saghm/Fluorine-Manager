@@ -615,6 +615,57 @@ pub extern "C" fn nak_get_dxvk_conf_path() -> *mut c_char {
 }
 
 // ============================================================================
+// Tier 8: PE Icon Extraction
+// ============================================================================
+
+/// Result of icon extraction
+#[repr(C)]
+pub struct NakIconData {
+    /// Raw ICO file bytes (caller must free with nak_icon_data_free)
+    pub data: *mut u8,
+    /// Length of the data in bytes (0 if extraction failed)
+    pub len: usize,
+}
+
+/// Extract the best icon from a Windows PE executable (.exe/.dll).
+///
+/// Returns NakIconData with the raw ICO file bytes.
+/// If extraction fails, data is null and len is 0.
+/// Caller must free the result with nak_icon_data_free().
+#[no_mangle]
+pub unsafe extern "C" fn nak_extract_exe_icon(exe_path: *const c_char) -> NakIconData {
+    let path_str = unsafe { from_cstr(exe_path) };
+    if path_str.is_empty() {
+        return NakIconData {
+            data: ptr::null_mut(),
+            len: 0,
+        };
+    }
+
+    match nak_rust::icons::extract_icon(std::path::Path::new(path_str)) {
+        Some(bytes) => {
+            let len = bytes.len();
+            let mut boxed = bytes.into_boxed_slice();
+            let ptr = boxed.as_mut_ptr();
+            std::mem::forget(boxed);
+            NakIconData { data: ptr, len }
+        }
+        None => NakIconData {
+            data: ptr::null_mut(),
+            len: 0,
+        },
+    }
+}
+
+/// Free icon data returned by nak_extract_exe_icon
+#[no_mangle]
+pub unsafe extern "C" fn nak_icon_data_free(icon: NakIconData) {
+    if !icon.data.is_null() && icon.len > 0 {
+        let _ = unsafe { Vec::from_raw_parts(icon.data, icon.len, icon.len) };
+    }
+}
+
+// ============================================================================
 // General: String free
 // ============================================================================
 

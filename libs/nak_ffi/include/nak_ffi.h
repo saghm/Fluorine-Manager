@@ -176,6 +176,23 @@ char *nak_ensure_dxvk_conf(void);
 char *nak_get_dxvk_conf_path(void);
 
 /* ========================================================================
+ * Tier 8: PE Icon Extraction
+ * ======================================================================== */
+
+/** Result of icon extraction */
+typedef struct {
+    uint8_t *data;  /**< Raw ICO file bytes (NULL if extraction failed) */
+    size_t len;     /**< Length in bytes (0 if extraction failed) */
+} NakIconData;
+
+/** Extract the best icon from a Windows PE executable (.exe/.dll).
+ *  Returns raw ICO bytes. Free with nak_icon_data_free(). */
+NakIconData nak_extract_exe_icon(const char *exe_path);
+
+/** Free icon data returned by nak_extract_exe_icon */
+void nak_icon_data_free(NakIconData icon);
+
+/* ========================================================================
  * General
  * ======================================================================== */
 

@@ -13,4 +13,5 @@ pub mod steam;
 pub mod utils;
 
 pub mod deps;
+pub mod icons;
 pub mod installers;

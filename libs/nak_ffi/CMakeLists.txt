@@ -18,6 +18,8 @@ add_custom_command(
     WORKING_DIRECTORY ${NAK_FFI_DIR}
     COMMENT "Building NaK FFI library (Rust)"
     DEPENDS ${NAK_FFI_DIR}/Cargo.toml ${NAK_FFI_DIR}/src/lib.rs
+            ${NAK_FFI_DIR}/../nak/Cargo.toml ${NAK_FFI_DIR}/../nak/src/lib.rs
+            ${NAK_FFI_DIR}/../nak/src/icons.rs
 )
 
 add_custom_target(nak_ffi_build DEPENDS ${NAK_FFI_LIB})
