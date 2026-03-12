@@ -19,9 +19,9 @@ pkgs.mkShell {
     qt6.qtsvg
     qt6.qtwayland
 
-    # Python + pybind11
+    # Python (pybind11 installed via pip in shellHook to pin version)
     python313
-    python313Packages.pybind11
+    python313Packages.pip
     python313Packages.sip
     python313Packages.pyqt6
 
@@ -45,7 +45,8 @@ pkgs.mkShell {
   ];
 
   shellHook = ''
-    export PYTHONPATH="${pkgs.python313Packages.pybind11}/${pkgs.python313.sitePackages}:$PYTHONPATH"
+    # Pin pybind11 to 2.13.6 (must match Docker build for ABI compat)
+    pip install --quiet pybind11==2.13.6 2>/dev/null || true
     export CMAKE_PREFIX_PATH="${pkgs.qt6.qtbase}:${pkgs.qt6.qtwebengine}:${pkgs.qt6.qtwebsockets}:${pkgs.qt6.qtsvg}:$CMAKE_PREFIX_PATH"
   '';
 }
