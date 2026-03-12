@@ -1,5 +1,12 @@
 { pkgs ? import <nixpkgs> {} }:
 
+let
+  python = pkgs.python313;
+  pythonWithPkgs = python.withPackages (ps: [
+    ps.sip
+    ps.pyqt6
+  ]);
+in
 pkgs.mkShell {
   nativeBuildInputs = with pkgs; [
     cmake
@@ -19,11 +26,8 @@ pkgs.mkShell {
     qt6.qtsvg
     qt6.qtwayland
 
-    # Python (pybind11 installed via pip in shellHook to pin version)
-    python313
-    python313Packages.pip
-    python313Packages.sip
-    python313Packages.pyqt6
+    # Python
+    pythonWithPkgs
 
     # Libraries
     boost
@@ -45,8 +49,13 @@ pkgs.mkShell {
   ];
 
   shellHook = ''
-    # Pin pybind11 to 2.13.6 (must match Docker build for ABI compat)
-    pip install --quiet pybind11==2.13.6 2>/dev/null || true
+    # Create a temporary venv to install pinned pybind11 (nixpkgs version is too new)
+    if [ ! -d .nix-venv ]; then
+      python3 -m venv .nix-venv --system-site-packages
+      .nix-venv/bin/pip install --quiet pybind11==2.13.6
+    fi
+    export PATH="$PWD/.nix-venv/bin:$PATH"
+    export PYTHONPATH="$PWD/.nix-venv/lib/python3.13/site-packages:$PYTHONPATH"
     export CMAKE_PREFIX_PATH="${pkgs.qt6.qtbase}:${pkgs.qt6.qtwebengine}:${pkgs.qt6.qtwebsockets}:${pkgs.qt6.qtsvg}:$CMAKE_PREFIX_PATH"
   '';
 }
