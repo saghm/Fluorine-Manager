@@ -25,6 +25,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "settingsdialogpaths.h"
 #include "settingsdialogplugins.h"
 #include "settingsdialogproton.h"
+#include "settingsdialogpython.h"
 #include "settingsdialogtheme.h"
 #include "settingsdialogworkarounds.h"
 #include "ui_settingsdialog.h"
@@ -51,6 +52,8 @@ SettingsDialog::SettingsDialog(PluginContainer* pluginContainer, Settings& setti
       new PluginsSettingsTab(settings, m_pluginContainer, *this)));
   m_tabs.push_back(
       std::unique_ptr<SettingsTab>(new ProtonSettingsTab(settings, *this)));
+  m_tabs.push_back(
+      std::unique_ptr<SettingsTab>(new PythonSettingsTab(settings, *this)));
   m_tabs.push_back(
       std::unique_ptr<SettingsTab>(new WorkaroundsSettingsTab(settings, *this)));
 }

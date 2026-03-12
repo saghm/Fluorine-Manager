@@ -49,15 +49,6 @@ ENV PATH="/opt/build-python/bin:${PATH}"
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
     sh -s -- -y --default-toolchain stable --profile minimal
 
-# ── Portable Python runtime (for bundling, not compilation) ──
-ARG PORTABLE_PYTHON_VERSION=3.13.9
-RUN curl -L --retry 3 -o /tmp/portable-python.zip \
-      "https://github.com/bjia56/portable-python/releases/download/cpython-v${PORTABLE_PYTHON_VERSION}-build.0/python-headless-${PORTABLE_PYTHON_VERSION}-linux-x86_64.zip" && \
-    mkdir -p /tmp/pp-extract && \
-    unzip -q /tmp/portable-python.zip -d /tmp/pp-extract && \
-    mv /tmp/pp-extract/python-headless-*/ /opt/portable-python && \
-    rm -rf /tmp/portable-python.zip /tmp/pp-extract
-
 # ── Build and install libloot ──
 ARG LIBLOOT_REF=master
 RUN git clone --depth 1 --branch ${LIBLOOT_REF} \

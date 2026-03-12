@@ -1897,6 +1897,167 @@ If you disable this feature, MO will only display official DLCs this way. Please
        </item>
       </layout>
      </widget>
+     <widget class="QWidget" name="pythonTab">
+      <attribute name="title">
+       <string>Python</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="verticalLayout_python">
+       <item>
+        <widget class="QGroupBox" name="groupBox_python">
+         <property name="title">
+          <string>Python Plugin Support</string>
+         </property>
+         <layout class="QGridLayout" name="gridLayout_python">
+          <item row="0" column="0">
+           <widget class="QLabel" name="pythonEnableLabel">
+            <property name="text">
+             <string>Enable Python Plugins:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1" colspan="2">
+           <widget class="QCheckBox" name="pythonEnableCheck">
+            <property name="text">
+             <string>Load .py plugins (requires Python 3 and PyQt6)</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="pythonPathLabel">
+            <property name="text">
+             <string>Python Path:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QLineEdit" name="pythonPathEdit">
+            <property name="readOnly">
+             <bool>true</bool>
+            </property>
+            <property name="placeholderText">
+             <string>Auto-detected</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="2">
+           <widget class="QPushButton" name="pythonRefreshButton">
+            <property name="text">
+             <string>Detect</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="pythonVersionLabel">
+            <property name="text">
+             <string>Version:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1" colspan="2">
+           <widget class="QLabel" name="pythonVersionValue">
+            <property name="text">
+             <string>Not detected</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="groupBox_venv">
+         <property name="title">
+          <string>Virtual Environment</string>
+         </property>
+         <layout class="QGridLayout" name="gridLayout_venv">
+          <item row="0" column="0">
+           <widget class="QLabel" name="venvPathLabel">
+            <property name="text">
+             <string>Venv Location:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1" colspan="2">
+           <widget class="QLineEdit" name="venvPathEdit">
+            <property name="readOnly">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="venvStatusLabel">
+            <property name="text">
+             <string>Status:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1" colspan="2">
+           <widget class="QLabel" name="venvStatusValue">
+            <property name="text">
+             <string>Not created</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QPushButton" name="createVenvButton">
+            <property name="text">
+             <string>Create Virtual Environment</string>
+            </property>
+            <property name="toolTip">
+             <string>Creates a Python virtual environment and installs PyQt6. Required for loading .py plugins.</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QPushButton" name="deleteVenvButton">
+            <property name="text">
+             <string>Delete Venv</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="2">
+           <widget class="QPushButton" name="openVenvFolderButton">
+            <property name="text">
+             <string>Open Folder</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0" colspan="3">
+           <widget class="QTextEdit" name="pythonLogOutput">
+            <property name="readOnly">
+             <bool>true</bool>
+            </property>
+            <property name="visible">
+             <bool>false</bool>
+            </property>
+            <property name="maximumHeight">
+             <number>150</number>
+            </property>
+            <property name="font">
+             <font>
+              <family>monospace</family>
+              <pointsize>9</pointsize>
+             </font>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacer_python">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
      <widget class="QWidget" name="workaroundTab">
       <attribute name="title">
        <string>Workarounds</string>

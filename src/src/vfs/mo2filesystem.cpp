@@ -28,7 +28,8 @@ constexpr double ATTR_CACHE_SECONDS   = 86400.0;
 void fillStatForDir(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid);
 void fillStatForFile(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid,
                      uint64_t size,
-                     const std::chrono::system_clock::time_point& mtime);
+                     const std::chrono::system_clock::time_point& mtime,
+                     const std::string& real_path = {});
 
 void maybeLogCounters(Mo2FsContext* ctx)
 {
@@ -209,6 +210,7 @@ struct ChildSnapshot
   bool is_dir = false;
   uint64_t size = 0;
   std::chrono::system_clock::time_point mtime{};
+  std::string real_path;
 };
 
 std::vector<ChildSnapshot> listChildrenSnapshot(
@@ -229,8 +231,9 @@ std::vector<ChildSnapshot> listChildrenSnapshot(
     snap.name   = name;
     snap.is_dir = child->is_directory;
     if (!child->is_directory) {
-      snap.size  = child->file_info.size;
-      snap.mtime = child->file_info.mtime;
+      snap.size      = child->file_info.size;
+      snap.mtime     = child->file_info.mtime;
+      snap.real_path = child->file_info.real_path;
     }
     out.push_back(std::move(snap));
   }
@@ -256,7 +259,8 @@ std::vector<Mo2FsContext::DirEntry> buildDirEntries(
     const std::string childPath = joinPath(path, child.name);
     entries.push_back(
         Mo2FsContext::DirEntry{ctx->inodes->getOrCreate(childPath), child.name,
-                               child.is_dir, child.size, child.mtime});
+                               child.is_dir, child.size, child.mtime,
+                               child.real_path});
   }
 
   return entries;
@@ -329,8 +333,20 @@ std::vector<char> buildReaddirBlob(
   for (const auto& entry : entries) {
     struct stat st;
     std::memset(&st, 0, sizeof(st));
-    st.st_ino  = entry.ino;
-    st.st_mode = entry.is_dir ? (S_IFDIR | 0755) : (S_IFREG | 0644);
+    st.st_ino = entry.ino;
+    if (entry.is_dir) {
+      st.st_mode = S_IFDIR | 0755;
+    } else {
+      // Preserve executable bits from the real file on disk.
+      mode_t mode = 0644;
+      if (!entry.real_path.empty()) {
+        struct stat real_st;
+        if (::stat(entry.real_path.c_str(), &real_st) == 0) {
+          mode = real_st.st_mode & 0777;
+        }
+      }
+      st.st_mode = S_IFREG | mode;
+    }
 
     const size_t entSize =
         fuse_add_direntry(req, nullptr, 0, entry.name.c_str(), &st, 0);
@@ -362,7 +378,7 @@ std::vector<char> buildReaddirPlusBlob(
       fillStatForDir(&e.attr, entry.ino, ctx->uid, ctx->gid);
     } else {
       fillStatForFile(&e.attr, entry.ino, ctx->uid, ctx->gid, entry.size,
-                      entry.mtime);
+                      entry.mtime, entry.real_path);
     }
 
     const size_t entSize =
@@ -444,15 +460,26 @@ void fillStatForDir(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid)
 
 void fillStatForFile(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid,
                      uint64_t size,
-                     const std::chrono::system_clock::time_point& mtime)
+                     const std::chrono::system_clock::time_point& mtime,
+                     const std::string& real_path = {})
 {
   std::memset(st, 0, sizeof(struct stat));
   st->st_ino   = ino;
-  st->st_mode  = S_IFREG | 0644;
   st->st_nlink = 1;
   st->st_uid   = uid;
   st->st_gid   = gid;
   st->st_size  = static_cast<off_t>(size);
+
+  // Preserve executable bits from the real file on disk so native Linux
+  // executables added as mods can actually be launched through the VFS.
+  mode_t mode = 0644;
+  if (!real_path.empty()) {
+    struct stat real_st;
+    if (::stat(real_path.c_str(), &real_st) == 0) {
+      mode = real_st.st_mode & 0777;
+    }
+  }
+  st->st_mode = S_IFREG | mode;
 
   const auto secs = std::chrono::duration_cast<std::chrono::seconds>(
       mtime.time_since_epoch());
@@ -473,7 +500,8 @@ void replyEntryFromSnapshot(fuse_req_t req, const Mo2FsContext* ctx, fuse_ino_t 
   if (snap.is_directory) {
     fillStatForDir(&e.attr, ino, ctx->uid, ctx->gid);
   } else {
-    fillStatForFile(&e.attr, ino, ctx->uid, ctx->gid, snap.size, snap.mtime);
+    fillStatForFile(&e.attr, ino, ctx->uid, ctx->gid, snap.size, snap.mtime,
+                    snap.real_path);
   }
 
   fuse_reply_entry(req, &e);
@@ -683,7 +711,8 @@ void mo2_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* /*fi*/)
   if (snap.is_directory) {
     fillStatForDir(&st, ino, ctx->uid, ctx->gid);
   } else {
-    fillStatForFile(&st, ino, ctx->uid, ctx->gid, snap.size, snap.mtime);
+    fillStatForFile(&st, ino, ctx->uid, ctx->gid, snap.size, snap.mtime,
+                    snap.real_path);
   }
 
   {
@@ -800,8 +829,19 @@ void mo2_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
   for (size_t i = static_cast<size_t>(off); i < entries->size(); ++i) {
     struct stat st;
     std::memset(&st, 0, sizeof(st));
-    st.st_ino  = (*entries)[i].ino;
-    st.st_mode = (*entries)[i].is_dir ? (S_IFDIR | 0755) : (S_IFREG | 0644);
+    st.st_ino = (*entries)[i].ino;
+    if ((*entries)[i].is_dir) {
+      st.st_mode = S_IFDIR | 0755;
+    } else {
+      mode_t mode = 0644;
+      if (!(*entries)[i].real_path.empty()) {
+        struct stat real_st;
+        if (::stat((*entries)[i].real_path.c_str(), &real_st) == 0) {
+          mode = real_st.st_mode & 0777;
+        }
+      }
+      st.st_mode = S_IFREG | mode;
+    }
 
     const size_t ent = fuse_add_direntry(req, buf.data() + used, size - used,
                                          (*entries)[i].name.c_str(), &st,
@@ -1164,7 +1204,7 @@ void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,
   fuse_reply_write(req, static_cast<size_t>(written));
 }
 
-void mo2_create(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t /*mode*/,
+void mo2_create(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t mode,
                 struct fuse_file_info* fi)
 {
   Mo2FsContext* ctx = getContext(req);
@@ -1196,7 +1236,8 @@ void mo2_create(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t /*mo
     std::error_code ec;
     fs::create_directories(fs::path(realPath).parent_path(), ec);
     // Create the file
-    int tmpFd = open(realPath.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    int tmpFd = open(realPath.c_str(), O_WRONLY | O_CREAT | O_TRUNC,
+                     mode != 0 ? (mode & 07777) : 0644);
     if (tmpFd < 0) {
       // Fall back to staging
       trackedMod.clear();
@@ -1259,7 +1300,8 @@ void mo2_create(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t /*mo
   e.ino           = newIno;
   e.attr_timeout  = TTL_SECONDS;
   e.entry_timeout = TTL_SECONDS;
-  fillStatForFile(&e.attr, newIno, ctx->uid, ctx->gid, snap.size, snap.mtime);
+  fillStatForFile(&e.attr, newIno, ctx->uid, ctx->gid, snap.size, snap.mtime,
+                  snap.real_path);
 
   fuse_reply_create(req, &e, fi);
 }
@@ -1447,6 +1489,14 @@ void mo2_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
     updateFileNode(ctx, path, target, targetIsTracked ? "Mod" : "Staging");
   }
 
+  // Handle chmod — propagate permission changes to the real file on disk.
+  if ((to_set & FUSE_SET_ATTR_MODE) != 0 && attr != nullptr) {
+    const auto snap = snapshotForPath(ctx, path);
+    if (snap.found && !snap.is_directory && !snap.real_path.empty()) {
+      ::chmod(snap.real_path.c_str(), attr->st_mode & 07777);
+    }
+  }
+
   // Handle explicit timestamp changes (utimensat / Wine SetFileTime)
   if ((to_set & (FUSE_SET_ATTR_MTIME | FUSE_SET_ATTR_MTIME_NOW |
                  FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_ATIME_NOW)) != 0 &&
@@ -1523,7 +1573,8 @@ void mo2_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
   if (snap.is_directory) {
     fillStatForDir(&st, ino, ctx->uid, ctx->gid);
   } else {
-    fillStatForFile(&st, ino, ctx->uid, ctx->gid, snap.size, snap.mtime);
+    fillStatForFile(&st, ino, ctx->uid, ctx->gid, snap.size, snap.mtime,
+                    snap.real_path);
   }
   fuse_reply_attr(req, &st, TTL_SECONDS);
 }

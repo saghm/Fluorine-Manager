@@ -9,6 +9,7 @@
 #include <QDirIterator>
 #include <QMessageBox>
 #include <QToolButton>
+#include <QSettings>
 #include <cstdio>
 #include <boost/fusion/algorithm/iteration/for_each.hpp>
 #include <boost/fusion/include/at_key.hpp>
@@ -1300,6 +1301,17 @@ void PluginContainer::loadPlugins()
     if (m_Organizer) {
       if (m_Organizer->settings().plugins().blacklisted(iter.fileName())) {
         log::debug("plugin \"{}\" blacklisted", iter.fileName());
+        continue;
+      }
+    }
+
+    // Skip the Python proxy plugin unless the user has enabled Python support
+    // in Settings > Python. Native C++ replacements handle all default plugins.
+    if (iter.fileName() == "libplugin_python.so" ||
+        iter.fileName() == "plugin_python.dll") {
+      if (!QSettings().value("fluorine/python_enabled", false).toBool()) {
+        log::debug("plugin \"{}\" skipped (Python plugins disabled in settings)",
+                   iter.fileName());
         continue;
       }
     }

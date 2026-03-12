@@ -51,6 +51,7 @@ struct Mo2FsContext
     bool is_dir = false;
     uint64_t size = 0;
     std::chrono::system_clock::time_point mtime{};
+    std::string real_path;
   };
   struct OpenDir
   {

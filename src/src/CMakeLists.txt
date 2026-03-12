@@ -121,7 +121,7 @@ target_compile_definitions(organizer PRIVATE
 if(NOT WIN32)
     option(MO2_BUNDLE_7Z_RUNTIME "Copy a Linux 7z module into organizer/dlls" ON)
     option(MO2_STAGE_PYTHON_PLUGIN_PAYLOAD
-        "Stage shipped Python plugin payload into build plugins/ for Linux runs" ON)
+        "Stage shipped Python plugin payload into build plugins/ for Linux runs" OFF)
     option(MO2_STAGE_INSTALLER_WIZARD
         "Stage installer_wizard python plugin payload (requires additional wizard package)" OFF)
     set(MO2_7Z_SO_PATH "" CACHE FILEPATH

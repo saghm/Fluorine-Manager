@@ -377,6 +377,14 @@ static QString appImageOrBinary()
   if (!appImage.isEmpty() && QFile::exists(appImage)) {
     return appImage;
   }
+  // Prefer the fluorine-manager launcher script over the bare ModOrganizer-core
+  // binary — the launcher sets up bundled library paths, Qt plugin paths, etc.
+  // Without it, shortcuts fail on systems that don't have all deps in PATH.
+  const QString appDir = QCoreApplication::applicationDirPath();
+  const QString launcher = appDir + "/fluorine-manager";
+  if (QFile::exists(launcher)) {
+    return QFileInfo(launcher).absoluteFilePath();
+  }
   return QFileInfo(qApp->applicationFilePath()).absoluteFilePath();
 }
 

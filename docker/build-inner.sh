@@ -36,8 +36,6 @@ if [ ! -f "${MODORG_BIN}" ]; then
 fi
 RUNDIR="build/src/src"
 
-PY_MM="$("${BUILD_PY}" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
-
 # ── Output layout (staging area — installed to ~/.local/share/fluorine by build-native.sh) ──
 OUT_DIR="/src/build/staging"
 rm -rf "${OUT_DIR}"
@@ -69,23 +67,21 @@ find build/libs -type f \( \
     -name "libinibakery.so" -o \
     -name "libbsa_extractor.so" -o \
     -name "libbsa_packer.so" -o \
-    -name "libproxy.so" \
+    -name "libproxy.so" -o \
+    -name "libform43_checker_native.so" -o \
+    -name "libscript_extender_checker_native.so" -o \
+    -name "libpreview_dds_native.so" -o \
+    -name "libbasic_games_native.so" \
 \) -exec cp -f {} "${OUT_DIR}/plugins/" \;
 
-# Python plugin payload.
-for f in libplugin_python.so lzokay.py winreg.py pyCfg.py \
-         DDSPreview.py Form43Checker.py ScriptExtenderPluginChecker.py; do
+# Python plugin loader (small — kept for optional Python support).
+[ -f "build/src/src/plugins/libplugin_python.so" ] && cp -f "build/src/src/plugins/libplugin_python.so" "${OUT_DIR}/plugins/"
+# Python helper shims (needed by Python plugins when Python is enabled).
+for f in lzokay.py winreg.py pyCfg.py; do
     [ -f "build/src/src/plugins/${f}" ] && cp -f "build/src/src/plugins/${f}" "${OUT_DIR}/plugins/"
 done
-for d in basic_games data libs dlls; do
-    [ -d "build/src/src/plugins/${d}" ] && cp -a "build/src/src/plugins/${d}" "${OUT_DIR}/plugins/"
-done
-rm -f "${OUT_DIR}/plugins/FNIS"*.py
-
-# Source-tree Python plugins (OMOD installer, etc.).
-for f in /src/src/plugins/*.py; do
-    [ -f "${f}" ] && cp -f "${f}" "${OUT_DIR}/plugins/"
-done
+# data/ dir (DDS headers etc., used by native plugins too).
+[ -d "build/src/src/plugins/data" ] && cp -a "build/src/src/plugins/data" "${OUT_DIR}/plugins/"
 
 # ── Stylesheets (themes) ──
 if [ -d "build/src/src/stylesheets" ]; then
@@ -125,8 +121,7 @@ echo "Bundling shared library dependencies..."
 SKIP_PATTERN="linux-vdso|ld-linux|libc\.so|libm\.so|libdl\.so|librt\.so|libpthread|libresolv|libnss|libgcc_s|libstdc\+\+"
 # GPU/graphics drivers must be host-provided
 SKIP_PATTERN="${SKIP_PATTERN}|libGL\.so|libEGL|libGLX|libGLdispatch|libdrm|libvulkan|libX11|libxcb|libwayland-client|libwayland-server|libwayland-cursor|libwayland-egl|libxkbcommon"
-# libpython is shipped by the portable Python runtime in python/lib/ — do NOT
-# copy the container's version into lib/ or it will shadow the portable one.
+# libpython — user provides via system Python; do not bundle.
 SKIP_PATTERN="${SKIP_PATTERN}|libpython"
 
 collect_deps() {
@@ -142,19 +137,6 @@ find "${OUT_DIR}/plugins" -name "*.so" -exec sh -c 'ldd "$1" 2>/dev/null | grep 
 find "${OUT_DIR}/lib" -name "*.so*" -exec sh -c 'ldd "$1" 2>/dev/null | grep "=>" | awk "{print \$3}" | grep "^/"' _ {} \; >> "${ALL_DEPS}"
 # lootcli
 [ -f "${OUT_DIR}/lootcli" ] && collect_deps "${OUT_DIR}/lootcli" >> "${ALL_DEPS}"
-# PyQt6 extension modules — these link against Qt6 libs that MO2 binaries don't
-# directly depend on (e.g. libQt6OpenGLWidgets, libQt6PrintSupport).  Without
-# bundling these, PyQt6 falls back to host Qt which may be a different version.
-# Scan from the system dist-packages (portable Python isn't copied yet).
-for pyqt_search in /usr/lib/python3/dist-packages/PyQt6 \
-                   "/usr/lib/python${PY_MM}/dist-packages/PyQt6" \
-                   "/usr/local/lib/python${PY_MM}/dist-packages/PyQt6"; do
-    if [ -d "${pyqt_search}" ]; then
-        find "${pyqt_search}" -name "*.so" -exec sh -c 'ldd "$1" 2>/dev/null | grep "=>" | awk "{print \$3}" | grep "^/"' _ {} \; >> "${ALL_DEPS}"
-        break
-    fi
-done
-
 sort -u "${ALL_DEPS}" | while read -r dep; do
     dep_name="$(basename "${dep}")"
     # Skip system libs
@@ -168,8 +150,6 @@ sort -u "${ALL_DEPS}" | while read -r dep; do
     cp -Lf "${dep}" "${OUT_DIR}/lib/" 2>/dev/null || true
 done
 rm -f "${ALL_DEPS}"
-# Remove any libpython that leaked into lib/ — must come from python/lib/ only.
-rm -f "${OUT_DIR}/lib"/libpython*.so* 2>/dev/null || true
 echo "Dependencies bundled."
 
 # ── Qt6 platform plugins ──
@@ -209,77 +189,11 @@ if [ -f /usr/local/lib/libloot.so.0 ]; then
     ln -sf libloot.so.0 "${OUT_DIR}/lib/libloot.so"
 fi
 
-# ── Portable Python runtime ──
-PORTABLE_PY="/opt/portable-python"
-if [ -d "${PORTABLE_PY}" ]; then
-    echo "Bundling portable Python from ${PORTABLE_PY}..."
-    cp -a "${PORTABLE_PY}" "${OUT_DIR}/python"
+# ── No portable Python runtime ──
+# Python plugins are optional and use the system Python + venv when enabled.
+# Native C++ plugins replace DDSPreview, Form43Checker, ScriptExtenderChecker, basic_games.
 
-    # Trim unnecessary files from portable Python.
-    PP_STDLIB="${OUT_DIR}/python/lib/python${PY_MM}"
-    rm -rf "${PP_STDLIB}/test" \
-           "${PP_STDLIB}/unittest/test" \
-           "${PP_STDLIB}/idlelib" \
-           "${PP_STDLIB}/tkinter" \
-           "${PP_STDLIB}/turtledemo" \
-           "${PP_STDLIB}/__pycache__" \
-           "${OUT_DIR}/python/include" \
-           "${OUT_DIR}/python/share" \
-           2>/dev/null || true
-    find "${OUT_DIR}/python" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-    find "${OUT_DIR}/python" -name "*.pyc" -delete 2>/dev/null || true
-
-    # The portable Python's libpython has SONAME "libpython3.13.so", but
-    # pybind11::embed links librunner.so against the build-venv's libpython
-    # which may have SONAME "libpython3.13.so.1.0".  A SONAME mismatch causes
-    # two copies of libpython to be loaded at runtime, making
-    # Py_IsInitialized() return false after Py_InitializeFromConfig() succeeds.
-    #
-    # Fix: patch the portable Python's SONAME to include the .1.0 suffix,
-    # matching what the linker recorded in librunner.so's DT_NEEDED.
-    PP_LIBPY="${OUT_DIR}/python/lib/libpython${PY_MM}.so"
-    if [ -f "${PP_LIBPY}" ]; then
-        CURRENT_SONAME="$(readelf -d "${PP_LIBPY}" 2>/dev/null | grep SONAME | sed 's/.*\[//' | sed 's/\]//')"
-        echo "Portable Python SONAME: ${CURRENT_SONAME}"
-        if [ "${CURRENT_SONAME}" = "libpython${PY_MM}.so" ]; then
-            echo "Patching SONAME to libpython${PY_MM}.so.1.0 ..."
-            patchelf --set-soname "libpython${PY_MM}.so.1.0" "${PP_LIBPY}"
-            # Rename the file to match and create backwards symlink.
-            mv "${PP_LIBPY}" "${PP_LIBPY}.1.0"
-            ln -sf "libpython${PY_MM}.so.1.0" "${PP_LIBPY}"
-        fi
-        # Ensure the .1.0 name exists (either as the real file or a symlink).
-        if [ ! -e "${PP_LIBPY}.1.0" ]; then
-            ln -sf "libpython${PY_MM}.so" "${PP_LIBPY}.1.0"
-        fi
-    fi
-else
-    echo "ERROR: Portable Python not found at ${PORTABLE_PY}"
-    exit 1
-fi
-
-# Bundle PyQt6 from system into portable Python's site-packages.
-PYSITE="${OUT_DIR}/python/lib/python${PY_MM}/site-packages"
-mkdir -p "${PYSITE}"
-for search_dir in /usr/lib/python3/dist-packages \
-                  "/usr/lib/python${PY_MM}/dist-packages" \
-                  "/usr/local/lib/python${PY_MM}/dist-packages"; do
-    if [ -d "${search_dir}/PyQt6" ]; then
-        echo "Bundling PyQt6 from ${search_dir}..."
-        cp -a "${search_dir}/PyQt6" "${PYSITE}/"
-        [ -d "${search_dir}/PyQt6_sip" ] && cp -a "${search_dir}/PyQt6_sip" "${PYSITE}/"
-        [ -d "${search_dir}/sip" ] && cp -a "${search_dir}/sip" "${PYSITE}/"
-        break
-    fi
-done
-
-# Install Python packages into portable runtime via uv.
-uv pip install --python "${OUT_DIR}/python/bin/python3" psutil vdf
-
-# Build-tree Python plugin payload.
-[ -d build/src/src/python ] && cp -a build/src/src/python/. "${OUT_DIR}/python/"
-
-# ── Strip all MO2 binaries (not portable Python) ──
+# ── Strip all MO2 binaries ──
 echo "Stripping MO2 binaries..."
 strip --strip-unneeded "${OUT_DIR}/ModOrganizer-core" 2>/dev/null || true
 find "${OUT_DIR}/plugins" -name "*.so" -exec strip --strip-unneeded {} \; 2>/dev/null || true
@@ -293,21 +207,10 @@ done
 # Use --force-rpath to set DT_RPATH (not DT_RUNPATH) for reliable
 # library resolution regardless of LD_LIBRARY_PATH.
 echo "Patching RPATH..."
-patchelf --force-rpath --set-rpath '$ORIGIN/lib:$ORIGIN/python/lib' "${OUT_DIR}/ModOrganizer-core"
+patchelf --force-rpath --set-rpath '$ORIGIN/lib' "${OUT_DIR}/ModOrganizer-core"
 [ -f "${OUT_DIR}/lootcli" ] && patchelf --force-rpath --set-rpath '$ORIGIN/lib' "${OUT_DIR}/lootcli"
-find "${OUT_DIR}/plugins" -name "*.so" -exec patchelf --force-rpath --set-rpath '$ORIGIN/../lib:$ORIGIN/../python/lib' {} \; 2>/dev/null || true
-# Libraries in lib/ (e.g. librunner.so) need to find sibling libs and python/lib.
-find "${OUT_DIR}/lib" \( -name "*.so" -o -name "*.so.*" \) -exec patchelf --force-rpath --set-rpath '$ORIGIN:$ORIGIN/../python/lib' {} \; 2>/dev/null || true
-
-# ── Validate embedded Python runtime ──
-if ! PYTHONHOME="${OUT_DIR}/python" \
-     PYTHONPATH="${OUT_DIR}/python/lib/python${PY_MM}:${PYSITE}" \
-     LD_LIBRARY_PATH="${OUT_DIR}/lib:${OUT_DIR}/python/lib:${LD_LIBRARY_PATH:-}" \
-     "${OUT_DIR}/python/bin/python3" -c \
-     "import zlib; import runpy; import zipimport; print('python embed check ok')"; then
-    echo "ERROR: Embedded Python runtime check failed."
-    exit 1
-fi
+find "${OUT_DIR}/plugins" -name "*.so" -exec patchelf --force-rpath --set-rpath '$ORIGIN/../lib' {} \; 2>/dev/null || true
+find "${OUT_DIR}/lib" \( -name "*.so" -o -name "*.so.*" \) -exec patchelf --force-rpath --set-rpath '$ORIGIN' {} \; 2>/dev/null || true
 
 # ── Launcher script ──
 cat > "${OUT_DIR}/fluorine-manager" <<'LAUNCH'
@@ -350,26 +253,20 @@ fi
 
 # Run from the synced location.
 RUN="${BIN_DST}"
-PYTHON_DIR="${RUN}/python"
 
 export PATH="${RUN}:${PATH}"
 # NOTE: Do NOT set LD_LIBRARY_PATH here.  The binary uses DT_RPATH
-# ($ORIGIN/lib:$ORIGIN/python/lib) to find its libraries.
+# ($ORIGIN/lib) to find its libraries.
 export MO2_BASE_DIR="${RUN}"
 export MO2_PLUGINS_DIR="${RUN}/plugins"
 export MO2_DLLS_DIR="${RUN}/dlls"
-export MO2_PYTHON_DIR="${PYTHON_DIR}"
-# PYTHONHOME is set only for the MO2 process (not exported to children like
-# Proton which has its own Python).  MO2_PYTHON_DIR lets the
-# binary reconstruct it internally.
-MO2_PYTHONHOME="${PYTHON_DIR}"
-unset PYTHONPATH PYTHONNOUSERSITE PYTHONHOME
+unset PYTHONPATH PYTHONNOUSERSITE PYTHONHOME MO2_PYTHON_DIR
 
 # Use bundled Qt6 plugins.
 export QT_PLUGIN_PATH="${RUN}/qt6plugins"
 
 cd "${RUN}"
-exec env PYTHONHOME="${MO2_PYTHONHOME}" "${RUN}/ModOrganizer-core" "$@"
+exec "${RUN}/ModOrganizer-core" "$@"
 LAUNCH
 chmod +x "${OUT_DIR}/fluorine-manager"
 
@@ -543,14 +440,6 @@ build_appimage() {
         cp -a "${APPDIR}/usr/bin/qt6plugins"/. "${APPDIR}/usr/plugins/"
     fi
 
-    PP_APPDIR_LIB="${APPDIR}/usr/bin/python/lib"
-    for pp_lib in "${PP_APPDIR_LIB}"/libpython*.so*; do
-        [ -e "${pp_lib}" ] || continue
-        pp_name="$(basename "${pp_lib}")"
-        rm -f "${APPDIR}/usr/lib/${pp_name}"
-        ln -sf ../bin/python/lib/"${pp_name}" "${APPDIR}/usr/lib/${pp_name}"
-    done
-
     cp -f "${OUT_DIR}/com.fluorine.manager.desktop" "${APPDIR}/usr/share/applications/"
     cp -f "${OUT_DIR}/com.fluorine.manager.png" "${APPDIR}/usr/share/icons/hicolor/256x256/apps/"
     cp -f "${OUT_DIR}/com.fluorine.manager.metainfo.xml" "${APPDIR}/usr/share/metainfo/"
@@ -565,10 +454,10 @@ build_appimage() {
         cp -f "/usr/share/icons/default/index.theme" "${APPDIR}/usr/share/icons/default/"
     fi
 
-    patchelf --force-rpath --set-rpath '$ORIGIN/../lib:$ORIGIN/python/lib' "${APPDIR}/usr/bin/ModOrganizer-core"
+    patchelf --force-rpath --set-rpath '$ORIGIN/../lib' "${APPDIR}/usr/bin/ModOrganizer-core"
     [ -f "${APPDIR}/usr/bin/lootcli" ] && patchelf --force-rpath --set-rpath '$ORIGIN/../lib' "${APPDIR}/usr/bin/lootcli"
     find "${APPDIR}/usr/bin/plugins" -name "*.so" -exec patchelf --force-rpath --set-rpath '$ORIGIN/../../lib' {} \; 2>/dev/null || true
-    find "${APPDIR}/usr/lib" -name "*.so" -not -name "libpython*" -exec patchelf --force-rpath --set-rpath '$ORIGIN' {} \; 2>/dev/null || true
+    find "${APPDIR}/usr/lib" -name "*.so" -exec patchelf --force-rpath --set-rpath '$ORIGIN' {} \; 2>/dev/null || true
 
     cat > "${APPDIR}/AppRun" <<'APPRUN'
 #!/usr/bin/env bash
@@ -578,38 +467,19 @@ HERE="$(cd "$(dirname "$SELF")" && pwd)"
 BIN="${HERE}/usr/bin"
 APPIMAGE_DIR="$(dirname "$(readlink -f "${APPIMAGE:-$0}")")"
 
-FLUORINE_DATA="${HOME}/.local/share/fluorine"
-PYTHON_DST="${FLUORINE_DATA}/python"
-PYTHON_SRC="${BIN}/python"
-
-if [ -d "${PYTHON_SRC}" ]; then
-    APPIMAGE_REAL="$(readlink -f "${APPIMAGE:-$0}")"
-    CURRENT_VER="$(stat -c '%i:%Y' "${APPIMAGE_REAL}" 2>/dev/null || echo "unknown")"
-    MARKER="${PYTHON_DST}/.version"
-
-    if [ ! -f "${MARKER}" ] || [ "$(cat "${MARKER}" 2>/dev/null)" != "${CURRENT_VER}" ]; then
-        echo "Syncing Python runtime to ${PYTHON_DST}..."
-        rm -rf "${PYTHON_DST}"
-        mkdir -p "${PYTHON_DST}"
-        (cd "${PYTHON_SRC}" && tar --exclude-vcs -cf - .) | (cd "${PYTHON_DST}" && tar -xf -)
-        echo "${CURRENT_VER}" > "${MARKER}"
-    fi
-fi
-
 export FLUORINE_ORIG_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
 export FLUORINE_ORIG_PATH="${PATH}"
 export FLUORINE_ORIG_XDG_DATA_DIRS="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
 export FLUORINE_ORIG_QT_PLUGIN_PATH="${QT_PLUGIN_PATH:-}"
 
 export PATH="${BIN}:${PATH}"
-export LD_LIBRARY_PATH="${HERE}/usr/lib:${PYTHON_DST}/lib:${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH:-}"
 
 export MO2_BASE_DIR="${APPIMAGE_DIR}"
 export MO2_PLUGINS_DIR="${BIN}/plugins"
 export MO2_DLLS_DIR="${BIN}/dlls"
-export MO2_PYTHON_DIR="${PYTHON_DST}"
 
-unset PYTHONPATH PYTHONNOUSERSITE PYTHONHOME
+unset PYTHONPATH PYTHONNOUSERSITE PYTHONHOME MO2_PYTHON_DIR
 
 export QT_PLUGIN_PATH="${HERE}/usr/plugins"
 export QT_QPA_PLATFORM_PLUGIN_PATH="${HERE}/usr/plugins/platforms"
@@ -636,13 +506,11 @@ APPRUN
     fi
 
     export ARCH=x86_64
-    export LINUXDEPLOY_EXCLUDE_MODULES="libpython"
     "${DEPLOY_DIR}/AppRun" \
         --appdir "${APPDIR}" \
         --output appimage \
         --desktop-file "${APPDIR}/usr/share/applications/com.fluorine.manager.desktop" \
         --icon-file "${APPDIR}/usr/share/icons/hicolor/256x256/apps/com.fluorine.manager.png" \
-        --exclude-library "libpython*" \
         2>&1 || {
         echo "WARNING: linuxdeploy AppImage generation failed"
     }

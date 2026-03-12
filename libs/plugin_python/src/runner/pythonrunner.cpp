@@ -147,20 +147,63 @@ namespace mo2::python {
             }
 #endif
 
-            // For portable/AppImage builds, set PYTHONHOME so the interpreter
-            // finds the bundled stdlib instead of looking at system paths.
-            // MO2_PYTHON_DIR (set by AppRun) points to the writable python/
-            // dir next to the AppImage; fall back to <exe_dir>/python.
+            // Determine Python home directory.
+            // Priority: 1) venv at ~/.local/share/fluorine/python-venv/
+            //           2) MO2_PYTHON_DIR env var (legacy bundled Python)
+            //           3) <exe_dir>/python (legacy bundled Python)
+            //           4) system Python (no PYTHONHOME needed)
             QString pythonHome;
-            const char* envPy = std::getenv("MO2_PYTHON_DIR");
-            if (envPy && envPy[0] != '\0') {
-                pythonHome = QString::fromUtf8(envPy);
-            } else {
-                pythonHome = QCoreApplication::applicationDirPath() + "/python";
+            QString venvPath;
+            bool usingVenv = false;
+
+            // Check for user-created venv
+            {
+                QString dataDir = QDir::homePath() + "/.local/share/fluorine";
+                QString venvDir = dataDir + "/python-venv";
+                if (QDir(venvDir).exists() && QFile::exists(venvDir + "/bin/python3")) {
+                    venvPath = venvDir;
+                    // Read pyvenv.cfg to find the base Python prefix
+                    QFile cfg(venvDir + "/pyvenv.cfg");
+                    if (cfg.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                        while (!cfg.atEnd()) {
+                            QString line = QString::fromUtf8(cfg.readLine()).trimmed();
+                            if (line.startsWith("home")) {
+                                // "home = /usr/bin" → base prefix is parent of bin dir
+                                int eq = line.indexOf('=');
+                                if (eq >= 0) {
+                                    QString binDir = line.mid(eq + 1).trimmed();
+                                    QDir parent(binDir);
+                                    parent.cdUp();
+                                    pythonHome = parent.absolutePath();
+                                    usingVenv = true;
+                                    MOBase::log::info("python: using venv at '{}', base prefix '{}'",
+                                                      venvPath, pythonHome);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
             }
-            if (!QDir(pythonHome).exists()) {
-                MOBase::log::warn("python: PYTHONHOME dir '{}' does not exist",
-                                  pythonHome);
+
+            // Fallback: legacy bundled Python
+            if (pythonHome.isEmpty()) {
+                const char* envPy = std::getenv("MO2_PYTHON_DIR");
+                if (envPy && envPy[0] != '\0') {
+                    pythonHome = QString::fromUtf8(envPy);
+                } else {
+                    QString bundled = QCoreApplication::applicationDirPath() + "/python";
+                    if (QDir(bundled).exists()) {
+                        pythonHome = bundled;
+                    }
+                }
+            }
+
+            // If no bundled Python, use system Python (don't set PYTHONHOME)
+            if (!pythonHome.isEmpty() && !QDir(pythonHome).exists()) {
+                MOBase::log::warn("python: PYTHONHOME dir '{}' does not exist, "
+                                  "falling back to system Python", pythonHome);
+                pythonHome.clear();
             }
 
             std::optional<QByteArray> oldPythonHome;
@@ -187,66 +230,80 @@ namespace mo2::python {
             // Paths we want to prepend/append for MO2 plugin loading.
             auto paths = pythonPaths;
 
-            // Configure bundled Python like running python/bin/python3 directly.
-            const QDir libDir(pythonHome + "/lib");
-            const auto pyDirs =
-                libDir.entryList({"python3.*"}, QDir::Dirs | QDir::NoDotAndDotDot);
-            const QString pyverDir = pyDirs.isEmpty() ? QStringLiteral("python3.13")
-                                                      : pyDirs.first();
-            const QString stdlibDir = pythonHome + "/lib/" + pyverDir;
-            const QString stdlibZip = pythonHome + "/lib/python313.zip";
-            const QString rootDynloadDir = pythonHome + "/lib-dynload";
-            const QString rootPlatDir = pythonHome + "/plat-linux2";
-            const QString dynloadDir = stdlibDir + "/lib-dynload";
-            const QString siteDir = stdlibDir + "/site-packages";
+            // Build PYTHONPATH and optionally set PYTHONHOME.
+            QStringList corePaths;
 
-            QStringList corePaths = {stdlibDir, siteDir, dynloadDir};
-            if (QFile::exists(stdlibZip)) {
-                corePaths.prepend(stdlibZip);
-            }
-            if (QDir(rootDynloadDir).exists()) {
-                corePaths.append(rootDynloadDir);
-            }
-            if (QDir(rootPlatDir).exists()) {
-                corePaths.append(rootPlatDir);
+            if (!pythonHome.isEmpty()) {
+                // Bundled or system Python with known prefix.
+                const QDir libDir(pythonHome + "/lib");
+                const auto pyDirs =
+                    libDir.entryList({"python3.*"}, QDir::Dirs | QDir::NoDotAndDotDot);
+                const QString pyverDir = pyDirs.isEmpty() ? QStringLiteral("python3.13")
+                                                          : pyDirs.first();
+                const QString stdlibDir = pythonHome + "/lib/" + pyverDir;
+                const QString dynloadDir = stdlibDir + "/lib-dynload";
+                const QString siteDir = stdlibDir + "/site-packages";
+
+                corePaths = {stdlibDir, siteDir, dynloadDir};
+
+                const QString stdlibZip = pythonHome + "/lib/python313.zip";
+                if (QFile::exists(stdlibZip)) {
+                    corePaths.prepend(stdlibZip);
+                }
+                const QString rootDynloadDir = pythonHome + "/lib-dynload";
+                if (QDir(rootDynloadDir).exists()) {
+                    corePaths.append(rootDynloadDir);
+                }
+
+                corePaths.append(pythonHome);
+                setenv("PYTHONHOME", pythonHome.toUtf8().constData(), 1);
             }
 
-            corePaths.append(pythonHome);
-            const QByteArray pyPath = corePaths.join(":").toUtf8();
-            setenv("PYTHONHOME", pythonHome.toUtf8().constData(), 1);
-            setenv("PYTHONPATH", pyPath.constData(), 1);
+            // If using a venv, prepend its site-packages so venv packages
+            // (PyQt6, etc.) take priority over system site-packages.
+            if (usingVenv && !venvPath.isEmpty()) {
+                const QDir venvLibDir(venvPath + "/lib");
+                const auto venvPyDirs =
+                    venvLibDir.entryList({"python3.*"}, QDir::Dirs | QDir::NoDotAndDotDot);
+                if (!venvPyDirs.isEmpty()) {
+                    QString venvSite = venvPath + "/lib/" + venvPyDirs.first() + "/site-packages";
+                    if (QDir(venvSite).exists()) {
+                        corePaths.prepend(venvSite);
+                    }
+                }
+            }
 
-            fprintf(stderr,
-                    "[py-diag] calling Py_InitializeFromConfig, PYTHONHOME='%s', "
-                    "Py_IsInitialized before=%d\n",
-                    pythonHome.toUtf8().constData(), Py_IsInitialized());
+            if (!corePaths.isEmpty()) {
+                setenv("PYTHONPATH", corePaths.join(":").toUtf8().constData(), 1);
+            }
+
             MOBase::log::debug(
                 "python: calling Py_InitializeFromConfig, PYTHONHOME='{}', "
-                "Py_IsInitialized before={}",
-                pythonHome, Py_IsInitialized());
+                "venv='{}', Py_IsInitialized before={}",
+                pythonHome.isEmpty() ? "(system)" : pythonHome,
+                venvPath.isEmpty() ? "(none)" : venvPath,
+                Py_IsInitialized());
 
             // Use Py_InitializeFromConfig (Python 3.8+) for explicit error reporting.
             {
                 PyConfig config;
                 PyConfig_InitPythonConfig(&config);
-                // Set config.home directly (more reliable than env for embedded use).
-                std::wstring wHome = pythonHome.toStdWString();
-                PyStatus status = PyConfig_SetString(&config, &config.home, wHome.c_str());
-                if (PyStatus_Exception(status)) {
-                    MOBase::log::error(
-                        "python: PyConfig_SetString(home) failed: '{}'",
-                        status.err_msg ? status.err_msg : "(no message)");
-                    PyConfig_Clear(&config);
-                    restorePythonEnv();
-                    return false;
+                if (!pythonHome.isEmpty()) {
+                    // Set config.home directly (more reliable than env for embedded use).
+                    std::wstring wHome = pythonHome.toStdWString();
+                    PyStatus status = PyConfig_SetString(&config, &config.home, wHome.c_str());
+                    if (PyStatus_Exception(status)) {
+                        MOBase::log::error(
+                            "python: PyConfig_SetString(home) failed: '{}'",
+                            status.err_msg ? status.err_msg : "(no message)");
+                        PyConfig_Clear(&config);
+                        restorePythonEnv();
+                        return false;
+                    }
                 }
-                status = Py_InitializeFromConfig(&config);
+                PyStatus status = Py_InitializeFromConfig(&config);
                 PyConfig_Clear(&config);
                 if (PyStatus_Exception(status)) {
-                    fprintf(stderr,
-                            "[py-diag] Py_InitializeFromConfig FAILED: '%s' [in '%s']\n",
-                            status.err_msg ? status.err_msg : "(no message)",
-                            status.func ? status.func : "(no func)");
                     MOBase::log::error(
                         "python: Py_InitializeFromConfig failed: '{}' [in '{}']",
                         status.err_msg ? status.err_msg : "(no message)",
@@ -256,23 +313,12 @@ namespace mo2::python {
                 }
             }
 
-            fprintf(stderr, "[py-diag] Py_IsInitialized after=%d\n",
-                    Py_IsInitialized());
             MOBase::log::debug("python: Py_IsInitialized after={}",
                                Py_IsInitialized());
 
             if (!Py_IsInitialized()) {
-                const char* ph = std::getenv("PYTHONHOME");
-                const char* pp = std::getenv("PYTHONPATH");
                 MOBase::log::error(
                     "failed to init python: Py_IsInitialized() returned false.");
-                MOBase::log::error("  PYTHONHOME='{}', PYTHONPATH='{}'",
-                                   ph ? ph : "(null)", pp ? pp : "(null)");
-                MOBase::log::error("  pythonHome='{}', exists={}", pythonHome,
-                                   QDir(pythonHome).exists() ? "yes" : "no");
-                const QString encPath = pythonHome + "/lib/python3.13/encodings";
-                MOBase::log::error("  encodings dir='{}', exists={}", encPath,
-                                   QDir(encPath).exists() ? "yes" : "no");
                 restorePythonEnv();
                 return false;
             }
