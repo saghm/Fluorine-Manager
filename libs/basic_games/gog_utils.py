@@ -5,8 +5,12 @@ from __future__ import annotations
 
 import json
 import sys
-import winreg
 from pathlib import Path
+
+try:
+    import winreg
+except ImportError:
+    winreg = None  # type: ignore[assignment]
 
 
 def _find_heroic_gog_games() -> dict[str, Path]:
@@ -44,6 +48,10 @@ def _find_heroic_gog_games() -> dict[str, Path]:
 
 
 def find_games() -> dict[str, Path]:
+    if winreg is None:
+        # winreg not available (Linux without shim); use Heroic GOG.
+        return _find_heroic_gog_games()
+
     # List the game IDs from the registry (Windows):
     game_ids: list[str] = []
     try:

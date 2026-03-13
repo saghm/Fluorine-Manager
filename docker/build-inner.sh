@@ -78,8 +78,9 @@ if [ -d "build/src/src/plugins/libs" ]; then
     mkdir -p "${OUT_DIR}/plugins/libs"
     cp -f build/src/src/plugins/libs/mobase*.so "${OUT_DIR}/plugins/libs/" 2>/dev/null || true
 fi
-# Python helper shims
+# Python helper shims — copy from source directly (cmake staging is OFF by default)
 for f in lzokay.py winreg.py pyCfg.py; do
+    [ -f "libs/${f}" ] && cp -f "libs/${f}" "${OUT_DIR}/plugins/"
     [ -f "build/src/src/plugins/${f}" ] && cp -f "build/src/src/plugins/${f}" "${OUT_DIR}/plugins/"
 done
 
@@ -103,7 +104,12 @@ if [ -d "libs/basic_games" ]; then
         -o -name "CMakeLists.txt" -o -name "CMakePresets.json" \) \
         -delete 2>/dev/null || true
 fi
-# data/ dir (DDS headers etc., used by native plugins too).
+# data/ dir (DDS headers etc., used by DDSPreview.py via plugins/data/ in sys.path).
+# Stage DDS package from source directly (cmake staging is OFF by default).
+if [ -d "libs/preview_dds/src/DDS" ]; then
+    mkdir -p "${OUT_DIR}/plugins/data"
+    cp -a "libs/preview_dds/src/DDS" "${OUT_DIR}/plugins/data/DDS"
+fi
 [ -d "build/src/src/plugins/data" ] && cp -a "build/src/src/plugins/data" "${OUT_DIR}/plugins/"
 
 # ── Stylesheets (themes) ──
