@@ -4,8 +4,7 @@ Fluorine Manager an attempt at porting [MO2 (Mod Organizer 2)](https://github.co
 
 NOTE: This is primarily for my personal use but I will see about fixing issues if I can. I use Claude/Codex, if you don't like AI please don't use this application. I'm looking for feedback not hate.
 
-<img width="4134" height="2453" alt="image" src="https://github.com/user-attachments/assets/887e042a-db74-43f8-a5aa-735d18d94cc9" />
-
+ ![](https://github.com/user-attachments/assets/0b70e889-f472-451b-bf72-9b0e3e52321d)
 
 ## Current Status
 
