@@ -24,11 +24,9 @@ NOTE: This is primarily for my personal use but I will see about fixing issues i
 `#user_allow_other` to `user_allow_other` if its missing please add it.
 
 ## Installing and Running
-Download the latest flatpak from the [releases](https://github.com/SulfurNitride/Fluorine-Manager/releases) and after you download it.
+Download the latest zip from the [releases](https://github.com/SulfurNitride/Fluorine-Manager/releases) and after you download it.
 
-You are able to install it with this command: `flatpak install --user fluorine-manager.flatpak`
-
-You can then get started with: `flatpak run com.fluorine.manager` or you should be able to find it in your apps drawer.
+You are able to run it with this command: `./fluorine-manager` or by double-clicking it.
 
 More information can be found in the [FAQ](https://github.com/SulfurNitride/Fluorine-Manager/blob/main/docs/FAQ.md).
 
@@ -38,16 +36,7 @@ If you want to support the things I put out, I do have a [Ko-Fi](https://ko-fi.c
 
 ## Building
 
-Both builds install to `~/.local/share/fluorine/` — the same location, so Flatpak and native share instances, plugins, and configs.
 
-NOTE: Native builds are available but are not officially supported by me. Please do not make an issue relating to something not working on the native build if it's working on the flatpak.
-### Flatpak (recommended for end users)
-
-```bash
-./build-flatpak.sh bundle
-# Produces a .flatpak file you can install with:
-# flatpak install --user fluorine-manager.flatpak
-```
 
 ## Known Limitations
 
