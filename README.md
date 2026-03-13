@@ -35,6 +35,41 @@ If you want to support the things I put out, I do have a [Ko-Fi](https://ko-fi.c
 
 ## Building
 
+Fluorine Manager is built inside a Docker/Podman container — no host toolchain setup required.
+
+**Prerequisites:** Docker or Podman
+
+```bash
+./build.sh              # Build portable .tar.gz
+```
+
+The default output is `build/fluorine-manager.tar.gz` — extract anywhere and run `./fluorine-manager`.
+
+### Runtime Requirements (Mainly NixOS)
+
+- Steam must be installed so that Proton is available.
+- The following libraries are **not bundled** and must be available on your system:
+  - `libEGL`
+  - `libGL`
+  - `libGLX`
+  - `libstdc++`
+  - `libX11`
+  - `libxkbcommon`
+
+On most distros these are already present or installable via your package manager.
+
+**NixOS:** Use `nix-ld` to expose the unbundled libraries. Add them to `programs.nix-ld.libraries` in your `configuration.nix`:
+
+```nix
+programs.nix-ld.enable = true;
+programs.nix-ld.libraries = with pkgs; [
+  libGL
+  libGLX
+  xorg.libX11
+  libxkbcommon
+  stdenv.cc.cc.lib  # libstdc++
+];
+```
 
 
 ## Known Limitations
