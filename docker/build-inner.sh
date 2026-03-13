@@ -20,9 +20,12 @@ if [ -n "${CMAKE_CXX_COMPILER_LAUNCHER:-}" ]; then
     CMAKE_EXTRA_ARGS+=("-DCMAKE_CXX_COMPILER_LAUNCHER=${CMAKE_CXX_COMPILER_LAUNCHER}")
 fi
 
+PYTHON_ROOT="$(dirname "$(dirname "${BUILD_PY}")")"
+
 cmake -S . -B build -G Ninja \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DPython_EXECUTABLE="${BUILD_PY}" \
+    -DPython_ROOT_DIR="${PYTHON_ROOT}" \
     ${PYBIND11_DIR:+-Dpybind11_DIR="${PYBIND11_DIR}"} \
     -DBUILD_PLUGIN_PYTHON=ON \
     "${CMAKE_EXTRA_ARGS[@]}"
@@ -65,13 +68,7 @@ find build/libs -type f \( \
     -name "libinibakery.so" -o \
     -name "libbsa_extractor.so" -o \
     -name "libbsa_packer.so" -o \
-    -name "libproxy.so" -o \
-    -name "libform43_checker_native.so" -o \
-    -name "libscript_extender_checker_native.so" -o \
-    -name "libpreview_dds_native.so" -o \
-    -name "libbasic_games_native.so" -o \
-    -name "librootbuilder_native.so" -o \
-    -name "libinstaller_omod_native.so" \
+    -name "libproxy.so" \
 \) -exec cp -f {} "${OUT_DIR}/plugins/" \;
 
 # Python plugin loader (small — kept for optional Python support).
@@ -81,10 +78,31 @@ if [ -d "build/src/src/plugins/libs" ]; then
     mkdir -p "${OUT_DIR}/plugins/libs"
     cp -f build/src/src/plugins/libs/mobase*.so "${OUT_DIR}/plugins/libs/" 2>/dev/null || true
 fi
-# Python helper shims (needed by Python plugins when Python is enabled).
+# Python helper shims
 for f in lzokay.py winreg.py pyCfg.py; do
     [ -f "build/src/src/plugins/${f}" ] && cp -f "build/src/src/plugins/${f}" "${OUT_DIR}/plugins/"
 done
+
+# Python plugins (simple single-file)
+for pyfile in \
+    "libs/form43_checker/src/Form43Checker.py" \
+    "libs/script_extender_plugin_checker/src/ScriptExtenderPluginChecker.py" \
+    "libs/preview_dds/src/DDSPreview.py" \
+    "src/plugins/rootbuilder.py" \
+    "src/plugins/installer_omod.py"; do
+    [ -f "${pyfile}" ] && cp -f "${pyfile}" "${OUT_DIR}/plugins/"
+done
+
+# basic_games Python module (directory package) — copy the whole tree, .py files only
+if [ -d "libs/basic_games" ]; then
+    cp -a "libs/basic_games" "${OUT_DIR}/plugins/basic_games"
+    # Remove non-Python clutter (metadata, lock files, vcpkg, etc.)
+    find "${OUT_DIR}/plugins/basic_games" \
+        \( -name "*.toml" -o -name "*.lock" -o -name "*.json" \
+        -o -name "*.txt" -o -name "*.md" -o -name "LICENSE" \
+        -o -name "CMakeLists.txt" -o -name "CMakePresets.json" \) \
+        -delete 2>/dev/null || true
+fi
 # data/ dir (DDS headers etc., used by native plugins too).
 [ -d "build/src/src/plugins/data" ] && cp -a "build/src/src/plugins/data" "${OUT_DIR}/plugins/"
 
@@ -204,9 +222,72 @@ if [ -f /usr/local/lib/libloot.so.0 ]; then
     ln -sf libloot.so.0 "${OUT_DIR}/lib/libloot.so"
 fi
 
-# ── No portable Python runtime ──
-# Python plugins are optional and use the system Python + venv when enabled.
-# Native C++ plugins replace DDSPreview, Form43Checker, ScriptExtenderChecker, basic_games.
+# ── Bundle PBS Python 3.12 runtime ──
+# PYTHONHOME only needs lib/python3.12/ (the stdlib). We do NOT copy the
+# binary, headers, static lib, or .py sources — only stripped .pyc + .so.
+PBS_SRC="/opt/python-bundled"
+PYTHON_OUT="${OUT_DIR}/python"
+mkdir -p "${PYTHON_OUT}/lib"
+
+# Copy only the stdlib directory
+cp -a "${PBS_SRC}/lib/python3.12" "${PYTHON_OUT}/lib/"
+
+# Remove only what is safe — test suites, GUI toolkits, dev tools.
+# Do NOT strip network/stdlib modules; basic_games uses email, http, xml, urllib, etc.
+find "${PYTHON_OUT}" -type d \( -name "test" -o -name "tests" \) \
+    -exec rm -rf {} + 2>/dev/null || true
+rm -rf "${PYTHON_OUT}/lib/python3.12/tkinter"
+rm -rf "${PYTHON_OUT}/lib/python3.12/ensurepip"
+rm -rf "${PYTHON_OUT}/lib/python3.12/distutils"
+rm -rf "${PYTHON_OUT}/lib/python3.12/lib2to3"
+rm -rf "${PYTHON_OUT}/lib/python3.12/idlelib"
+rm -rf "${PYTHON_OUT}/lib/python3.12/turtledemo"
+rm -f  "${PYTHON_OUT}/lib/python3.12/turtle.py"
+# Wipe site-packages entirely — build-time packages (pybind11, PyQt6, sip, etc.)
+# are not needed at runtime. PyQt6 is staged separately to plugins/libs/PyQt6/.
+rm -rf "${PYTHON_OUT}/lib/python3.12/site-packages"
+mkdir -p "${PYTHON_OUT}/lib/python3.12/site-packages"
+# Copy runtime-required packages back in
+for pkg in psutil vdf; do
+    pkg_dir="$("${PBS_SRC}/bin/python3" -c "import importlib.util; s=importlib.util.find_spec('${pkg}'); print(s.submodule_search_locations[0] if s and s.submodule_search_locations else (s.origin if s else ''))" 2>/dev/null || true)"
+    if [ -d "${pkg_dir}" ]; then
+        cp -a "${pkg_dir}" "${PYTHON_OUT}/lib/python3.12/site-packages/"
+    elif [ -f "${pkg_dir}" ]; then
+        cp -f "${pkg_dir}" "${PYTHON_OUT}/lib/python3.12/site-packages/"
+    fi
+done
+
+# Pre-compile .py → .pyc (PBS ships .py + .pyc; this ensures cache is fresh).
+# We keep the .py source files — Python's SourceFileLoader requires them to
+# find the corresponding __pycache__/*.pyc files. Deleting them breaks imports.
+"${PBS_SRC}/bin/python3" -m compileall -q "${PYTHON_OUT}/lib/python3.12/" 2>/dev/null || true
+
+# Strip debug info from extension modules
+find "${PYTHON_OUT}/lib/python3.12" -name "*.so" \
+    -exec strip --strip-unneeded {} \; 2>/dev/null || true
+
+# libpython shared library goes in our lib/ (dlopen'd by librunner.so via $ORIGIN RPATH)
+# Not placed inside python/ — PYTHONHOME doesn't need the shared lib alongside the stdlib.
+cp -Lf "${PBS_SRC}/lib/libpython3.12.so.1.0" "${OUT_DIR}/lib/"
+strip --strip-unneeded "${OUT_DIR}/lib/libpython3.12.so.1.0" 2>/dev/null || true
+ln -sf libpython3.12.so.1.0 "${OUT_DIR}/lib/libpython3.12.so"
+echo "Bundled PBS Python 3.12: $(du -sh "${PYTHON_OUT}" | cut -f1)"
+
+# ── Bundle PyQt6 (bindings only — reuse our bundled Qt, no duplicate Qt .so) ──
+# PyQt6 pip wheel bundles Qt under PyQt6/Qt6/lib/ which we strip out.
+# The binding .so files are patchelf'd to find our Qt in lib/.
+PYQT6_SRC="$("${PBS_SRC}/bin/python3" -c 'import PyQt6, os; print(os.path.dirname(PyQt6.__file__))')"
+PYQT6_OUT="${OUT_DIR}/plugins/libs/PyQt6"
+mkdir -p "${PYQT6_OUT}"
+cp -a "${PYQT6_SRC}/." "${PYQT6_OUT}/"
+# Remove PyQt6's bundled Qt — we already have Qt in lib/
+rm -rf "${PYQT6_OUT}/Qt6"
+# Patchelf all PyQt6 binding .so files to reach our lib/ via RPATH
+# Path: plugins/libs/PyQt6/*.so → ../../.. = staging root → lib/
+find "${PYQT6_OUT}" -name "*.so" -exec \
+    patchelf --force-rpath --set-rpath '$ORIGIN/../../../lib' {} \; 2>/dev/null || true
+strip --strip-unneeded "${PYQT6_OUT}"/*.so 2>/dev/null || true
+echo "Bundled PyQt6 (no Qt dupe): $(du -sh "${PYQT6_OUT}" | cut -f1)"
 
 # ── Strip all MO2 binaries ──
 echo "Stripping MO2 binaries..."

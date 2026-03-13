@@ -63,10 +63,8 @@ static void ensureBundledPluginsLinked(const QString& bundledDir,
 }
 #endif
 
-static void printPluginDiagToStderr(const QString& message)
+static void printPluginDiagToStderr(const QString&)
 {
-  std::fprintf(stderr, "[plugin-diag] %s\n", qUtf8Printable(message));
-  std::fflush(stderr);
 }
 
 // Welcome to the wonderful world of MO2 plugin management!
@@ -654,7 +652,7 @@ IPlugin* PluginContainer::registerPlugin(QObject* plugin, const QString& filepat
       const QString pluginRoot =
           m_PluginPath.isEmpty() ? AppConfig::pluginsPath() : m_PluginPath;
       QStringList filepaths = proxy->pluginList(pluginRoot);
-      log::warn("proxy '{}' discovered {} proxied plugin candidate(s) in '{}'",
+      log::debug("proxy '{}' discovered {} proxied plugin candidate(s) in '{}'",
                 proxy->name(), filepaths.size(),
                 QDir::toNativeSeparators(pluginRoot));
       printPluginDiagToStderr(
@@ -859,7 +857,7 @@ std::vector<QObject*> PluginContainer::loadProxied(const QString& filepath,
   std::vector<QObject*> proxiedPlugins;
 
   try {
-    log::warn("loading proxied plugin candidate '{}' via proxy '{}'",
+    log::debug("loading proxied plugin candidate '{}' via proxy '{}'",
               QDir::toNativeSeparators(filepath),
               (proxy ? proxy->name() : QStringLiteral("<null>")));
     printPluginDiagToStderr(
@@ -871,7 +869,7 @@ std::vector<QObject*> PluginContainer::loadProxied(const QString& filepath,
     // per file and do not  have a good way of supporting multiple inheritance.
     QList<QObject*> matchingPlugins = proxy->load(filepath);
     if (matchingPlugins.isEmpty()) {
-      log::warn("no plugins were returned for proxied candidate '{}' via proxy '{}'",
+      log::debug("no plugins were returned for proxied candidate '{}' via proxy '{}'",
                 QDir::toNativeSeparators(filepath), proxy->name());
       printPluginDiagToStderr(
           QString("no plugins were returned for proxied candidate '%1' via proxy '%2'")
@@ -930,7 +928,7 @@ std::vector<QObject*> PluginContainer::loadProxied(const QString& filepath,
         }
       }
     }
-    log::warn("finished proxied candidate '{}' via proxy '{}': {} plugin(s) loaded",
+    log::debug("finished proxied candidate '{}' via proxy '{}': {} plugin(s) loaded",
               QDir::toNativeSeparators(filepath), proxy->name(),
               proxiedPlugins.size());
     printPluginDiagToStderr(
@@ -1301,17 +1299,6 @@ void PluginContainer::loadPlugins()
     if (m_Organizer) {
       if (m_Organizer->settings().plugins().blacklisted(iter.fileName())) {
         log::debug("plugin \"{}\" blacklisted", iter.fileName());
-        continue;
-      }
-    }
-
-    // Skip the Python proxy plugin unless the user has enabled Python support
-    // in Settings > Python. Native C++ replacements handle all default plugins.
-    if (iter.fileName() == "libplugin_python.so" ||
-        iter.fileName() == "plugin_python.dll") {
-      if (!QSettings().value("fluorine/python_enabled", false).toBool()) {
-        log::debug("plugin \"{}\" skipped (Python plugins disabled in settings)",
-                   iter.fileName());
         continue;
       }
     }

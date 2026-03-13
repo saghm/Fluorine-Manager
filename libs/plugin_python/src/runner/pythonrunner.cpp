@@ -148,62 +148,19 @@ namespace mo2::python {
 #endif
 
             // Determine Python home directory.
-            // Priority: 1) venv at ~/.local/share/fluorine/python-venv/
-            //           2) MO2_PYTHON_DIR env var (legacy bundled Python)
-            //           3) <exe_dir>/python (legacy bundled Python)
-            //           4) system Python (no PYTHONHOME needed)
+            // Priority: 1) <exe_dir>/python (bundled PBS Python)
+            //           2) system Python (no PYTHONHOME — last resort fallback)
             QString pythonHome;
-            QString venvPath;
-            bool usingVenv = false;
 
-            // Check for user-created venv
             {
-                QString dataDir = QDir::homePath() + "/.local/share/fluorine";
-                QString venvDir = dataDir + "/python-venv";
-                if (QDir(venvDir).exists() && QFile::exists(venvDir + "/bin/python3")) {
-                    venvPath = venvDir;
-                    // Read pyvenv.cfg to find the base Python prefix
-                    QFile cfg(venvDir + "/pyvenv.cfg");
-                    if (cfg.open(QIODevice::ReadOnly | QIODevice::Text)) {
-                        while (!cfg.atEnd()) {
-                            QString line = QString::fromUtf8(cfg.readLine()).trimmed();
-                            if (line.startsWith("home")) {
-                                // "home = /usr/bin" → base prefix is parent of bin dir
-                                int eq = line.indexOf('=');
-                                if (eq >= 0) {
-                                    QString binDir = line.mid(eq + 1).trimmed();
-                                    QDir parent(binDir);
-                                    parent.cdUp();
-                                    pythonHome = parent.absolutePath();
-                                    usingVenv = true;
-                                    MOBase::log::info("python: using venv at '{}', base prefix '{}'",
-                                                      venvPath, pythonHome);
-                                }
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Fallback: legacy bundled Python
-            if (pythonHome.isEmpty()) {
-                const char* envPy = std::getenv("MO2_PYTHON_DIR");
-                if (envPy && envPy[0] != '\0') {
-                    pythonHome = QString::fromUtf8(envPy);
+                QString bundled = QCoreApplication::applicationDirPath() + "/python";
+                if (QDir(bundled).exists()) {
+                    pythonHome = bundled;
+                    MOBase::log::info("python: using bundled Python at '{}'", pythonHome);
                 } else {
-                    QString bundled = QCoreApplication::applicationDirPath() + "/python";
-                    if (QDir(bundled).exists()) {
-                        pythonHome = bundled;
-                    }
+                    MOBase::log::warn("python: bundled Python not found at '{}', "
+                                      "falling back to system Python", bundled);
                 }
-            }
-
-            // If no bundled Python, use system Python (don't set PYTHONHOME)
-            if (!pythonHome.isEmpty() && !QDir(pythonHome).exists()) {
-                MOBase::log::warn("python: PYTHONHOME dir '{}' does not exist, "
-                                  "falling back to system Python", pythonHome);
-                pythonHome.clear();
             }
 
             std::optional<QByteArray> oldPythonHome;
@@ -259,29 +216,14 @@ namespace mo2::python {
                 setenv("PYTHONHOME", pythonHome.toUtf8().constData(), 1);
             }
 
-            // If using a venv, prepend its site-packages so venv packages
-            // (PyQt6, etc.) take priority over system site-packages.
-            if (usingVenv && !venvPath.isEmpty()) {
-                const QDir venvLibDir(venvPath + "/lib");
-                const auto venvPyDirs =
-                    venvLibDir.entryList({"python3.*"}, QDir::Dirs | QDir::NoDotAndDotDot);
-                if (!venvPyDirs.isEmpty()) {
-                    QString venvSite = venvPath + "/lib/" + venvPyDirs.first() + "/site-packages";
-                    if (QDir(venvSite).exists()) {
-                        corePaths.prepend(venvSite);
-                    }
-                }
-            }
-
             if (!corePaths.isEmpty()) {
                 setenv("PYTHONPATH", corePaths.join(":").toUtf8().constData(), 1);
             }
 
             MOBase::log::debug(
                 "python: calling Py_InitializeFromConfig, PYTHONHOME='{}', "
-                "venv='{}', Py_IsInitialized before={}",
+                "Py_IsInitialized before={}",
                 pythonHome.isEmpty() ? "(system)" : pythonHome,
-                venvPath.isEmpty() ? "(none)" : venvPath,
                 Py_IsInitialized());
 
             // Use Py_InitializeFromConfig (Python 3.8+) for explicit error reporting.

@@ -50,16 +50,23 @@ ENV CMAKE_PREFIX_PATH="/opt/qt6/6.10.2/gcc_64:${CMAKE_PREFIX_PATH}"
 ENV PATH="/opt/qt6/6.10.2/gcc_64/bin:${PATH}"
 ENV LD_LIBRARY_PATH="/opt/qt6/6.10.2/gcc_64/lib:${LD_LIBRARY_PATH}"
 
-# ── uv (Python package manager) ──
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:${PATH}"
+# ── python-build-standalone 3.12 (build-time + bundled runtime) ──
+# Single Python for both compiling pybind11 modules and shipping in the tarball.
+# The install_only_stripped tarball is ~28MB; we strip it further in build-inner.sh.
+ARG PBS_VERSION=3.12.13
+ARG PBS_DATE=20260310
+RUN curl -fL --retry 3 -o /tmp/pbs-python.tar.gz \
+      "https://github.com/astral-sh/python-build-standalone/releases/download/${PBS_DATE}/cpython-${PBS_VERSION}%2B${PBS_DATE}-x86_64-unknown-linux-gnu-install_only.tar.gz" && \
+    tar xzf /tmp/pbs-python.tar.gz -C /opt/ && \
+    mv /opt/python /opt/python-bundled && \
+    rm /tmp/pbs-python.tar.gz
+ENV BUILD_PYTHON=/opt/python-bundled/bin/python3
+ENV PATH="/opt/python-bundled/bin:${PATH}"
 
-# ── Build-time Python venv (pybind11, sip, etc.) ──
-RUN uv venv /opt/build-python --python 3.13 --seed && \
-    uv pip install --python /opt/build-python/bin/python \
-      pybind11==2.13.6 sip psutil vdf
-ENV BUILD_PYTHON=/opt/build-python/bin/python
-ENV PATH="/opt/build-python/bin:${PATH}"
+# ── Build-time Python packages ──
+# pybind11/sip/etc. for compiling mobase.so; PyQt6 is staged into the distribution.
+RUN /opt/python-bundled/bin/pip3 install --no-cache-dir \
+      pybind11==2.13.6 sip psutil vdf PyQt6
 
 # ── Rust toolchain ──
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
