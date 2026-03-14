@@ -306,6 +306,22 @@ find "${PYQT6_OUT}" -name "*.so" -exec \
 strip --strip-unneeded "${PYQT6_OUT}"/*.so 2>/dev/null || true
 echo "Bundled PyQt6 (no Qt dupe): $(du -sh "${PYQT6_OUT}" | cut -f1)"
 
+# Scan PyQt6 binding deps and bundle any Qt libs not yet in lib/.
+# PyQt6 is bundled after the main dep-collection loop, so its deps (e.g.
+# libQt6OpenGLWidgets) would otherwise be missing. Without them the dynamic
+# linker falls back to the host's Qt RPM build, which uses Qt_6.*_PRIVATE_API
+# version symbols that aqtinstall's Qt libs don't export — causing crashes on
+# distros like Bazzite/Fedora that ship their own Qt.
+echo "Scanning PyQt6 deps for missing Qt libs..."
+find "${PYQT6_OUT}" -name "*.so" | while read -r pyqt_so; do
+    ldd "${pyqt_so}" 2>/dev/null | grep "=>" | awk '{print $3}' | grep "^/" | while read -r dep; do
+        dep_name="$(basename "${dep}")"
+        if echo "${dep_name}" | grep -qE "${SKIP_PATTERN}"; then continue; fi
+        if [ -f "${OUT_DIR}/lib/${dep_name}" ]; then continue; fi
+        cp -Lf "${dep}" "${OUT_DIR}/lib/" 2>/dev/null && echo "  + ${dep_name}" || true
+    done
+done
+
 # ── Strip all MO2 binaries ──
 echo "Stripping MO2 binaries..."
 strip --strip-unneeded "${OUT_DIR}/ModOrganizer-core" 2>/dev/null || true
