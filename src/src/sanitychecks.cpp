@@ -389,12 +389,29 @@ int checkMissingFiles()
   log::debug("  . checking Linux dependencies");
   int n = 0;
 
-  // Check for FUSE
-  if (!QFileInfo::exists("/usr/lib/libfuse3.so") &&
-      !QFileInfo::exists("/usr/lib64/libfuse3.so") &&
-      !QFileInfo::exists("/usr/lib/x86_64-linux-gnu/libfuse3.so")) {
-    log::warn("libfuse3 not found - FUSE VFS will not work");
-    ++n;
+  // Check for FUSE (check both unversioned .so and versioned .so.3, since
+  // on Debian/Ubuntu the unversioned symlink is only in libfuse3-dev)
+  {
+    static const char* fusePaths[] = {
+      "/usr/lib/libfuse3.so",
+      "/usr/lib/libfuse3.so.3",
+      "/usr/lib64/libfuse3.so",
+      "/usr/lib64/libfuse3.so.3",
+      "/usr/lib/x86_64-linux-gnu/libfuse3.so",
+      "/usr/lib/x86_64-linux-gnu/libfuse3.so.3",
+      nullptr
+    };
+    bool fuseFound = false;
+    for (int i = 0; fusePaths[i]; ++i) {
+      if (QFileInfo::exists(fusePaths[i])) {
+        fuseFound = true;
+        break;
+      }
+    }
+    if (!fuseFound) {
+      log::warn("libfuse3 not found - FUSE VFS will not work");
+      ++n;
+    }
   }
 
   return n;
