@@ -341,6 +341,12 @@ patchelf --force-rpath --set-rpath '$ORIGIN/lib' "${OUT_DIR}/ModOrganizer-core"
 find "${OUT_DIR}/plugins" -maxdepth 1 -name "*.so" -exec patchelf --force-rpath --set-rpath '$ORIGIN/../lib' {} \; 2>/dev/null || true
 find "${OUT_DIR}/plugins/libs" -name "*.so" -exec patchelf --force-rpath --set-rpath '$ORIGIN/../../lib' {} \; 2>/dev/null || true
 find "${OUT_DIR}/lib" \( -name "*.so" -o -name "*.so.*" \) -exec patchelf --force-rpath --set-rpath '$ORIGIN' {} \; 2>/dev/null || true
+# Qt platform plugins keep aqtinstall's hardcoded RPATH (/opt/qt6/.../lib) which
+# doesn't exist on user systems — the linker falls through to system Qt, loading
+# the wrong version and poisoning the link map for all subsequent Qt library
+# lookups (including PyQt6 bindings).  All Qt plugins sit one subdir deep under
+# qt6plugins/, so $ORIGIN/../../lib resolves correctly to our lib/ for all of them.
+find "${OUT_DIR}/qt6plugins" -name "*.so" -exec patchelf --force-rpath --set-rpath '$ORIGIN/../../lib' {} \; 2>/dev/null || true
 
 # ── Launcher script ──
 cat > "${OUT_DIR}/fluorine-manager" <<'LAUNCH'
