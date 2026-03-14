@@ -181,6 +181,17 @@ done
 rm -f "${ALL_DEPS}"
 echo "Dependencies bundled."
 
+# libxcb-cursor is required by Qt's xcb platform plugin (Qt >= 6.5.0) but is
+# frequently absent on user systems (package: xcb-cursor0 / libxcb-cursor0).
+# All other libxcb libs are skipped above because they must match the host X
+# server ABI; libxcb-cursor is a pure utility library with no ABI dependency
+# on the X server version, so it's safe to bundle.
+for _xcb_cursor in /lib/x86_64-linux-gnu/libxcb-cursor.so* \
+                   /usr/lib/x86_64-linux-gnu/libxcb-cursor.so*; do
+    [ -f "${_xcb_cursor}" ] && cp -Lf "${_xcb_cursor}" "${OUT_DIR}/lib/" && \
+        echo "Bundled ${_xcb_cursor}"
+done
+
 # ── Qt6 platform plugins ──
 # Prefer aqtinstall location (Docker), then system, then qtpaths6 fallback.
 QT6_PLUGIN_DIR=""
