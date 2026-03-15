@@ -678,7 +678,7 @@ void DownloadManager::addNXMDownload(const QString& url)
   NXMUrl nxmInfo(url);
 
   QStringList validGames;
-  MOBase::IPluginGame* foundGame = nullptr;
+  const MOBase::IPluginGame* foundGame = nullptr;
   validGames.append(m_ManagedGame->gameShortName());
   validGames.append(m_ManagedGame->validShortNames());
   for (auto game : validGames) {
