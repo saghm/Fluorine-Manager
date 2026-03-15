@@ -700,21 +700,34 @@ void DownloadManager::addNXMDownload(const QString& url)
     }
   }
   log::debug("add nxm download: {}", url);
+  // The Nexus API game name to use for requests (may differ from foundGame's short name
+  // for special domains like "site" that have no matching game plugin).
+  QString apiGameName;
   if (foundGame == nullptr) {
-    log::debug("download requested for wrong game (game: {}, url: {})",
-               m_ManagedGame->gameShortName(), nxmInfo.game());
-    QMessageBox::information(
-        m_ParentWidget, tr("Wrong Game"),
-        tr("The download link is for a mod for \"%1\" but this instance of MO "
-           "has been set up for \"%2\".")
-            .arg(nxmInfo.game())
-            .arg(m_ManagedGame->gameShortName()),
-        QMessageBox::Ok);
-    return;
+    // "site" is Nexus Mods' game-agnostic domain for tools/utilities (e.g. BethINI Pie).
+    // Allow these downloads using the current managed game's API context.
+    if (nxmInfo.game().compare("site", Qt::CaseInsensitive) == 0) {
+      log::debug("NXM link is for nexusmods.com/site (game-agnostic tool), allowing download");
+      foundGame   = m_ManagedGame;
+      apiGameName = nxmInfo.game();  // keep "site" for correct API URLs
+    } else {
+      log::debug("download requested for wrong game (game: {}, url: {})",
+                 m_ManagedGame->gameShortName(), nxmInfo.game());
+      QMessageBox::information(
+          m_ParentWidget, tr("Wrong Game"),
+          tr("The download link is for a mod for \"%1\" but this instance of MO "
+             "has been set up for \"%2\".")
+              .arg(nxmInfo.game())
+              .arg(m_ManagedGame->gameShortName()),
+          QMessageBox::Ok);
+      return;
+    }
+  } else {
+    apiGameName = foundGame->gameShortName();
   }
 
   for (auto tuple : m_PendingDownloads) {
-    if (std::get<0>(tuple).compare(foundGame->gameShortName(), Qt::CaseInsensitive) ==
+    if (std::get<0>(tuple).compare(apiGameName, Qt::CaseInsensitive) ==
             0,
         std::get<1>(tuple) == nxmInfo.modId() &&
             std::get<2>(tuple) == nxmInfo.fileId()) {
@@ -785,7 +798,7 @@ void DownloadManager::addNXMDownload(const QString& url)
   emit aboutToUpdate();
 
   m_PendingDownloads.append(
-      std::make_tuple(foundGame->gameShortName(), nxmInfo.modId(), nxmInfo.fileId()));
+      std::make_tuple(apiGameName, nxmInfo.modId(), nxmInfo.fileId()));
 
   emit update(-1);
   emit downloadAdded();
@@ -797,7 +810,7 @@ void DownloadManager::addNXMDownload(const QString& url)
 
   QObject* test = info;
   m_RequestIDs.insert(m_NexusInterface->requestFileInfo(
-      foundGame->gameShortName(), nxmInfo.modId(), nxmInfo.fileId(), this,
+      apiGameName, nxmInfo.modId(), nxmInfo.fileId(), this,
       QVariant::fromValue(test), ""));
 }
 
@@ -1929,6 +1942,9 @@ void DownloadManager::nxmFileInfoAvailable(QString gameName, int modID, int file
 
   info->repository = "Nexus";
 
+  // Default to the raw game name; overridden below if a matching plugin is found.
+  // This preserves special domains like "site" that have no game plugin.
+  info->gameName = gameName;
   QStringList games(m_ManagedGame->validShortNames());
   games += m_ManagedGame->gameShortName();
   for (auto game : games) {
@@ -1936,6 +1952,7 @@ void DownloadManager::nxmFileInfoAvailable(QString gameName, int modID, int file
     if (gamePlugin != nullptr &&
         gamePlugin->gameNexusName().compare(gameName, Qt::CaseInsensitive) == 0) {
       info->gameName = gamePlugin->gameShortName();
+      break;
     }
   }
 

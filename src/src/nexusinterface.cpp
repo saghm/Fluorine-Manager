@@ -625,6 +625,12 @@ int NexusInterface::requestFileInfo(QString gameName, int modID, int fileID,
 
   NXMRequestInfo requestInfo(modID, fileID, NXMRequestInfo::TYPE_FILEINFO, userData,
                              subModule, gamePlugin);
+  // If the game plugin was a fallback (managed game), the NXM game name may be a
+  // different domain (e.g. "site" for Nexus tools). Override so the API URL is correct.
+  if (gamePlugin->gameShortName().compare(gameName, Qt::CaseInsensitive) != 0 &&
+      gamePlugin->gameNexusName().compare(gameName, Qt::CaseInsensitive) != 0) {
+    requestInfo.m_GameName = gameName.toLower();
+  }
   m_RequestQueue.enqueue(requestInfo);
 
   connect(
@@ -648,6 +654,11 @@ int NexusInterface::requestDownloadURL(QString gameName, int modID, int fileID,
 {
   NXMRequestInfo requestInfo(modID, fileID, NXMRequestInfo::TYPE_DOWNLOADURL, userData,
                              subModule, game);
+  // Override game name if the plugin was a fallback (e.g. "site" has no game plugin)
+  if (game && game->gameShortName().compare(gameName, Qt::CaseInsensitive) != 0 &&
+      game->gameNexusName().compare(gameName, Qt::CaseInsensitive) != 0) {
+    requestInfo.m_GameName = gameName.toLower();
+  }
   m_RequestQueue.enqueue(requestInfo);
 
   connect(this,
