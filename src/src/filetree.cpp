@@ -287,7 +287,8 @@ void FileTree::addAsExecutable(FileTreeItem* item)
               .title(name)
               .binaryInfo(fec.binary)
               .arguments(fec.arguments)
-              .workingDirectory(target.absolutePath()));
+              .workingDirectory(target.absolutePath())
+              .flags(Executable::UseProton));
 
       emit executablesChanged();
     }

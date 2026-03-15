@@ -1803,28 +1803,38 @@ If you disable this feature, MO will only display official DLCs this way. Please
             </property>
            </widget>
           </item>
-          <item row="4" column="0">
+          <item row="4" column="0" colspan="4">
+           <widget class="QPushButton" name="downloadSLRButton">
+            <property name="text">
+             <string>Download Steam Linux Runtime</string>
+            </property>
+            <property name="toolTip">
+             <string>Download SteamLinuxRuntime_sniper (~180 MB) from Valve's servers. Provides GStreamer, 32-bit libs, and an FHS environment for non-FHS distros (NixOS, etc.). Required for the "Use SLR" option in the Instance Manager.</string>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="0">
            <widget class="QLabel" name="label_64">
             <property name="text">
              <string>Status:</string>
             </property>
            </widget>
           </item>
-          <item row="4" column="1" colspan="3">
+          <item row="5" column="1" colspan="3">
            <widget class="QLabel" name="protonStatusLabel">
             <property name="text">
              <string>No Prefix</string>
             </property>
            </widget>
           </item>
-          <item row="5" column="0" colspan="4">
+          <item row="6" column="0" colspan="4">
            <widget class="QProgressBar" name="protonProgressBar">
             <property name="value">
              <number>0</number>
             </property>
            </widget>
           </item>
-          <item row="6" column="0" colspan="4">
+          <item row="7" column="0" colspan="4">
            <widget class="QPushButton" name="toggleInstallLog">
             <property name="text">
              <string>Show Install Log</string>
@@ -1837,7 +1847,7 @@ If you disable this feature, MO will only display official DLCs this way. Please
             </property>
            </widget>
           </item>
-          <item row="7" column="0" colspan="4">
+          <item row="8" column="0" colspan="4">
            <widget class="QTextEdit" name="nakInstallLog">
             <property name="readOnly">
              <bool>true</bool>

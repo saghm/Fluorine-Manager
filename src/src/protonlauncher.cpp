@@ -135,6 +135,30 @@ QString detectSteamPath()
   return {};
 }
 
+// Find the Steam Linux Runtime (sniper) run script.
+// SLR wraps the Proton launch in a pressure-vessel container that provides
+// GStreamer, 32-bit libs, and an FHS-compliant environment — required on
+// NixOS and other non-FHS distros.
+// Returns empty string if SLR is not installed.
+QString detectSLRRunScript()
+{
+  const QString steamPath = detectSteamPath();
+
+  // Common SLR sniper locations relative to Steam install
+  const QStringList candidates = {
+      steamPath + "/steamapps/common/SteamLinuxRuntime_sniper/run",
+      QDir::home().filePath(".local/share/Steam/steamapps/common/SteamLinuxRuntime_sniper/run"),
+      "/usr/lib/pressure-vessel/wrap",
+  };
+
+  for (const QString& path : candidates) {
+    if (!path.isEmpty() && QFileInfo::exists(path)) {
+      return path;
+    }
+  }
+  return {};
+}
+
 // Detect an available terminal emulator on the system.
 QString findTerminal()
 {
@@ -365,6 +389,12 @@ ProtonLauncher& ProtonLauncher::setSteamDrm(bool useSteamDrm)
   return *this;
 }
 
+ProtonLauncher& ProtonLauncher::setUseSLR(bool useSLR)
+{
+  m_useSLR = useSLR;
+  return *this;
+}
+
 ProtonLauncher& ProtonLauncher::setStoreVariant(const QString& variant)
 {
   m_storeVariant = variant.trimmed();
@@ -418,9 +448,28 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
   // before starting a new one.
   const QStringList protonArgs = QStringList() << "waitforexitandrun" << m_binary << m_arguments;
 
+  // If SLR is enabled, wrap the whole proton invocation inside the
+  // pressure-vessel container provided by SteamLinuxRuntime_sniper.
+  // The `run` script accepts `-- <command> [args...]` and re-executes the
+  // command inside the container.
   QString program;
   QStringList arguments;
-  wrapProgram(m_wrapperCommands, protonScript, protonArgs, program, arguments);
+  if (m_useSLR) {
+    if (char* slrScript = nak_slr_get_run_script(); slrScript != nullptr) {
+      const QString runScript = QString::fromUtf8(slrScript);
+      nak_string_free(slrScript);
+      MOBase::log::info("SLR: wrapping launch with {}", runScript);
+      // Build: [wrappers] run_script -- proton_script protonArgs
+      QStringList slrArgs;
+      slrArgs << "--" << protonScript << protonArgs;
+      wrapProgram(m_wrapperCommands, runScript, slrArgs, program, arguments);
+    } else {
+      MOBase::log::warn("SLR enabled but run script not found — launching without SLR");
+      wrapProgram(m_wrapperCommands, protonScript, protonArgs, program, arguments);
+    }
+  } else {
+    wrapProgram(m_wrapperCommands, protonScript, protonArgs, program, arguments);
+  }
 
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
   env.remove("PYTHONHOME");
@@ -476,6 +525,8 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
   }
 
   MOBase::log::info("Proton launch: '{}' run '{}'", protonScript, m_binary);
+  MOBase::log::info("Final command: '{}' {}", program,
+      arguments.join(" ").toStdString());
 
   if (!m_workingDir.isEmpty()) {
     env.insert("PWD", m_workingDir);

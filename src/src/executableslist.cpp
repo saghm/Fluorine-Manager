@@ -155,7 +155,7 @@ ExecutablesList::getPluginExecutables(MOBase::IPluginGame const* game) const
       continue;
     }
 
-    v.push_back({info, Executable::UseApplicationIcon});
+    v.push_back({info, Executable::UseApplicationIcon | Executable::UseProton});
   }
 
   const QFileInfo eppBin(QCoreApplication::applicationDirPath() +

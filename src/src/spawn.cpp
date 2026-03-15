@@ -647,16 +647,19 @@ int spawn(const SpawnParameters &sp, pid_t &processId) {
     // QSettings).
     const Settings *instanceForLaunch = Settings::maybeInstance();
     bool useSteamDrm = true; // default
+    bool useSLR       = true; // default on
     QString storeVariant;
     if (instanceForLaunch) {
       const QSettings instanceIni(instanceForLaunch->filename(),
                                   QSettings::IniFormat);
-      useSteamDrm = instanceIni.value("fluorine/steam_drm", true).toBool();
-      storeVariant = instanceIni.value("game_edition").toString().trimmed();
+      useSteamDrm  = instanceIni.value("fluorine/steam_drm", true).toBool();
+      useSLR        = instanceIni.value("fluorine/use_slr",   true).toBool();
+      storeVariant  = instanceIni.value("game_edition").toString().trimmed();
     }
 
     launcher.setSteamDrm(useSteamDrm)
-        .setStoreVariant(storeVariant);
+        .setStoreVariant(storeVariant)
+        .setUseSLR(useSLR);
 
     const QString prefixPath = resolvePrefixPath();
     if (prefixPath.isEmpty()) {

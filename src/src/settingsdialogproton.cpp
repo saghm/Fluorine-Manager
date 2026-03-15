@@ -23,8 +23,11 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QtConcurrent/QtConcurrent>
+#include <QFutureWatcher>
 #include <QMetaObject>
 #include <QProcess>
+#include <QProgressDialog>
 #include <QSettings>
 #include <QScopeGuard>
 #include <QStandardPaths>
@@ -95,6 +98,8 @@ ProtonSettingsTab::ProtonSettingsTab(Settings& s, SettingsDialog& d)
                    &ProtonSettingsTab::onWinetricks);
   QObject::connect(ui->prefixLocationBrowseButton, &QPushButton::clicked, this,
                    &ProtonSettingsTab::onBrowsePrefixLocation);
+  QObject::connect(ui->downloadSLRButton, &QPushButton::clicked, this,
+                   &ProtonSettingsTab::onDownloadSLR);
 
   QObject::connect(&m_installWatcher, &QFutureWatcher<InstallResult>::finished, this,
                    &ProtonSettingsTab::onInstallFinished);
@@ -295,6 +300,58 @@ void ProtonSettingsTab::onOpenPrefixFolder()
   }
 
   MOBase::shell::Explore(QDir(*path));
+}
+
+void ProtonSettingsTab::onDownloadSLR()
+{
+  if (nak_slr_is_installed()) {
+    QMessageBox::information(parentWidget(), tr("Steam Linux Runtime"),
+        tr("Steam Linux Runtime is already installed."));
+    return;
+  }
+
+  ui->downloadSLRButton->setEnabled(false);
+  auto* progress = new QProgressDialog(
+      tr("Downloading Steam Linux Runtime (~180 MB)...\n"
+         "Check the MO2 log for progress details."),
+      tr("Cancel"), 0, 0, parentWidget());
+  progress->setWindowTitle(tr("Steam Linux Runtime"));
+  progress->setWindowModality(Qt::WindowModal);
+  progress->setMinimumDuration(0);
+
+  auto* cancelFlag = new int(0);
+  connect(progress, &QProgressDialog::canceled, this, [cancelFlag] {
+    *cancelFlag = 1;
+  });
+
+  auto* watcher = new QFutureWatcher<char*>(this);
+  connect(watcher, &QFutureWatcher<char*>::finished, this,
+      [this, watcher, progress, cancelFlag] {
+        progress->close();
+        watcher->deleteLater();
+        progress->deleteLater();
+        ui->downloadSLRButton->setEnabled(true);
+
+        char* err = watcher->result();
+        if (err) {
+          const QString msg = QString::fromUtf8(err);
+          nak_string_free(err);
+          MOBase::log::error("[SLR] Download failed: {}", msg);
+          QMessageBox::warning(parentWidget(), tr("Steam Linux Runtime"),
+              tr("Download failed:\n%1").arg(msg));
+        } else {
+          MOBase::log::info("[SLR] Steam Linux Runtime installed successfully");
+          QMessageBox::information(parentWidget(), tr("Steam Linux Runtime"),
+              tr("Steam Linux Runtime installed successfully."));
+        }
+        delete cancelFlag;
+      });
+
+  int* cancelPtr = cancelFlag;
+  watcher->setFuture(QtConcurrent::run([cancelPtr]() -> char* {
+    return nak_download_slr(nullptr, nullptr, cancelPtr);
+  }));
+  progress->show();
 }
 
 void ProtonSettingsTab::onBrowsePrefixLocation()

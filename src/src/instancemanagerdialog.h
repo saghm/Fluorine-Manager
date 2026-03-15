@@ -148,6 +148,11 @@ private:
   // deletes the given files, returns false on error
   //
   bool doDelete(const QStringList& files, bool recycle);
+
+  // downloads SLR if not already installed; called when the SLR checkbox is
+  // toggled on
+  //
+  void downloadSLRIfNeeded();
 };
 
 #endif  // MODORGANIZER_INSTANCEMANAGERDIALOG_INCLUDED

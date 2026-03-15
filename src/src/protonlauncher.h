@@ -21,6 +21,7 @@ public:
   ProtonLauncher& setSteamAppId(uint32_t id);
   ProtonLauncher& setWrapper(const QString& wrapperCmd);
   ProtonLauncher& setSteamDrm(bool useSteamDrm);
+  ProtonLauncher& setUseSLR(bool useSLR);
   ProtonLauncher& setStoreVariant(const QString& variant);
   ProtonLauncher& addEnvVar(const QString& key, const QString& value);
   ProtonLauncher& setUseTerminal(bool useTerminal);
@@ -41,6 +42,7 @@ private:
   uint32_t m_steamAppId;
   QStringList m_wrapperCommands;
   bool m_useSteamDrm;
+  bool m_useSLR = true;
   QString m_storeVariant; // "GOG", "Epic", or empty for Steam
   QMap<QString, QString> m_envVars;
   QMap<QString, QString> m_wrapperEnvVars;

@@ -11,9 +11,16 @@
 #include <QCheckBox>
 #include <QFile>
 #include <QFileDialog>
+#include <QtConcurrent/QtConcurrent>
+#include <QFutureWatcher>
+#include <QMessageBox>
+#include <QProgressDialog>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QtConcurrent/QtConcurrent>
 #include <iplugingame.h>
+#include <log.h>
+#include <nak_ffi.h>
 #include <report.h>
 #include <utility.h>
 
@@ -222,6 +229,18 @@ InstanceManagerDialog::InstanceManagerDialog(PluginContainer& pc, QWidget* paren
     if (ini.isEmpty()) return;
     QSettings s(ini, QSettings::IniFormat);
     s.setValue("fluorine/steam_drm", checked);
+  });
+
+  connect(ui->steamLinuxRuntimeCheckBox, &QCheckBox::toggled, [&](bool checked) {
+    const auto* inst = singleSelection();
+    if (!inst) return;
+    const QString ini = inst->iniPath();
+    if (ini.isEmpty()) return;
+    QSettings s(ini, QSettings::IniFormat);
+    s.setValue("fluorine/use_slr", checked);
+    if (checked) {
+      downloadSLRIfNeeded();
+    }
   });
 
   connect(ui->switchToInstance, &QPushButton::clicked, [&] {
@@ -793,12 +812,19 @@ void InstanceManagerDialog::fillData(const Instance& ii)
       ui->steamDrmCheckBox->blockSignals(true);
       ui->steamDrmCheckBox->setChecked(s.value("fluorine/steam_drm", true).toBool());
       ui->steamDrmCheckBox->blockSignals(false);
+
+      ui->steamLinuxRuntimeCheckBox->blockSignals(true);
+      ui->steamLinuxRuntimeCheckBox->setChecked(s.value("fluorine/use_slr", true).toBool());
+      ui->steamLinuxRuntimeCheckBox->blockSignals(false);
     } else {
       ui->prefixPath->clear();
       ui->protonVersion->clear();
       ui->steamDrmCheckBox->blockSignals(true);
       ui->steamDrmCheckBox->setChecked(false);
       ui->steamDrmCheckBox->blockSignals(false);
+      ui->steamLinuxRuntimeCheckBox->blockSignals(true);
+      ui->steamLinuxRuntimeCheckBox->setChecked(true);
+      ui->steamLinuxRuntimeCheckBox->blockSignals(false);
     }
   }
 
@@ -897,4 +923,70 @@ void InstanceManagerDialog::openExistingPortable()
       break;
     }
   }
+}
+
+void InstanceManagerDialog::downloadSLRIfNeeded()
+{
+  if (nak_slr_is_installed()) {
+    return;
+  }
+
+  // Indeterminate progress dialog — SLR download logs internally via nak_init_logging.
+  // We can't pass capturing C++ lambdas as C function pointers, so we let the
+  // Rust side handle progress logging and just show a spinner here.
+  auto* progress = new QProgressDialog(
+      tr("Downloading Steam Linux Runtime (~180 MB)...\n"
+         "This only happens once. Check the MO2 log for details."),
+      tr("Cancel"), 0, 0, this); // 0,0 = indeterminate
+  progress->setWindowTitle(tr("Steam Linux Runtime"));
+  progress->setWindowModality(Qt::WindowModal);
+  progress->setMinimumDuration(0);
+
+  auto* cancelFlag = new int(0);
+
+  connect(progress, &QProgressDialog::canceled, this, [cancelFlag] {
+    *cancelFlag = 1;
+  });
+
+  using Result = char*;
+  auto* watcher = new QFutureWatcher<Result>(this);
+
+  connect(watcher, &QFutureWatcher<Result>::finished, this,
+      [this, watcher, progress, cancelFlag] {
+        progress->close();
+        watcher->deleteLater();
+        progress->deleteLater();
+
+        char* err = watcher->result();
+        if (err) {
+          const QString msg = QString::fromUtf8(err);
+          nak_string_free(err);
+          MOBase::log::error("[SLR] Download failed: {}", msg);
+          QMessageBox::warning(this, tr("Steam Linux Runtime"),
+              tr("Download failed:\n%1\n\nSLR has been disabled for this instance.")
+                  .arg(msg));
+          ui->steamLinuxRuntimeCheckBox->blockSignals(true);
+          ui->steamLinuxRuntimeCheckBox->setChecked(false);
+          ui->steamLinuxRuntimeCheckBox->blockSignals(false);
+          const auto* inst = singleSelection();
+          if (inst) {
+            const QString ini = inst->iniPath();
+            if (!ini.isEmpty()) {
+              QSettings s(ini, QSettings::IniFormat);
+              s.setValue("fluorine/use_slr", false);
+            }
+          }
+        } else {
+          MOBase::log::info("[SLR] Steam Linux Runtime installed successfully");
+          progress->setLabelText(tr("Steam Linux Runtime is ready."));
+        }
+        delete cancelFlag;
+      });
+
+  int* cancelPtr = cancelFlag;
+  watcher->setFuture(QtConcurrent::run([cancelPtr]() -> Result {
+    return nak_download_slr(nullptr, nullptr, cancelPtr);
+  }));
+
+  progress->show();
 }

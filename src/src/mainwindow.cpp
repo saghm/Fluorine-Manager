@@ -92,6 +92,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "shared/fileentry.h"
 #include "shared/filesorigin.h"
 
+#include <nak_ffi.h>
 #include <QAbstractItemDelegate>
 #include <QAction>
 #include <QApplication>
@@ -2364,6 +2365,57 @@ void MainWindow::on_startButton_clicked()
   Guard g([&] {
     ui->startButton->setEnabled(true);
   });
+
+  // Pre-check: if this executable uses Proton and the current instance has SLR
+  // enabled, download SLR before launching if it isn't installed yet.
+  if (selectedExecutable->useProton()) {
+    const auto* s = Settings::maybeInstance();
+    bool useSLR = true;
+    if (s) {
+      QSettings instanceIni(s->filename(), QSettings::IniFormat);
+      useSLR = instanceIni.value("fluorine/use_slr", true).toBool();
+    }
+    if (useSLR && !nak_slr_is_installed()) {
+      auto* progress = new QProgressDialog(
+          tr("Downloading Steam Linux Runtime (~180 MB)...\n"
+             "This is required to launch games. Check the MO2 log for details."),
+          tr("Cancel"), 0, 0, this);
+      progress->setWindowTitle(tr("Steam Linux Runtime"));
+      progress->setWindowModality(Qt::WindowModal);
+      progress->setMinimumDuration(0);
+
+      int cancelFlag = 0;
+      connect(progress, &QProgressDialog::canceled, this, [&cancelFlag] {
+        cancelFlag = 1;
+      });
+
+      // Run download synchronously using an event loop so the dialog stays responsive.
+      QFutureWatcher<char*> watcher;
+      QEventLoop loop;
+      connect(&watcher, &QFutureWatcher<char*>::finished, &loop, &QEventLoop::quit);
+      watcher.setFuture(QtConcurrent::run([&cancelFlag]() -> char* {
+        return nak_download_slr(nullptr, nullptr, &cancelFlag);
+      }));
+      progress->show();
+      loop.exec();
+      progress->close();
+      progress->deleteLater();
+
+      char* err = watcher.result();
+      if (cancelFlag) {
+        return; // user cancelled, don't launch
+      }
+      if (err) {
+        const QString msg = QString::fromUtf8(err);
+        nak_string_free(err);
+        log::error("[SLR] Download failed: {}", msg);
+        QMessageBox::warning(this, tr("Steam Linux Runtime"),
+            tr("Steam Linux Runtime download failed:\n%1\n\n"
+               "You can disable SLR in the Instance Manager and try again.").arg(msg));
+        return;
+      }
+    }
+  }
 
   if (selectedExecutable->minimizeToSystemTray()) {
     m_SystemTrayManager->minimizeToSystemTray();

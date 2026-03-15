@@ -5,6 +5,7 @@
 
 pub mod config;
 pub mod dxvk;
+pub mod slr;
 pub mod game_finder;
 pub mod logging;
 pub mod paths;

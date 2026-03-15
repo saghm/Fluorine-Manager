@@ -33,6 +33,7 @@ private:
   void onFixGameRegistries();
   void onWinetricks();
   void onBrowsePrefixLocation();
+  void onDownloadSLR();
 
   void showGameRegistryDialog();
   QString ensureWinetricks();

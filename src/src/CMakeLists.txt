@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 find_package(Qt6 REQUIRED COMPONENTS
-    Widgets WebSockets Network)
+    Widgets WebSockets Network Concurrent)
 if(WIN32)
     find_package(Qt6 REQUIRED COMPONENTS WebEngineWidgets)
 endif()
@@ -101,6 +101,7 @@ target_link_libraries(organizer PRIVATE
     mo2::nak_ffi
     # Qt6
     Qt6::Widgets
+    Qt6::Concurrent
     $<$<TARGET_EXISTS:Qt6::WebEngineWidgets>:Qt6::WebEngineWidgets>
     Qt6::WebSockets
     Qt6::Network

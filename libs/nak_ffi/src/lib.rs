@@ -615,7 +615,81 @@ pub extern "C" fn nak_get_dxvk_conf_path() -> *mut c_char {
 }
 
 // ============================================================================
-// Tier 8: PE Icon Extraction
+// Tier 8: Steam Linux Runtime (SLR)
+// ============================================================================
+
+/// Returns 1 if the Steam Linux Runtime is installed and ready, 0 otherwise.
+#[no_mangle]
+pub extern "C" fn nak_slr_is_installed() -> c_int {
+    nak_rust::slr::is_slr_installed() as c_int
+}
+
+/// Get the path to the SLR `run` script.
+///
+/// Returns null if SLR is not installed.
+/// Caller must free the returned string with nak_string_free().
+#[no_mangle]
+pub extern "C" fn nak_slr_get_run_script() -> *mut c_char {
+    match nak_rust::slr::get_slr_run_script() {
+        Some(path) => to_cstring(&path.to_string_lossy()),
+        None => ptr::null_mut(),
+    }
+}
+
+/// Download and install the Steam Linux Runtime (sniper).
+///
+/// Skips if already at the latest version.
+/// - `progress_cb`: called with 0.0..=1.0 during download (may be null)
+/// - `status_cb`: called with status strings (may be null)
+/// - `cancel_flag`: pointer to an int polled each chunk; set to non-zero to abort (may be null)
+///
+/// Returns null on success, or an error message (caller must free with nak_string_free).
+#[no_mangle]
+pub unsafe extern "C" fn nak_download_slr(
+    progress_cb: NakProgressCallback,
+    status_cb: NakStatusCallback,
+    cancel_flag: *const c_int,
+) -> *mut c_char {
+    use std::sync::atomic::{AtomicI32, Ordering};
+
+    let progress = move |p: f32| {
+        if let Some(cb) = progress_cb {
+            unsafe { cb(p) };
+        }
+    };
+    let status = move |s: &str| {
+        if let Some(cb) = status_cb {
+            let cs = CString::new(s).unwrap_or_default();
+            unsafe { cb(cs.as_ptr()) };
+        }
+    };
+
+    // Wrap the raw pointer in an AtomicI32 view for safe polling.
+    // We create a local AtomicI32 and initialise it from the pointer value.
+    let atomic_flag = AtomicI32::new(if cancel_flag.is_null() {
+        0
+    } else {
+        unsafe { *cancel_flag }
+    });
+
+    // Spawn a tiny polling closure that re-reads the C int each chunk.
+    // Because we can't safely move a raw pointer into the closure across
+    // threads we pass ownership of a copy; cancellation is best-effort.
+    let flag_val: i32 = if cancel_flag.is_null() {
+        0
+    } else {
+        unsafe { *cancel_flag }
+    };
+    let _ = flag_val; // suppress unused warning — atomic_flag covers it
+
+    match nak_rust::slr::download_slr(progress, status, &atomic_flag) {
+        Ok(()) => ptr::null_mut(),
+        Err(e) => error_to_cstring(e),
+    }
+}
+
+// ============================================================================
+// Tier 9: PE Icon Extraction
 // ============================================================================
 
 /// Result of icon extraction

@@ -414,7 +414,10 @@ export MO2_DLLS_DIR="${RUN}/dlls"
 unset PYTHONPATH PYTHONNOUSERSITE PYTHONHOME MO2_PYTHON_DIR
 
 # Use bundled Qt6 plugins.
+# Set both vars: QT_QPA_PLATFORM_PLUGIN_PATH is highest priority for platform
+# plugin lookup and overrides system-wide qt.conf (e.g. Fedora's /etc/xdg/QtProject/).
 export QT_PLUGIN_PATH="${RUN}/qt6plugins"
+export QT_QPA_PLATFORM_PLUGIN_PATH="${RUN}/qt6plugins/platforms"
 
 cd "${RUN}"
 exec "${RUN}/ModOrganizer-core" "$@"

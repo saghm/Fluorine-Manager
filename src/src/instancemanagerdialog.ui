@@ -324,6 +324,19 @@
                  </property>
                 </widget>
                </item>
+               <item row="11" column="0" colspan="2">
+                <widget class="QCheckBox" name="steamLinuxRuntimeCheckBox">
+                 <property name="text">
+                  <string>Use Steam Linux Runtime (SLR)</string>
+                 </property>
+                 <property name="toolTip">
+                  <string>Run games inside the Steam Linux Runtime container (pressure-vessel). Provides GStreamer, 32-bit libs, and other dependencies for non-FHS distros like NixOS. Requires Steam to be installed.</string>
+                 </property>
+                 <property name="checked">
+                  <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
               </layout>
              </widget>
             </item>

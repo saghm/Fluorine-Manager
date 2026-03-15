@@ -176,7 +176,31 @@ char *nak_ensure_dxvk_conf(void);
 char *nak_get_dxvk_conf_path(void);
 
 /* ========================================================================
- * Tier 8: PE Icon Extraction
+ * Tier 8: Steam Linux Runtime (SLR)
+ * ======================================================================== */
+
+/** Returns 1 if SteamLinuxRuntime_sniper is installed and the run script exists, 0 otherwise. */
+int nak_slr_is_installed(void);
+
+/** Get the path to the SLR run script.
+ *  Returns NULL if SLR is not installed.
+ *  Caller must free with nak_string_free(). */
+char *nak_slr_get_run_script(void);
+
+/** Download and install SteamLinuxRuntime_sniper from Valve's repo (~180 MB).
+ *  Skips if already at the latest version (checked via BUILD_ID).
+ *  progress_cb: 0.0..1.0 during download (may be NULL).
+ *  status_cb: human-readable status strings (may be NULL).
+ *  cancel_flag: pointer to int, set non-zero to cancel (may be NULL).
+ *  Returns NULL on success, or error message (free with nak_string_free). */
+char *nak_download_slr(
+    NakProgressCallback progress_cb,
+    NakStatusCallback status_cb,
+    const int *cancel_flag
+);
+
+/* ========================================================================
+ * Tier 9: PE Icon Extraction
  * ======================================================================== */
 
 /** Result of icon extraction */
