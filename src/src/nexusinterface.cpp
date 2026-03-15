@@ -470,6 +470,7 @@ int NexusInterface::requestDescription(QString gameName, int modID, QObject* rec
 {
   NXMRequestInfo requestInfo(modID, NXMRequestInfo::TYPE_DESCRIPTION, userData,
                              subModule, game);
+  applyGameNameOverride(requestInfo, gameName, game);
   m_RequestQueue.enqueue(requestInfo);
 
   connect(this, SIGNAL(nxmDescriptionAvailable(QString, int, QVariant, QVariant, int)),
@@ -497,6 +498,7 @@ int NexusInterface::requestModInfo(QString gameName, int modID, QObject* receive
 
   NXMRequestInfo requestInfo(modID, NXMRequestInfo::TYPE_MODINFO, userData, subModule,
                              game);
+  applyGameNameOverride(requestInfo, gameName, game);
   m_RequestQueue.enqueue(requestInfo);
 
   connect(this, SIGNAL(nxmModInfoAvailable(QString, int, QVariant, QVariant, int)),
@@ -625,12 +627,7 @@ int NexusInterface::requestFileInfo(QString gameName, int modID, int fileID,
 
   NXMRequestInfo requestInfo(modID, fileID, NXMRequestInfo::TYPE_FILEINFO, userData,
                              subModule, gamePlugin);
-  // If the game plugin was a fallback (managed game), the NXM game name may be a
-  // different domain (e.g. "site" for Nexus tools). Override so the API URL is correct.
-  if (gamePlugin->gameShortName().compare(gameName, Qt::CaseInsensitive) != 0 &&
-      gamePlugin->gameNexusName().compare(gameName, Qt::CaseInsensitive) != 0) {
-    requestInfo.m_GameName = gameName.toLower();
-  }
+  applyGameNameOverride(requestInfo, gameName, gamePlugin);
   m_RequestQueue.enqueue(requestInfo);
 
   connect(
@@ -654,11 +651,7 @@ int NexusInterface::requestDownloadURL(QString gameName, int modID, int fileID,
 {
   NXMRequestInfo requestInfo(modID, fileID, NXMRequestInfo::TYPE_DOWNLOADURL, userData,
                              subModule, game);
-  // Override game name if the plugin was a fallback (e.g. "site" has no game plugin)
-  if (game && game->gameShortName().compare(gameName, Qt::CaseInsensitive) != 0 &&
-      game->gameNexusName().compare(gameName, Qt::CaseInsensitive) != 0) {
-    requestInfo.m_GameName = gameName.toLower();
-  }
+  applyGameNameOverride(requestInfo, gameName, game);
   m_RequestQueue.enqueue(requestInfo);
 
   connect(this,
@@ -1236,6 +1229,18 @@ APIStats NexusInterface::getAPIStats() const
   stats.requestsQueued = m_RequestQueue.size();
 
   return stats;
+}
+
+void NexusInterface::applyGameNameOverride(NXMRequestInfo& info, const QString& gameName,
+                                           const MOBase::IPluginGame* game) const
+{
+  // When gameName has no matching plugin (e.g. "site" for Nexus tools), getGame()
+  // returns the managed game as a fallback, causing NXMRequestInfo to store the wrong
+  // game name (e.g. "skyrimspecialedition" instead of "site"). Override it here.
+  if (game && game->gameShortName().compare(gameName, Qt::CaseInsensitive) != 0 &&
+      game->gameNexusName().compare(gameName, Qt::CaseInsensitive) != 0) {
+    info.m_GameName = gameName.toLower();
+  }
 }
 
 namespace

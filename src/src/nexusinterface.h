@@ -675,6 +675,11 @@ private:
   void requestFinished(std::list<NXMRequestInfo>::iterator iter);
   MOBase::IPluginGame* getGame(QString gameName) const;
   QString getOldModsURL(QString gameName) const;
+  // When the game name has no matching plugin (e.g. "site"), getGame() returns the
+  // managed game as a fallback but sets the wrong m_GameName in the request. This
+  // overrides it back to the raw requested name so API URLs use the correct domain.
+  void applyGameNameOverride(NXMRequestInfo& info, const QString& gameName,
+                             const MOBase::IPluginGame* game) const;
 
 private:
   QNetworkDiskCache* m_DiskCache;
