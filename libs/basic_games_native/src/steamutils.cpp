@@ -20,6 +20,16 @@ static QStringList findSteamPaths()
       home + "/snap/steam/common/.local/share/Steam",
   };
 
+  // When Steam launches an app (e.g. in game mode) it sets
+  // STEAM_COMPAT_CLIENT_INSTALL_PATH to its own root.  Add that as a
+  // candidate so we find the right installation even if $HOME resolves
+  // differently inside the gamescope session.
+  const QString steamEnvPath =
+      QString::fromLocal8Bit(qgetenv("STEAM_COMPAT_CLIENT_INSTALL_PATH"));
+  if (!steamEnvPath.isEmpty()) {
+    candidates.prepend(steamEnvPath);
+  }
+
   for (const auto& candidate : candidates) {
     QDir dir(candidate);
     if (dir.exists("steamapps") || QFile::exists(candidate + "/steam.pid")) {
@@ -68,8 +78,12 @@ static QStringList getAllLibraryFolders(const QString& steamPath)
        {"steamapps/libraryfolders.vdf", "config/libraryfolders.vdf"}) {
     QString vdfPath = steamPath + "/" + vdfName;
     for (const auto& path : parseLibraryFolders(vdfPath)) {
-      if (!folders.contains(path)) {
-        folders.append(path);
+      // Canonicalize before dedup so /home/ and /var/home/ paths compare equal
+      QString canonical = QFileInfo(path).canonicalFilePath();
+      if (canonical.isEmpty())
+        canonical = path;
+      if (!folders.contains(canonical)) {
+        folders.append(canonical);
       }
     }
   }
@@ -120,8 +134,15 @@ static AppManifest parseAppManifest(const QString& path)
   return manifest;
 }
 
+// Cache: built once per process, cleared on explicit refresh.
+static QHash<int, QString> s_steamGamesCache;
+static bool s_steamGamesCacheValid = false;
+
 QHash<int, QString> findSteamGames()
 {
+  if (s_steamGamesCacheValid)
+    return s_steamGamesCache;
+
   QHash<int, QString> games;
 
   for (const auto& steamPath : findSteamPaths()) {
@@ -146,11 +167,12 @@ QHash<int, QString> findSteamGames()
     }
   }
 
+  s_steamGamesCache      = games;
+  s_steamGamesCacheValid = true;
   return games;
 }
 
 QString findSteamGamePath(int appId)
 {
-  auto games = findSteamGames();
-  return games.value(appId);
+  return findSteamGames().value(appId);
 }
