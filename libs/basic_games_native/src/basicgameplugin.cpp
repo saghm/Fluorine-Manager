@@ -315,7 +315,26 @@ int BasicGamePlugin::nexusGameID() const
 
 bool BasicGamePlugin::looksValid(QDir const& dir) const
 {
-  return dir.exists(m_def.binaryName);
+  // Primary check: binary at game root
+  if (dir.exists(m_def.binaryName))
+    return true;
+
+  // Fallback: check if the data directory exists relative to this path.
+  // Some UE5 games (e.g. Oblivion Remastered) have their root exe nested
+  // under a subdirectory even though the appmanifest installdir points one
+  // level up. If the unique data path resolves, it's the right directory.
+  if (!m_def.dataDirectory.isEmpty()) {
+    QString dataDir = m_def.dataDirectory;
+    dataDir.replace('\\', '/');
+    // Only handle %GAME_PATH% here; other vars need context we don't have
+    if (!dataDir.contains('%') || dataDir.startsWith("%GAME_PATH%")) {
+      dataDir.replace("%GAME_PATH%", dir.absolutePath());
+      if (!dataDir.contains('%') && QDir(dataDir).exists())
+        return true;
+    }
+  }
+
+  return false;
 }
 
 QString BasicGamePlugin::gameVersion() const
