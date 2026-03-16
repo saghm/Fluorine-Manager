@@ -40,7 +40,13 @@ static void ensureBundledPluginsLinked(const QString& bundledDir,
 
     if (targetInfo.isSymLink()) {
       // Already a symlink — check if it points to the right place.
-      if (targetInfo.symLinkTarget() == QFileInfo(it.filePath()).absoluteFilePath()) {
+      // Use canonicalFilePath() on both sides so /home/ ↔ /var/home/ symlinks
+      // (Bazzite/Fedora immutable distros) don't cause false stale-symlink
+      // replacements that can delete the .so before re-linking it.
+      const QString existingTarget =
+          QFileInfo(targetInfo.symLinkTarget()).canonicalFilePath();
+      const QString expectedTarget = QFileInfo(it.filePath()).canonicalFilePath();
+      if (!expectedTarget.isEmpty() && existingTarget == expectedTarget) {
         continue;  // correct symlink, nothing to do
       }
       // Stale symlink pointing elsewhere — replace it.
