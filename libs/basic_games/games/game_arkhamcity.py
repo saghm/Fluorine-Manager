@@ -53,7 +53,7 @@ class ArkhamCityGame(BasicGame):
 
     # This will only detect saves from the earliest-created Steam profile on the user's PC.
     def savesDirectory(self) -> QDir:
-        docSaves = QDir(self.documentsDirectory().cleanPath("../../SaveData"))
+        docSaves = QDir(self.documentsDirectory().absoluteFilePath("../../SaveData"))
         if self.is_steam():
             if (steamDir := find_steam_path()) is None:
                 return docSaves

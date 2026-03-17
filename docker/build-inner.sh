@@ -68,6 +68,7 @@ find build/libs -type f \( \
     -name "libinibakery.so" -o \
     -name "libbsa_extractor.so" -o \
     -name "libbsa_packer.so" -o \
+    -name "libbasic_games_native.so" -o \
     -name "libproxy.so" \
 \) -exec cp -f {} "${OUT_DIR}/plugins/" \;
 
@@ -103,6 +104,8 @@ if [ -d "libs/basic_games" ]; then
         -o -name "*.txt" -o -name "*.md" -o -name "LICENSE" \
         -o -name "CMakeLists.txt" -o -name "CMakePresets.json" \) \
         -delete 2>/dev/null || true
+    # Remove __pycache__ directories to prevent stale bytecode
+    find "${OUT_DIR}/plugins/basic_games" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 fi
 # data/ dir (DDS headers etc., used by DDSPreview.py via plugins/data/ in sys.path).
 # Stage DDS package from source directly (cmake staging is OFF by default).
@@ -406,8 +409,12 @@ fi
 RUN="${BIN_DST}"
 
 export PATH="${RUN}:${PATH}"
-# NOTE: Do NOT set LD_LIBRARY_PATH here.  The binary uses DT_RPATH
-# ($ORIGIN/lib) to find its libraries.
+# Steam game mode injects its scout/soldier runtime into LD_LIBRARY_PATH.
+# Those old libraries (libssl, libz, etc.) break Python extension modules
+# and Qt internals that don't have RPATH pointing to our bundled libs.
+# Clear it — the binary uses DT_RPATH ($ORIGIN/lib) for its own deps,
+# and we prepend our lib/ for anything loaded via dlopen (Python, Qt plugins).
+export LD_LIBRARY_PATH="${RUN}/lib"
 export MO2_BASE_DIR="${RUN}"
 export MO2_PLUGINS_DIR="${RUN}/plugins"
 export MO2_DLLS_DIR="${RUN}/dlls"
@@ -628,7 +635,9 @@ export FLUORINE_ORIG_XDG_DATA_DIRS="${XDG_DATA_DIRS:-/usr/local/share:/usr/share
 export FLUORINE_ORIG_QT_PLUGIN_PATH="${QT_PLUGIN_PATH:-}"
 
 export PATH="${BIN}:${PATH}"
-export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH:-}"
+# Replace (not append) LD_LIBRARY_PATH — Steam game mode injects its runtime
+# libs which break Python/Qt.  RPATH handles the binary's own deps.
+export LD_LIBRARY_PATH="${HERE}/usr/lib"
 
 export MO2_BASE_DIR="${APPIMAGE_DIR}"
 export MO2_PLUGINS_DIR="${BIN}/plugins"

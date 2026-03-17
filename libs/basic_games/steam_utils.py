@@ -1,5 +1,6 @@
 # Code greatly inspired by https://github.com/LostDragonist/steam-library-setup-tool
 
+import os
 import sys
 import winreg
 from pathlib import Path
@@ -149,6 +150,16 @@ def find_steam_path() -> Path | None:
             return Path(value[0].replace("/", "\\")).parent
     except FileNotFoundError:
         pass
+
+    # When Steam launches an app (e.g. in game mode), it sets
+    # STEAM_COMPAT_CLIENT_INSTALL_PATH to its own root.  Check it first so we
+    # find the right installation even if $HOME resolves differently inside
+    # the gamescope session (e.g. /var/home vs /home on Bazzite).
+    steam_env = os.environ.get("STEAM_COMPAT_CLIENT_INSTALL_PATH", "")
+    if steam_env:
+        p = Path(steam_env)
+        if p.is_dir() and p.joinpath("steamapps", "libraryfolders.vdf").exists():
+            return p
 
     # Linux: check common Steam install locations.
     for candidate in (

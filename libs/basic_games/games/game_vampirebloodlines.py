@@ -83,6 +83,7 @@ class VampireTheMasqueradeBloodlinesGame(BasicGame):
         for iniFile in self.iniFiles():
             iniPath = Path(self.documentsDirectory().absoluteFilePath(iniFile))
             if not iniPath.exists():
+                iniPath.parent.mkdir(parents=True, exist_ok=True)
                 with open(iniPath, "w") as _:
                     pass
 
