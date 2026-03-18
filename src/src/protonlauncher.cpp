@@ -70,6 +70,7 @@ void cleanAppImageEnv(QProcessEnvironment& env)
 
   const bool hasOrigVars = env.contains("FLUORINE_ORIG_PATH");
   restoreOrStrip("LD_LIBRARY_PATH", "FLUORINE_ORIG_LD_LIBRARY_PATH", env);
+  restoreOrStrip("LD_PRELOAD", "FLUORINE_ORIG_LD_PRELOAD", env);
   restoreOrStrip("PATH", "FLUORINE_ORIG_PATH", env);
   restoreOrStrip("XDG_DATA_DIRS", "FLUORINE_ORIG_XDG_DATA_DIRS", env);
   restoreOrStrip("QT_PLUGIN_PATH", "FLUORINE_ORIG_QT_PLUGIN_PATH", env);

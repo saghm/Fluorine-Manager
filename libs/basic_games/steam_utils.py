@@ -164,6 +164,7 @@ def find_steam_path() -> Path | None:
     # Linux: check common Steam install locations.
     for candidate in (
         Path.home() / ".local" / "share" / "Steam",
+        Path.home() / ".steam" / "debian-installation",
         Path.home() / ".steam" / "steam",
         Path.home()
         / ".var"

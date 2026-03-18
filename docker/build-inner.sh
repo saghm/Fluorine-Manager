@@ -362,9 +362,15 @@ HERE="$(cd "$(dirname "$SELF")" && pwd)"
 # Without this, our bundled LD_LIBRARY_PATH leaks into game processes and
 # causes library conflicts.
 export FLUORINE_ORIG_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
+export FLUORINE_ORIG_LD_PRELOAD="${LD_PRELOAD:-}"
 export FLUORINE_ORIG_PATH="${PATH}"
 export FLUORINE_ORIG_XDG_DATA_DIRS="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
 export FLUORINE_ORIG_QT_PLUGIN_PATH="${QT_PLUGIN_PATH:-}"
+
+# Steam injects 32-bit gameoverlayrenderer.so via LD_PRELOAD which causes
+# "wrong ELF class" errors for 64-bit Qt6 apps (see PrismLauncher #3421).
+# Clear it for our process; game launches restore via FLUORINE_ORIG_LD_PRELOAD.
+unset LD_PRELOAD
 
 # ── Sync entire app to ~/.local/share/fluorine/bin/ ──
 # This gives instances a stable symlink target that won't break if the user
@@ -630,9 +636,13 @@ BIN="${HERE}/usr/bin"
 APPIMAGE_DIR="$(dirname "$(readlink -f "${APPIMAGE:-$0}")")"
 
 export FLUORINE_ORIG_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
+export FLUORINE_ORIG_LD_PRELOAD="${LD_PRELOAD:-}"
 export FLUORINE_ORIG_PATH="${PATH}"
 export FLUORINE_ORIG_XDG_DATA_DIRS="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
 export FLUORINE_ORIG_QT_PLUGIN_PATH="${QT_PLUGIN_PATH:-}"
+
+# Steam injects 32-bit gameoverlayrenderer.so via LD_PRELOAD — clear it.
+unset LD_PRELOAD
 
 export PATH="${BIN}:${PATH}"
 # Replace (not append) LD_LIBRARY_PATH — Steam game mode injects its runtime

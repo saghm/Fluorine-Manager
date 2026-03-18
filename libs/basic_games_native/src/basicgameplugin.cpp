@@ -4,6 +4,8 @@
 #include <uibase/utility.h>
 #include <uibase/versioninfo.h>
 
+#include <uibase/log.h>
+
 #include <QDateTime>
 #include <QDirIterator>
 #include <QStandardPaths>
@@ -87,6 +89,8 @@ void BasicGamePlugin::detectGame()
   for (int steamId : m_def.steamAppIds) {
     QString path = findSteamGamePath(steamId);
     if (!path.isEmpty()) {
+      MOBase::log::debug("detectGame: '{}' found via Steam appid {} at '{}'",
+                         m_def.gameName, steamId, path);
       setGamePath(path);
       return;
     }
@@ -315,9 +319,50 @@ int BasicGamePlugin::nexusGameID() const
 
 bool BasicGamePlugin::looksValid(QDir const& dir) const
 {
-  // Primary check: binary at game root
-  if (dir.exists(m_def.binaryName))
+  // Primary check: binary at game root.
+  // Use QFileInfo with the absolute path directly — QDir::exists() with
+  // relative paths containing subdirectories can have edge-case issues on
+  // some filesystems / Qt builds.
+  const QString absPath = dir.absoluteFilePath(m_def.binaryName);
+  if (QFileInfo::exists(absPath)) {
     return true;
+  }
+
+  // Case-insensitive fallback: Linux filesystems are case-sensitive but
+  // Steam sometimes creates directories with different casing than expected.
+  // Walk the path components and try case-insensitive matching.
+  if (m_def.binaryName.contains('/')) {
+    QStringList parts = QString(m_def.binaryName).replace('\\', '/').split('/');
+    QString current   = dir.absolutePath();
+    bool found        = true;
+    for (const QString& part : parts) {
+      QDir d(current);
+      if (d.exists(part)) {
+        current = d.absoluteFilePath(part);
+        continue;
+      }
+      // Try case-insensitive match
+      const QStringList entries =
+          d.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
+      bool matched = false;
+      for (const QString& entry : entries) {
+        if (entry.compare(part, Qt::CaseInsensitive) == 0) {
+          current = d.absoluteFilePath(entry);
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) {
+        found = false;
+        break;
+      }
+    }
+    if (found) {
+      MOBase::log::debug("looksValid: found '{}' via case-insensitive match in '{}'",
+                         m_def.binaryName, dir.absolutePath());
+      return true;
+    }
+  }
 
   // Fallback: check if the data directory exists relative to this path.
   // Some UE5 games (e.g. Oblivion Remastered) have their root exe nested
@@ -334,6 +379,8 @@ bool BasicGamePlugin::looksValid(QDir const& dir) const
     }
   }
 
+  MOBase::log::debug("looksValid: '{}' not found in '{}'", m_def.binaryName,
+                     dir.absolutePath());
   return false;
 }
 
