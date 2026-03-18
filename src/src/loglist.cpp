@@ -22,6 +22,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "env.h"
 #include "fluorinepaths.h"
 #include "organizercore.h"
+#include <algorithm>
 #include <cstdlib>
 
 using namespace MOBase;
@@ -241,7 +242,10 @@ void LogList::clear()
 void LogList::openLogsFolder()
 {
 #ifndef _WIN32
-  const QString logsPath = fluorineDataDir() + "/logs";
+  const char* launchDir  = std::getenv("FLUORINE_LAUNCH_DIR");
+  const QString logsPath = (launchDir && launchDir[0])
+                               ? QString::fromUtf8(launchDir) + "/logs"
+                               : QDir::currentPath() + "/logs";
 #else
   const QString logsPath = qApp->property("dataPath").toString() + "/" +
                            QString::fromStdWString(AppConfig::logPath());
@@ -406,11 +410,31 @@ bool createAndMakeWritable(const std::wstring& subPath)
 bool setLogDirectory(const QString& dir)
 {
 #ifndef _WIN32
-  // On Linux, all logs go to ~/.var/app/com.fluorine.manager/logs/
-  const QString logDir = fluorineDataDir() + "/logs";
+  // Place logs in the directory the user launched fluorine from so they're
+  // easy to find and share.  Each launch creates a new timestamped log file
+  // and the oldest are cleaned up to keep only the last 5.
+  // FLUORINE_LAUNCH_DIR is set by the launcher script before it cd's elsewhere.
+  const char* launchDir = std::getenv("FLUORINE_LAUNCH_DIR");
+  const QString logDir  = (launchDir && launchDir[0])
+                              ? QString::fromUtf8(launchDir) + "/logs"
+                              : QDir::currentPath() + "/logs";
   QDir().mkpath(logDir);
-  const auto logFile = logDir + "/" +
-                       QString::fromStdWString(AppConfig::logFileName());
+
+  // Create a timestamped log file for this session.
+  const QString timestamp =
+      QDateTime::currentDateTime().toString("yyyy-MM-dd_HH-mm-ss");
+  const auto logFile = logDir + "/mo_interface_" + timestamp + ".log";
+
+  // Clean up old logs, keeping only the most recent (numLogFiles - 1) so that
+  // together with the new one we have numLogFiles total.
+  {
+    QDir d(logDir);
+    QStringList existing = d.entryList({"mo_interface_*.log"}, QDir::Files, QDir::Name);
+    const int keep = std::max(0, AppConfig::numLogFiles() - 1);
+    while (existing.size() > keep) {
+      d.remove(existing.takeFirst());
+    }
+  }
 #else
   const auto logFile = dir + "/" + QString::fromStdWString(AppConfig::logPath()) + "/" +
                        QString::fromStdWString(AppConfig::logFileName());

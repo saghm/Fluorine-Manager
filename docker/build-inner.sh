@@ -432,6 +432,7 @@ unset PYTHONPATH PYTHONNOUSERSITE PYTHONHOME MO2_PYTHON_DIR
 export QT_PLUGIN_PATH="${RUN}/qt6plugins"
 export QT_QPA_PLATFORM_PLUGIN_PATH="${RUN}/qt6plugins/platforms"
 
+export FLUORINE_LAUNCH_DIR="${PWD}"
 cd "${RUN}"
 exec "${RUN}/ModOrganizer-core" "$@"
 LAUNCH
@@ -662,6 +663,7 @@ export QT_ICON_THEME_NAME="${QT_ICON_THEME_NAME:-breeze}"
 export QT_STYLE_OVERRIDE="${QT_STYLE_OVERRIDE:-Breeze}"
 export XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-KDE}"
 
+export FLUORINE_LAUNCH_DIR="${PWD}"
 cd "${APPIMAGE_DIR}"
 exec "${BIN}/ModOrganizer-core" "$@"
 APPRUN
