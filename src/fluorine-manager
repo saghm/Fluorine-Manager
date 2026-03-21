@@ -1,4 +1,9 @@
 #!/bin/bash
 # Fluorine Manager - thin wrapper around ModOrganizer
 MO2_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Raise open file descriptor limit — large modlists with FUSE VFS
+# can easily exceed the default 1024
+ulimit -n 65536 2>/dev/null
+
 exec "${MO2_DIR}/ModOrganizer" "$@"

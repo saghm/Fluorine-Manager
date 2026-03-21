@@ -432,6 +432,10 @@ unset PYTHONPATH PYTHONNOUSERSITE PYTHONHOME MO2_PYTHON_DIR
 export QT_PLUGIN_PATH="${RUN}/qt6plugins"
 export QT_QPA_PLATFORM_PLUGIN_PATH="${RUN}/qt6plugins/platforms"
 
+# Raise open file descriptor limit — large modlists with FUSE VFS
+# can easily exceed the default 1024
+ulimit -n 65536 2>/dev/null
+
 export FLUORINE_LAUNCH_DIR="${PWD}"
 cd "${RUN}"
 exec "${RUN}/ModOrganizer-core" "$@"
@@ -662,6 +666,10 @@ export XDG_DATA_DIRS="${HERE}/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/s
 export QT_ICON_THEME_NAME="${QT_ICON_THEME_NAME:-breeze}"
 export QT_STYLE_OVERRIDE="${QT_STYLE_OVERRIDE:-Breeze}"
 export XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-KDE}"
+
+# Raise open file descriptor limit — large modlists with FUSE VFS
+# can easily exceed the default 1024
+ulimit -n 65536 2>/dev/null
 
 export FLUORINE_LAUNCH_DIR="${PWD}"
 cd "${APPIMAGE_DIR}"

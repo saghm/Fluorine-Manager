@@ -124,5 +124,9 @@ fi
 # use their own system Python environment.
 unset PYTHONHOME PYTHONPATH PYTHONNOUSERSITE
 
+# Raise open file descriptor limit — large modlists with FUSE VFS
+# can easily exceed the default 1024
+ulimit -n 65536 2>/dev/null
+
 cd "${APPIMAGE_DIR}"
 exec "${HERE}/usr/bin/ModOrganizer.bin" "$@"
