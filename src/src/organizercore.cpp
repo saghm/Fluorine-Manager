@@ -2247,6 +2247,102 @@ ProcessRunner OrganizerCore::processRunner()
   return ProcessRunner(*this, m_UserInterface);
 }
 
+#ifndef _WIN32
+bool OrganizerCore::checkGameRegistryKey()
+{
+  // Map of game short names to their registry key info.
+  // Format: { shortName, { subKey, valueName } }
+  static const QMap<QString, QPair<QString, QString>> gameRegistryKeys = {
+    {"Enderal",    {"Software\\SureAI\\Enderal",                            "Install_Path"}},
+    {"EnderalSE",  {"Software\\SureAI\\EnderalSE",                          "Install_Path"}},
+    {"Fallout3",   {"Software\\Bethesda Softworks\\Fallout3",               "Installed Path"}},
+    {"Fallout4",   {"Software\\Bethesda Softworks\\Fallout4",               "Installed Path"}},
+    {"Fallout4VR", {"Software\\Bethesda Softworks\\Fallout 4 VR",           "Installed Path"}},
+    {"FalloutNV",  {"Software\\Bethesda Softworks\\FalloutNV",              "Installed Path"}},
+    {"Morrowind",  {"Software\\Bethesda Softworks\\Morrowind",              "Installed Path"}},
+    {"Oblivion",   {"Software\\Bethesda Softworks\\Oblivion",               "Installed Path"}},
+    {"Skyrim",     {"Software\\Bethesda Softworks\\Skyrim",                 "Installed Path"}},
+    {"SkyrimSE",   {"Software\\Bethesda Softworks\\Skyrim Special Edition", "Installed Path"}},
+    {"SkyrimVR",   {"Software\\Bethesda Softworks\\Skyrim VR",              "Installed Path"}},
+    {"TTW",        {"Software\\Bethesda Softworks\\FalloutNV",              "Installed Path"}},
+  };
+
+  const auto* game = managedGame();
+  if (!game) return true;
+
+  const QString shortName = game->gameShortName();
+  auto it = gameRegistryKeys.find(shortName);
+  if (it == gameRegistryKeys.end()) {
+    return true;  // unknown game, nothing to check
+  }
+
+  auto cfg = FluorineConfig::load();
+  if (!cfg || cfg->prefix_path.isEmpty()) {
+    return true;  // no prefix configured
+  }
+
+  WinePrefix prefix(cfg->prefix_path);
+  if (!prefix.isValid()) {
+    return true;  // prefix doesn't exist yet
+  }
+
+  const QString& subKey    = it.value().first;
+  const QString& valueName = it.value().second;
+
+  // The game directory MO2 is configured to use — convert to Wine path
+  const QString gameDir = game->gameDirectory().canonicalPath();
+  if (gameDir.isEmpty()) {
+    return true;
+  }
+
+  // Convert Linux path to Wine Z: path for comparison
+  const QString winePath = "Z:" + QString(gameDir).replace("/", "\\");
+
+  // Read the current registry value (check both normal and Wow6432Node)
+  QString registryPath = prefix.readHklmValue(subKey, valueName);
+  if (registryPath.isEmpty()) {
+    const QString wow64Key = "Software\\Wow6432Node\\" + subKey.mid(9);
+    registryPath = prefix.readHklmValue(wow64Key, valueName);
+  }
+
+  if (registryPath.isEmpty() ||
+      registryPath.compare(winePath, Qt::CaseInsensitive) != 0) {
+    const QString displayRegPath = registryPath.isEmpty()
+        ? tr("<not set>") : registryPath;
+
+    QWidget* parent = nullptr;
+    if (m_UserInterface) {
+      parent = m_UserInterface->mainWindow();
+    }
+
+    const auto answer = QMessageBox::question(
+        parent,
+        tr("Registry key does not match"),
+        tr("The game's installation path in the Wine registry does not match "
+           "the managed game path.\n\n"
+           "Registry Game Path:\n\t%1\n"
+           "Managed Game Path:\n\t%2\n\n"
+           "Change the path in the registry to match the managed game path?")
+            .arg(displayRegPath, winePath),
+        QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel,
+        QMessageBox::Yes);
+
+    if (answer == QMessageBox::Yes) {
+      if (!prefix.writeHklmValue(subKey, valueName, winePath)) {
+        log::error("Failed to update game registry key");
+      }
+      // Also update the Wow6432Node copy (32-bit registry view)
+      const QString wow64Key = "Software\\Wow6432Node\\" + subKey.mid(9);  // skip "Software\\"
+      prefix.writeHklmValue(wow64Key, valueName, winePath);
+    } else if (answer == QMessageBox::Cancel) {
+      return false;  // cancel launch
+    }
+  }
+
+  return true;
+}
+#endif
+
 bool OrganizerCore::beforeRun(
     const QFileInfo& binary, const QDir& cwd, const QString& arguments,
     const QString& profileName, const QString& customOverwrite,
@@ -2271,6 +2367,27 @@ bool OrganizerCore::beforeRun(
     log::debug("start of \"{}\" cancelled by plugin", binary.absoluteFilePath());
     return false;
   }
+
+#ifndef _WIN32
+  // Check the game's registry key in the Wine prefix and fix if needed.
+  if (!checkGameRegistryKey()) {
+    return false;  // user cancelled
+  }
+#endif
+
+#ifndef _WIN32
+  // VFS Root Builder: read per-instance setting and configure.
+  {
+    bool vfsRootBuilder = false;
+    if (const auto* s = Settings::maybeInstance()) {
+      const QSettings instanceIni(s->filename(), QSettings::IniFormat);
+      vfsRootBuilder = instanceIni.value("fluorine/vfs_root_builder", true).toBool();
+    }
+    const QString storageDir =
+        QDir(QDir::fromNativeSeparators(basePath())).filePath("rootbuilder");
+    m_USVFS.setRootBuilderEnabled(vfsRootBuilder, storageDir.toStdString());
+  }
+#endif
 
   try {
     m_USVFS.updateMapping(fileMapping(profileName, customOverwrite));

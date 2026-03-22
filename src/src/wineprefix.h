@@ -36,6 +36,20 @@ public:
   // Should be called at startup before any game runs.
   void restoreStaleBackups() const;
 
+  // Wine registry (system.reg / user.reg) access.
+  // subKey uses Wine format: "Software\\\\Bethesda Softworks\\\\Skyrim Special Edition"
+  // (double-escaped backslashes as stored in .reg files).
+  // Convenience overload accepts normal backslash paths and escapes internally.
+  QString readRegistryValue(const QString& regFile, const QString& subKey,
+                            const QString& valueName) const;
+  bool writeRegistryValue(const QString& regFile, const QString& subKey,
+                          const QString& valueName, const QString& value) const;
+
+  // High-level: read/write HKLM values via system.reg
+  QString readHklmValue(const QString& subKey, const QString& valueName) const;
+  bool writeHklmValue(const QString& subKey, const QString& valueName,
+                      const QString& value) const;
+
 private:
   QString m_prefixPath;
 };

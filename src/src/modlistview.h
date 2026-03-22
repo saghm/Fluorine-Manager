@@ -339,6 +339,10 @@ public:  // member variables
   // losing them on model reset
   std::map<QAbstractItemModel*, std::set<QString>> m_collapsed;
 
+  // guard: suppresses updateGroupByProxy() during header state restoration
+  // to prevent setSourceModel() from resetting column visibility
+  bool m_restoringHeaderState = false;
+
   MarkerInfos m_markers;
   ViewMarkingScrollBar* m_scrollbar;
 

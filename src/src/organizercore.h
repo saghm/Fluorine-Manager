@@ -316,6 +316,10 @@ public:
                  const QString& profileName, const QString& customOverwrite,
                  const QList<MOBase::ExecutableForcedLoadSetting>& forcedLibraries);
 
+#ifndef _WIN32
+  bool checkGameRegistryKey();
+#endif
+
   void afterRun(const QFileInfo& binary, DWORD exitCode);
 
   ProcessRunner::Results

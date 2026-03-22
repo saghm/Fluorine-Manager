@@ -658,6 +658,10 @@ bool ModListView::toggleSelectionState()
 
 void ModListView::updateGroupByProxy()
 {
+  if (m_restoringHeaderState) {
+    return;
+  }
+
   int groupIndex      = ui.groupBy->currentIndex();
   auto* previousModel = m_sortProxy->sourceModel();
 
@@ -806,7 +810,11 @@ void ModListView::setup(OrganizerCore& core, CategoryFactory& factory, MainWindo
   setItemDelegateForColumn(ModList::COL_VERSION,
                            new ModListVersionDelegate(this, core.settings()));
 
-  if (m_core->settings().geometry().restoreState(header())) {
+  m_restoringHeaderState = true;
+  const bool headerRestored = m_core->settings().geometry().restoreState(header());
+  m_restoringHeaderState = false;
+
+  if (headerRestored) {
     // hack: force the resize-signal to be triggered because restoreState doesn't seem
     // to do that
     for (int column = 0; column <= ModList::COL_LASTCOLUMN; ++column) {
@@ -893,7 +901,9 @@ void ModListView::restoreState(const Settings& s)
   // (column visibility, widths, order) is restored.
   s.widgets().restoreIndex(ui.groupBy);
 
+  m_restoringHeaderState = true;
   s.geometry().restoreState(header());
+  m_restoringHeaderState = false;
 
   s.widgets().restoreTreeExpandState(this);
 

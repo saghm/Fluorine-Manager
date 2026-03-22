@@ -460,8 +460,20 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
       const QString runScript = QString::fromUtf8(slrScript);
       nak_string_free(slrScript);
       MOBase::log::info("SLR: wrapping launch with {}", runScript);
-      // Build: [wrappers] run_script -- proton_script protonArgs
+      // Build: [wrappers] run_script [--filesystem=...] -- proton_script protonArgs
       QStringList slrArgs;
+
+      // Expose the game directory (and its FUSE-mounted Data/) to the
+      // pressure-vessel container.  Without this, the container's mount
+      // namespace may not see FUSE mounts on the host.
+      if (!m_binary.isEmpty()) {
+        const QString gameDir = QFileInfo(m_binary).absolutePath();
+        slrArgs << QStringLiteral("--filesystem=%1").arg(gameDir);
+      }
+      if (!m_prefixPath.isEmpty()) {
+        slrArgs << QStringLiteral("--filesystem=%1").arg(m_prefixPath);
+      }
+
       slrArgs << "--" << protonScript << protonArgs;
       wrapProgram(m_wrapperCommands, runScript, slrArgs, program, arguments);
     } else {

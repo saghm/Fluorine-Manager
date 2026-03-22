@@ -82,15 +82,71 @@ void adjustForVirtualized(const IPluginGame *game, spawn::SpawnParameters &sp,
     // Root Builder deploys Root/ contents to the game directory root,
     // stripping the "Root/" prefix.  Fix paths that were remapped to
     // <dataDir>/Root/... so they point to <gameDir>/... instead.
+    // Also handle direct mods/.../Root/ paths (not just dataDir/Root/).
     const QString gameDir = game->gameDirectory().absolutePath();
     const QString dataDir = game->dataDirectory().absolutePath();
-    const QString rootTag = dataDir + QStringLiteral("/Root/");
 
-    if (binPath.startsWith(rootTag, Qt::CaseInsensitive)) {
-      binPath = gameDir + QStringLiteral("/") + binPath.mid(rootTag.length());
+    // Normalize any path that was remapped to dataDir/Root/... → gameDir/...
+    // Handles both dataDir/Root/file and dataDir/Root (exact, no trailing content).
+    auto normalizeRootPath = [&](QString& path) {
+      const QString rootWithSlash = dataDir + QStringLiteral("/Root/");
+      const QString rootExact     = dataDir + QStringLiteral("/Root");
+      if (path.startsWith(rootWithSlash, Qt::CaseInsensitive)) {
+        const QString after = path.mid(rootWithSlash.length());
+        path = after.isEmpty() ? gameDir
+               : gameDir + QStringLiteral("/") + after;
+        return true;
+      }
+      if (path.compare(rootExact, Qt::CaseInsensitive) == 0) {
+        path = gameDir;
+        return true;
+      }
+      return false;
+    };
+
+    bool binNormalized = normalizeRootPath(binPath);
+    bool cwdNormalized = normalizeRootPath(cwdPath);
+
+    if (binNormalized) {
+      log::info("Root Builder: rewrote binary -> '{}'", binPath);
     }
-    if (cwdPath.startsWith(rootTag, Qt::CaseInsensitive)) {
-      cwdPath = gameDir + QStringLiteral("/") + cwdPath.mid(rootTag.length());
+    if (cwdNormalized) {
+      log::info("Root Builder: rewrote start-in -> '{}'", cwdPath);
+    }
+
+    // If neither was caught by the dataDir/Root/ check, the path might
+    // still be the original mods/.../Root/ path (not yet remapped).
+    // This happens when the first remapping (lines 61-66) produced
+    // something that didn't match the dataDir/Root pattern.
+    if (!binNormalized && binPath.startsWith(trailedModsPath, Qt::CaseInsensitive)) {
+      int rootIdx = binPath.indexOf("/Root/", trailedModsPath.length(),
+                                    Qt::CaseInsensitive);
+      if (rootIdx < 0)
+        rootIdx = binPath.indexOf("/Root", trailedModsPath.length(),
+                                  Qt::CaseInsensitive);
+      if (rootIdx >= 0) {
+        int afterRootStart = rootIdx + 5;  // skip "/Root"
+        if (afterRootStart < binPath.length() && binPath[afterRootStart] == '/')
+          ++afterRootStart;  // skip trailing slash
+        const QString afterRoot = binPath.mid(afterRootStart);
+        const QString modRoot = binPath.left(rootIdx + 5);  // up to "/Root"
+
+        binPath = afterRoot.isEmpty() ? gameDir
+                  : gameDir + QStringLiteral("/") + afterRoot;
+        log::info("Root Builder: rewrote binary (mod path) -> '{}'", binPath);
+
+        // Normalize start-in if it's under the same mod's Root/
+        if (!cwdNormalized &&
+            cwdPath.startsWith(modRoot, Qt::CaseInsensitive)) {
+          int cwdAfterStart = modRoot.length();
+          if (cwdAfterStart < cwdPath.length() && cwdPath[cwdAfterStart] == '/')
+            ++cwdAfterStart;
+          const QString cwdAfter = cwdPath.mid(cwdAfterStart);
+          cwdPath = cwdAfter.isEmpty() ? gameDir
+                    : gameDir + QStringLiteral("/") + cwdAfter;
+          log::info("Root Builder: rewrote start-in (mod path) -> '{}'", cwdPath);
+        }
+      }
     }
 
     sp.binary = QFileInfo(binPath);

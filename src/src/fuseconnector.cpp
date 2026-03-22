@@ -9,6 +9,9 @@
 #include <QFileInfo>
 #include <QProcess>
 #include <QStandardPaths>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QTextStream>
 #include <QVariant>
 
@@ -423,6 +426,11 @@ void FuseConnector::unmount()
   // Clean up symlinks created for non-data-dir mappings.
   cleanupExternalMappings();
 
+  // VFS Root Builder: remove deployed root files and restore backups.
+  if (m_rootBuilderEnabled) {
+    clearRootFiles();
+  }
+
   {
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - unmountStart).count();
@@ -563,6 +571,13 @@ void FuseConnector::updateMapping(const MappingType& mapping)
                  "in %lldms\n",
                  m_externalSymlinks.size(), m_extraVfsFiles.size(),
                  static_cast<long long>(ms));
+  }
+
+  // VFS Root Builder: deploy Root/ files to game dir BEFORE mounting.
+  // This ensures files deployed under Data/ are included in the base file scan.
+  if (m_rootBuilderEnabled) {
+    deployRootFiles(mods);
+    m_baseFileCache.clear();  // force rescan to include root-deployed Data/ files
   }
 
   if (!m_mounted) {
@@ -895,4 +910,217 @@ void FuseConnector::tryCleanupStaleMount(const QString& path)
 
   log::warn("stale FUSE mount detected at '{}', attempting cleanup", path);
   doUnmount(path);
+}
+
+// ── VFS Root Builder ─────────────────────────────────────────────────────────
+
+void FuseConnector::setRootBuilderEnabled(bool enabled,
+                                          const std::string& storageDir)
+{
+  m_rootBuilderEnabled = enabled;
+  m_rootStorageDir     = storageDir;
+}
+
+static std::string findRootDir(const std::string& modPath)
+{
+  // Case-insensitive search for "Root" subdirectory
+  namespace fs = std::filesystem;
+  std::error_code ec;
+  for (const auto& entry : fs::directory_iterator(modPath, ec)) {
+    if (entry.is_directory(ec)) {
+      const auto name = entry.path().filename().string();
+      if (name.size() == 4) {
+        std::string lower = name;
+        std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+        if (lower == "root") {
+          return entry.path().string();
+        }
+      }
+    }
+  }
+  return {};
+}
+
+static bool reflinkCopy(const std::string& src, const std::string& dst)
+{
+  namespace fs = std::filesystem;
+  std::error_code ec;
+  fs::create_directories(fs::path(dst).parent_path(), ec);
+
+  // Try reflink (CoW) first via cp --reflink=auto
+  if (QProcess::execute("cp", {"--reflink=auto", "--no-preserve=mode",
+                                QString::fromStdString(src),
+                                QString::fromStdString(dst)}) == 0) {
+    return true;
+  }
+
+  // Fallback to regular copy
+  return fs::copy_file(src, dst, fs::copy_options::overwrite_existing, ec);
+}
+
+static void loadRootManifest(const std::string& storageDir,
+                             std::vector<std::string>& deployed,
+                             std::map<std::string, std::string>& backups)
+{
+  namespace fs = std::filesystem;
+  const auto manifestPath = fs::path(storageDir) / "manifest.json";
+  std::ifstream in(manifestPath);
+  if (!in.is_open()) return;
+
+  try {
+    std::string content((std::istreambuf_iterator<char>(in)),
+                        std::istreambuf_iterator<char>());
+    // Simple JSON parsing — the manifest is { "deployed": [...], "backups": {...} }
+    // Use Qt's JSON for simplicity
+    QJsonDocument doc = QJsonDocument::fromJson(
+        QByteArray::fromStdString(content));
+    if (doc.isNull()) return;
+
+    const auto obj = doc.object();
+    for (const auto& v : obj["deployed"].toArray()) {
+      deployed.push_back(v.toString().toStdString());
+    }
+    const auto bk = obj["backups"].toObject();
+    for (auto it = bk.begin(); it != bk.end(); ++it) {
+      backups[it.key().toStdString()] = it.value().toString().toStdString();
+    }
+  } catch (...) {}
+}
+
+static void saveRootManifest(const std::string& storageDir,
+                             const std::vector<std::string>& deployed,
+                             const std::map<std::string, std::string>& backups)
+{
+  namespace fs = std::filesystem;
+  std::error_code ec;
+  fs::create_directories(storageDir, ec);
+
+  QJsonArray arr;
+  for (const auto& f : deployed) {
+    arr.append(QString::fromStdString(f));
+  }
+
+  QJsonObject bk;
+  for (const auto& [dst, bak] : backups) {
+    bk[QString::fromStdString(dst)] = QString::fromStdString(bak);
+  }
+
+  QJsonObject obj;
+  obj["deployed"] = arr;
+  obj["backups"]  = bk;
+
+  const auto manifestPath = fs::path(storageDir) / "manifest.json";
+  std::ofstream out(manifestPath);
+  if (out.is_open()) {
+    out << QJsonDocument(obj).toJson().toStdString();
+  }
+}
+
+void FuseConnector::deployRootFiles(
+    const std::vector<std::pair<std::string, std::string>>& mods)
+{
+  if (!m_rootBuilderEnabled || m_gameDir.empty() || m_rootStorageDir.empty()) {
+    return;
+  }
+
+  namespace fs = std::filesystem;
+  const auto t0 = std::chrono::steady_clock::now();
+
+  // Clear any previous deployment
+  clearRootFiles();
+
+  m_rootDeployedFiles.clear();
+  m_rootBackups.clear();
+
+  const std::string backupDir = (fs::path(m_rootStorageDir) / "backup").string();
+  std::set<std::string> deployedSet;
+
+  for (const auto& [modName, modPath] : mods) {
+    const auto rootDir = findRootDir(modPath);
+    if (rootDir.empty()) continue;
+
+    std::error_code ec;
+    for (const auto& entry :
+         fs::recursive_directory_iterator(rootDir, ec)) {
+      if (!entry.is_regular_file(ec)) continue;
+
+      const auto relPath = fs::relative(entry.path(), rootDir, ec).string();
+      const auto dst     = (fs::path(m_gameDir) / relPath).string();
+
+      if (deployedSet.count(dst)) continue;  // higher-priority mod already deployed
+
+      // Backup existing file
+      if (fs::exists(dst, ec) && !deployedSet.count(dst)) {
+        const auto bak = (fs::path(backupDir) / relPath).string();
+        fs::create_directories(fs::path(bak).parent_path(), ec);
+        fs::copy_file(dst, bak, fs::copy_options::overwrite_existing, ec);
+        m_rootBackups[dst] = bak;
+      }
+
+      // Deploy: always copy (exe/dll need it, and symlinks can confuse Wine)
+      if (fs::exists(dst, ec) || fs::is_symlink(dst, ec)) {
+        fs::remove(dst, ec);
+      }
+      fs::create_directories(fs::path(dst).parent_path(), ec);
+
+      if (!reflinkCopy(entry.path().string(), dst)) {
+        std::fprintf(stderr, "[RootBuilder] failed to copy '%s' -> '%s'\n",
+                     entry.path().c_str(), dst.c_str());
+        continue;
+      }
+
+      m_rootDeployedFiles.push_back(dst);
+      deployedSet.insert(dst);
+    }
+  }
+
+  saveRootManifest(m_rootStorageDir, m_rootDeployedFiles, m_rootBackups);
+
+  const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::steady_clock::now() - t0).count();
+  std::fprintf(stderr, "[RootBuilder] deployed %zu files (%zu backups) in %lldms\n",
+               m_rootDeployedFiles.size(), m_rootBackups.size(),
+               static_cast<long long>(ms));
+}
+
+void FuseConnector::clearRootFiles()
+{
+  if (m_rootStorageDir.empty()) return;
+
+  namespace fs = std::filesystem;
+  std::error_code ec;
+
+  // Load manifest if we don't have in-memory state
+  if (m_rootDeployedFiles.empty()) {
+    loadRootManifest(m_rootStorageDir, m_rootDeployedFiles, m_rootBackups);
+  }
+
+  if (m_rootDeployedFiles.empty()) return;
+
+  int removed = 0;
+  for (const auto& dst : m_rootDeployedFiles) {
+    if (fs::exists(dst, ec) || fs::is_symlink(dst, ec)) {
+      fs::remove(dst, ec);
+      ++removed;
+    }
+  }
+
+  // Restore backups
+  for (const auto& [dst, bak] : m_rootBackups) {
+    if (fs::exists(bak, ec)) {
+      fs::create_directories(fs::path(dst).parent_path(), ec);
+      fs::rename(bak, dst, ec);
+    }
+  }
+
+  // Clean up backup directory and manifest
+  const auto backupDir = fs::path(m_rootStorageDir) / "backup";
+  fs::remove_all(backupDir, ec);
+  fs::remove(fs::path(m_rootStorageDir) / "manifest.json", ec);
+
+  std::fprintf(stderr, "[RootBuilder] cleared %d deployed files, restored %zu backups\n",
+               removed, m_rootBackups.size());
+
+  m_rootDeployedFiles.clear();
+  m_rootBackups.clear();
 }

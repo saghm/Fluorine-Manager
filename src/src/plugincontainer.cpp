@@ -23,52 +23,6 @@ using namespace MOShared;
 
 namespace bf = boost::fusion;
 
-#ifndef _WIN32
-// Ensure the instance plugin directory contains symlinks to all bundled plugins.
-// Real user files (not matching any bundled plugin name) are left untouched.
-// Stale copies of bundled plugins are replaced with symlinks so that RPATH
-// resolution works correctly (critical for Flatpak where libs live in /app/).
-static void ensureBundledPluginsLinked(const QString& bundledDir,
-                                       const QString& instanceDir)
-{
-  QDir().mkpath(instanceDir);
-  QDirIterator it(bundledDir, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
-  while (it.hasNext()) {
-    it.next();
-    const QString target = QDir(instanceDir).filePath(it.fileName());
-    const QFileInfo targetInfo(target);
-
-    if (targetInfo.isSymLink()) {
-      // Already a symlink — check if it points to the right place.
-      // Use canonicalFilePath() on both sides so /home/ ↔ /var/home/ symlinks
-      // (Bazzite/Fedora immutable distros) don't cause false stale-symlink
-      // replacements that can delete the .so before re-linking it.
-      const QString existingTarget =
-          QFileInfo(targetInfo.symLinkTarget()).canonicalFilePath();
-      const QString expectedTarget = QFileInfo(it.filePath()).canonicalFilePath();
-      if (!expectedTarget.isEmpty() && existingTarget == expectedTarget) {
-        continue;  // correct symlink, nothing to do
-      }
-      // Stale symlink pointing elsewhere — replace it.
-      QFile::remove(target);
-    } else if (targetInfo.exists()) {
-      // Real file/dir with the same name as a bundled plugin — this is a
-      // stale copy (not a user plugin). Replace with a symlink so RPATH works.
-      if (targetInfo.isDir()) {
-        QDir(target).removeRecursively();
-      } else {
-        QFile::remove(target);
-      }
-    }
-
-    if (!QFile::link(it.filePath(), target)) {
-      log::warn("ensureBundledPluginsLinked: failed to symlink '{}' -> '{}'",
-                it.filePath(), target);
-    }
-  }
-}
-#endif
-
 static void printPluginDiagToStderr(const QString&)
 {
 }
@@ -445,6 +399,26 @@ bool PluginContainer::isBetterInterface(QObject* lhs, QObject* rhs) const
   return lhsIdx < rhsIdx;
 }
 
+QStringList PluginContainer::mergedProxyList(IPluginProxy* proxy) const
+{
+  const QString bundled =
+      m_BundledPluginPath.isEmpty() ? AppConfig::pluginsPath() : m_BundledPluginPath;
+  const QString instance =
+      m_PluginPath.isEmpty() ? AppConfig::pluginsPath() : m_PluginPath;
+
+  QMap<QString, QString> merged;
+  // Instance plugins first (lower priority)
+  if (instance != bundled) {
+    for (const auto& p : proxy->pluginList(instance))
+      merged[QFileInfo(p).fileName()] = p;
+  }
+  // Bundled plugins overwrite (higher priority)
+  for (const auto& p : proxy->pluginList(bundled))
+    merged[QFileInfo(p).fileName()] = p;
+
+  return merged.values();
+}
+
 QStringList PluginContainer::pluginFileNames() const
 {
   QStringList result;
@@ -453,9 +427,7 @@ QStringList PluginContainer::pluginFileNames() const
   }
   std::vector<IPluginProxy*> proxyList = bf::at_key<IPluginProxy>(m_Plugins);
   for (IPluginProxy* proxy : proxyList) {
-    QStringList proxiedPlugins = proxy->pluginList(
-        m_PluginPath.isEmpty() ? AppConfig::pluginsPath() : m_PluginPath);
-    result.append(proxiedPlugins);
+    result.append(mergedProxyList(proxy));
   }
   return result;
 }
@@ -655,17 +627,13 @@ IPlugin* PluginContainer::registerPlugin(QObject* plugin, const QString& filepat
       bf::at_key<IPluginProxy>(m_Plugins).push_back(proxy);
       emit pluginRegistered(proxy);
 
-      const QString pluginRoot =
-          m_PluginPath.isEmpty() ? AppConfig::pluginsPath() : m_PluginPath;
-      QStringList filepaths = proxy->pluginList(pluginRoot);
-      log::debug("proxy '{}' discovered {} proxied plugin candidate(s) in '{}'",
-                proxy->name(), filepaths.size(),
-                QDir::toNativeSeparators(pluginRoot));
+      QStringList filepaths = mergedProxyList(proxy);
+      log::debug("proxy '{}' discovered {} proxied plugin candidate(s)",
+                proxy->name(), filepaths.size());
       printPluginDiagToStderr(
-          QString("proxy '%1' discovered %2 proxied plugin candidate(s) in '%3'")
+          QString("proxy '%1' discovered %2 proxied plugin candidate(s)")
               .arg(proxy->name())
-              .arg(filepaths.size())
-              .arg(QDir::toNativeSeparators(pluginRoot)));
+              .arg(filepaths.size()));
       for (const QString& filepath : filepaths) {
         log::debug("proxy '{}' candidate: '{}'", proxy->name(),
                    QDir::toNativeSeparators(filepath));
@@ -1036,8 +1004,7 @@ void PluginContainer::loadPlugin(QString const& filepath)
   } else {
     // We need to check if this can be handled by a proxy.
     for (auto* proxy : this->plugins<IPluginProxy>()) {
-      auto filepaths = proxy->pluginList(
-          m_PluginPath.isEmpty() ? AppConfig::pluginsPath() : m_PluginPath);
+      auto filepaths = mergedProxyList(proxy);
       if (filepaths.contains(filepath)) {
         plugins = loadProxied(filepath, proxy);
         break;
@@ -1255,32 +1222,51 @@ void PluginContainer::loadPlugins()
     }
   }
 
-  QString pluginPath = AppConfig::pluginsPath();
+  m_BundledPluginPath = AppConfig::pluginsPath();
 
 #ifndef _WIN32
-  // Per-instance plugin directory: symlink bundled plugins, then load from there.
-  // This allows each instance to have its own set of plugins (bundled + custom).
   if (m_Organizer) {
     QString instancePluginPath =
         QDir(QDir::fromNativeSeparators(m_Organizer->basePath())).filePath("plugins");
-    if (QDir::cleanPath(instancePluginPath) != QDir::cleanPath(pluginPath)) {
-      ensureBundledPluginsLinked(pluginPath, instancePluginPath);
-      pluginPath = instancePluginPath;
-      log::debug("Using per-instance plugin directory: {}",
-                 QDir::toNativeSeparators(pluginPath));
+    if (QDir::cleanPath(instancePluginPath) != QDir::cleanPath(m_BundledPluginPath)) {
+      QDir().mkpath(instancePluginPath);
+      m_PluginPath = instancePluginPath;
+      log::debug("instance plugin directory: {}",
+                 QDir::toNativeSeparators(m_PluginPath));
+
+      // Migration: remove stale symlinks left by the old ensureBundledPluginsLinked()
+      // approach. Only symlinks are removed; real user files are left untouched.
+      {
+        QDirIterator cleanIter(instancePluginPath,
+                               QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
+        while (cleanIter.hasNext()) {
+          cleanIter.next();
+          if (QFileInfo(cleanIter.filePath()).isSymLink()) {
+            log::debug("removing stale plugin symlink '{}'",
+                       QDir::toNativeSeparators(cleanIter.filePath()));
+            QFile::remove(cleanIter.filePath());
+          }
+        }
+      }
+    } else {
+      m_PluginPath = m_BundledPluginPath;
     }
+  } else {
+    m_PluginPath = m_BundledPluginPath;
   }
+#else
+  m_PluginPath = m_BundledPluginPath;
 #endif
 
-  m_PluginPath = pluginPath;
-  log::debug("looking for plugins in {}", QDir::toNativeSeparators(pluginPath));
+  log::debug("bundled plugins: {}", QDir::toNativeSeparators(m_BundledPluginPath));
+  log::debug("looking for plugins in {}", QDir::toNativeSeparators(m_PluginPath));
 
   // Linux is case-sensitive; keep only the canonical Fallout NV plugin filename.
   // Older builds may leave a stale lowercase artifact that causes duplicate
   // registration warnings at startup.
-  {
-    const QString nvCanonical = pluginPath + "/libgame_falloutNV.so";
-    const QString nvStale     = pluginPath + "/libgame_falloutnv.so";
+  auto cleanStaleNvPlugin = [](const QString& dir) {
+    const QString nvCanonical = dir + "/libgame_falloutNV.so";
+    const QString nvStale     = dir + "/libgame_falloutnv.so";
     if (QFile::exists(nvCanonical) && QFile::exists(nvStale)) {
       if (QFile::remove(nvStale)) {
         log::debug("removed stale plugin artifact '{}'",
@@ -1290,32 +1276,54 @@ void PluginContainer::loadPlugins()
                   QDir::toNativeSeparators(nvStale));
       }
     }
+  };
+  cleanStaleNvPlugin(m_BundledPluginPath);
+  if (m_PluginPath != m_BundledPluginPath) {
+    cleanStaleNvPlugin(m_PluginPath);
   }
 
-  QDirIterator iter(pluginPath, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
+  // Build merged plugin map: instance extras first (low priority),
+  // then bundled plugins overwrite (high priority).
+  QMap<QString, QString> pluginMap;  // filename -> full path
 
-  while (iter.hasNext()) {
-    iter.next();
+  if (m_PluginPath != m_BundledPluginPath) {
+    QDirIterator instanceIter(m_PluginPath,
+                              QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
+    while (instanceIter.hasNext()) {
+      instanceIter.next();
+      pluginMap[instanceIter.fileName()] = instanceIter.filePath();
+    }
+  }
 
-    if (skipPlugin == iter.fileName()) {
-      log::debug("plugin \"{}\" skipped for this session", iter.fileName());
+  QDirIterator bundledIter(m_BundledPluginPath,
+                           QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
+  while (bundledIter.hasNext()) {
+    bundledIter.next();
+    pluginMap[bundledIter.fileName()] = bundledIter.filePath();
+  }
+
+  for (auto it = pluginMap.cbegin(); it != pluginMap.cend(); ++it) {
+    const QString& fileName = it.key();
+    const QString& filepath = it.value();
+
+    if (skipPlugin == fileName) {
+      log::debug("plugin \"{}\" skipped for this session", fileName);
       continue;
     }
 
     if (m_Organizer) {
-      if (m_Organizer->settings().plugins().blacklisted(iter.fileName())) {
-        log::debug("plugin \"{}\" blacklisted", iter.fileName());
+      if (m_Organizer->settings().plugins().blacklisted(fileName)) {
+        log::debug("plugin \"{}\" blacklisted", fileName);
         continue;
       }
     }
 
     if (loadCheck.isOpen()) {
-      loadCheck.write(iter.fileName().toUtf8());
+      loadCheck.write(fileName.toUtf8());
       loadCheck.write("\n");
       loadCheck.flush();
     }
 
-    QString filepath = iter.filePath();
     if (QLibrary::isLibrary(filepath)) {
       loadQtPlugin(filepath);
     } else if (auto p = isQtPluginFolder(filepath)) {

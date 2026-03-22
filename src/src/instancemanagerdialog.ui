@@ -337,6 +337,19 @@
                  </property>
                 </widget>
                </item>
+               <item row="12" column="0" colspan="2">
+                <widget class="QCheckBox" name="vfsRootBuilderCheckBox">
+                 <property name="text">
+                  <string>Enable VFS Root Builder</string>
+                 </property>
+                 <property name="toolTip">
+                  <string>Automatically deploy mod Root/ files (SKSE, ENB, etc.) to the game directory before launch. Disable if using a third-party Root Builder plugin.</string>
+                 </property>
+                 <property name="checked">
+                  <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
               </layout>
              </widget>
             </item>

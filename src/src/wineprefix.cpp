@@ -531,3 +531,174 @@ bool WinePrefix::syncProfileInisBack(
 
   return allCopied;
 }
+
+// ── Wine registry (.reg file) access ─────────────────────────────────────────
+
+// Wine .reg files use doubled backslashes in key paths:
+//   [Software\\Bethesda Softworks\\Skyrim Special Edition]
+// Values are stored as:
+//   "Installed Path"="C:\\path\\to\\game"
+
+static QString escapeRegKey(const QString& key)
+{
+  // Convert normal backslash path to Wine .reg double-backslash format
+  QString escaped = key;
+  escaped.replace("\\", "\\\\");
+  return escaped;
+}
+
+static QString unescapeRegValue(const QString& val)
+{
+  // Wine .reg files escape backslashes in string values
+  QString unescaped = val;
+  unescaped.replace("\\\\", "\\");
+  return unescaped;
+}
+
+static QString escapeRegValue(const QString& val)
+{
+  QString escaped = val;
+  escaped.replace("\\", "\\\\");
+  return escaped;
+}
+
+QString WinePrefix::readRegistryValue(const QString& regFile,
+                                      const QString& subKey,
+                                      const QString& valueName) const
+{
+  const QString filePath = m_prefixPath + "/" + regFile;
+  QFile file(filePath);
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    return {};
+  }
+
+  // Wine .reg section headers have an optional trailing timestamp:
+  //   [Software\\Bethesda Softworks\\Skyrim Special Edition] 1774203819
+  const QString sectionPrefix =
+      "[" + escapeRegKey(subKey) + "]";
+  const QString valuePrefix = "\"" + valueName + "\"=";
+
+  bool inSection = false;
+  QTextStream in(&file);
+  while (!in.atEnd()) {
+    const QString line = in.readLine().trimmed();
+
+    if (line.startsWith('[')) {
+      inSection = line.startsWith(sectionPrefix, Qt::CaseInsensitive);
+      continue;
+    }
+
+    if (inSection && line.startsWith(valuePrefix, Qt::CaseInsensitive)) {
+      // Extract value: "Name"="value" or "Name"=str(2):"value"
+      int eqPos = line.indexOf('=');
+      if (eqPos < 0) continue;
+      QString rhs = line.mid(eqPos + 1);
+
+      // Handle str(2):"..." (REG_EXPAND_SZ) and regular "..." (REG_SZ)
+      int firstQuote = rhs.indexOf('"');
+      int lastQuote  = rhs.lastIndexOf('"');
+      if (firstQuote >= 0 && lastQuote > firstQuote) {
+        return unescapeRegValue(rhs.mid(firstQuote + 1, lastQuote - firstQuote - 1));
+      }
+      return {};
+    }
+  }
+
+  return {};
+}
+
+bool WinePrefix::writeRegistryValue(const QString& regFile,
+                                    const QString& subKey,
+                                    const QString& valueName,
+                                    const QString& value) const
+{
+  const QString filePath = m_prefixPath + "/" + regFile;
+  QFile file(filePath);
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    MOBase::log::error("writeRegistryValue: cannot open '{}'", filePath);
+    return false;
+  }
+
+  const QString sectionPrefix = "[" + escapeRegKey(subKey) + "]";
+  const QString valuePrefix   = "\"" + valueName + "\"=";
+  const QString newLine       = "\"" + valueName + "\"=\"" + escapeRegValue(value) + "\"";
+
+  QStringList lines;
+  bool inSection = false;
+  bool replaced  = false;
+  bool sectionFound = false;
+
+  QTextStream in(&file);
+  while (!in.atEnd()) {
+    QString line = in.readLine();
+    const QString trimmed = line.trimmed();
+
+    if (trimmed.startsWith('[')) {
+      if (inSection && !replaced) {
+        // End of our section without finding the value — insert it
+        lines.append(newLine);
+        replaced = true;
+      }
+      inSection = trimmed.startsWith(sectionPrefix, Qt::CaseInsensitive);
+      if (inSection) sectionFound = true;
+    }
+
+    if (inSection && trimmed.startsWith(valuePrefix, Qt::CaseInsensitive)) {
+      lines.append(newLine);
+      replaced = true;
+      continue;
+    }
+
+    lines.append(line);
+  }
+  file.close();
+
+  // If section existed but value wasn't found (and wasn't inserted above)
+  if (sectionFound && !replaced) {
+    for (int i = 0; i < lines.size(); ++i) {
+      if (lines[i].trimmed().startsWith(sectionPrefix, Qt::CaseInsensitive)) {
+        lines.insert(i + 1, newLine);
+        replaced = true;
+        break;
+      }
+    }
+  }
+
+  // If section doesn't exist at all, append it
+  if (!sectionFound) {
+    lines.append("");
+    lines.append(sectionPrefix);
+    lines.append(newLine);
+    replaced = true;
+  }
+
+  if (!replaced) {
+    return false;
+  }
+
+  if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    MOBase::log::error("writeRegistryValue: cannot write '{}'", filePath);
+    return false;
+  }
+  QTextStream out(&file);
+  for (const auto& l : lines) {
+    out << l << "\n";
+  }
+
+  MOBase::log::info("Updated Wine registry: [{}] \"{}\"=\"{}\" in {}",
+                    subKey, valueName, value, regFile);
+  return true;
+}
+
+QString WinePrefix::readHklmValue(const QString& subKey,
+                                  const QString& valueName) const
+{
+  return readRegistryValue("system.reg", subKey, valueName);
+}
+
+bool WinePrefix::writeHklmValue(const QString& subKey,
+                                const QString& valueName,
+                                const QString& value) const
+{
+  return writeRegistryValue("system.reg", subKey, valueName, value);
+}

@@ -63,6 +63,12 @@ public:
 
   static void tryCleanupStaleMount(const QString& path);
 
+  // VFS Root Builder: deploy/clear mod Root/ files to the game directory.
+  void setRootBuilderEnabled(bool enabled, const std::string& storageDir = {});
+  void deployRootFiles(
+      const std::vector<std::pair<std::string, std::string>>& mods);
+  void clearRootFiles();
+
 private:
   void flushStaging();
   void deployExternalMappings(const MappingType& mapping, const QString& dataDir);
@@ -96,6 +102,12 @@ private:
   std::thread m_fuseThread;
   bool m_mounted        = false;
   bool m_discardStaging = false;
+
+  // VFS Root Builder state
+  bool m_rootBuilderEnabled = false;
+  std::string m_rootStorageDir;
+  std::vector<std::string> m_rootDeployedFiles;
+  std::map<std::string, std::string> m_rootBackups;  // dst -> backup path
 };
 
 #endif

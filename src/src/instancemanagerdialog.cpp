@@ -243,6 +243,15 @@ InstanceManagerDialog::InstanceManagerDialog(PluginContainer& pc, QWidget* paren
     }
   });
 
+  connect(ui->vfsRootBuilderCheckBox, &QCheckBox::toggled, [&](bool checked) {
+    const auto* inst = singleSelection();
+    if (!inst) return;
+    const QString ini = inst->iniPath();
+    if (ini.isEmpty()) return;
+    QSettings s(ini, QSettings::IniFormat);
+    s.setValue("fluorine/vfs_root_builder", checked);
+  });
+
   connect(ui->switchToInstance, &QPushButton::clicked, [&] {
     openSelectedInstance();
   });
@@ -816,6 +825,10 @@ void InstanceManagerDialog::fillData(const Instance& ii)
       ui->steamLinuxRuntimeCheckBox->blockSignals(true);
       ui->steamLinuxRuntimeCheckBox->setChecked(s.value("fluorine/use_slr", true).toBool());
       ui->steamLinuxRuntimeCheckBox->blockSignals(false);
+
+      ui->vfsRootBuilderCheckBox->blockSignals(true);
+      ui->vfsRootBuilderCheckBox->setChecked(s.value("fluorine/vfs_root_builder", true).toBool());
+      ui->vfsRootBuilderCheckBox->blockSignals(false);
     } else {
       ui->prefixPath->clear();
       ui->protonVersion->clear();
@@ -825,6 +838,9 @@ void InstanceManagerDialog::fillData(const Instance& ii)
       ui->steamLinuxRuntimeCheckBox->blockSignals(true);
       ui->steamLinuxRuntimeCheckBox->setChecked(true);
       ui->steamLinuxRuntimeCheckBox->blockSignals(false);
+      ui->vfsRootBuilderCheckBox->blockSignals(true);
+      ui->vfsRootBuilderCheckBox->setChecked(false);
+      ui->vfsRootBuilderCheckBox->blockSignals(false);
     }
   }
 

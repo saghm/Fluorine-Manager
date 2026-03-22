@@ -354,6 +354,11 @@ public:
    */
   QStringList pluginFileNames() const;
 
+  /**
+   * @brief Merged proxy plugin list from bundled + instance dirs (bundled wins).
+   */
+  QStringList mergedProxyList(MOBase::IPluginProxy* proxy) const;
+
 public:  // IPluginDiagnose interface
   virtual std::vector<unsigned int> activeProblems() const;
   virtual QString shortDescription(unsigned int key) const;
@@ -501,7 +506,10 @@ private:
 
   QFile m_PluginsCheck;
 
-  // Resolved plugin path (may be per-instance on Linux global installs)
+  // Bundled plugin path (app's read-only plugins/ dir, always takes priority)
+  QString m_BundledPluginPath;
+
+  // Instance plugin path (user additions; only extras not in bundled dir are loaded)
   QString m_PluginPath;
 };
 

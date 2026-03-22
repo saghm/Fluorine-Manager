@@ -284,12 +284,18 @@ QStringList ProxyPython::pluginList(const QDir& pluginPath) const
             // loaded as MO2 plugins.
             if (baseName == "winreg.py" || baseName == "lzokay.py" ||
                 baseName == "FNISPatches.py" || baseName == "FNISTool.py" ||
-                baseName == "FNISToolReset.py") {
+                baseName == "FNISToolReset.py" ||
+                baseName == "FixGameRegKey.py" ||
+                baseName == "rootbuilder.py") {
                 continue;
             }
             result.append(name);
         }
         else if (info.isDir() && QDir(info.absoluteFilePath()).exists("__init__.py")) {
+            // Skip Windows-only directory plugins that use ctypes.windll etc.
+            if (baseName == "crashlogtools") {
+                continue;
+            }
             result.append(name);
         }
     }
