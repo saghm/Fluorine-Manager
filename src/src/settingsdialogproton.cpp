@@ -467,6 +467,25 @@ void ProtonSettingsTab::onWinetricks()
   arguments << QStringLiteral("--gui");
 
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+
+  // Restore the original host LD_LIBRARY_PATH so that winetricks (and any
+  // GUI helpers it spawns, e.g. kdialog/zenity) don't pick up Fluorine's
+  // bundled Qt libraries, which cause symbol-lookup errors on SteamOS.
+  auto restoreOrig = [&](const QString& var, const QString& origVar) {
+    if (env.contains(origVar)) {
+      const QString orig = env.value(origVar);
+      if (orig.isEmpty())
+        env.remove(var);
+      else
+        env.insert(var, orig);
+      env.remove(origVar);
+    }
+  };
+  restoreOrig("LD_LIBRARY_PATH", "FLUORINE_ORIG_LD_LIBRARY_PATH");
+  restoreOrig("LD_PRELOAD", "FLUORINE_ORIG_LD_PRELOAD");
+  restoreOrig("QT_PLUGIN_PATH", "FLUORINE_ORIG_QT_PLUGIN_PATH");
+  env.remove("QT_QPA_PLATFORM_PLUGIN_PATH");
+
   for (const QString& flag : envFlags) {
     const int eq = flag.indexOf('=');
     if (eq > 0) {
