@@ -1302,9 +1302,20 @@ void PluginContainer::loadPlugins()
     pluginMap[bundledIter.fileName()] = bundledIter.filePath();
   }
 
+  // Plugins that are permanently blacklisted for all users.  These are
+  // known-incompatible with Fluorine / Linux and must never be loaded.
+  static const QSet<QString> hardBlacklist = {
+      QStringLiteral("rootbuilder"),
+  };
+
   for (auto it = pluginMap.cbegin(); it != pluginMap.cend(); ++it) {
     const QString& fileName = it.key();
     const QString& filepath = it.value();
+
+    if (hardBlacklist.contains(fileName.toLower())) {
+      log::debug("plugin \"{}\" is hard-blacklisted, skipping", fileName);
+      continue;
+    }
 
     if (skipPlugin == fileName) {
       log::debug("plugin \"{}\" skipped for this session", fileName);
