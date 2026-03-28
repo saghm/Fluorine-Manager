@@ -33,14 +33,17 @@ pub fn detect_steam_games() -> Vec<Game> {
     for steam_info in find_steam_installations(&home) {
         let libraries = get_library_folders(&steam_info.path);
 
-        for library_path in libraries {
-            let steamapps = library_path.join("steamapps");
-            if !steamapps.exists() {
-                continue;
-            }
+        // Collect all steamapps paths so we can search across them for compatdata.
+        // Steam can place compatdata in a different library folder than the game.
+        let all_steamapps: Vec<PathBuf> = libraries
+            .iter()
+            .map(|l| l.join("steamapps"))
+            .filter(|s| s.exists())
+            .collect();
 
+        for steamapps in &all_steamapps {
             // Scan for appmanifest_*.acf files
-            let Ok(entries) = fs::read_dir(&steamapps) else {
+            let Ok(entries) = fs::read_dir(steamapps) else {
                 continue;
             };
 
@@ -51,7 +54,9 @@ pub fn detect_steam_games() -> Vec<Game> {
                 };
 
                 if name.starts_with("appmanifest_") && name.ends_with(".acf") {
-                    if let Some(game) = parse_appmanifest(&path, &steamapps, &steam_info) {
+                    if let Some(game) =
+                        parse_appmanifest(&path, steamapps, &all_steamapps, &steam_info)
+                    {
                         games.push(game);
                     }
                 }
@@ -143,6 +148,7 @@ fn get_library_folders(steam_path: &Path) -> Vec<PathBuf> {
 fn parse_appmanifest(
     manifest_path: &Path,
     steamapps_path: &Path,
+    all_steamapps: &[PathBuf],
     steam_info: &SteamInstallation,
 ) -> Option<Game> {
     let content = fs::read_to_string(manifest_path).ok()?;
@@ -159,17 +165,13 @@ fn parse_appmanifest(
         return None;
     }
 
-    // Build the prefix path
-    let prefix_path = steamapps_path
-        .join("compatdata")
-        .join(&manifest.app_id)
-        .join("pfx");
-
-    let prefix_path = if prefix_path.exists() {
-        Some(prefix_path)
-    } else {
-        None
-    };
+    // Search ALL library folders for the compatdata — Steam can place it in a
+    // different library than the game itself (e.g. game on SD card, compatdata
+    // on internal storage or vice-versa).
+    let prefix_path = all_steamapps
+        .iter()
+        .map(|sa| sa.join("compatdata").join(&manifest.app_id).join("pfx"))
+        .find(|p| p.exists());
 
     // Look up known game info
     let known_game = find_by_steam_id(&manifest.app_id);
