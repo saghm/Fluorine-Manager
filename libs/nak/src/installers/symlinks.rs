@@ -54,6 +54,10 @@ pub fn create_game_symlinks(nak_prefix: &Path, games: &[Game]) {
     for game in games {
         // Skip games without prefixes
         let Some(game_prefix) = &game.prefix_path else {
+            log_info(&format!(
+                "Symlink skip '{}' (app_id {}): no prefix_path",
+                game.name, game.app_id
+            ));
             continue;
         };
 
@@ -61,6 +65,12 @@ pub fn create_game_symlinks(nak_prefix: &Path, games: &[Game]) {
         let game_users_dir = game_prefix.join("drive_c/users");
         let game_username = find_prefix_username(&game_users_dir);
         let game_user_dir = game_users_dir.join(&game_username);
+
+        let my_games_dir = game_user_dir.join("Documents/My Games");
+        log_info(&format!(
+            "Symlink checking '{}' (app_id {}): prefix={}, user='{}', my_games_exists={}",
+            game.name, game.app_id, game_prefix.display(), game_username, my_games_dir.is_dir()
+        ));
 
         // Scan and symlink ALL folders in the game prefix's Documents/My Games/
         linked_count += scan_and_link_all(
@@ -214,10 +224,18 @@ fn scan_and_link_all(
     _game_prefix: &Path,
 ) -> usize {
     if !game_base.is_dir() {
+        log_info(&format!(
+            "  scan_and_link_all: {} not a dir for '{}', skipping",
+            game_base.display(), game_name
+        ));
         return 0;
     }
 
     let Ok(entries) = fs::read_dir(game_base) else {
+        log_info(&format!(
+            "  scan_and_link_all: cannot read {} for '{}'",
+            game_base.display(), game_name
+        ));
         return 0;
     };
 
