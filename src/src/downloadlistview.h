@@ -102,6 +102,7 @@ private slots:
 
   void issueInstall(int index);
   void issueDelete(int index);
+  void issueDeleteSelected();
   void issueRemoveFromView(int index);
   void issueRestoreToView(int index);
   void issueRestoreToViewAll();

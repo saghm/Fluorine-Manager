@@ -662,6 +662,18 @@ void OrganizerCore::prepareVFS()
     m_USVFS.setTrackingFilePath(trackPath.toStdString());
   }
 
+  // VFS Root Builder: read per-instance setting and configure.
+  {
+    bool vfsRootBuilder = false;
+    if (const auto* s = Settings::maybeInstance()) {
+      const QSettings instanceIni(s->filename(), QSettings::IniFormat);
+      vfsRootBuilder = instanceIni.value("fluorine/vfs_root_builder", true).toBool();
+    }
+    const QString storageDir =
+        QDir(QDir::fromNativeSeparators(basePath())).filePath("rootbuilder");
+    m_USVFS.setRootBuilderEnabled(vfsRootBuilder, storageDir.toStdString());
+  }
+
 #endif
   m_USVFS.updateMapping(fileMapping(m_CurrentProfile->name(), QString()));
 }

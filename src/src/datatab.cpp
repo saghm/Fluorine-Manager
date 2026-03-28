@@ -10,6 +10,7 @@
 #include <report.h>
 
 #include <QMessageBox>
+#include <QSettings>
 #include <utility.h>
 
 using namespace MOShared;
@@ -25,6 +26,7 @@ DataTab::DataTab(OrganizerCore& core, PluginContainer& pc, QWidget* parent,
          mwui->dataTab,
          mwui->dataTabRefresh,
          mwui->dataTabBrowseVFS,
+         mwui->dataTabBrowseRootBuilder,
          mwui->dataTree,
          mwui->dataTabShowOnlyConflicts,
          mwui->dataTabShowFromArchives,
@@ -48,10 +50,24 @@ DataTab::DataTab(OrganizerCore& core, PluginContainer& pc, QWidget* parent,
 
 #ifdef _WIN32
   ui.browseVFS->setVisible(false);
+  ui.browseRootBuilder->setVisible(false);
 #else
   connect(ui.browseVFS, &QPushButton::clicked, [&] {
     onBrowseVFS();
   });
+  connect(ui.browseRootBuilder, &QPushButton::clicked, [&] {
+    onBrowseRootBuilder();
+  });
+
+  // Hide Root Builder button if the feature is disabled for this instance.
+  {
+    bool rbEnabled = true;
+    if (const auto* s = Settings::maybeInstance()) {
+      const QSettings instanceIni(s->filename(), QSettings::IniFormat);
+      rbEnabled = instanceIni.value("fluorine/vfs_root_builder", true).toBool();
+    }
+    ui.browseRootBuilder->setVisible(rbEnabled);
+  }
 #endif
 
   connect(ui.refresh, &QPushButton::clicked, [&] {
@@ -161,6 +177,36 @@ void DataTab::onBrowseVFS()
   box.exec();
 
   log::info("Unmounting VFS after Browse...");
+  m_core.unmountVFS();
+#endif
+}
+
+void DataTab::onBrowseRootBuilder()
+{
+#ifndef _WIN32
+  QString gameRoot = m_core.managedGame()->gameDirectory().absolutePath();
+
+  // Mount the FUSE VFS which also triggers Root Builder deployment to the
+  // game root directory.
+  log::info("Mounting VFS for Root Builder browse...");
+  m_core.prepareVFS();
+
+  // Open the game root folder (not Data/) so the user sees deployed Root files.
+  shell::Explore(gameRoot);
+
+  QMessageBox box(QMessageBox::Information,
+                  QObject::tr("Browse Root Builder"),
+                  QObject::tr("The virtual filesystem is mounted and Root Builder "
+                              "files have been deployed to the game root.\n\n"
+                              "The game folder has been opened in your file manager. "
+                              "You can see files deployed by Root Builder (e.g. SKSE, "
+                              "ENB).\n\n"
+                              "Close this dialog to unmount and clean up."),
+                  QMessageBox::Close, m_parent);
+  box.setWindowModality(Qt::WindowModal);
+  box.exec();
+
+  log::info("Unmounting VFS after Root Builder browse...");
   m_core.unmountVFS();
 #endif
 }

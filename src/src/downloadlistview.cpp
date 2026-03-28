@@ -302,6 +302,12 @@ void DownloadListView::onCustomContextMenu(const QPoint& point)
     // display download-specific actions
   }
 
+  if (selectionModel()->selectedRows().size() > 1) {
+    menu.addAction(tr("Delete Selected (%1)...").arg(selectionModel()->selectedRows().size()),
+                   [=, this] { issueDeleteSelected(); });
+    menu.addSeparator();
+  }
+
   menu.addAction(tr("Delete Installed Downloads..."), [=, this] {
     issueDeleteCompleted();
   });
@@ -335,6 +341,14 @@ void DownloadListView::onCustomContextMenu(const QPoint& point)
 void DownloadListView::keyPressEvent(QKeyEvent* event)
 {
   if (selectionModel()->hasSelection()) {
+    // Multi-select delete: if more than one row is selected, batch delete
+    if (event->key() == Qt::Key_Delete &&
+        selectionModel()->selectedRows().size() > 1) {
+      issueDeleteSelected();
+      QTreeView::keyPressEvent(event);
+      return;
+    }
+
     const int row = qobject_cast<QSortFilterProxyModel*>(model())
                         ->mapToSource(currentIndex())
                         .row();
@@ -394,6 +408,39 @@ void DownloadListView::issueDelete(int index)
   }
 
   emit removeDownload(index, true);
+}
+
+void DownloadListView::issueDeleteSelected()
+{
+  auto* proxy = qobject_cast<QSortFilterProxyModel*>(model());
+  if (!proxy) return;
+
+  QList<int> sourceRows;
+  for (const auto& idx : selectionModel()->selectedRows()) {
+    int row = proxy->mapToSource(idx).row();
+    auto state = m_Manager->getState(row);
+    if (state >= DownloadManager::STATE_READY) {
+      sourceRows.append(row);
+    }
+  }
+
+  if (sourceRows.isEmpty()) return;
+
+  const auto r = MOBase::TaskDialog(this, tr("Delete downloads"))
+                     .main(tr("Are you sure you want to delete %1 download(s)?")
+                               .arg(sourceRows.size()))
+                     .icon(QMessageBox::Question)
+                     .button({tr("Move to the Recycle Bin"), QMessageBox::Yes})
+                     .button({tr("Cancel"), QMessageBox::Cancel})
+                     .exec();
+
+  if (r != QMessageBox::Yes) return;
+
+  // Delete in reverse order so indices remain valid
+  std::sort(sourceRows.begin(), sourceRows.end(), std::greater<int>());
+  for (int row : sourceRows) {
+    emit removeDownload(row, true);
+  }
 }
 
 void DownloadListView::issueRemoveFromView(int index)

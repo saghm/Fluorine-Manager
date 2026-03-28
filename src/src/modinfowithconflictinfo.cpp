@@ -9,6 +9,7 @@
 #include "moddatachecker.h"
 #include "organizercore.h"
 #include "qdirfiletree.h"
+#include "settings.h"
 
 using namespace MOBase;
 using namespace MOShared;
@@ -319,10 +320,34 @@ bool ModInfoWithConflictInfo::doIsValid() const
 
   if (mdc) {
     auto qdirfiletree = fileTree();
-    return mdc->dataLooksValid(qdirfiletree) == ModDataChecker::CheckReturn::VALID;
+    if (mdc->dataLooksValid(qdirfiletree) == ModDataChecker::CheckReturn::VALID) {
+      return true;
+    }
   }
 
-  return true;
+#ifndef _WIN32
+  // If VFS Root Builder is enabled, a mod with only a Root/ folder is still valid
+  // (e.g. SKSE, ENB — files get deployed to the game directory at launch).
+  if (const auto* s = Settings::maybeInstance()) {
+    const QSettings instanceIni(s->filename(), QSettings::IniFormat);
+    if (instanceIni.value("fluorine/vfs_root_builder", true).toBool()) {
+      const auto modPath = absolutePath();
+      std::error_code ec;
+      for (const auto& entry :
+           fs::directory_iterator(modPath.toStdString(), ec)) {
+        if (entry.is_directory()) {
+          auto name = entry.path().filename().string();
+          std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+          if (name == "root") {
+            return true;
+          }
+        }
+      }
+    }
+  }
+#endif
+
+  return mdc == nullptr;
 }
 
 std::shared_ptr<const IFileTree> ModInfoWithConflictInfo::fileTree() const

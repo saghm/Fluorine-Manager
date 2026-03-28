@@ -1119,6 +1119,16 @@
                 </widget>
                </item>
                <item>
+                <widget class="QPushButton" name="dataTabBrowseRootBuilder">
+                 <property name="toolTip">
+                  <string>Deploy Root Builder files and open the game root folder in a file manager.</string>
+                 </property>
+                 <property name="text">
+                  <string>Browse Root Builder</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
                 <spacer name="horizontalSpacer_4">
                  <property name="orientation">
                   <enum>Qt::Horizontal</enum>

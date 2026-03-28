@@ -168,6 +168,26 @@ std::string joinPath(const std::string& base, const std::string& name)
   return base + "/" + name;
 }
 
+// Look up the canonical (mod-provided) display name for a child entry.
+// Returns the display name if found, or the original name if not.
+std::string canonicalChildName(const Mo2FsContext* ctx, const std::string& parentPath,
+                               const std::string& name)
+{
+  std::shared_lock lock(ctx->tree_mutex);
+  const VfsNode* parent = parentPath.empty()
+      ? &ctx->tree->root
+      : ctx->tree->root.resolve(splitPath(parentPath));
+  if (parent == nullptr || !parent->is_directory) {
+    return name;
+  }
+  const std::string key = normalizeForLookup(name);
+  auto it = parent->dir_info.display_names.find(key);
+  if (it != parent->dir_info.display_names.end()) {
+    return it->second;
+  }
+  return name;
+}
+
 std::string inodeToPath(const Mo2FsContext* ctx, fuse_ino_t ino, bool* ok)
 {
   std::shared_lock lock(ctx->inode_mutex);
@@ -630,7 +650,10 @@ void mo2_lookup(fuse_req_t req, fuse_ino_t parent, const char* name)
     return;
   }
 
-  const std::string childPath = joinPath(parentPath, name);
+  // Use the tree's canonical (mod-provided) case for the child name so that
+  // inode paths match the mod's directory/file casing rather than Wine's.
+  const std::string canonical = canonicalChildName(ctx, parentPath, name);
+  const std::string childPath = joinPath(parentPath, canonical);
   const auto snap             = snapshotForPath(ctx, childPath);
   if (!snap.found) {
     samplePathStat(ctx, "lookup", childPath, true);
@@ -1324,7 +1347,7 @@ void mo2_rename(fuse_req_t req, fuse_ino_t parent, const char* name,
     return;
   }
 
-  const std::string oldRelative = joinPath(parentPath, name);
+  const std::string oldRelative = joinPath(parentPath, canonicalChildName(ctx, parentPath, name));
   const std::string newRelative = joinPath(newParentPath, newname);
 
   const auto oldSnap = snapshotForPath(ctx, oldRelative);
@@ -1594,7 +1617,7 @@ void mo2_unlink(fuse_req_t req, fuse_ino_t parent, const char* name)
     return;
   }
 
-  const std::string relative = joinPath(parentPath, name);
+  const std::string relative = joinPath(parentPath, canonicalChildName(ctx, parentPath, name));
   if (!ctx->overwrite->removeFile(relative)) {
     fuse_reply_err(req, EACCES);
     return;

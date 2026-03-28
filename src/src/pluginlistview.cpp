@@ -258,10 +258,12 @@ void PluginListView::setup(OrganizerCore& core, MainWindow* mw, Ui::MainWindow* 
     updatePluginCount();
   });
 
+#ifdef _WIN32
   // sort
   connect(mwui->sortButton, &QPushButton::clicked, [=, this] {
     onSortButtonClicked();
   });
+#endif
 
   // filter
   connect(ui.filter, &QLineEdit::textChanged, m_sortProxy,

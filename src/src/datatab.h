@@ -53,6 +53,7 @@ private:
     QWidget* tab;
     QPushButton* refresh;
     QPushButton* browseVFS;
+    QPushButton* browseRootBuilder;
     QTreeView* tree;
     QCheckBox* conflicts;
     QCheckBox* archives;
@@ -70,6 +71,7 @@ private:
 
   void onRefresh();
   void onBrowseVFS();
+  void onBrowseRootBuilder();
   void onItemExpanded(QTreeWidgetItem* item);
   void onConflicts();
   void onArchives();

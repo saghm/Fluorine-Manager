@@ -660,7 +660,11 @@ void MainWindow::resetButtonIcons()
       QIcon::fromTheme("edit-undo", QIcon(":/MO/gui/restore")));
   ui->saveModsButton->setIcon(
       QIcon::fromTheme("document-save", QIcon(":/MO/gui/backup")));
+#ifdef _WIN32
   ui->sortButton->setIcon(QIcon::fromTheme("view-sort-ascending", QIcon(":/MO/gui/sort")));
+#else
+  ui->sortButton->setVisible(false);
+#endif
   ui->restoreButton->setIcon(
       QIcon::fromTheme("edit-undo", QIcon(":/MO/gui/restore")));
   ui->saveButton->setIcon(QIcon::fromTheme("document-save", QIcon(":/MO/gui/backup")));
@@ -669,7 +673,9 @@ void MainWindow::resetButtonIcons()
   ui->openFolderMenu->setIconSize(QSize(16, 16));
   ui->restoreModsButton->setIconSize(QSize(16, 16));
   ui->saveModsButton->setIconSize(QSize(16, 16));
+#ifdef _WIN32
   ui->sortButton->setIconSize(QSize(16, 16));
+#endif
   ui->restoreButton->setIconSize(QSize(16, 16));
   ui->saveButton->setIconSize(QSize(16, 16));
 }
@@ -3251,6 +3257,7 @@ void MainWindow::toggleUpdateAction()
 
 void MainWindow::updateSortButton()
 {
+#ifdef _WIN32
   if (m_OrganizerCore.managedGame()->sortMechanism() !=
       IPluginGame::SortMechanism::NONE) {
     ui->sortButton->setEnabled(true);
@@ -3260,6 +3267,7 @@ void MainWindow::updateSortButton()
     ui->sortButton->setToolTip(tr("There is no supported sort mechanism for this game. "
                                   "You will probably have to use a third-party tool."));
   }
+#endif
 }
 
 void MainWindow::nxmEndorsementsAvailable(QVariant userData, QVariant resultData, int)

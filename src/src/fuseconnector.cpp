@@ -516,6 +516,9 @@ void FuseConnector::updateMapping(const MappingType& mapping)
   const QString dataDirName  = game->dataDirectory().dirName();
   const QString overwriteDir = Settings::instance().paths().overwrite();
 
+  // Set m_gameDir early so deployRootFiles() can use it before mount().
+  m_gameDir = gameDir.toStdString();
+
   // Auto-derive tracking file path if not explicitly set
   if (m_trackingFilePath.empty() && !overwriteDir.isEmpty()) {
     QDir owDir(overwriteDir);
