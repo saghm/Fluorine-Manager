@@ -20,10 +20,8 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "loglist.h"
 #include "copyeventfilter.h"
 #include "env.h"
-#include "fluorinepaths.h"
 #include "organizercore.h"
 #include <algorithm>
-#include <cstdlib>
 
 using namespace MOBase;
 
@@ -242,10 +240,7 @@ void LogList::clear()
 void LogList::openLogsFolder()
 {
 #ifndef _WIN32
-  const char* launchDir  = std::getenv("FLUORINE_LAUNCH_DIR");
-  const QString logsPath = (launchDir && launchDir[0])
-                               ? QString::fromUtf8(launchDir) + "/logs"
-                               : QDir::currentPath() + "/logs";
+  const QString logsPath = qApp->property("dataPath").toString() + "/logs";
 #else
   const QString logsPath = qApp->property("dataPath").toString() + "/" +
                            QString::fromStdWString(AppConfig::logPath());
@@ -410,14 +405,8 @@ bool createAndMakeWritable(const std::wstring& subPath)
 bool setLogDirectory(const QString& dir)
 {
 #ifndef _WIN32
-  // Place logs in the directory the user launched fluorine from so they're
-  // easy to find and share.  Each launch creates a new timestamped log file
-  // and the oldest are cleaned up to keep only the last 5.
-  // FLUORINE_LAUNCH_DIR is set by the launcher script before it cd's elsewhere.
-  const char* launchDir = std::getenv("FLUORINE_LAUNCH_DIR");
-  const QString logDir  = (launchDir && launchDir[0])
-                              ? QString::fromUtf8(launchDir) + "/logs"
-                              : QDir::currentPath() + "/logs";
+  // Place logs in the instance directory so each instance has its own logs.
+  const QString logDir = dir + "/logs";
   QDir().mkpath(logDir);
 
   // Create a timestamped log file for this session.

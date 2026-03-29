@@ -435,7 +435,6 @@ export QT_QPA_PLATFORM_PLUGIN_PATH="${RUN}/qt6plugins/platforms"
 # can easily exceed the default 1024
 ulimit -n 65536 2>/dev/null
 
-export FLUORINE_LAUNCH_DIR="${PWD}"
 cd "${RUN}"
 exec "${RUN}/ModOrganizer-core" "$@"
 LAUNCH
@@ -670,7 +669,6 @@ export XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-KDE}"
 # can easily exceed the default 1024
 ulimit -n 65536 2>/dev/null
 
-export FLUORINE_LAUNCH_DIR="${PWD}"
 cd "${APPIMAGE_DIR}"
 exec "${BIN}/ModOrganizer-core" "$@"
 APPRUN
