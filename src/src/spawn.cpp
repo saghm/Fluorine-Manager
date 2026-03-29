@@ -663,13 +663,15 @@ int spawn(const SpawnParameters &sp, pid_t &processId) {
 
     const QString prefixPath = resolvePrefixPath();
     if (prefixPath.isEmpty()) {
-      MOBase::log::warn(
-          "No Wine prefix configured - games may not launch correctly. "
-          "Configure a prefix in Settings > Proton or via fluorine-manager.");
+      MOBase::log::error(
+          "No Wine prefix configured - cannot launch game. "
+          "Configure a prefix in Settings > Proton.");
+      return ENOENT;
     } else if (!QDir(QDir(prefixPath).filePath("drive_c")).exists()) {
-      MOBase::log::warn(
-          "Wine prefix '{}' does not contain drive_c/ - prefix may be invalid",
+      MOBase::log::error(
+          "Wine prefix '{}' does not contain drive_c/ - prefix is invalid",
           prefixPath);
+      return ENOENT;
     } else {
       MOBase::log::info("Using Wine prefix: {}", prefixPath);
       launcher.setPrefix(prefixPath);
@@ -1024,7 +1026,19 @@ pid_t startBinary(QWidget *parent, const SpawnParameters &sp) {
   const auto e = spawn::spawn(sp, pid);
 
   if (e != 0) {
-    dialogs::spawnFailed(parent, sp, e);
+    if (e == ENOENT && sp.useProton) {
+      QMessageBox::critical(
+          parent, QObject::tr("No Wine Prefix"),
+          QObject::tr("No Wine prefix has been configured for this instance.\n\n"
+                       "A Wine prefix is required to run Windows games through "
+                       "Proton.\n\n"
+                       "To create one, go to:\n"
+                       "  Settings \u2192 Wine/Proton\n\n"
+                       "Set the prefix location, then click \"Create Prefix\" "
+                       "to generate a new prefix."));
+    } else {
+      dialogs::spawnFailed(parent, sp, e);
+    }
     return -1;
   }
 
