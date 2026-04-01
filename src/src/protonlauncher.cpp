@@ -463,15 +463,22 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
       // Build: [wrappers] run_script [--filesystem=...] -- proton_script protonArgs
       QStringList slrArgs;
 
-      // Expose the game directory (and its FUSE-mounted Data/) to the
-      // pressure-vessel container.  Without this, the container's mount
-      // namespace may not see FUSE mounts on the host.
+      // Expose host directories to the pressure-vessel container.
+      // Without --filesystem= flags, the container's mount namespace
+      // may not see FUSE mounts or system-installed Proton paths.
       if (!m_binary.isEmpty()) {
         const QString gameDir = QFileInfo(m_binary).absolutePath();
         slrArgs << QStringLiteral("--filesystem=%1").arg(gameDir);
       }
       if (!m_prefixPath.isEmpty()) {
         slrArgs << QStringLiteral("--filesystem=%1").arg(m_prefixPath);
+      }
+      // Expose the Proton installation directory — needed for
+      // system-installed Protons (e.g. /usr/share/steam/compatibilitytools.d/)
+      // whose files may not be visible inside the container by default.
+      {
+        const QString protonDir = QFileInfo(protonScript).absolutePath();
+        slrArgs << QStringLiteral("--filesystem=%1").arg(protonDir);
       }
 
       slrArgs << "--" << protonScript << protonArgs;

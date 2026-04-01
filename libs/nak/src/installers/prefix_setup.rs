@@ -284,9 +284,9 @@ fn initialize_prefix_with_proton(
 
     log_install(&format!("STEAM_COMPAT_DATA_PATH={:?}", compat_data_path));
 
-    // Collect all env vars upfront so build_command can forward them
-    // via --env= flags in Flatpak mode.
-    let mut envs: Vec<(&str, String)> = vec![
+    // Collect all env vars upfront so build_command can set them on the
+    // process (inherited by SLR/pressure-vessel into the container).
+    let envs: Vec<(&str, String)> = vec![
         ("STEAM_COMPAT_CLIENT_INSTALL_PATH", steam_root.clone()),
         ("STEAM_COMPAT_DATA_PATH", compat_data_path.display().to_string()),
         ("SteamAppId", app_id.to_string()),

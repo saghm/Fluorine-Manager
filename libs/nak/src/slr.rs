@@ -8,12 +8,12 @@
 
 use std::error::Error;
 use std::fs;
-use std::io::{self, Read, Write};
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicI32, Ordering};
 
-use crate::logging::{log_info, log_warning};
+use crate::logging::log_info;
 
 const BASE_URL: &str =
     "https://repo.steampowered.com/steamrt3/images/latest-public-beta";
@@ -79,38 +79,13 @@ fn read_local_build_id() -> Option<String> {
         .map(|s| s.trim().to_string())
 }
 
-/// Fetch the expected SHA256 hash for the archive from the remote SHA256SUMS file.
-fn fetch_expected_sha256() -> Result<String, Box<dyn Error>> {
-    let url = format!("{}/SHA256SUMS", BASE_URL);
-    let resp = ureq::get(&url).call()?;
-    let mut body = String::new();
-    resp.into_reader().read_to_string(&mut body)?;
-
-    for line in body.lines() {
-        // Format: "<hash>  <filename>" or "<hash> *<filename>"
-        let parts: Vec<&str> = line.splitn(2, ' ').collect();
-        if parts.len() == 2 {
-            let hash = parts[0].trim();
-            let name = parts[1].trim().trim_start_matches('*');
-            if name == ARCHIVE_NAME {
-                return Ok(hash.to_string());
-            }
-        }
-    }
-    Err(format!("SHA256 hash for {} not found in SHA256SUMS", ARCHIVE_NAME).into())
-}
-
-/// Verify a file's SHA256 hash using the system `sha256sum` command.
-fn verify_sha256(file: &std::path::Path, expected: &str) -> Result<(), Box<dyn Error>> {
-    let output = Command::new("sha256sum").arg(file).output()?;
-    if !output.status.success() {
-        return Err("sha256sum command failed".into());
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let actual = stdout.split_whitespace().next().unwrap_or("").trim();
+/// Verify downloaded file size matches the Content-Length from the HTTP response.
+/// This is more reliable than SHA256SUMS which can be stale on Valve's CDN.
+fn verify_download_size(file: &std::path::Path, expected: u64) -> Result<(), Box<dyn Error>> {
+    let actual = fs::metadata(file)?.len();
     if actual != expected {
         return Err(format!(
-            "SHA256 mismatch: expected {}, got {}",
+            "Download incomplete: expected {} bytes, got {}",
             expected, actual
         )
         .into());
@@ -122,15 +97,15 @@ fn verify_sha256(file: &std::path::Path, expected: &str) -> Result<(), Box<dyn E
 ///
 /// `progress_cb` receives values in 0.0..=1.0.
 /// `cancel_flag` is polled each chunk — set to non-zero to abort.
+/// Returns the Content-Length on success for verification.
 fn download_archive(
     dest: &std::path::Path,
     progress_cb: &impl Fn(f32),
     cancel_flag: &AtomicI32,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<Option<u64>, Box<dyn Error>> {
     let url = format!("{}/{}", BASE_URL, ARCHIVE_NAME);
     let resp = ureq::get(&url).call()?;
 
-    // Try to get Content-Length for progress reporting
     let total_bytes: Option<u64> = resp
         .header("Content-Length")
         .and_then(|v| v.parse().ok());
@@ -162,7 +137,7 @@ fn download_archive(
     }
 
     file.flush()?;
-    Ok(())
+    Ok(total_bytes)
 }
 
 /// Download and install the Steam Linux Runtime (sniper).
@@ -201,25 +176,22 @@ pub fn download_slr(
 
     // Download
     status_cb("Downloading Steam Linux Runtime (sniper, ~180 MB)...");
-    download_archive(&archive_path, &progress_cb, cancel_flag)?;
+    let content_length = download_archive(&archive_path, &progress_cb, cancel_flag)?;
     progress_cb(1.0);
 
-    // SHA256 verification
-    status_cb("Verifying download...");
-    match fetch_expected_sha256() {
-        Ok(expected) => {
-            if let Err(e) = verify_sha256(&archive_path, &expected) {
-                let _ = fs::remove_file(&archive_path);
-                return Err(format!("Checksum verification failed: {}", e).into());
-            }
-            log_info("SHA256 verification passed");
+    // Verify download integrity via Content-Length.
+    // We don't use Valve's SHA256SUMS file because their CDN frequently
+    // serves a stale copy that doesn't match the current archive.
+    if let Some(expected_size) = content_length {
+        status_cb("Verifying download...");
+        if let Err(e) = verify_download_size(&archive_path, expected_size) {
+            let _ = fs::remove_file(&archive_path);
+            return Err(format!("Download verification failed: {}", e).into());
         }
-        Err(e) => {
-            log_warning(&format!(
-                "Could not fetch SHA256SUMS ({}), skipping verification",
-                e
-            ));
-        }
+        log_info(&format!(
+            "Download verified ({} bytes)",
+            expected_size
+        ));
     }
 
     // Extract

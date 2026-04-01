@@ -12,14 +12,17 @@ endif()
 set(NAK_FFI_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(NAK_FFI_LIB ${NAK_FFI_DIR}/target/${CARGO_BUILD_TYPE}/libnak_ffi.so)
 
+# Glob all Rust sources so any change triggers a cargo rebuild
+file(GLOB_RECURSE NAK_FFI_SOURCES ${NAK_FFI_DIR}/src/*.rs)
+file(GLOB_RECURSE NAK_SOURCES ${NAK_FFI_DIR}/../nak/src/*.rs)
+
 add_custom_command(
     OUTPUT ${NAK_FFI_LIB}
     COMMAND cargo build ${CARGO_BUILD_FLAGS}
     WORKING_DIRECTORY ${NAK_FFI_DIR}
     COMMENT "Building NaK FFI library (Rust)"
-    DEPENDS ${NAK_FFI_DIR}/Cargo.toml ${NAK_FFI_DIR}/src/lib.rs
-            ${NAK_FFI_DIR}/../nak/Cargo.toml ${NAK_FFI_DIR}/../nak/src/lib.rs
-            ${NAK_FFI_DIR}/../nak/src/icons.rs
+    DEPENDS ${NAK_FFI_DIR}/Cargo.toml ${NAK_FFI_DIR}/../nak/Cargo.toml
+            ${NAK_FFI_SOURCES} ${NAK_SOURCES}
 )
 
 add_custom_target(nak_ffi_build DEPENDS ${NAK_FFI_LIB})
