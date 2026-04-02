@@ -92,7 +92,7 @@ private:
   QString m_arguments;
   QString m_steamAppID;
   QString m_workingDirectory;
-  Flags m_flags;
+  Flags m_flags = UseProton;
 };
 
 /*!
