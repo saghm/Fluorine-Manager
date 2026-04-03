@@ -32,12 +32,16 @@ file(GLOB ORGANIZER_QRC
 list(APPEND ORGANIZER_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/fluorineconfig.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/fluorinepaths.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/prefixsetupdialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/prefixsetuprunner.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/protonlauncher.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/settingsdialogproton.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/wineprefix.cpp)
 list(APPEND ORGANIZER_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/fluorineconfig.h
     ${CMAKE_CURRENT_SOURCE_DIR}/fluorinepaths.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/prefixsetupdialog.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/prefixsetuprunner.h
     ${CMAKE_CURRENT_SOURCE_DIR}/protonlauncher.h
     ${CMAKE_CURRENT_SOURCE_DIR}/settingsdialogproton.h
     ${CMAKE_CURRENT_SOURCE_DIR}/wineprefix.h)

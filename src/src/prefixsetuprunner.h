@@ -1,0 +1,134 @@
+#ifndef PREFIXSETUPRUNNER_H
+#define PREFIXSETUPRUNNER_H
+
+#include <QAtomicInt>
+#include <QObject>
+#include <QProcess>
+#include <QString>
+#include <QVector>
+
+#include <functional>
+
+/// Represents a single step in the prefix setup process.
+struct SetupStep {
+  enum Status { Pending, Running, Succeeded, Failed, Skipped };
+
+  QString id;            ///< Machine-readable identifier
+  QString displayName;   ///< Human-readable name for the UI
+  Status status = Pending;
+  QString errorMessage;
+};
+
+/// Runs the Wine prefix setup as a sequence of discrete, retryable steps.
+///
+/// Lives on a worker thread.  Communicates with the UI via signals.
+/// Each step spawns a QProcess wrapped in Steam Linux Runtime if available.
+class PrefixSetupRunner : public QObject
+{
+  Q_OBJECT
+
+public:
+  explicit PrefixSetupRunner(const QString& prefixPath,
+                             const QString& protonPath,
+                             uint32_t appId,
+                             QObject* parent = nullptr);
+
+  /// Read-only access to the step list for the UI.
+  const QVector<SetupStep>& steps() const { return m_steps; }
+
+  /// Request cancellation (thread-safe).
+  void cancel() { m_cancelled.storeRelease(1); }
+
+signals:
+  void stepStarted(int index);
+  void stepFinished(int index, bool success, const QString& error);
+  void logMessage(const QString& text);
+  void progressChanged(float progress);   ///< 0.0 – 1.0
+  void finished(bool allSucceeded);
+
+public slots:
+  /// Run all pending steps from the beginning.
+  void start();
+
+  /// Re-run only the steps that previously failed.
+  void retryFailed();
+
+  /// Re-run a single step by index.
+  void retryStep(int index);
+
+private:
+  // -- helpers ---------------------------------------------------------------
+  void buildStepList();
+  bool runStep(int index);
+  bool isCancelled() const { return m_cancelled.loadAcquire() != 0; }
+
+  /// Run an external process with SLR wrapping and log its output.
+  /// Returns exit code (0 = success).
+  int runProcess(const QString& exe,
+                 const QStringList& args,
+                 const QMap<QString, QString>& extraEnv,
+                 int timeoutMs = -1);
+
+  /// Run a plain host command (NO SLR wrapping).
+  /// Used for host utilities like curl, unzip that must not run in the container.
+  int runHostProcess(const QString& exe,
+                     const QStringList& args,
+                     int timeoutMs = -1);
+
+  /// Run a host command with extra env vars (NO SLR wrapping).
+  /// Used for winetricks which is a host script that calls wine internally.
+  int runHostProcessWithEnv(const QString& exe,
+                            const QStringList& args,
+                            const QMap<QString, QString>& extraEnv,
+                            int timeoutMs = -1);
+
+  /// Build a QProcess configured with SLR wrapping + cleaned environment.
+  QProcess* buildWrappedProcess(const QString& exe,
+                                const QMap<QString, QString>& extraEnv);
+
+  // -- step implementations --------------------------------------------------
+  bool stepProtonInit();
+  bool stepDriveCleanup();
+  bool stepWinetricksVerb(const QString& verb);
+  bool stepDotNetInstall(const QString& url, const QString& name);
+  bool stepGameDetection();
+  bool stepWineRegistry();
+  bool stepWin11Mode();
+  bool stepPostSetup();
+
+  // -- tool management -------------------------------------------------------
+  bool downloadFile(const QString& url, const QString& destPath);
+  bool ensure7zz();
+  bool ensureWinetricks();
+  bool ensureCabextract();
+
+  // -- Wine environment helpers ----------------------------------------------
+  QString findWineBinary() const;
+  QString findWineserverBinary() const;
+  QString findProtonScript() const;
+  QString detectSteamPath() const;
+  QString detectSLRRunScript() const;
+  QString fluorineBinDir() const;
+  QString fluorineCacheDir() const;
+  QString fluorineTmpDir() const;
+  QMap<QString, QString> baseWineEnv() const;
+
+  // -- state -----------------------------------------------------------------
+  QString m_prefixPath;
+  QString m_protonPath;
+  uint32_t m_appId;
+  QAtomicInt m_cancelled{0};
+
+  QString m_wineBin;
+  QString m_wineserverBin;
+  QString m_slrRunScript;
+  QString m_winetricksPath;
+  QString m_7zzPath;
+
+  QVector<SetupStep> m_steps;
+
+  // Step execution functions indexed parallel to m_steps.
+  QVector<std::function<bool()>> m_stepFunctions;
+};
+
+#endif // PREFIXSETUPRUNNER_H

@@ -2,6 +2,7 @@
 
 #include "fluorineconfig.h"
 #include "fluorinepaths.h"
+#include "prefixsetupdialog.h"
 #include "ui_settingsdialog.h"
 
 #include <QtConcurrent/QtConcurrentRun>
@@ -233,13 +234,7 @@ void ProtonSettingsTab::onCreatePrefix()
     return;
   }
 
-  setBusy(true);
-  ui->protonStatusLabel->setText(tr("Creating prefix..."));
-  ui->nakInstallLog->clear();
-  ui->nakInstallLog->setVisible(true);
-  ui->toggleInstallLog->setChecked(true);
-
-  startInstallTask(0, pfxPath, protonName, protonPath);
+  runPrefixSetupDialog(0, pfxPath, protonName, protonPath);
 }
 
 void ProtonSettingsTab::onDeletePrefix()
@@ -281,14 +276,8 @@ void ProtonSettingsTab::onRecreatePrefix()
     return;
   }
 
-  setBusy(true);
-  ui->protonStatusLabel->setText(tr("Recreating prefix..."));
-  ui->nakInstallLog->clear();
-  ui->nakInstallLog->setVisible(true);
-  ui->toggleInstallLog->setChecked(true);
-
-  startInstallTask(cfg->app_id, cfg->prefix_path, cfg->proton_name,
-                   cfg->proton_path);
+  runPrefixSetupDialog(cfg->app_id, cfg->prefix_path, cfg->proton_name,
+                       cfg->proton_path);
 }
 
 void ProtonSettingsTab::onOpenPrefixFolder()
@@ -665,121 +654,38 @@ void ProtonSettingsTab::showGameRegistryDialog()
       }));
 }
 
-void ProtonSettingsTab::startInstallTask(uint32_t appId, const QString& prefixPath,
-                                         const QString& protonName,
-                                         const QString& protonPath)
+void ProtonSettingsTab::runPrefixSetupDialog(uint32_t appId,
+                                              const QString& prefixPath,
+                                              const QString& protonName,
+                                              const QString& protonPath)
 {
-  m_pendingAppId      = appId;
-  m_pendingPrefixPath = prefixPath;
-  m_pendingProtonName = protonName;
-  m_pendingProtonPath = protonPath;
+  PrefixSetupDialog dialog(prefixPath, protonPath, appId, parentWidget());
+  const int result = dialog.exec();
 
-  ui->protonProgressBar->setValue(0);
+  if (result == QDialog::Accepted && dialog.succeeded()) {
+    // All steps succeeded — save config to mark prefix as complete.
+    FluorineConfig cfg;
+    cfg.app_id      = appId;
+    cfg.prefix_path = prefixPath;
+    cfg.proton_name = protonName;
+    cfg.proton_path = protonPath;
+    cfg.created     = QDateTime::currentDateTime().toString(Qt::ISODate);
 
-  g_activeInstallTab.store(this);
-
-  m_installWatcher.setFuture(QtConcurrent::run([
-      appId,
-      prefixPath,
-      protonName,
-      protonPath]() -> InstallResult {
-    const QByteArray prefixPathUtf8 = prefixPath.toUtf8();
-    const QByteArray protonNameUtf8 = protonName.toUtf8();
-    const QByteArray protonPathUtf8 = protonPath.toUtf8();
-
-    // Set WINEPREFIX so NAK (and its child processes like winetricks) always
-    // target the correct prefix during Proton init.
-    qputenv("WINEPREFIX", prefixPathUtf8);
-
-    // Point WINE/WINESERVER at Proton's binaries so winetricks and regedit
-    // use Proton's wine instead of falling back to system wine.
-    QByteArray protonWineUtf8;
-    QByteArray protonWineserverUtf8;
-    for (const char* subdir : {"files/bin", "dist/bin"}) {
-      const QString candidate = QDir(protonPath).filePath(
-          QString::fromLatin1(subdir) + "/wine");
-      if (QFileInfo::exists(candidate)) {
-        protonWineUtf8 = candidate.toUtf8();
-        protonWineserverUtf8 =
-            QDir(protonPath)
-                .filePath(QString::fromLatin1(subdir) + "/wineserver")
-                .toUtf8();
-        break;
-      }
+    if (!cfg.save()) {
+      ui->protonStatusLabel->setText(tr("Error saving Fluorine config"));
+    } else {
+      ui->protonStatusLabel->setText(tr("Prefix Active"));
     }
-    if (!protonWineUtf8.isEmpty()) {
-      qputenv("WINE", protonWineUtf8);
-      qputenv("WINESERVER", protonWineserverUtf8);
-    }
+  } else {
+    ui->protonStatusLabel->setText(tr("Prefix setup incomplete"));
+  }
 
-    const auto restoreNakEnv = qScopeGuard([protonWineUtf8] {
-      qunsetenv("WINEPREFIX");
-      if (!protonWineUtf8.isEmpty()) {
-        qunsetenv("WINE");
-        qunsetenv("WINESERVER");
-      }
-    });
-
-    int cancelFlag = 0;
-    char* error    = nak_install_all_dependencies(
-        prefixPathUtf8.constData(), protonNameUtf8.constData(),
-        protonPathUtf8.constData(), &ProtonSettingsTab::statusCallback,
-        &ProtonSettingsTab::logCallback, &ProtonSettingsTab::progressCallback,
-        &cancelFlag, appId);
-
-    InstallResult r;
-    if (error != nullptr) {
-      r.error = QString::fromUtf8(error);
-      nak_string_free(error);
-    }
-
-    return r;
-  }));
-}
-
-void ProtonSettingsTab::enqueueStatus(const QString& message)
-{
-  QMetaObject::invokeMethod(this,
-                            [this, message] {
-                              if (m_busy) {
-                                ui->protonStatusLabel->setText(message);
-                              }
-                            },
-                            Qt::QueuedConnection);
-}
-
-void ProtonSettingsTab::enqueueProgress(float progress)
-{
-  QMetaObject::invokeMethod(this,
-                            [this, progress] {
-                              if (m_busy) {
-                                const int clamped =
-                                    qBound(0, static_cast<int>(progress * 100.0f), 100);
-                                ui->protonProgressBar->setValue(clamped);
-                              }
-                            },
-                            Qt::QueuedConnection);
+  refreshState();
 }
 
 void ProtonSettingsTab::appendInstallLog(const QString& message)
 {
   ui->nakInstallLog->append(message);
-}
-
-void ProtonSettingsTab::statusCallback(const char* message)
-{
-  if (auto* tab = g_activeInstallTab.load(); tab != nullptr) {
-    const QString msg = QString::fromUtf8(message ? message : "");
-    tab->enqueueStatus(msg);
-
-    if (!msg.isEmpty()) {
-      QMetaObject::invokeMethod(tab,
-                                [tab, msg] {
-                                  tab->appendInstallLog(msg);
-                                },
-                                Qt::QueuedConnection);
-    }
-  }
 }
 
 void ProtonSettingsTab::logCallback(const char* message)
@@ -798,13 +704,6 @@ void ProtonSettingsTab::logCallback(const char* message)
   }
 }
 
-void ProtonSettingsTab::progressCallback(float progress)
-{
-  if (auto* tab = g_activeInstallTab.load(); tab != nullptr) {
-    tab->enqueueProgress(progress);
-  }
-}
-
 void ProtonSettingsTab::onInstallFinished()
 {
   g_activeInstallTab.store(nullptr);
@@ -818,32 +717,6 @@ void ProtonSettingsTab::onInstallFinished()
     return;
   }
 
-  // Set up prefix directory structure (temp dir + game symlinks)
-  {
-    const QByteArray prefixPathUtf8 = m_pendingPrefixPath.toUtf8();
-    nak_ensure_temp_directory(prefixPathUtf8.constData());
-    nak_create_game_symlinks_auto(prefixPathUtf8.constData());
-  }
-
-  // Ensure DXVK config exists for game launches
-  if (char* dxvkErr = nak_ensure_dxvk_conf(); dxvkErr != nullptr) {
-    MOBase::log::warn("Failed to create dxvk.conf: {}", dxvkErr);
-    nak_string_free(dxvkErr);
-  }
-
-  FluorineConfig cfg;
-  cfg.app_id      = m_pendingAppId;
-  cfg.prefix_path = m_pendingPrefixPath;
-  cfg.proton_name = m_pendingProtonName;
-  cfg.proton_path = m_pendingProtonPath;
-  cfg.created     = QDateTime::currentDateTime().toString(Qt::ISODate);
-
-  if (!cfg.save()) {
-    ui->protonStatusLabel->setText(tr("Error saving Fluorine config"));
-    refreshState();
-    return;
-  }
-
-  ui->protonStatusLabel->setText(tr("Prefix Active"));
+  ui->protonStatusLabel->setText(tr("Done"));
   refreshState();
 }
