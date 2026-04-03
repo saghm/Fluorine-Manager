@@ -105,19 +105,12 @@ pub fn ensure_winetricks() -> Result<PathBuf, Box<dyn Error>> {
 const CABEXTRACT_URL: &str =
     "https://github.com/SulfurNitride/NaK/releases/download/Cabextract/cabextract-linux-x86_64.zip";
 
-/// Ensures cabextract is available (either system or downloaded).
+/// Ensures cabextract is available in our bin directory.
+///
+/// Always downloads to ~/.local/share/fluorine/bin/ because winetricks runs
+/// inside pressure-vessel where system binaries under /usr are not visible.
 pub fn ensure_cabextract() -> Result<PathBuf, Box<dyn Error>> {
-    // First check if system has cabextract
-    if Command::new("which")
-        .arg("cabextract")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-    {
-        return Ok(PathBuf::from("cabextract"));
-    }
-
-    // Check if we already downloaded it
+    // Check if we already downloaded it to our bin dir
     let bin_dir = get_nak_bin_path();
     let cabextract_path = bin_dir.join("cabextract");
 
@@ -125,8 +118,8 @@ pub fn ensure_cabextract() -> Result<PathBuf, Box<dyn Error>> {
         return Ok(cabextract_path);
     }
 
-    // Download cabextract zip
-    log_warning("System cabextract not found, downloading...");
+    // Download cabextract zip — system copy is unusable inside pressure-vessel
+    log_info("Downloading cabextract for use inside container...");
     fs::create_dir_all(&bin_dir)?;
 
     let response = ureq::get(CABEXTRACT_URL).call().map_err(|e| {

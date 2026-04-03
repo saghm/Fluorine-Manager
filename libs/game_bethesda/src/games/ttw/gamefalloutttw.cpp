@@ -15,6 +15,11 @@
 #include <gamebryosavegameinfo.h>
 #include <gamebryounmanagedmods.h>
 
+#ifdef HAS_NAK_FFI
+#include <nak_ffi.h>
+#include "scopeguard.h"
+#endif
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
@@ -80,8 +85,26 @@ QString GameFalloutTTW::identifyGamePath() const
   QString path = "Software\\Bethesda Softworks\\FalloutNV";
   result       = findInRegistry(HKEY_LOCAL_MACHINE, path.toStdWString().c_str(),
                                 L"Installed Path");
-#else
-  result = GameGamebryo::identifyGamePath();
+#elif defined(HAS_NAK_FFI)
+  // TTW uses FalloutNV as its base game, so look for Fallout New Vegas
+  // (the base class would try matching "TTW" which NaK doesn't know about)
+  NakGameList gameList = nak_detect_all_games();
+  ON_BLOCK_EXIT([&]() {
+    nak_game_list_free(gameList);
+  });
+
+  for (size_t i = 0; i < gameList.count; ++i) {
+    const NakGame& game = gameList.games[i];
+    QString detectedName = QString::fromUtf8(game.name);
+    if (detectedName.contains("Fallout", Qt::CaseInsensitive) &&
+        detectedName.contains("Vegas", Qt::CaseInsensitive)) {
+      QString detectedPath = QString::fromUtf8(game.install_path);
+      if (looksValid(QDir(detectedPath))) {
+        result = detectedPath;
+        break;
+      }
+    }
+  }
 #endif
   // EPIC Game Store
   if (result.isEmpty()) {
