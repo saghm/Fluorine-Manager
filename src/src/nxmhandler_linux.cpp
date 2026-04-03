@@ -102,12 +102,15 @@ void updateMimeAppsList(const QString& path, const QString& mimeType,
 std::optional<NxmLink> NxmLink::parse(const QString& url)
 {
   const QUrl parsed(url);
-  if (!parsed.isValid() || parsed.scheme().compare("nxm", Qt::CaseInsensitive) != 0) {
+  const QString scheme = parsed.scheme().toLower();
+  if (!parsed.isValid() || (scheme != "nxm" && scheme != "modl")) {
+    log::debug("NxmLink::parse rejected scheme: '{}'", url);
     return {};
   }
 
   const QString gameDomain = parsed.host().trimmed();
   if (gameDomain.isEmpty()) {
+    log::debug("NxmLink::parse rejected empty host: '{}'", url);
     return {};
   }
 
@@ -115,6 +118,7 @@ std::optional<NxmLink> NxmLink::parse(const QString& url)
       parsed.path().split('/', Qt::SkipEmptyParts);
 
   if (parts.size() != 4 || parts[0] != "mods" || parts[2] != "files") {
+    log::debug("NxmLink::parse rejected path (expected /mods/ID/files/ID): '{}'", url);
     return {};
   }
 
@@ -123,22 +127,15 @@ std::optional<NxmLink> NxmLink::parse(const QString& url)
   const uint64_t modId  = parts[1].toULongLong(&modOk);
   const uint64_t fileId = parts[3].toULongLong(&fileOk);
   if (!modOk || !fileOk) {
+    log::debug("NxmLink::parse rejected non-numeric IDs: '{}'", url);
     return {};
   }
 
+  // key/expires are required for NXM but optional for modl:// (mod.pub).
   const QUrlQuery query(parsed);
-  const QString key = query.queryItemValue("key");
-  if (key.isEmpty()) {
-    return {};
-  }
-
-  bool expiresOk       = false;
-  const uint64_t expires = query.queryItemValue("expires").toULongLong(&expiresOk);
-  if (!expiresOk) {
-    return {};
-  }
-
-  const int userId = query.queryItemValue("user_id").toInt();
+  const QString key      = query.queryItemValue("key");
+  const uint64_t expires = query.queryItemValue("expires").toULongLong();
+  const int userId       = query.queryItemValue("user_id").toInt();
 
   return NxmLink{gameDomain, modId, fileId, key, expires, userId};
 }
@@ -229,7 +226,7 @@ void NxmHandlerLinux::registerHandler() const
                                   "Type=Application\n"
                                   "Name=Mod Organizer 2 NXM Handler\n"
                                   "Exec=%1\n"
-                                  "MimeType=x-scheme-handler/nxm;\n"
+                                  "MimeType=x-scheme-handler/nxm;x-scheme-handler/modl;\n"
                                   "NoDisplay=true\n").arg(execLine);
 
   if (!writeTextFile(desktopPath, desktop)) {
@@ -240,6 +237,10 @@ void NxmHandlerLinux::registerHandler() const
   updateMimeAppsList(configDir + "/mimeapps.list", "x-scheme-handler/nxm",
                      "mo2-nxm-handler.desktop");
   updateMimeAppsList(appsDir + "/mimeapps.list", "x-scheme-handler/nxm",
+                     "mo2-nxm-handler.desktop");
+  updateMimeAppsList(configDir + "/mimeapps.list", "x-scheme-handler/modl",
+                     "mo2-nxm-handler.desktop");
+  updateMimeAppsList(appsDir + "/mimeapps.list", "x-scheme-handler/modl",
                      "mo2-nxm-handler.desktop");
 
   const auto result =
@@ -302,13 +303,29 @@ void NxmHandlerLinux::processSocketData(QLocalSocket* socket)
       continue;
     }
 
+    log::info("received link on socket: {}", line);
+
+    // Try NXM-style parse first (nxm:// or modl:// with /mods/ID/files/ID path).
     const auto link = NxmLink::parse(line);
-    if (!link) {
-      log::warn("received invalid nxm url on socket: {}", line);
+    if (link) {
+      emit nxmReceived(*link);
       continue;
     }
 
-    emit nxmReceived(*link);
+    // modl:// direct download: modl://GAME/?url=<encoded-download-url>
+    const QUrl parsed(line);
+    if (parsed.isValid() && parsed.scheme().compare("modl", Qt::CaseInsensitive) == 0) {
+      const QUrlQuery query(parsed);
+      const QString downloadUrl = query.queryItemValue("url", QUrl::FullyDecoded);
+      if (!downloadUrl.isEmpty()) {
+        const QString gameDomain = parsed.host().trimmed();
+        log::info("modl direct download for '{}': {}", gameDomain, downloadUrl);
+        emit directDownloadReceived(downloadUrl, gameDomain);
+        continue;
+      }
+    }
+
+    log::warn("received unrecognized url on socket: {}", line);
   }
 }
 

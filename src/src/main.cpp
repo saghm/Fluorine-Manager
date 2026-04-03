@@ -205,6 +205,13 @@ int run(int argc, char* argv[])
                                    .arg(link.expires)
                                    .arg(link.user_id));
                          });
+
+        QObject::connect(&nxmHandler, &NxmHandlerLinux::directDownloadReceived,
+                         &app.core(), [&](const QString& url, const QString&) {
+                           QMetaObject::invokeMethod(&app.core(), [&app, url] {
+                             app.core().downloadManager()->startDownloadURLs(QStringList{url});
+                           }, Qt::QueuedConnection);
+                         });
       }
 #endif
 

@@ -41,6 +41,7 @@ public:
 
 signals:
   void nxmReceived(NxmLink link);
+  void directDownloadReceived(QString url, QString gameDomain);
 
 private:
   void onNewConnection();

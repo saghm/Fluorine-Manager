@@ -8,7 +8,7 @@ Icon=com.fluorine.manager
 Terminal=false
 Categories=Game;Utility;
 Keywords=mod;organizer;modding;skyrim;fallout;
-MimeType=x-scheme-handler/nxm;
+MimeType=x-scheme-handler/nxm;x-scheme-handler/modl;
 Actions=create-portable;list-instances;
 
 [Desktop Action create-portable]
