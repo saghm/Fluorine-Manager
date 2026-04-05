@@ -15,6 +15,7 @@
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QRegularExpression>
+#include <QCryptographicHash>
 #include <QStandardPaths>
 #include <QTemporaryFile>
 #include <QThread>
@@ -44,11 +45,56 @@ static const char* DOTNET_DESKTOP10_URL =
     "https://builds.dotnet.microsoft.com/dotnet/WindowsDesktop/10.0.2/"
     "windowsdesktop-runtime-10.0.2-win-x64.exe";
 
-static const QStringList WINETRICKS_VERBS = {
-    "vcrun2022", "dotnet6",        "dotnet7",    "dotnet8",
-    "dotnetdesktop6", "d3dcompiler_47", "d3dcompiler_43",
-    "d3dx9",     "d3dx11_43",      "xact",       "xact_x64",
-};
+// d3dcompiler_47: prebuilt DLLs from Mozilla's fxc2 repo (Windows 8.1 SDK redist).
+static const char* D3DCOMPILER_47_32_URL =
+    "https://github.com/mozilla/fxc2/raw/master/dll/d3dcompiler_47_32.dll";
+static const char* D3DCOMPILER_47_32_SHA256 =
+    "2ad0d4987fc4624566b190e747c9d95038443956ed816abfd1e2d389b5ec0851";
+static const char* D3DCOMPILER_47_64_URL =
+    "https://github.com/mozilla/fxc2/raw/master/dll/d3dcompiler_47.dll";
+static const char* D3DCOMPILER_47_64_SHA256 =
+    "4432bbd1a390874f3f0a503d45cc48d346abc3a8c0213c289f4b615bf0ee84f3";
+
+// DirectX End-User Runtimes (June 2010) — shared by d3dcompiler_43, d3dx9,
+// d3dx11_43, xact, xact_x64.
+static const char* DIRECTX_JUN2010_URL =
+    "https://files.holarse-linuxgaming.de/mirrors/microsoft/"
+    "directx_Jun2010_redist.exe";
+static const char* DIRECTX_JUN2010_SHA256 =
+    "8746ee1a84a083a90e37899d71d50d5c7c015e69688a466aa80447f011780c0d";
+
+// Visual C++ 2015-2022 redistributable.
+static const char* VCRUN2022_X86_URL = "https://aka.ms/vs/17/release/vc_redist.x86.exe";
+static const char* VCRUN2022_X64_URL = "https://aka.ms/vs/17/release/vc_redist.x64.exe";
+
+// .NET runtimes (x86 + x64 pairs for Wine prefix).
+static const char* DOTNET6_X86_URL =
+    "https://download.visualstudio.microsoft.com/download/pr/727d79cb-6a4c-4a6b-bd9e-af99ad62de0b/"
+    "5cd3550f1589a2f1b3a240c745dd1023/dotnet-runtime-6.0.36-win-x86.exe";
+static const char* DOTNET6_X64_URL =
+    "https://download.visualstudio.microsoft.com/download/pr/1a5fc50a-9222-4f33-8f73-3c78485a55c7/"
+    "1cb55899b68fcb9d98d206ba56f28b66/dotnet-runtime-6.0.36-win-x64.exe";
+
+static const char* DOTNET7_X86_URL =
+    "https://download.visualstudio.microsoft.com/download/pr/b2e820bd-b591-43df-ab10-1eeb7998cc18/"
+    "661ca79db4934c6247f5c7a809a62238/dotnet-runtime-7.0.20-win-x86.exe";
+static const char* DOTNET7_X64_URL =
+    "https://download.visualstudio.microsoft.com/download/pr/be7eaed0-4e32-472b-b53e-b08ac3433a22/"
+    "fc99a5977c57cbfb93b4afb401953818/dotnet-runtime-7.0.20-win-x64.exe";
+
+static const char* DOTNET8_X86_URL =
+    "https://download.visualstudio.microsoft.com/download/pr/3210417e-ab32-4d14-a152-1ad9a2fcfdd2/"
+    "da097cee5aa85bd79b6d593e3866fb7f/dotnet-runtime-8.0.12-win-x86.exe";
+static const char* DOTNET8_X64_URL =
+    "https://download.visualstudio.microsoft.com/download/pr/136f4593-e3cd-4d52-bc25-579cdf46e80c/"
+    "8b98c1347293b48c56c3a68d72f586a1/dotnet-runtime-8.0.12-win-x64.exe";
+
+static const char* DOTNET_DESKTOP6_X86_URL =
+    "https://download.visualstudio.microsoft.com/download/pr/cdc314df-4a4c-4709-868d-b974f336f77f/"
+    "acd5ab7637e456c8a3aa667661324f6d/windowsdesktop-runtime-6.0.36-win-x86.exe";
+static const char* DOTNET_DESKTOP6_X64_URL =
+    "https://download.visualstudio.microsoft.com/download/pr/f6b6c5dc-e02d-4738-9559-296e938dabcb/"
+    "b66d365729359df8e8ea131197715076/windowsdesktop-runtime-6.0.36-win-x64.exe";
 
 
 // Allowed drive letters to keep in the prefix.
@@ -129,6 +175,80 @@ static const char* WINE_SETTINGS_REG = R"(Windows Registry Editor Version 5.00
 "dinput.dll"="native,builtin"
 "dinput8"="native,builtin"
 "dinput8.dll"="native,builtin"
+"d3dcompiler_43"="native"
+"d3dcompiler_47"="native"
+"d3dx9_24"="native"
+"d3dx9_25"="native"
+"d3dx9_26"="native"
+"d3dx9_27"="native"
+"d3dx9_28"="native"
+"d3dx9_29"="native"
+"d3dx9_30"="native"
+"d3dx9_31"="native"
+"d3dx9_32"="native"
+"d3dx9_33"="native"
+"d3dx9_34"="native"
+"d3dx9_35"="native"
+"d3dx9_36"="native"
+"d3dx9_37"="native"
+"d3dx9_38"="native"
+"d3dx9_39"="native"
+"d3dx9_40"="native"
+"d3dx9_41"="native"
+"d3dx9_42"="native"
+"d3dx9_43"="native"
+"d3dx11_43"="native"
+"xaudio2_0"="native,builtin"
+"xaudio2_1"="native,builtin"
+"xaudio2_2"="native,builtin"
+"xaudio2_3"="native,builtin"
+"xaudio2_4"="native,builtin"
+"xaudio2_5"="native,builtin"
+"xaudio2_6"="native,builtin"
+"xaudio2_7"="native,builtin"
+"x3daudio1_0"="native,builtin"
+"x3daudio1_1"="native,builtin"
+"x3daudio1_2"="native,builtin"
+"x3daudio1_3"="native,builtin"
+"x3daudio1_4"="native,builtin"
+"x3daudio1_5"="native,builtin"
+"x3daudio1_6"="native,builtin"
+"x3daudio1_7"="native,builtin"
+"xapofx1_1"="native,builtin"
+"xapofx1_2"="native,builtin"
+"xapofx1_3"="native,builtin"
+"xapofx1_4"="native,builtin"
+"xapofx1_5"="native,builtin"
+"xactengine2_0"="native,builtin"
+"xactengine2_1"="native,builtin"
+"xactengine2_2"="native,builtin"
+"xactengine2_3"="native,builtin"
+"xactengine2_4"="native,builtin"
+"xactengine2_5"="native,builtin"
+"xactengine2_6"="native,builtin"
+"xactengine2_7"="native,builtin"
+"xactengine2_8"="native,builtin"
+"xactengine2_9"="native,builtin"
+"xactengine2_10"="native,builtin"
+"xactengine3_0"="native,builtin"
+"xactengine3_1"="native,builtin"
+"xactengine3_2"="native,builtin"
+"xactengine3_3"="native,builtin"
+"xactengine3_4"="native,builtin"
+"xactengine3_5"="native,builtin"
+"xactengine3_6"="native,builtin"
+"xactengine3_7"="native,builtin"
+"concrt140"="native,builtin"
+"msvcp140"="native,builtin"
+"msvcp140_1"="native,builtin"
+"msvcp140_2"="native,builtin"
+"msvcp140_atomic_wait"="native,builtin"
+"msvcp140_codecvt_ids"="native,builtin"
+"vcamp140"="native,builtin"
+"vccorlib140"="native,builtin"
+"vcomp140"="native,builtin"
+"vcruntime140"="native,builtin"
+"vcruntime140_1"="native,builtin"
 
 [HKEY_CURRENT_USER\Software\Wine]
 "ShowDotFiles"="Y"
@@ -288,14 +408,33 @@ void PrefixSetupRunner::buildStepList()
   addStep("drive_cleanup", "Clean Up Drive Letters",
           [this] { return stepDriveCleanup(); });
 
-  for (const QString& verb : WINETRICKS_VERBS) {
-    addStep("wt_" + verb, verb,
-            [this, verb] { return stepWinetricksVerb(verb); });
-  }
+  // DirectX DLL extraction (cab-based, no Wine needed).
+  addStep("d3dcompiler_47", "d3dcompiler_47",
+          [this] { return stepD3DCompiler47(); });
+  addStep("d3dcompiler_43", "d3dcompiler_43",
+          [this] { return stepD3DCompiler43(); });
+  addStep("d3dx9", "d3dx9",
+          [this] { return stepD3dx9(); });
+  addStep("d3dx11_43", "d3dx11_43",
+          [this] { return stepD3dx11_43(); });
+  addStep("xact", "XACT (32-bit)",
+          [this] { return stepXact(); });
+  addStep("xact_x64", "XACT (64-bit)",
+          [this] { return stepXact64(); });
 
+  // Runtime installers (run via Wine).
+  addStep("vcrun2022", "Visual C++ 2022",
+          [this] { return stepVcrun2022(); });
+  addStep("dotnet6", ".NET Runtime 6",
+          [this] { return stepDotNetInstallPair(DOTNET6_X86_URL, DOTNET6_X64_URL, ".NET 6"); });
+  addStep("dotnet7", ".NET Runtime 7",
+          [this] { return stepDotNetInstallPair(DOTNET7_X86_URL, DOTNET7_X64_URL, ".NET 7"); });
+  addStep("dotnet8", ".NET Runtime 8",
+          [this] { return stepDotNetInstallPair(DOTNET8_X86_URL, DOTNET8_X64_URL, ".NET 8"); });
+  addStep("dotnetdesktop6", ".NET Desktop Runtime 6",
+          [this] { return stepDotNetInstallPair(DOTNET_DESKTOP6_X86_URL, DOTNET_DESKTOP6_X64_URL, ".NET Desktop 6"); });
   addStep("dotnet9_sdk", ".NET 9 SDK",
           [this] { return stepDotNetInstall(DOTNET9_SDK_URL, "dotnet-sdk-9"); });
-
   addStep("dotnet_desktop10", ".NET Desktop Runtime 10",
           [this] { return stepDotNetInstall(DOTNET_DESKTOP10_URL, "dotnet-desktop-10"); });
 
@@ -321,10 +460,13 @@ void PrefixSetupRunner::start()
   m_cancelled.storeRelease(0);
 
   // Ensure tools are available before starting steps.
-  if (!ensureWinetricks() || !ensureCabextract()) {
+  // cabextract is needed for DirectX cab extraction and vcrun2022 workaround.
+  // winetricks is only needed for win11 mode (non-fatal if missing).
+  if (!ensureCabextract()) {
     emit finished(false);
     return;
   }
+  ensureWinetricks();  // Best-effort for win11 step.
 
   const int total = m_steps.size();
   bool allOk = true;
@@ -716,35 +858,413 @@ bool PrefixSetupRunner::stepDriveCleanup()
   return true;
 }
 
-bool PrefixSetupRunner::stepWinetricksVerb(const QString& verb)
-{
-  emit logMessage(QStringLiteral("Installing %1 via winetricks...").arg(verb));
+// ============================================================================
+// DirectX cab extraction helpers
+// ============================================================================
 
-  // Winetricks is a host bash script — do NOT wrap in SLR.
-  // It calls wine internally via $WINE/$WINESERVER env vars.
-  // Running it on the host ensures cabextract and other tools are visible.
-  const QString binDir   = fluorineBinDir();
+bool PrefixSetupRunner::ensureDirectXRedist(QString& redistPath)
+{
+  const QString cacheDir = fluorineCacheDir() + "/directx9";
+  QDir().mkpath(cacheDir);
+  redistPath = cacheDir + "/directx_Jun2010_redist.exe";
+
+  if (!QFileInfo::exists(redistPath)) {
+    emit logMessage("Downloading DirectX June 2010 redistributable...");
+    return downloadAndVerify(DIRECTX_JUN2010_URL, redistPath, DIRECTX_JUN2010_SHA256);
+  }
+
+  if (!verifySha256(redistPath, DIRECTX_JUN2010_SHA256)) {
+    emit logMessage("Cached redist has bad checksum, re-downloading...");
+    QFile::remove(redistPath);
+    return downloadAndVerify(DIRECTX_JUN2010_URL, redistPath, DIRECTX_JUN2010_SHA256);
+  }
+
+  return true;
+}
+
+bool PrefixSetupRunner::extractFromRedist(const QString& redistPath,
+                                          const QString& cabFilter,
+                                          const QString& dllFilter,
+                                          const QString& destDir)
+{
+  const QString tmpDir = fluorineTmpDir() + "/dxextract";
+  QDir().mkpath(tmpDir);
+
+  // Clean tmp dir.
+  QDir tmp(tmpDir);
+  for (const QString& f : tmp.entryList(QDir::Files))
+    tmp.remove(f);
+
+  const QString cabextractBin = fluorineBinDir() + "/cabextract";
+
+  // Stage 1: extract inner cab(s) matching filter from the outer redist.
+  int rc = runHostProcess(cabextractBin,
+      {"-d", tmpDir, "-L", "-F", cabFilter, redistPath});
+  if (rc != 0) {
+    m_steps.last().errorMessage =
+        QStringLiteral("cabextract failed (filter: %1, exit %2)").arg(cabFilter).arg(rc);
+    return false;
+  }
+
+  // Stage 2: extract DLL(s) from each inner cab.
+  const QStringList cabs = QDir(tmpDir).entryList({"*.cab"}, QDir::Files);
+  if (cabs.isEmpty()) {
+    m_steps.last().errorMessage =
+        QStringLiteral("No inner cab found for filter: %1").arg(cabFilter);
+    return false;
+  }
+
+  for (const QString& cab : cabs) {
+    rc = runHostProcess(cabextractBin,
+        {"-d", destDir, "-L", "-F", dllFilter, tmpDir + "/" + cab});
+    if (rc != 0) {
+      m_steps.last().errorMessage =
+          QStringLiteral("cabextract inner failed (filter: %1, exit %2)").arg(dllFilter).arg(rc);
+      return false;
+    }
+  }
+
+  // Clean up tmp.
+  QDir(tmpDir).removeRecursively();
+  return true;
+}
+
+// ============================================================================
+// DirectX DLL steps
+// ============================================================================
+
+bool PrefixSetupRunner::stepD3DCompiler47()
+{
+  emit logMessage("Installing d3dcompiler_47...");
+
+  const QString cacheDir = fluorineCacheDir() + "/d3dcompiler_47";
+  QDir().mkpath(cacheDir);
+
+  // On a win64 prefix (matching real Windows):
+  //   system32  = 64-bit DLLs
+  //   syswow64  = 32-bit DLLs
+  const QString dllDir64 = m_prefixPath + "/drive_c/windows/system32";
+  const QString dllDir32 = m_prefixPath + "/drive_c/windows/syswow64";
+
+  // 32-bit DLL → syswow64
+  {
+    const QString cached = cacheDir + "/d3dcompiler_47_32.dll";
+    if (!QFileInfo::exists(cached)) {
+      emit logMessage("Downloading d3dcompiler_47 (32-bit)...");
+      if (!downloadAndVerify(D3DCOMPILER_47_32_URL, cached, D3DCOMPILER_47_32_SHA256))
+        return false;
+    }
+    const QString dest = dllDir32 + "/d3dcompiler_47.dll";
+    QFile::remove(dest);
+    if (!QFile::copy(cached, dest)) {
+      m_steps.last().errorMessage = "Failed to copy d3dcompiler_47.dll to syswow64";
+      return false;
+    }
+  }
+
+  // 64-bit DLL → system32
+  {
+    const QString cached = cacheDir + "/d3dcompiler_47.dll";
+    if (!QFileInfo::exists(cached)) {
+      emit logMessage("Downloading d3dcompiler_47 (64-bit)...");
+      if (!downloadAndVerify(D3DCOMPILER_47_64_URL, cached, D3DCOMPILER_47_64_SHA256))
+        return false;
+    }
+    const QString dest = dllDir64 + "/d3dcompiler_47.dll";
+    QFile::remove(dest);
+    if (!QFile::copy(cached, dest)) {
+      m_steps.last().errorMessage = "Failed to copy d3dcompiler_47.dll to system32";
+      return false;
+    }
+  }
+
+  emit logMessage("d3dcompiler_47 installed");
+  return true;
+}
+
+bool PrefixSetupRunner::stepD3DCompiler43()
+{
+  emit logMessage("Installing d3dcompiler_43...");
+
+  QString redistPath;
+  if (!ensureDirectXRedist(redistPath))
+    return false;
+
+  const QString dllDir64 = m_prefixPath + "/drive_c/windows/system32";
+  const QString dllDir32 = m_prefixPath + "/drive_c/windows/syswow64";
+
+  emit logMessage("Extracting d3dcompiler_43 (32-bit)...");
+  if (!extractFromRedist(redistPath, "*d3dcompiler_43*x86*", "d3dcompiler_43.dll", dllDir32))
+    return false;
+
+  emit logMessage("Extracting d3dcompiler_43 (64-bit)...");
+  if (!extractFromRedist(redistPath, "*d3dcompiler_43*x64*", "d3dcompiler_43.dll", dllDir64))
+    return false;
+
+  emit logMessage("d3dcompiler_43 installed");
+  return true;
+}
+
+bool PrefixSetupRunner::stepD3dx9()
+{
+  emit logMessage("Installing d3dx9...");
+
+  QString redistPath;
+  if (!ensureDirectXRedist(redistPath))
+    return false;
+
+  const QString dllDir64 = m_prefixPath + "/drive_c/windows/system32";
+  const QString dllDir32 = m_prefixPath + "/drive_c/windows/syswow64";
+
+  emit logMessage("Extracting d3dx9 (32-bit)...");
+  if (!extractFromRedist(redistPath, "*d3dx9*x86*", "d3dx9*.dll", dllDir32))
+    return false;
+
+  emit logMessage("Extracting d3dx9 (64-bit)...");
+  if (!extractFromRedist(redistPath, "*d3dx9*x64*", "d3dx9*.dll", dllDir64))
+    return false;
+
+  emit logMessage("d3dx9 installed");
+  return true;
+}
+
+bool PrefixSetupRunner::stepD3dx11_43()
+{
+  emit logMessage("Installing d3dx11_43...");
+
+  QString redistPath;
+  if (!ensureDirectXRedist(redistPath))
+    return false;
+
+  const QString dllDir64 = m_prefixPath + "/drive_c/windows/system32";
+  const QString dllDir32 = m_prefixPath + "/drive_c/windows/syswow64";
+
+  emit logMessage("Extracting d3dx11_43 (32-bit)...");
+  if (!extractFromRedist(redistPath, "*d3dx11_43*x86*", "d3dx11_43.dll", dllDir32))
+    return false;
+
+  emit logMessage("Extracting d3dx11_43 (64-bit)...");
+  if (!extractFromRedist(redistPath, "*d3dx11_43*x64*", "d3dx11_43.dll", dllDir64))
+    return false;
+
+  emit logMessage("d3dx11_43 installed");
+  return true;
+}
+
+bool PrefixSetupRunner::stepXact()
+{
+  emit logMessage("Installing XACT (32-bit)...");
+
+  QString redistPath;
+  if (!ensureDirectXRedist(redistPath))
+    return false;
+
+  const QString dllDir32 = m_prefixPath + "/drive_c/windows/syswow64";
+
+  // Extract all xact-related cabs and DLLs.
+  for (const char* cabPat : {"*_xact_*x86*", "*_x3daudio_*x86*", "*_xaudio_*x86*"}) {
+    for (const char* dllPat : {"xactengine*.dll", "xaudio*.dll", "x3daudio*.dll", "xapofx*.dll"}) {
+      // Ignore failures for individual patterns — not all cabs contain all DLL types.
+      extractFromRedist(redistPath, cabPat, dllPat, dllDir32);
+    }
+  }
+
+  // Batch-register all xactengine and xaudio DLLs in a single regsvr32 call.
+  QStringList regDlls;
+
+  const QStringList xactDlls = QDir(dllDir32).entryList({"xactengine*.dll"}, QDir::Files);
+  regDlls.append(xactDlls);
+
+  for (int i = 0; i <= 7; ++i) {
+    const QString dll = QStringLiteral("xaudio2_%1.dll").arg(i);
+    if (QFileInfo::exists(dllDir32 + "/" + dll))
+      regDlls.append(dll);
+  }
+
+  if (!regDlls.isEmpty()) {
+    emit logMessage(QStringLiteral("Registering %1 DLLs...").arg(regDlls.size()));
+    QMap<QString, QString> env = baseWineEnv();
+    env["WINEDLLOVERRIDES"] = "mshtml=d";
+    QStringList args = {"regsvr32", "/S"};
+    args.append(regDlls);
+    runProcess(m_wineBin, args, env);
+  }
+
+  emit logMessage("XACT (32-bit) installed");
+  return true;
+}
+
+bool PrefixSetupRunner::stepXact64()
+{
+  emit logMessage("Installing XACT (64-bit)...");
+
+  QString redistPath;
+  if (!ensureDirectXRedist(redistPath))
+    return false;
+
+  const QString dllDir64 = m_prefixPath + "/drive_c/windows/system32";
+
+  // Extract all xact-related cabs and DLLs.
+  for (const char* cabPat : {"*_xact_*x64*", "*_x3daudio_*x64*", "*_xaudio_*x64*"}) {
+    for (const char* dllPat : {"xactengine*.dll", "xaudio*.dll", "x3daudio*.dll", "xapofx*.dll"}) {
+      extractFromRedist(redistPath, cabPat, dllPat, dllDir64);
+    }
+  }
+
+  // Batch-register all 64-bit xactengine and xaudio DLLs.
+  QStringList regDlls;
+
+  const QStringList xactDlls = QDir(dllDir64).entryList({"xactengine*.dll"}, QDir::Files);
+  regDlls.append(xactDlls);
+
+  for (int i = 0; i <= 7; ++i) {
+    const QString dll = QStringLiteral("xaudio2_%1.dll").arg(i);
+    if (QFileInfo::exists(dllDir64 + "/" + dll))
+      regDlls.append(dll);
+  }
+
+  if (!regDlls.isEmpty()) {
+    emit logMessage(QStringLiteral("Registering %1 DLLs...").arg(regDlls.size()));
+    QMap<QString, QString> env = baseWineEnv();
+    env["WINEDLLOVERRIDES"] = "mshtml=d";
+    QStringList args = {"regsvr32", "/S"};
+    args.append(regDlls);
+    runProcess(m_wineBin, args, env);
+  }
+
+  emit logMessage("XACT (64-bit) installed");
+  return true;
+}
+
+// ============================================================================
+// Runtime installer steps
+// ============================================================================
+
+bool PrefixSetupRunner::stepVcrun2022()
+{
+  emit logMessage("Installing Visual C++ 2022...");
+
+  const QString cacheDir = fluorineCacheDir() + "/vcrun2022";
+  const QString tmpDir   = fluorineTmpDir() + "/vcrun2022";
+  QDir().mkpath(cacheDir);
+  QDir().mkpath(tmpDir);
+
+  const QString dllDir64 = m_prefixPath + "/drive_c/windows/system32";
+  const QString dllDir32 = m_prefixPath + "/drive_c/windows/syswow64";
+  const QString cabextractBin = fluorineBinDir() + "/cabextract";
+
+  // Download x86 installer.
+  const QString x86Path = cacheDir + "/vc_redist.x86.exe";
+  if (!QFileInfo::exists(x86Path)) {
+    emit logMessage("Downloading vc_redist.x86.exe...");
+    if (!downloadFile(VCRUN2022_X86_URL, x86Path)) {
+      m_steps.last().errorMessage = "Failed to download vc_redist.x86.exe";
+      return false;
+    }
+  }
+
+  // Wine bug #57518 workaround: manually extract msvcp140.dll before running
+  // the installer, because the installer refuses to replace the builtin
+  // (builtin version number is higher).
+  emit logMessage("Extracting msvcp140.dll (32-bit)...");
+  runHostProcess(cabextractBin, {"--directory=" + tmpDir + "/win32", x86Path, "-F", "a10"});
+  runHostProcess(cabextractBin,
+      {"--directory=" + dllDir32, tmpDir + "/win32/a10", "-F", "msvcp140.dll"});
+
+  // Run 32-bit installer.
+  emit logMessage("Running vc_redist.x86.exe...");
+  QMap<QString, QString> env = baseWineEnv();
+  env["WINEDLLOVERRIDES"] = "mshtml=d";
+
+  int rc = runProcess(m_wineBin, {x86Path, "/install", "/quiet", "/norestart"}, env);
+  if (rc != 0) {
+    m_steps.last().errorMessage =
+        QStringLiteral("vc_redist.x86.exe failed (exit code %1)").arg(rc);
+    return false;
+  }
+
+  // Download and run x64 installer.
+  const QString x64Path = cacheDir + "/vc_redist.x64.exe";
+  if (!QFileInfo::exists(x64Path)) {
+    emit logMessage("Downloading vc_redist.x64.exe...");
+    if (!downloadFile(VCRUN2022_X64_URL, x64Path)) {
+      m_steps.last().errorMessage = "Failed to download vc_redist.x64.exe";
+      return false;
+    }
+  }
+
+  emit logMessage("Extracting msvcp140.dll (64-bit)...");
+  runHostProcess(cabextractBin, {"--directory=" + tmpDir + "/win64", x64Path, "-F", "a12"});
+  runHostProcess(cabextractBin,
+      {"--directory=" + dllDir64, tmpDir + "/win64/a12", "-F", "msvcp140.dll"});
+
+  emit logMessage("Running vc_redist.x64.exe...");
+  rc = runProcess(m_wineBin, {x64Path, "/install", "/quiet", "/norestart"}, env);
+  if (rc != 0) {
+    m_steps.last().errorMessage =
+        QStringLiteral("vc_redist.x64.exe failed (exit code %1)").arg(rc);
+    return false;
+  }
+
+  QDir(tmpDir).removeRecursively();
+  emit logMessage("Visual C++ 2022 installed");
+  return true;
+}
+
+bool PrefixSetupRunner::stepDotNetInstallPair(const QString& url32, const QString& url64,
+                                              const QString& name)
+{
   const QString cacheDir = fluorineCacheDir();
   QDir().mkpath(cacheDir);
 
-  const QProcessEnvironment sysEnv = QProcessEnvironment::systemEnvironment();
-  const QString origPath = sysEnv.contains("FLUORINE_ORIG_PATH")
-      ? sysEnv.value("FLUORINE_ORIG_PATH")
-      : sysEnv.value("PATH");
+  QMap<QString, QString> env = baseWineEnv();
+  env["WINEDLLOVERRIDES"] = "mshtml=d";
 
-  QMap<QString, QString> env;
-  env["PATH"]             = binDir + ":" + origPath;
-  env["WINE"]             = m_wineBin;
-  env["WINESERVER"]       = m_wineserverBin;
-  env["WINEPREFIX"]       = m_prefixPath;
-  env["WINETRICKS_CACHE"] = cacheDir;
+  // Install 32-bit runtime.
+  {
+    const QString filename = QUrl(url32).fileName();
+    const QString path     = cacheDir + "/" + filename;
 
-  const int rc = runHostProcessWithEnv(m_winetricksPath, {"-q", verb}, env);
-  if (rc != 0) {
-    m_steps.last().errorMessage =
-        QStringLiteral("winetricks %1 failed (exit code %2)").arg(verb).arg(rc);
-    return false;
+    if (!QFileInfo::exists(path)) {
+      emit logMessage(QStringLiteral("Downloading %1 (32-bit)...").arg(name));
+      if (!downloadFile(url32, path)) {
+        m_steps.last().errorMessage = QStringLiteral("Failed to download %1 x86").arg(name);
+        return false;
+      }
+    }
+
+    emit logMessage(QStringLiteral("Installing %1 (32-bit)...").arg(name));
+    const int rc = runProcess(m_wineBin, {path, "/install", "/quiet", "/norestart"}, env);
+    if (rc != 0) {
+      m_steps.last().errorMessage =
+          QStringLiteral("%1 x86 installer failed (exit code %2)").arg(name).arg(rc);
+      return false;
+    }
   }
+
+  // Install 64-bit runtime.
+  {
+    const QString filename = QUrl(url64).fileName();
+    const QString path     = cacheDir + "/" + filename;
+
+    if (!QFileInfo::exists(path)) {
+      emit logMessage(QStringLiteral("Downloading %1 (64-bit)...").arg(name));
+      if (!downloadFile(url64, path)) {
+        m_steps.last().errorMessage = QStringLiteral("Failed to download %1 x64").arg(name);
+        return false;
+      }
+    }
+
+    emit logMessage(QStringLiteral("Installing %1 (64-bit)...").arg(name));
+    const int rc = runProcess(m_wineBin, {path, "/install", "/quiet", "/norestart"}, env);
+    if (rc != 0) {
+      m_steps.last().errorMessage =
+          QStringLiteral("%1 x64 installer failed (exit code %2)").arg(name).arg(rc);
+      return false;
+    }
+  }
+
+  emit logMessage(QStringLiteral("%1 installed").arg(name));
   return true;
 }
 
@@ -797,13 +1317,11 @@ bool PrefixSetupRunner::stepGameDetection()
     return true;
   }
 
-  int applied = 0;
-  const QString tmpDir = fluorineTmpDir();
-  QDir().mkpath(tmpDir);
+  // Build a single .reg file with all game registry entries.
+  QString regContent = QStringLiteral("Windows Registry Editor Version 5.00\n\n");
+  int gameCount = 0;
 
   for (size_t i = 0; i < gameList.count; ++i) {
-    if (isCancelled()) break;
-
     const NakGame& game = gameList.games[i];
     if (!game.registry_path || !game.registry_value)
       continue;
@@ -816,37 +1334,52 @@ bool PrefixSetupRunner::stepGameDetection()
     // Convert Linux path to Wine Z: drive path with escaped backslashes.
     QString winePath = "Z:" + QString(installPath).replace('/', "\\\\");
 
-    const QString regContent = QStringLiteral(
-        "Windows Registry Editor Version 5.00\n\n"
+    regContent += QStringLiteral(
         "[HKEY_LOCAL_MACHINE\\%1]\n\"%2\"=\"%3\"\n\n"
-        "[HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node\\%4]\n\"%5\"=\"%6\"\n")
+        "[HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node\\%4]\n\"%5\"=\"%6\"\n\n")
         .arg(rPath, rVal, winePath,
              rPath.mid(rPath.indexOf('\\') + 1),
              rVal, winePath);
 
-    const QString regFile = tmpDir + QStringLiteral("/game_reg_%1.reg").arg(i);
-    QFile f(regFile);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
-      continue;
-    f.write(regContent.toUtf8());
-    f.close();
-
-    QMap<QString, QString> env = baseWineEnv();
-    env["WINEDLLOVERRIDES"] = "mshtml=d";
-    env["PROTON_USE_XALIA"] = "0";
-
-    emit logMessage(QStringLiteral("Applying registry for %1...").arg(gameName));
-    const int rc = runProcess(m_wineBin, {"regedit", regFile}, env);
-    QFile::remove(regFile);
-
-    if (rc == 0) {
-      ++applied;
-      emit logMessage(QStringLiteral("  -> %1").arg(installPath));
-    }
+    emit logMessage(QStringLiteral("  Found: %1 -> %2").arg(gameName, installPath));
+    ++gameCount;
   }
 
   nak_game_list_free(gameList);
-  emit logMessage(QStringLiteral("Configured %1 game(s) in registry").arg(applied));
+
+  if (gameCount == 0) {
+    emit logMessage("No games with valid registry paths");
+    return true;
+  }
+
+  // Write and import the combined .reg file in a single regedit call.
+  const QString tmpDir = fluorineTmpDir();
+  QDir().mkpath(tmpDir);
+
+  const QString regFile = tmpDir + "/game_registry.reg";
+  QFile f(regFile);
+  if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    m_steps.last().errorMessage = "Failed to write game registry file";
+    return false;
+  }
+  f.write(regContent.toUtf8());
+  f.close();
+
+  QMap<QString, QString> env = baseWineEnv();
+  env["WINEDLLOVERRIDES"] = "mshtml=d";
+  env["PROTON_USE_XALIA"] = "0";
+
+  emit logMessage(QStringLiteral("Applying registry for %1 game(s)...").arg(gameCount));
+  const int rc = runProcess(m_wineBin, {"regedit", regFile}, env);
+  QFile::remove(regFile);
+
+  if (rc != 0) {
+    m_steps.last().errorMessage =
+        QStringLiteral("wine regedit failed (exit code %1)").arg(rc);
+    return false;
+  }
+
+  emit logMessage(QStringLiteral("Configured %1 game(s) in registry").arg(gameCount));
   return true;
 }
 
@@ -888,18 +1421,17 @@ bool PrefixSetupRunner::stepWin11Mode()
   emit logMessage("Setting Windows 11 mode...");
 
   const QString binDir = fluorineBinDir();
-  const QProcessEnvironment sysEnv = QProcessEnvironment::systemEnvironment();
-  const QString origPath = sysEnv.contains("FLUORINE_ORIG_PATH")
-      ? sysEnv.value("FLUORINE_ORIG_PATH")
-      : sysEnv.value("PATH");
 
   QMap<QString, QString> env;
   env["WINE"]       = m_wineBin;
   env["WINESERVER"] = m_wineserverBin;
   env["WINEPREFIX"] = m_prefixPath;
-  env["PATH"]       = binDir + ":" + origPath;
 
-  const int rc = runHostProcessWithEnv(m_winetricksPath, {"-q", "win11"}, env);
+  const QString shellCmd = QStringLiteral(
+      "export PATH='%1':\"$PATH\"; exec '%2' -q win11")
+      .arg(binDir, m_winetricksPath);
+
+  const int rc = runProcess("/bin/sh", {"-c", shellCmd}, env);
   if (rc != 0) {
     m_steps.last().errorMessage =
         QStringLiteral("winetricks win11 failed (exit code %1)").arg(rc);
@@ -973,6 +1505,37 @@ bool PrefixSetupRunner::downloadFile(const QString& url, const QString& destPath
   file.write(reply->readAll());
   file.close();
   reply->deleteLater();
+  return true;
+}
+
+bool PrefixSetupRunner::verifySha256(const QString& filePath, const QString& expectedHex)
+{
+  QFile file(filePath);
+  if (!file.open(QIODevice::ReadOnly))
+    return false;
+
+  QCryptographicHash hash(QCryptographicHash::Sha256);
+  if (!hash.addData(&file))
+    return false;
+
+  return hash.result().toHex() == expectedHex.toLatin1();
+}
+
+bool PrefixSetupRunner::downloadAndVerify(const QString& url, const QString& destPath,
+                                          const QString& expectedSha256)
+{
+  if (!downloadFile(url, destPath)) {
+    m_steps.last().errorMessage = QStringLiteral("Failed to download %1").arg(url);
+    return false;
+  }
+
+  if (!verifySha256(destPath, expectedSha256)) {
+    QFile::remove(destPath);
+    m_steps.last().errorMessage =
+        QStringLiteral("SHA256 mismatch for %1").arg(QUrl(url).fileName());
+    return false;
+  }
+
   return true;
 }
 

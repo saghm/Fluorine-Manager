@@ -89,15 +89,31 @@ private:
   // -- step implementations --------------------------------------------------
   bool stepProtonInit();
   bool stepDriveCleanup();
-  bool stepWinetricksVerb(const QString& verb);
+  bool stepD3DCompiler47();
+  bool stepD3DCompiler43();
+  bool stepD3dx9();
+  bool stepD3dx11_43();
+  bool stepXact();
+  bool stepXact64();
+  bool stepVcrun2022();
   bool stepDotNetInstall(const QString& url, const QString& name);
+  bool stepDotNetInstallPair(const QString& url32, const QString& url64,
+                             const QString& name);
   bool stepGameDetection();
   bool stepWineRegistry();
   bool stepWin11Mode();
   bool stepPostSetup();
 
+  // -- DirectX cab extraction helpers ----------------------------------------
+  bool ensureDirectXRedist(QString& redistPath);
+  bool extractFromRedist(const QString& redistPath, const QString& cabFilter,
+                         const QString& dllFilter, const QString& destDir);
+
   // -- tool management -------------------------------------------------------
   bool downloadFile(const QString& url, const QString& destPath);
+  bool downloadAndVerify(const QString& url, const QString& destPath,
+                         const QString& expectedSha256);
+  static bool verifySha256(const QString& filePath, const QString& expectedHex);
   bool ensure7zz();
   bool ensureWinetricks();
   bool ensureCabextract();
