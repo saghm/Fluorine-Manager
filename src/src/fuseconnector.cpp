@@ -176,6 +176,7 @@ void setupFuseOps(struct fuse_lowlevel_ops* ops)
   ops->mkdir   = mo2_mkdir;
   ops->release = mo2_release;
   ops->releasedir = mo2_releasedir;
+  ops->access  = mo2_access;
 }
 
 }  // namespace

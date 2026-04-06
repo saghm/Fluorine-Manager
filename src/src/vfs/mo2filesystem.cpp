@@ -30,6 +30,7 @@ void fillStatForFile(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid,
                      uint64_t size,
                      const std::chrono::system_clock::time_point& mtime,
                      const std::string& real_path = {});
+void invalidateLookupCache(Mo2FsContext* ctx, const std::string& dirPath);
 
 void maybeLogCounters(Mo2FsContext* ctx)
 {
@@ -116,6 +117,72 @@ void invalidateDirCache(Mo2FsContext* ctx, const std::string& dirPath)
     ctx->dir_cache.erase(dirPath);
     ctx->readdir_blob_cache.erase(dirPath);
     ctx->readdirplus_blob_cache.erase(dirPath);
+  }
+  invalidateLookupCache(ctx, dirPath);
+}
+
+// Invalidate lookup cache entries for a directory whose children changed.
+// The lookup cache is keyed by (parent_ino, normalized_child_name), so we
+// need to remove all entries with the given parent inode.
+void invalidateLookupCache(Mo2FsContext* ctx, const std::string& dirPath)
+{
+  if (ctx == nullptr) {
+    return;
+  }
+
+  fuse_ino_t parentIno = 0;
+  if (dirPath.empty()) {
+    parentIno = 1;  // root
+  } else {
+    std::shared_lock lock(ctx->inode_mutex);
+    parentIno = ctx->inodes->get(dirPath);
+  }
+
+  if (parentIno == 0) {
+    return;
+  }
+
+  std::scoped_lock lock(ctx->lookup_cache_mutex);
+  for (auto it = ctx->lookup_cache.begin(); it != ctx->lookup_cache.end();) {
+    if (it->first.first == parentIno) {
+      it = ctx->lookup_cache.erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
+
+// Clear all node_cache entries whose path starts with the given prefix.
+// Must be called while tree_mutex is held exclusively (during mutations).
+void invalidateNodeCache(Mo2FsContext* ctx, const std::string& path)
+{
+  if (ctx == nullptr) {
+    return;
+  }
+
+  // Look up inode for this path and remove its cache entry.
+  fuse_ino_t ino = 0;
+  {
+    std::shared_lock lock(ctx->inode_mutex);
+    ino = ctx->inodes->get(path);
+  }
+  if (ino != 0) {
+    ctx->node_cache.erase(ino);
+  }
+
+  // Also invalidate the parent directory's cache entry since its children
+  // map has changed (new/removed child).
+  const auto slash = path.rfind('/');
+  if (slash != std::string::npos) {
+    const std::string parentPath = path.substr(0, slash);
+    fuse_ino_t parentIno = 0;
+    {
+      std::shared_lock lock(ctx->inode_mutex);
+      parentIno = ctx->inodes->get(parentPath);
+    }
+    if (parentIno != 0) {
+      ctx->node_cache.erase(parentIno);
+    }
   }
 }
 
@@ -222,6 +289,93 @@ NodeSnapshot snapshotForPath(const Mo2FsContext* ctx, const std::string& path)
   }
 
   return snap;
+}
+
+// Fill a snapshot from an already-resolved VfsNode (caller holds tree_mutex shared).
+void snapshotFromNode(const VfsNode* node, NodeSnapshot& snap)
+{
+  snap.found        = true;
+  snap.is_directory = node->is_directory;
+  if (!node->is_directory) {
+    snap.real_path  = node->file_info.real_path;
+    snap.size       = node->file_info.size;
+    snap.mtime      = node->file_info.mtime;
+    snap.is_backing = node->file_info.is_backing;
+  }
+}
+
+// Resolve a parent inode to its VfsNode*, using the node_cache for O(1) hits.
+// Caller must hold tree_mutex (shared).  Falls back to tree walk on cache miss
+// and populates the cache.
+const VfsNode* resolveByInode(Mo2FsContext* ctx, fuse_ino_t ino)
+{
+  if (ino == 1) {
+    return &ctx->tree->root;
+  }
+
+  // Check node_cache (fast path — no splitPath, no tree walk)
+  auto cacheIt = ctx->node_cache.find(ino);
+  if (cacheIt != ctx->node_cache.end()) {
+    return cacheIt->second;
+  }
+
+  // Cache miss — resolve via inode→path→tree walk
+  std::string path;
+  {
+    std::shared_lock ilock(ctx->inode_mutex);
+    path = ctx->inodes->getPath(ino);
+  }
+  if (path.empty()) {
+    return nullptr;
+  }
+
+  const VfsNode* node = ctx->tree->root.resolve(splitPath(path));
+  if (node != nullptr) {
+    // Safe: we hold tree_mutex shared, and mutations hold it exclusively
+    // so they can clear stale entries before any pointer becomes dangling.
+    const_cast<std::unordered_map<fuse_ino_t, const VfsNode*>&>(ctx->node_cache)[ino] = node;
+  }
+  return node;
+}
+
+// Combined lookup: resolves parent by inode (cached), looks up child in one
+// hash probe, returns canonical name + snapshot.  Single tree_mutex acquisition.
+struct LookupResult
+{
+  bool found         = false;
+  std::string canonical_name;
+  NodeSnapshot snap;
+};
+
+LookupResult lookupChild(Mo2FsContext* ctx, fuse_ino_t parentIno, const char* name)
+{
+  LookupResult result;
+  std::shared_lock lock(ctx->tree_mutex);
+
+  const VfsNode* parent = resolveByInode(ctx, parentIno);
+  if (parent == nullptr || !parent->is_directory) {
+    return result;
+  }
+
+  const std::string key = normalizeForLookup(name);
+
+  // Get canonical display name
+  auto nameIt = parent->dir_info.display_names.find(key);
+  result.canonical_name = (nameIt != parent->dir_info.display_names.end())
+                              ? nameIt->second
+                              : std::string(name);
+
+  // Look up child node — single hash probe
+  auto childIt = parent->dir_info.children.find(key);
+  if (childIt == parent->dir_info.children.end()) {
+    return result;
+  }
+
+  const VfsNode* child = childIt->second.get();
+  result.found = true;
+  snapshotFromNode(child, result.snap);
+
+  return result;
 }
 
 struct ChildSnapshot
@@ -556,6 +710,7 @@ void updateFileNode(Mo2FsContext* ctx, const std::string& relative,
   std::unique_lock lock(ctx->tree_mutex);
   ctx->tree->root.insertFile(splitPath(relative), realPath, ec ? 0 : size, mtime,
                              origin);
+  invalidateNodeCache(ctx, relative);
 }
 
 }  // namespace
@@ -643,28 +798,53 @@ void mo2_lookup(fuse_req_t req, fuse_ino_t parent, const char* name)
   ctx->lookup_count.fetch_add(1, std::memory_order_relaxed);
   maybeLogCounters(ctx);
 
+  // Fast path: check userspace lookup cache.  The kernel FUSE dcache is
+  // case-sensitive, so Wine's different-case probes ("Shaders", "shaders")
+  // each miss the kernel cache and reach us.  Our cache keys on normalized
+  // (lowercased) name so all case variants hit on the second probe.
+  const std::string normName = normalizeForLookup(name);
+  const auto cacheKey = std::make_pair(parent, normName);
+  {
+    std::scoped_lock lock(ctx->lookup_cache_mutex);
+    auto it = ctx->lookup_cache.find(cacheKey);
+    if (it != ctx->lookup_cache.end()) {
+      // Cache hit — reply directly, no tree/inode locks needed
+      fuse_reply_entry(req, &it->second.entry);
+      return;
+    }
+  }
+
+  // Cache miss — do the full lookup
+  const auto lr = lookupChild(ctx, parent, name);
+
+  if (!lr.found) {
+    struct fuse_entry_param e;
+    std::memset(&e, 0, sizeof(e));
+    e.ino           = 0;
+    e.attr_timeout  = NEGATIVE_TTL_SECONDS;
+    e.entry_timeout = NEGATIVE_TTL_SECONDS;
+
+    // Cache negative results too (Wine probes many non-existent paths)
+    {
+      std::scoped_lock lock(ctx->lookup_cache_mutex);
+      Mo2FsContext::LookupCacheEntry lce;
+      lce.child_ino = 0;
+      lce.entry     = e;
+      ctx->lookup_cache[cacheKey] = lce;
+    }
+
+    fuse_reply_entry(req, &e);
+    return;
+  }
+
+  // Build child path for inode allocation
   bool ok = false;
   const std::string parentPath = inodeToPath(ctx, parent, &ok);
   if (!ok) {
     fuse_reply_err(req, ENOENT);
     return;
   }
-
-  // Use the tree's canonical (mod-provided) case for the child name so that
-  // inode paths match the mod's directory/file casing rather than Wine's.
-  const std::string canonical = canonicalChildName(ctx, parentPath, name);
-  const std::string childPath = joinPath(parentPath, canonical);
-  const auto snap             = snapshotForPath(ctx, childPath);
-  if (!snap.found) {
-    samplePathStat(ctx, "lookup", childPath, true);
-    struct fuse_entry_param e;
-    std::memset(&e, 0, sizeof(e));
-    e.ino           = 0;
-    e.attr_timeout  = NEGATIVE_TTL_SECONDS;
-    e.entry_timeout = NEGATIVE_TTL_SECONDS;
-    fuse_reply_entry(req, &e);
-    return;
-  }
+  const std::string childPath = joinPath(parentPath, lr.canonical_name);
   samplePathStat(ctx, "lookup", childPath, false);
 
   fuse_ino_t childIno = 0;
@@ -677,7 +857,41 @@ void mo2_lookup(fuse_req_t req, fuse_ino_t parent, const char* name)
     childIno = ctx->inodes->getOrCreate(childPath);
   }
 
-  replyEntryFromSnapshot(req, ctx, childIno, snap);
+  // Cache the child node pointer for future getattr/open
+  {
+    std::shared_lock lock(ctx->tree_mutex);
+    const VfsNode* parentNode = resolveByInode(ctx, parent);
+    if (parentNode != nullptr && parentNode->is_directory) {
+      const std::string key = normalizeForLookup(lr.canonical_name);
+      auto it = parentNode->dir_info.children.find(key);
+      if (it != parentNode->dir_info.children.end()) {
+        const_cast<std::unordered_map<fuse_ino_t, const VfsNode*>&>(ctx->node_cache)[childIno] = it->second.get();
+      }
+    }
+  }
+
+  // Build the entry_param and cache it for future case-variant lookups
+  struct fuse_entry_param e;
+  std::memset(&e, 0, sizeof(e));
+  e.ino           = childIno;
+  e.attr_timeout  = TTL_SECONDS;
+  e.entry_timeout = TTL_SECONDS;
+  if (lr.snap.is_directory) {
+    fillStatForDir(&e.attr, childIno, ctx->uid, ctx->gid);
+  } else {
+    fillStatForFile(&e.attr, childIno, ctx->uid, ctx->gid, lr.snap.size, lr.snap.mtime,
+                    lr.snap.real_path);
+  }
+
+  {
+    std::scoped_lock lock(ctx->lookup_cache_mutex);
+    Mo2FsContext::LookupCacheEntry lce;
+    lce.child_ino = childIno;
+    lce.entry     = e;
+    ctx->lookup_cache[cacheKey] = lce;
+  }
+
+  fuse_reply_entry(req, &e);
 }
 
 void mo2_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* /*fi*/)
@@ -716,18 +930,16 @@ void mo2_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* /*fi*/)
     return;
   }
 
-  bool ok = false;
-  const std::string path = inodeToPath(ctx, ino, &ok);
-  if (!ok) {
-    fuse_reply_err(req, ENOENT);
-    return;
-  }
-  samplePathStat(ctx, "getattr", path);
-
-  const auto snap = snapshotForPath(ctx, path);
-  if (!snap.found) {
-    fuse_reply_err(req, ENOENT);
-    return;
+  // Use node cache for O(1) resolution instead of splitPath + full tree walk
+  NodeSnapshot snap;
+  {
+    std::shared_lock lock(ctx->tree_mutex);
+    const VfsNode* node = resolveByInode(ctx, ino);
+    if (node == nullptr) {
+      fuse_reply_err(req, ENOENT);
+      return;
+    }
+    snapshotFromNode(node, snap);
   }
 
   struct stat st;
@@ -993,10 +1205,16 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
     return;
   }
 
-  const auto snap = snapshotForPath(ctx, path);
-  if (!snap.found || snap.is_directory) {
-    fuse_reply_err(req, ENOENT);
-    return;
+  // Use node cache for O(1) snapshot instead of full tree walk
+  NodeSnapshot snap;
+  {
+    std::shared_lock lock(ctx->tree_mutex);
+    const VfsNode* node = resolveByInode(ctx, ino);
+    if (node == nullptr || node->is_directory) {
+      fuse_reply_err(req, ENOENT);
+      return;
+    }
+    snapshotFromNode(node, snap);
   }
 
   std::string realPath = snap.real_path;
@@ -1283,6 +1501,7 @@ void mo2_create(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t mode
   {
     std::unique_lock lock(ctx->tree_mutex);
     ++ctx->tree->file_count;
+    invalidateNodeCache(ctx, relative);
   }
 
   fuse_ino_t newIno;
@@ -1363,6 +1582,7 @@ void mo2_rename(fuse_req_t req, fuse_ino_t parent, const char* name,
 
   {
     std::unique_lock lock(ctx->tree_mutex);
+    invalidateNodeCache(ctx, oldRelative);
     ctx->tree->root.removeFromTree(splitPath(oldRelative));
 
     if (oldSnap.is_directory) {
@@ -1374,6 +1594,7 @@ void mo2_rename(fuse_req_t req, fuse_ino_t parent, const char* name,
       ctx->tree->root.insertFile(splitPath(newRelative), real, oldSnap.size,
                                  oldSnap.mtime, "Staging");
     }
+    invalidateNodeCache(ctx, newRelative);
   }
 
   {
@@ -1625,6 +1846,7 @@ void mo2_unlink(fuse_req_t req, fuse_ino_t parent, const char* name)
 
   {
     std::unique_lock lock(ctx->tree_mutex);
+    invalidateNodeCache(ctx, relative);
     if (ctx->tree->root.removeFromTree(splitPath(relative))) {
       ctx->tree->file_count = ctx->tree->file_count > 0 ? ctx->tree->file_count - 1 : 0;
     }
@@ -1659,6 +1881,7 @@ void mo2_mkdir(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t /*mod
     std::unique_lock lock(ctx->tree_mutex);
     ctx->tree->root.insertDirectory(splitPath(relative));
     ++ctx->tree->dir_count;
+    invalidateNodeCache(ctx, relative);
   }
   invalidateDirCache(ctx, parentPath);
 
@@ -1757,4 +1980,52 @@ void mo2_ioctl(fuse_req_t req, fuse_ino_t /*ino*/, unsigned int cmd, void* /*arg
   }
 
   fuse_reply_err(req, ENOTTY);
+}
+
+void mo2_access(fuse_req_t req, fuse_ino_t ino, int mask)
+{
+  Mo2FsContext* ctx = getContext(req);
+  if (ctx == nullptr) {
+    fuse_reply_err(req, EINVAL);
+    return;
+  }
+
+  // Root always exists
+  if (ino == 1) {
+    fuse_reply_err(req, 0);
+    return;
+  }
+
+  // Use node cache for O(1) existence check — no splitPath or tree walk needed.
+  {
+    std::shared_lock lock(ctx->tree_mutex);
+    const VfsNode* node = resolveByInode(ctx, ino);
+    if (node == nullptr) {
+      fuse_reply_err(req, ENOENT);
+      return;
+    }
+
+    // W_OK: only allow for files we can write to (non-backing, non-directory)
+    if ((mask & W_OK) != 0 && (node->is_directory || node->file_info.is_backing)) {
+      fuse_reply_err(req, EACCES);
+      return;
+    }
+  }
+
+  // X_OK on regular files: check real file permissions
+  if ((mask & X_OK) != 0) {
+    std::shared_lock lock(ctx->tree_mutex);
+    const VfsNode* node = resolveByInode(ctx, ino);
+    if (node != nullptr && !node->is_directory && !node->file_info.real_path.empty()) {
+      struct stat st;
+      if (::stat(node->file_info.real_path.c_str(), &st) == 0) {
+        if ((st.st_mode & S_IXUSR) == 0) {
+          fuse_reply_err(req, EACCES);
+          return;
+        }
+      }
+    }
+  }
+
+  fuse_reply_err(req, 0);
 }

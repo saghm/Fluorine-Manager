@@ -24,6 +24,10 @@ struct Mo2FsContext
   std::unique_ptr<InodeTable> inodes;
   mutable std::shared_mutex inode_mutex;
 
+  // Fast inode→VfsNode* cache.  Pointers are valid while tree_mutex is held
+  // (shared for reads).  Invalidated under exclusive tree_mutex during mutations.
+  std::unordered_map<fuse_ino_t, const VfsNode*> node_cache;  // protected by tree_mutex
+
   std::unique_ptr<OverwriteManager> overwrite;
   std::shared_ptr<TrackedWrites> tracked_writes;
 
@@ -74,6 +78,27 @@ struct Mo2FsContext
   };
   std::unordered_map<fuse_ino_t, CachedAttr> attr_cache;
   mutable std::mutex attr_cache_mutex;
+
+  // Userspace lookup cache: (parent_ino, normalized_child_name) → (child_ino, entry_param).
+  // The kernel FUSE dcache is case-sensitive, but Wine probes the same directory
+  // with many case variants ("Shaders", "shaders", "SHADERS").  Each variant is a
+  // kernel dcache miss that reaches userspace.  This cache makes those re-lookups
+  // lock-free (no tree_mutex, no inode_mutex).
+  struct LookupCacheEntry
+  {
+    fuse_ino_t child_ino = 0;
+    struct fuse_entry_param entry{};
+  };
+  struct PairHash {
+    size_t operator()(const std::pair<fuse_ino_t, std::string>& p) const {
+      size_t h1 = std::hash<fuse_ino_t>{}(p.first);
+      size_t h2 = std::hash<std::string>{}(p.second);
+      return h1 ^ (h2 * 0x9e3779b97f4a7c15ULL + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
+    }
+  };
+  std::unordered_map<std::pair<fuse_ino_t, std::string>, LookupCacheEntry, PairHash> lookup_cache;
+  mutable std::mutex lookup_cache_mutex;
+
   std::atomic<uint64_t> next_dh{1};
   std::atomic<uint64_t> lookup_count{0};
   std::atomic<uint64_t> getattr_count{0};
@@ -126,5 +151,6 @@ void mo2_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void* arg,
                struct fuse_file_info* fi, unsigned flags, const void* in_buf,
                size_t in_bufsz, size_t out_bufsz);
 #endif
+void mo2_access(fuse_req_t req, fuse_ino_t ino, int mask);
 
 #endif
