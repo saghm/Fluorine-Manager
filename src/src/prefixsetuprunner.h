@@ -90,12 +90,9 @@ private:
   bool stepProtonInit();
   bool stepDriveCleanup();
   bool stepD3DCompiler47();
-  bool stepD3DCompiler43();
-  bool stepD3dx9();
-  bool stepD3dx11_43();
-  bool stepXact();
-  bool stepXact64();
+  bool stepDirectXRuntime();
   bool stepVcrun2022();
+  bool stepDotNetRuntimes();
   bool stepDotNetInstall(const QString& url, const QString& name);
   bool stepDotNetInstallPair(const QString& url32, const QString& url64,
                              const QString& name);

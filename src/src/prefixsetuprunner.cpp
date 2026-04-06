@@ -37,13 +37,13 @@ static const char* CABEXTRACT_URL =
 static const char* SEVENZIP_URL =
     "https://github.com/ip7z/7zip/releases/download/26.00/7z2600-linux-x86.tar.xz";
 
-static const char* DOTNET9_SDK_URL =
-    "https://builds.dotnet.microsoft.com/dotnet/Sdk/9.0.310/"
-    "dotnet-sdk-9.0.310-win-x64.exe";
+static const char* DOTNET9_RUNTIME_URL =
+    "https://builds.dotnet.microsoft.com/dotnet/Runtime/9.0.14/"
+    "dotnet-runtime-9.0.14-win-x64.exe";
 
-static const char* DOTNET_DESKTOP10_URL =
-    "https://builds.dotnet.microsoft.com/dotnet/WindowsDesktop/10.0.2/"
-    "windowsdesktop-runtime-10.0.2-win-x64.exe";
+static const char* DOTNET10_SDK_URL =
+    "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.201/"
+    "dotnet-sdk-10.0.201-win-x64.exe";
 
 // d3dcompiler_47: prebuilt DLLs from Mozilla's fxc2 repo (Windows 8.1 SDK redist).
 static const char* D3DCOMPILER_47_32_URL =
@@ -175,6 +175,7 @@ static const char* WINE_SETTINGS_REG = R"(Windows Registry Editor Version 5.00
 "dinput.dll"="native,builtin"
 "dinput8"="native,builtin"
 "dinput8.dll"="native,builtin"
+"d3dcompiler_42"="native"
 "d3dcompiler_43"="native"
 "d3dcompiler_47"="native"
 "d3dx9_24"="native"
@@ -197,7 +198,23 @@ static const char* WINE_SETTINGS_REG = R"(Windows Registry Editor Version 5.00
 "d3dx9_41"="native"
 "d3dx9_42"="native"
 "d3dx9_43"="native"
+"d3dx10_33"="native"
+"d3dx10_34"="native"
+"d3dx10_35"="native"
+"d3dx10_36"="native"
+"d3dx10_37"="native"
+"d3dx10_38"="native"
+"d3dx10_39"="native"
+"d3dx10_40"="native"
+"d3dx10_41"="native"
+"d3dx10_42"="native"
+"d3dx10_43"="native"
+"d3dx11_42"="native"
 "d3dx11_43"="native"
+"xinput1_1"="native"
+"xinput1_2"="native"
+"xinput1_3"="native"
+"xinput9_1_0"="native"
 "xaudio2_0"="native,builtin"
 "xaudio2_1"="native,builtin"
 "xaudio2_2"="native,builtin"
@@ -408,35 +425,19 @@ void PrefixSetupRunner::buildStepList()
   addStep("drive_cleanup", "Clean Up Drive Letters",
           [this] { return stepDriveCleanup(); });
 
-  // DirectX DLL extraction (cab-based, no Wine needed).
-  addStep("d3dcompiler_47", "d3dcompiler_47",
-          [this] { return stepD3DCompiler47(); });
-  addStep("d3dcompiler_43", "d3dcompiler_43",
-          [this] { return stepD3DCompiler43(); });
-  addStep("d3dx9", "d3dx9",
-          [this] { return stepD3dx9(); });
-  addStep("d3dx11_43", "d3dx11_43",
-          [this] { return stepD3dx11_43(); });
-  addStep("xact", "XACT (32-bit)",
-          [this] { return stepXact(); });
-  addStep("xact_x64", "XACT (64-bit)",
-          [this] { return stepXact64(); });
+  // DirectX DLL extraction (cab-based, no Wine needed for most).
+  addStep("directx_runtime", "DirectX Runtimes",
+          [this] { return stepDirectXRuntime(); });
 
   // Runtime installers (run via Wine).
   addStep("vcrun2022", "Visual C++ 2022",
           [this] { return stepVcrun2022(); });
-  addStep("dotnet6", ".NET Runtime 6",
-          [this] { return stepDotNetInstallPair(DOTNET6_X86_URL, DOTNET6_X64_URL, ".NET 6"); });
-  addStep("dotnet7", ".NET Runtime 7",
-          [this] { return stepDotNetInstallPair(DOTNET7_X86_URL, DOTNET7_X64_URL, ".NET 7"); });
-  addStep("dotnet8", ".NET Runtime 8",
-          [this] { return stepDotNetInstallPair(DOTNET8_X86_URL, DOTNET8_X64_URL, ".NET 8"); });
   addStep("dotnetdesktop6", ".NET Desktop Runtime 6",
           [this] { return stepDotNetInstallPair(DOTNET_DESKTOP6_X86_URL, DOTNET_DESKTOP6_X64_URL, ".NET Desktop 6"); });
-  addStep("dotnet9_sdk", ".NET 9 SDK",
-          [this] { return stepDotNetInstall(DOTNET9_SDK_URL, "dotnet-sdk-9"); });
-  addStep("dotnet_desktop10", ".NET Desktop Runtime 10",
-          [this] { return stepDotNetInstall(DOTNET_DESKTOP10_URL, "dotnet-desktop-10"); });
+  addStep("dotnet_runtimes", ".NET Runtimes (6-9)",
+          [this] { return stepDotNetRuntimes(); });
+  addStep("dotnet10_sdk", ".NET 10 SDK",
+          [this] { return stepDotNetInstall(DOTNET10_SDK_URL, ".NET 10 SDK"); });
 
   addStep("game_detection", "Auto-Detect Games",
           [this] { return stepGameDetection(); });
@@ -982,157 +983,104 @@ bool PrefixSetupRunner::stepD3DCompiler47()
   return true;
 }
 
-bool PrefixSetupRunner::stepD3DCompiler43()
+bool PrefixSetupRunner::stepDirectXRuntime()
 {
-  emit logMessage("Installing d3dcompiler_43...");
-
-  QString redistPath;
-  if (!ensureDirectXRedist(redistPath))
-    return false;
+  emit logMessage("Installing DirectX runtimes...");
 
   const QString dllDir64 = m_prefixPath + "/drive_c/windows/system32";
   const QString dllDir32 = m_prefixPath + "/drive_c/windows/syswow64";
 
-  emit logMessage("Extracting d3dcompiler_43 (32-bit)...");
-  if (!extractFromRedist(redistPath, "*d3dcompiler_43*x86*", "d3dcompiler_43.dll", dllDir32))
+  // d3dcompiler_47: prebuilt DLLs from Mozilla fxc2 (not in the June 2010 redist).
+  if (!stepD3DCompiler47())
     return false;
 
-  emit logMessage("Extracting d3dcompiler_43 (64-bit)...");
-  if (!extractFromRedist(redistPath, "*d3dcompiler_43*x64*", "d3dcompiler_43.dll", dllDir64))
-    return false;
-
-  emit logMessage("d3dcompiler_43 installed");
-  return true;
-}
-
-bool PrefixSetupRunner::stepD3dx9()
-{
-  emit logMessage("Installing d3dx9...");
-
+  // Everything else comes from the DirectX June 2010 redist.
   QString redistPath;
   if (!ensureDirectXRedist(redistPath))
     return false;
 
-  const QString dllDir64 = m_prefixPath + "/drive_c/windows/system32";
-  const QString dllDir32 = m_prefixPath + "/drive_c/windows/syswow64";
+  // All single-DLL extractions: {cabFilter, dllFilter, displayName}
+  struct DllEntry { const char* cabFilter; const char* dllFilter; const char* name; };
+  static const DllEntry singleDlls[] = {
+    {"*d3dcompiler_42*", "d3dcompiler_42.dll", "d3dcompiler_42"},
+    {"*d3dcompiler_43*", "d3dcompiler_43.dll", "d3dcompiler_43"},
+    {"*d3dx11_42*",      "d3dx11_42.dll",      "d3dx11_42"},
+    {"*d3dx11_43*",      "d3dx11_43.dll",      "d3dx11_43"},
+  };
 
-  emit logMessage("Extracting d3dx9 (32-bit)...");
-  if (!extractFromRedist(redistPath, "*d3dx9*x86*", "d3dx9*.dll", dllDir32))
-    return false;
+  // Multi-DLL extractions (wildcards): {cabFilter, dllFilter, displayName}
+  static const DllEntry multiDlls[] = {
+    {"*d3dx9*",    "d3dx9*.dll",  "d3dx9"},
+    {"*d3dx10*",   "d3dx10*.dll", "d3dx10"},
+    {"*_xinput_*", "xinput*.dll", "xinput"},
+  };
 
-  emit logMessage("Extracting d3dx9 (64-bit)...");
-  if (!extractFromRedist(redistPath, "*d3dx9*x64*", "d3dx9*.dll", dllDir64))
-    return false;
+  // Extract single DLLs (both arches).
+  for (const auto& e : singleDlls) {
+    if (isCancelled()) return false;
+    emit logMessage(QStringLiteral("Extracting %1...").arg(e.name));
+    extractFromRedist(redistPath, QStringLiteral("%1x86*").arg(e.cabFilter), e.dllFilter, dllDir32);
+    extractFromRedist(redistPath, QStringLiteral("%1x64*").arg(e.cabFilter), e.dllFilter, dllDir64);
+  }
 
-  emit logMessage("d3dx9 installed");
-  return true;
-}
+  // Extract multi-DLLs (both arches).
+  for (const auto& e : multiDlls) {
+    if (isCancelled()) return false;
+    emit logMessage(QStringLiteral("Extracting %1...").arg(e.name));
+    extractFromRedist(redistPath, QStringLiteral("%1x86*").arg(e.cabFilter), e.dllFilter, dllDir32);
+    extractFromRedist(redistPath, QStringLiteral("%1x64*").arg(e.cabFilter), e.dllFilter, dllDir64);
+  }
 
-bool PrefixSetupRunner::stepD3dx11_43()
-{
-  emit logMessage("Installing d3dx11_43...");
+  // XACT / XAudio / X3DAudio / XAPOFX — 32-bit.
+  if (!isCancelled()) {
+    emit logMessage("Extracting XACT (32-bit)...");
+    for (const char* cabPat : {"*_xact_*x86*", "*_x3daudio_*x86*", "*_xaudio_*x86*"})
+      for (const char* dllPat : {"xactengine*.dll", "xaudio*.dll", "x3daudio*.dll", "xapofx*.dll"})
+        extractFromRedist(redistPath, cabPat, dllPat, dllDir32);
+  }
 
-  QString redistPath;
-  if (!ensureDirectXRedist(redistPath))
-    return false;
+  // XACT — 64-bit.
+  if (!isCancelled()) {
+    emit logMessage("Extracting XACT (64-bit)...");
+    for (const char* cabPat : {"*_xact_*x64*", "*_x3daudio_*x64*", "*_xaudio_*x64*"})
+      for (const char* dllPat : {"xactengine*.dll", "xaudio*.dll", "x3daudio*.dll", "xapofx*.dll"})
+        extractFromRedist(redistPath, cabPat, dllPat, dllDir64);
+  }
 
-  const QString dllDir64 = m_prefixPath + "/drive_c/windows/system32";
-  const QString dllDir32 = m_prefixPath + "/drive_c/windows/syswow64";
-
-  emit logMessage("Extracting d3dx11_43 (32-bit)...");
-  if (!extractFromRedist(redistPath, "*d3dx11_43*x86*", "d3dx11_43.dll", dllDir32))
-    return false;
-
-  emit logMessage("Extracting d3dx11_43 (64-bit)...");
-  if (!extractFromRedist(redistPath, "*d3dx11_43*x64*", "d3dx11_43.dll", dllDir64))
-    return false;
-
-  emit logMessage("d3dx11_43 installed");
-  return true;
-}
-
-bool PrefixSetupRunner::stepXact()
-{
-  emit logMessage("Installing XACT (32-bit)...");
-
-  QString redistPath;
-  if (!ensureDirectXRedist(redistPath))
-    return false;
-
-  const QString dllDir32 = m_prefixPath + "/drive_c/windows/syswow64";
-
-  // Extract all xact-related cabs and DLLs.
-  for (const char* cabPat : {"*_xact_*x86*", "*_x3daudio_*x86*", "*_xaudio_*x86*"}) {
-    for (const char* dllPat : {"xactengine*.dll", "xaudio*.dll", "x3daudio*.dll", "xapofx*.dll"}) {
-      // Ignore failures for individual patterns — not all cabs contain all DLL types.
-      extractFromRedist(redistPath, cabPat, dllPat, dllDir32);
+  // Batch-register XACT DLLs via regsvr32.
+  auto collectRegDlls = [](const QString& dir) -> QStringList {
+    QStringList dlls;
+    dlls.append(QDir(dir).entryList({"xactengine*.dll"}, QDir::Files));
+    for (int i = 0; i <= 7; ++i) {
+      const QString dll = QStringLiteral("xaudio2_%1.dll").arg(i);
+      if (QFileInfo::exists(dir + "/" + dll))
+        dlls.append(dll);
     }
-  }
+    return dlls;
+  };
 
-  // Batch-register all xactengine and xaudio DLLs in a single regsvr32 call.
-  QStringList regDlls;
+  QMap<QString, QString> env = baseWineEnv();
+  env["WINEDLLOVERRIDES"] = "mshtml=d";
 
-  const QStringList xactDlls = QDir(dllDir32).entryList({"xactengine*.dll"}, QDir::Files);
-  regDlls.append(xactDlls);
-
-  for (int i = 0; i <= 7; ++i) {
-    const QString dll = QStringLiteral("xaudio2_%1.dll").arg(i);
-    if (QFileInfo::exists(dllDir32 + "/" + dll))
-      regDlls.append(dll);
-  }
-
-  if (!regDlls.isEmpty()) {
-    emit logMessage(QStringLiteral("Registering %1 DLLs...").arg(regDlls.size()));
-    QMap<QString, QString> env = baseWineEnv();
-    env["WINEDLLOVERRIDES"] = "mshtml=d";
+  // 32-bit registration.
+  QStringList reg32 = collectRegDlls(dllDir32);
+  if (!reg32.isEmpty()) {
+    emit logMessage(QStringLiteral("Registering %1 32-bit DLLs...").arg(reg32.size()));
     QStringList args = {"regsvr32", "/S"};
-    args.append(regDlls);
+    args.append(reg32);
     runProcess(m_wineBin, args, env);
   }
 
-  emit logMessage("XACT (32-bit) installed");
-  return true;
-}
-
-bool PrefixSetupRunner::stepXact64()
-{
-  emit logMessage("Installing XACT (64-bit)...");
-
-  QString redistPath;
-  if (!ensureDirectXRedist(redistPath))
-    return false;
-
-  const QString dllDir64 = m_prefixPath + "/drive_c/windows/system32";
-
-  // Extract all xact-related cabs and DLLs.
-  for (const char* cabPat : {"*_xact_*x64*", "*_x3daudio_*x64*", "*_xaudio_*x64*"}) {
-    for (const char* dllPat : {"xactengine*.dll", "xaudio*.dll", "x3daudio*.dll", "xapofx*.dll"}) {
-      extractFromRedist(redistPath, cabPat, dllPat, dllDir64);
-    }
-  }
-
-  // Batch-register all 64-bit xactengine and xaudio DLLs.
-  QStringList regDlls;
-
-  const QStringList xactDlls = QDir(dllDir64).entryList({"xactengine*.dll"}, QDir::Files);
-  regDlls.append(xactDlls);
-
-  for (int i = 0; i <= 7; ++i) {
-    const QString dll = QStringLiteral("xaudio2_%1.dll").arg(i);
-    if (QFileInfo::exists(dllDir64 + "/" + dll))
-      regDlls.append(dll);
-  }
-
-  if (!regDlls.isEmpty()) {
-    emit logMessage(QStringLiteral("Registering %1 DLLs...").arg(regDlls.size()));
-    QMap<QString, QString> env = baseWineEnv();
-    env["WINEDLLOVERRIDES"] = "mshtml=d";
+  // 64-bit registration.
+  QStringList reg64 = collectRegDlls(dllDir64);
+  if (!reg64.isEmpty()) {
+    emit logMessage(QStringLiteral("Registering %1 64-bit DLLs...").arg(reg64.size()));
     QStringList args = {"regsvr32", "/S"};
-    args.append(regDlls);
+    args.append(reg64);
     runProcess(m_wineBin, args, env);
   }
 
-  emit logMessage("XACT (64-bit) installed");
+  emit logMessage("DirectX runtimes installed");
   return true;
 }
 
@@ -1208,6 +1156,32 @@ bool PrefixSetupRunner::stepVcrun2022()
 
   QDir(tmpDir).removeRecursively();
   emit logMessage("Visual C++ 2022 installed");
+  return true;
+}
+
+bool PrefixSetupRunner::stepDotNetRuntimes()
+{
+  emit logMessage("Installing .NET Runtimes (6-9)...");
+
+  struct RuntimePair { const char* url32; const char* url64; const char* name; };
+  static const RuntimePair runtimes[] = {
+    {DOTNET6_X86_URL, DOTNET6_X64_URL, ".NET 6"},
+    {DOTNET7_X86_URL, DOTNET7_X64_URL, ".NET 7"},
+    {DOTNET8_X86_URL, DOTNET8_X64_URL, ".NET 8"},
+  };
+
+  for (const auto& rt : runtimes) {
+    if (isCancelled()) return false;
+    if (!stepDotNetInstallPair(rt.url32, rt.url64, rt.name))
+      return false;
+  }
+
+  // .NET 9 is 64-bit only.
+  if (isCancelled()) return false;
+  if (!stepDotNetInstall(DOTNET9_RUNTIME_URL, ".NET 9 Runtime"))
+    return false;
+
+  emit logMessage(".NET Runtimes installed");
   return true;
 }
 
