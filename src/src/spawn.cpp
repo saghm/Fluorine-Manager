@@ -1026,7 +1026,7 @@ pid_t startBinary(QWidget *parent, const SpawnParameters &sp) {
   const auto e = spawn::spawn(sp, pid);
 
   if (e != 0) {
-    if (e == ENOENT && sp.useProton) {
+    if (e == ENOENT && sp.useProton && !FluorineConfig::isSetup()) {
       QMessageBox::critical(
           parent, QObject::tr("No Wine Prefix"),
           QObject::tr("No Wine prefix has been configured for this instance.\n\n"
