@@ -1,4 +1,5 @@
 #include "nxmhandler_linux.h"
+#include "fluorinepaths.h"
 
 #include <log.h>
 
@@ -161,12 +162,14 @@ NxmHandlerLinux::~NxmHandlerLinux()
 
 QString NxmHandlerLinux::socketPath()
 {
-  const QString runtimeDir = qEnvironmentVariable("XDG_RUNTIME_DIR");
-  if (!runtimeDir.isEmpty()) {
-    return QDir(runtimeDir).filePath("mo2-nxm.sock");
+  // Use our own data dir for the socket — XDG_RUNTIME_DIR may point to a
+  // read-only location on Steam Deck (SteamOS has a read-only root).
+  const QString dataDir = fluorineDataDir();
+  if (!dataDir.isEmpty()) {
+    return QDir(dataDir).filePath("tmp/mo2-nxm.sock");
   }
 
-  return "/tmp/mo2-nxm.sock";
+  return QDir::homePath() + "/.local/share/fluorine/tmp/mo2-nxm.sock";
 }
 
 void NxmHandlerLinux::registerHandler() const
