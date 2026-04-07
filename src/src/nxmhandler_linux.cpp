@@ -266,6 +266,13 @@ bool NxmHandlerLinux::startListener()
 
   const QString path = socketPath();
 
+  // Ensure parent directory exists (XDG_RUNTIME_DIR may point to a
+  // non-existent path on some configurations).
+  const QDir parentDir = QFileInfo(path).dir();
+  if (!parentDir.exists()) {
+    QDir().mkpath(parentDir.absolutePath());
+  }
+
   QLocalServer::removeServer(path);
   if (QFileInfo::exists(path)) {
     QFile::remove(path);
