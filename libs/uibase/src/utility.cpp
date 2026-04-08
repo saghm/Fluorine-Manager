@@ -22,7 +22,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <uibase/log.h>
 #include <uibase/report.h>
 #ifndef _WIN32
-#include <nak_ffi.h>
+#include "iconextractor.h"
 #endif
 #include <QApplication>
 #include <QBuffer>
@@ -946,15 +946,12 @@ QIcon iconForExecutable(const QString& filePath)
   cache.insert(cacheKey, icon);
   return icon;
 #else
-  // Extract icon from PE executable via NaK (pelite-based, no external tools).
+  // Extract icon from PE executable (native C++ parser, no external tools).
   QIcon icon;
 
   {
-    const QByteArray pathUtf8 = fi.absoluteFilePath().toUtf8();
-    NakIconData icoData = nak_extract_exe_icon(pathUtf8.constData());
-    if (icoData.data && icoData.len > 0) {
-      QByteArray ba(reinterpret_cast<const char*>(icoData.data),
-                    static_cast<qsizetype>(icoData.len));
+    QByteArray ba = extractExeIcon(fi.absoluteFilePath());
+    if (!ba.isEmpty()) {
       QBuffer buf(&ba);
       buf.open(QIODevice::ReadOnly);
       QImageReader reader(&buf, "ico");
@@ -978,7 +975,6 @@ QIcon iconForExecutable(const QString& filePath)
           }
         }
       }
-      nak_icon_data_free(icoData);
     }
   }
 

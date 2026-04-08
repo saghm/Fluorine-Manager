@@ -19,6 +19,15 @@ file(GLOB ORGANIZER_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/shared/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/vfs/*.cpp)
+
+# These files are compiled into libuibase.so (shared with plugins) — exclude from organizer.
+list(REMOVE_ITEM ORGANIZER_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/gamedetection.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/steamdetection.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/vdfparser.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/iconextractor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/prefixsymlinks.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/slrmanager.cpp)
 file(GLOB ORGANIZER_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/shared/*.h
@@ -101,8 +110,6 @@ target_link_libraries(organizer PRIVATE
     mo2::bsatk
     mo2::esptk
     mo2::lootcli-header
-    # NaK FFI for game detection + Proton
-    mo2::nak_ffi
     # Qt6
     Qt6::Widgets
     Qt6::Concurrent

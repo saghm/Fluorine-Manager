@@ -53,7 +53,7 @@ cp -f "${RUNDIR}/ModOrganizer" "${OUT_DIR}/ModOrganizer-core"
 LOOTCLI="build/libs/lootcli/src/lootcli"
 [ -f "${LOOTCLI}" ] && cp -f "${LOOTCLI}" "${OUT_DIR}/"
 
-# wrestool/icotool no longer needed — icon extraction is built into libnak_ffi.so (pelite)
+# wrestool/icotool no longer needed — icon extraction is built into the C++ PE parser
 
 # ── MO2 plugins (.so) ──
 find build/libs -type f \( \
@@ -131,10 +131,9 @@ cp -f build/libs/uibase/src/libuibase.so "${OUT_DIR}/lib/"
 cp -f build/libs/libbsarch/liblibbsarch.so "${OUT_DIR}/lib/"
 cp -f build/libs/archive/src/libarchive.so "${OUT_DIR}/lib/"
 cp -f build/libs/plugin_python/src/runner/librunner.so "${OUT_DIR}/lib/"
-for ffi in libs/bsa_ffi/target/release/libbsa_ffi.so \
-           libs/nak_ffi/target/release/libnak_ffi.so; do
-    [ -f "${ffi}" ] && cp -f "${ffi}" "${OUT_DIR}/lib/"
-done
+if [ -f "libs/bsa_ffi/target/release/libbsa_ffi.so" ]; then
+    cp -f libs/bsa_ffi/target/release/libbsa_ffi.so "${OUT_DIR}/lib/"
+fi
 
 # Boost (version-pinned to container, won't exist on most user systems).
 for boost_lib in /lib/x86_64-linux-gnu/libboost_program_options.so* \
@@ -416,8 +415,8 @@ export PATH="${RUN}:${PATH}"
 # Steam game mode injects its scout/soldier runtime into LD_LIBRARY_PATH.
 # Those old libraries (libssl, libz, etc.) break Python extension modules
 # and Qt internals that don't have RPATH pointing to our bundled libs.
-# Clear it — the binary uses DT_RPATH ($ORIGIN/lib) for its own deps,
-# and we prepend our lib/ for anything loaded via dlopen (Python, Qt plugins).
+# Clear it and set only our lib/ — the binary uses DT_RPATH ($ORIGIN/lib)
+# for its own deps, this covers dlopen'd plugins.
 export LD_LIBRARY_PATH="${RUN}/lib"
 export MO2_BASE_DIR="${RUN}"
 export MO2_PLUGINS_DIR="${RUN}/plugins"

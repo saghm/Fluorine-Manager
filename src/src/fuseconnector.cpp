@@ -176,7 +176,8 @@ void setupFuseOps(struct fuse_lowlevel_ops* ops)
   ops->mkdir   = mo2_mkdir;
   ops->release = mo2_release;
   ops->releasedir = mo2_releasedir;
-  ops->access  = mo2_access;
+  // access handler removed: default_permissions mount option lets the kernel
+  // handle permission checks in-kernel, eliminating access() round-trips.
 }
 
 }  // namespace
@@ -311,7 +312,7 @@ bool FuseConnector::mount(
   // separately to fuse_session_mount(). Including it here causes
   // "fuse: unknown option(s)" error.
   std::vector<std::string> argvStorage = {
-      "mo2fuse", "-o", "fsname=mo2linux", "-o", "noatime"};
+      "mo2fuse", "-o", "fsname=mo2linux", "-o", "noatime", "-o", "default_permissions"};
 
   std::vector<char*> argv;
   argv.reserve(argvStorage.size());

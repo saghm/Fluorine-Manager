@@ -92,7 +92,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "shared/fileentry.h"
 #include "shared/filesorigin.h"
 
-#include <nak_ffi.h>
+#include "slrmanager.h"
 #include <QAbstractItemDelegate>
 #include <QAction>
 #include <QApplication>
@@ -2381,7 +2381,7 @@ void MainWindow::on_startButton_clicked()
       QSettings instanceIni(s->filename(), QSettings::IniFormat);
       useSLR = instanceIni.value("fluorine/use_slr", true).toBool();
     }
-    if (useSLR && !nak_slr_is_installed()) {
+    if (useSLR && !isSlrInstalled()) {
       auto* progress = new QProgressDialog(
           tr("Downloading Steam Linux Runtime (~180 MB)...\n"
              "This is required to launch games. Check the MO2 log for details."),
@@ -2396,28 +2396,26 @@ void MainWindow::on_startButton_clicked()
       });
 
       // Run download synchronously using an event loop so the dialog stays responsive.
-      QFutureWatcher<char*> watcher;
+      QFutureWatcher<QString> watcher;
       QEventLoop loop;
-      connect(&watcher, &QFutureWatcher<char*>::finished, &loop, &QEventLoop::quit);
-      watcher.setFuture(QtConcurrent::run([&cancelFlag]() -> char* {
-        return nak_download_slr(nullptr, nullptr, &cancelFlag);
+      connect(&watcher, &QFutureWatcher<QString>::finished, &loop, &QEventLoop::quit);
+      watcher.setFuture(QtConcurrent::run([&cancelFlag]() -> QString {
+        return downloadSlr(nullptr, nullptr, &cancelFlag);
       }));
       progress->show();
       loop.exec();
       progress->close();
       progress->deleteLater();
 
-      char* err = watcher.result();
+      const QString err = watcher.result();
       if (cancelFlag) {
         return; // user cancelled, don't launch
       }
-      if (err) {
-        const QString msg = QString::fromUtf8(err);
-        nak_string_free(err);
-        log::error("[SLR] Download failed: {}", msg);
+      if (!err.isEmpty()) {
+        log::error("[SLR] Download failed: {}", err);
         QMessageBox::warning(this, tr("Steam Linux Runtime"),
             tr("Steam Linux Runtime download failed:\n%1\n\n"
-               "You can disable SLR in the Instance Manager and try again.").arg(msg));
+               "You can disable SLR in the Instance Manager and try again.").arg(err));
         return;
       }
     }

@@ -1,6 +1,7 @@
 #include "protonlauncher.h"
 
-#include <nak_ffi.h>
+#include "steamdetection.h"
+#include "slrmanager.h"
 #include <cstdio>
 #include <QDir>
 #include <QFile>
@@ -114,10 +115,8 @@ QString compatDataPathFromPrefix(const QString& prefixPath)
 
 QString detectSteamPath()
 {
-  if (char* steamPathRaw = nak_find_steam_path(); steamPathRaw != nullptr) {
-    const QString steamPath = QString::fromUtf8(steamPathRaw).trimmed();
-    nak_string_free(steamPathRaw);
-
+  {
+    const QString steamPath = findSteamPath().trimmed();
     if (!steamPath.isEmpty()) {
       return steamPath;
     }
@@ -456,9 +455,8 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
   QString program;
   QStringList arguments;
   if (m_useSLR) {
-    if (char* slrScript = nak_slr_get_run_script(); slrScript != nullptr) {
-      const QString runScript = QString::fromUtf8(slrScript);
-      nak_string_free(slrScript);
+    const QString runScript = getSlrRunScript();
+    if (!runScript.isEmpty()) {
       MOBase::log::info("SLR: wrapping launch with {}", runScript);
       // Build: [wrappers] run_script [--filesystem=...] -- proton_script protonArgs
       QStringList slrArgs;
@@ -533,15 +531,6 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
 
   for (auto it = m_envVars.cbegin(); it != m_envVars.cend(); ++it) {
     env.insert(it.key(), it.value());
-  }
-
-  // Set DXVK config if available
-  if (char* dxvkPath = nak_get_dxvk_conf_path(); dxvkPath != nullptr) {
-    const QString dxvkConf = QString::fromUtf8(dxvkPath);
-    nak_string_free(dxvkPath);
-    if (QFileInfo::exists(dxvkConf)) {
-      env.insert("DXVK_CONFIG_FILE", dxvkConf);
-    }
   }
 
   MOBase::log::info("Proton launch: '{}' run '{}'", protonScript, m_binary);

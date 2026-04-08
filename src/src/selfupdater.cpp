@@ -89,6 +89,10 @@ void SelfUpdater::setPluginContainer(PluginContainer* pluginContainer)
 
 void SelfUpdater::testForUpdate(const Settings& settings)
 {
+  // Fluorine Manager has its own update mechanism — skip the MO2 GitHub check.
+  (void)settings;
+  return;
+
   if (settings.network().offlineMode()) {
     log::debug("not checking for updates, in offline mode");
     return;

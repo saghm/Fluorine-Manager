@@ -29,7 +29,8 @@ void fillStatForDir(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid);
 void fillStatForFile(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid,
                      uint64_t size,
                      const std::chrono::system_clock::time_point& mtime,
-                     const std::string& real_path = {});
+                     const std::string& real_path = {},
+                     mode_t cached_mode = 0);
 void invalidateLookupCache(Mo2FsContext* ctx, const std::string& dirPath);
 
 void maybeLogCounters(Mo2FsContext* ctx)
@@ -143,12 +144,12 @@ void invalidateLookupCache(Mo2FsContext* ctx, const std::string& dirPath)
   }
 
   std::scoped_lock lock(ctx->lookup_cache_mutex);
-  for (auto it = ctx->lookup_cache.begin(); it != ctx->lookup_cache.end();) {
-    if (it->first.first == parentIno) {
-      it = ctx->lookup_cache.erase(it);
-    } else {
-      ++it;
+  auto idxIt = ctx->lookup_cache_by_parent.find(parentIno);
+  if (idxIt != ctx->lookup_cache_by_parent.end()) {
+    for (const auto& childName : idxIt->second) {
+      ctx->lookup_cache.erase({parentIno, childName});
     }
+    ctx->lookup_cache_by_parent.erase(idxIt);
   }
 }
 
@@ -385,6 +386,7 @@ struct ChildSnapshot
   uint64_t size = 0;
   std::chrono::system_clock::time_point mtime{};
   std::string real_path;
+  mode_t cached_mode = 0;  // permission bits from stat() or VfsNode cache
 };
 
 std::vector<ChildSnapshot> listChildrenSnapshot(
@@ -408,6 +410,24 @@ std::vector<ChildSnapshot> listChildrenSnapshot(
       snap.size      = child->file_info.size;
       snap.mtime     = child->file_info.mtime;
       snap.real_path = child->file_info.real_path;
+
+      // Use cached mode bits if available, otherwise stat() once and cache.
+      if (child->file_info.cached_mode != 0) {
+        snap.cached_mode = child->file_info.cached_mode;
+      } else if (!snap.real_path.empty()) {
+        struct stat real_st;
+        if (::stat(snap.real_path.c_str(), &real_st) == 0) {
+          snap.cached_mode = real_st.st_mode & 0777;
+          // Cache in the tree node for future readdir calls (safe under shared lock
+          // because mode_t is atomic-width and this is a benign data race — worst
+          // case we stat() one extra time from another thread).
+          const_cast<VfsNode*>(child)->file_info.cached_mode = snap.cached_mode;
+        } else {
+          snap.cached_mode = 0644;
+        }
+      } else {
+        snap.cached_mode = 0644;
+      }
     }
     out.push_back(std::move(snap));
   }
@@ -434,7 +454,7 @@ std::vector<Mo2FsContext::DirEntry> buildDirEntries(
     entries.push_back(
         Mo2FsContext::DirEntry{ctx->inodes->getOrCreate(childPath), child.name,
                                child.is_dir, child.size, child.mtime,
-                               child.real_path});
+                               child.real_path, child.cached_mode});
   }
 
   return entries;
@@ -511,14 +531,8 @@ std::vector<char> buildReaddirBlob(
     if (entry.is_dir) {
       st.st_mode = S_IFDIR | 0755;
     } else {
-      // Preserve executable bits from the real file on disk.
-      mode_t mode = 0644;
-      if (!entry.real_path.empty()) {
-        struct stat real_st;
-        if (::stat(entry.real_path.c_str(), &real_st) == 0) {
-          mode = real_st.st_mode & 0777;
-        }
-      }
+      // Use cached mode bits (populated during tree snapshot) — no stat() needed.
+      mode_t mode = entry.cached_mode != 0 ? entry.cached_mode : static_cast<mode_t>(0644);
       st.st_mode = S_IFREG | mode;
     }
 
@@ -635,7 +649,8 @@ void fillStatForDir(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid)
 void fillStatForFile(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid,
                      uint64_t size,
                      const std::chrono::system_clock::time_point& mtime,
-                     const std::string& real_path)
+                     const std::string& real_path,
+                     mode_t cached_mode)
 {
   std::memset(st, 0, sizeof(struct stat));
   st->st_ino   = ino;
@@ -644,10 +659,11 @@ void fillStatForFile(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid,
   st->st_gid   = gid;
   st->st_size  = static_cast<off_t>(size);
 
-  // Preserve executable bits from the real file on disk so native Linux
-  // executables added as mods can actually be launched through the VFS.
+  // Use cached mode bits if available, otherwise stat() the real file.
   mode_t mode = 0644;
-  if (!real_path.empty()) {
+  if (cached_mode != 0) {
+    mode = cached_mode;
+  } else if (!real_path.empty()) {
     struct stat real_st;
     if (::stat(real_path.c_str(), &real_st) == 0) {
       mode = real_st.st_mode & 0777;
@@ -765,18 +781,32 @@ void mo2_init(void* userdata, struct fuse_conn_info* conn)
     conn->want |= FUSE_CAP_SPLICE_READ;
   }
 
-  // More async readahead/writeback slots (default is 12, far too low).
-  conn->max_background      = 128;
-  conn->congestion_threshold = 96;
-
-  // Increase max read/write buffer to 1MB (kernel 4.20+ supports this).
-  // Reduces FUSE round-trips for large file reads (textures, meshes, BSAs).
-  constexpr unsigned int ONE_MB = 1048576;
-  if (conn->max_readahead < ONE_MB) {
-    conn->max_readahead = ONE_MB;
+  // Allow concurrent submission of split direct I/O requests.
+  // Harmless when not triggered; helps if Wine opens files with O_DIRECT.
+  if (conn->capable & FUSE_CAP_ASYNC_DIO) {
+    conn->want |= FUSE_CAP_ASYNC_DIO;
   }
-  if (conn->max_write < ONE_MB) {
-    conn->max_write = ONE_MB;
+
+  // Softer dentry invalidation: mark entries as expired rather than
+  // forcefully removing them, reducing cascading cache evictions.
+  if (conn->capable & FUSE_CAP_EXPIRE_ONLY) {
+    conn->want |= FUSE_CAP_EXPIRE_ONLY;
+  }
+
+  // Maximize async I/O slots (default is 12).  The kernel will still only
+  // dispatch as many as there are actual concurrent requests, so higher
+  // values just raise the ceiling without wasting memory.
+  conn->max_background      = 32767;
+  conn->congestion_threshold = 24576;
+
+  // Request large read/write buffers.  The kernel caps these at its own
+  // compiled-in maximum, so overshooting is harmless.
+  constexpr unsigned int EIGHT_MB = 8 * 1048576;
+  if (conn->max_readahead < EIGHT_MB) {
+    conn->max_readahead = EIGHT_MB;
+  }
+  if (conn->max_write < EIGHT_MB) {
+    conn->max_write = EIGHT_MB;
   }
 
   std::fprintf(stderr,
@@ -831,6 +861,7 @@ void mo2_lookup(fuse_req_t req, fuse_ino_t parent, const char* name)
       lce.child_ino = 0;
       lce.entry     = e;
       ctx->lookup_cache[cacheKey] = lce;
+      ctx->lookup_cache_by_parent[cacheKey.first].push_back(cacheKey.second);
     }
 
     fuse_reply_entry(req, &e);
@@ -889,6 +920,7 @@ void mo2_lookup(fuse_req_t req, fuse_ino_t parent, const char* name)
     lce.child_ino = childIno;
     lce.entry     = e;
     ctx->lookup_cache[cacheKey] = lce;
+    ctx->lookup_cache_by_parent[cacheKey.first].push_back(cacheKey.second);
   }
 
   fuse_reply_entry(req, &e);
@@ -1340,18 +1372,17 @@ void mo2_read(fuse_req_t req, fuse_ino_t /*ino*/, size_t size, off_t off,
     openedTempFd = true;
   }
 
-  std::vector<char> out(size);
-  const ssize_t n = pread(localFd, out.data(), size, off);
+  // Zero-copy read: splice data directly from backing fd to /dev/fuse,
+  // bypassing userspace entirely.  The kernel transfers data kernel-to-kernel.
+  struct fuse_bufvec buf = FUSE_BUFVEC_INIT(size);
+  buf.buf[0].flags = static_cast<fuse_buf_flags>(FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK);
+  buf.buf[0].fd    = localFd;
+  buf.buf[0].pos   = off;
+  fuse_reply_data(req, &buf, FUSE_BUF_SPLICE_MOVE);
+
   if (openedTempFd) {
     close(localFd);
   }
-
-  if (n < 0) {
-    fuse_reply_err(req, EIO);
-    return;
-  }
-
-  fuse_reply_buf(req, out.data(), static_cast<size_t>(n));
 }
 
 void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,

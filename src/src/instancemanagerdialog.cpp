@@ -20,7 +20,7 @@
 #include <QtConcurrent/QtConcurrent>
 #include <iplugingame.h>
 #include <log.h>
-#include <nak_ffi.h>
+#include "slrmanager.h"
 #include <report.h>
 #include <utility.h>
 
@@ -943,13 +943,10 @@ void InstanceManagerDialog::openExistingPortable()
 
 void InstanceManagerDialog::downloadSLRIfNeeded()
 {
-  if (nak_slr_is_installed()) {
+  if (isSlrInstalled()) {
     return;
   }
 
-  // Indeterminate progress dialog — SLR download logs internally via nak_init_logging.
-  // We can't pass capturing C++ lambdas as C function pointers, so we let the
-  // Rust side handle progress logging and just show a spinner here.
   auto* progress = new QProgressDialog(
       tr("Downloading Steam Linux Runtime (~180 MB)...\n"
          "This only happens once. Check the MO2 log for details."),
@@ -964,23 +961,20 @@ void InstanceManagerDialog::downloadSLRIfNeeded()
     *cancelFlag = 1;
   });
 
-  using Result = char*;
-  auto* watcher = new QFutureWatcher<Result>(this);
+  auto* watcher = new QFutureWatcher<QString>(this);
 
-  connect(watcher, &QFutureWatcher<Result>::finished, this,
+  connect(watcher, &QFutureWatcher<QString>::finished, this,
       [this, watcher, progress, cancelFlag] {
         progress->close();
         watcher->deleteLater();
         progress->deleteLater();
 
-        char* err = watcher->result();
-        if (err) {
-          const QString msg = QString::fromUtf8(err);
-          nak_string_free(err);
-          MOBase::log::error("[SLR] Download failed: {}", msg);
+        const QString err = watcher->result();
+        if (!err.isEmpty()) {
+          MOBase::log::error("[SLR] Download failed: {}", err);
           QMessageBox::warning(this, tr("Steam Linux Runtime"),
               tr("Download failed:\n%1\n\nSLR has been disabled for this instance.")
-                  .arg(msg));
+                  .arg(err));
           ui->steamLinuxRuntimeCheckBox->blockSignals(true);
           ui->steamLinuxRuntimeCheckBox->setChecked(false);
           ui->steamLinuxRuntimeCheckBox->blockSignals(false);
@@ -1000,8 +994,8 @@ void InstanceManagerDialog::downloadSLRIfNeeded()
       });
 
   int* cancelPtr = cancelFlag;
-  watcher->setFuture(QtConcurrent::run([cancelPtr]() -> Result {
-    return nak_download_slr(nullptr, nullptr, cancelPtr);
+  watcher->setFuture(QtConcurrent::run([cancelPtr]() -> QString {
+    return downloadSlr(nullptr, nullptr, cancelPtr);
   }));
 
   progress->show();

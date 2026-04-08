@@ -44,7 +44,6 @@
 #else
 #include "fluorineconfig.h"
 #include "wineprefix.h"
-#include <nak_ffi.h>
 #endif
 
 #include <chrono>

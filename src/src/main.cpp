@@ -10,7 +10,6 @@
 #include "shared/util.h"
 #include "thread_utils.h"
 #include <log.h>
-#include <nak_ffi.h>
 #include <report.h>
 #include <QString>
 
@@ -86,23 +85,6 @@ int run(int argc, char* argv[])
   fluorineMigrateDataDir();
 
   initLogging();
-
-  // Route NaK (Rust) log messages through MOBase::log
-  nak_init_logging([](const char* level, const char* message) {
-    if (!message || !*message) return;
-    if (!level || !*level) {
-      log::info("[nak] {}", message);
-      return;
-    }
-    // Map NaK levels to MOBase log levels
-    if (std::strcmp(level, "error") == 0) {
-      log::error("[nak] {}", message);
-    } else if (std::strcmp(level, "warning") == 0) {
-      log::warn("[nak] {}", message);
-    } else {
-      log::info("[nak] {}", message);
-    }
-  });
 
   // must be after logging
   TimeThis tt("main() multiprocess");

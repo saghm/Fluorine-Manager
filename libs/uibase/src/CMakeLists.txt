@@ -187,8 +187,20 @@ target_link_libraries(uibase
 	PUBLIC Qt6::Widgets Qt6::Network Qt6::QuickWidgets
 	PRIVATE spdlog::spdlog_header_only Qt6::Qml Qt6::Quick)
 
-if(NOT WIN32 AND TARGET mo2::nak_ffi)
-	target_link_libraries(uibase PRIVATE mo2::nak_ffi)
+if(NOT WIN32)
+	# Native C++ ports of game detection, Steam/Proton detection, SLR management,
+	# icon extraction, and prefix symlinks (formerly in Rust nak_ffi).
+	# Use BUILD_INTERFACE to avoid "prefixed in the source directory" CMake error.
+	target_include_directories(uibase
+		PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/src>)
+	target_sources(uibase PRIVATE
+		${CMAKE_SOURCE_DIR}/src/src/gamedetection.cpp
+		${CMAKE_SOURCE_DIR}/src/src/steamdetection.cpp
+		${CMAKE_SOURCE_DIR}/src/src/vdfparser.cpp
+		${CMAKE_SOURCE_DIR}/src/src/iconextractor.cpp
+		${CMAKE_SOURCE_DIR}/src/src/prefixsymlinks.cpp
+		${CMAKE_SOURCE_DIR}/src/src/slrmanager.cpp
+	)
 endif()
 
 # installation

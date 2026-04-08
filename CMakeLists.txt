@@ -22,7 +22,6 @@ if(HAS_NO_DIRECT_EXTERN_ACCESS)
 endif()
 
 option(BUILD_TESTING "Build tests" OFF)
-option(BUILD_NAK_FFI "Build NaK Rust FFI library" ON)
 option(BUILD_BSA_FFI "Build Rust BSA/BA2 FFI library" ON)
 option(BUILD_DOTNET_PLUGINS "Build C++/CLI .NET plugins (Windows+MSVC only)" OFF)
 option(BUILD_PLUGIN_PYTHON "Build plugin_python bridge on Linux" ON)
@@ -155,11 +154,7 @@ add_subdirectory(libs/7zip)        # builds 7z.so from source (Linux only)
 add_subdirectory(libs/archive)    # shared lib, needs dl
 add_subdirectory(libs/lootcli)    # executable, needs Qt6 + boost + libloot + curl
 
-if(BUILD_NAK_FFI)
-    add_subdirectory(libs/nak_ffi)   # Rust FFI lib, before uibase (icon extraction)
-endif()
-
-add_subdirectory(libs/uibase)     # shared lib, needs Qt6 + spdlog + nak_ffi (Linux)
+add_subdirectory(libs/uibase)     # shared lib, needs Qt6 + spdlog
 
 if(BUILD_BSA_FFI)
     add_subdirectory(libs/bsa_ffi)

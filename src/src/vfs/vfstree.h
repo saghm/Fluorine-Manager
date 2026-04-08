@@ -18,6 +18,7 @@ struct VfsFileInfo
   std::chrono::system_clock::time_point mtime{};
   std::string origin;
   bool is_backing = false;
+  mode_t cached_mode = 0;  // permission bits from stat() at tree-build time
 };
 
 struct CachedBaseFile

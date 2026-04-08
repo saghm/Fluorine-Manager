@@ -8,7 +8,10 @@
 #include <QtConcurrent/QtConcurrentRun>
 #include <log.h>
 #include <uibase/utility.h>
-#include <nak_ffi.h>
+#include "knowngames.h"
+#include "steamdetection.h"
+#include "gamedetection.h"
+#include "slrmanager.h"
 #include <atomic>
 #include <QCheckBox>
 #include <QComboBox>
@@ -37,6 +40,128 @@
 namespace
 {
 std::atomic<ProtonSettingsTab*> g_activeInstallTab = nullptr;
+
+/// Find the wine binary inside a Proton installation directory.
+static QString findWineBinary(const QString& protonPath)
+{
+  for (const char* subdir : {"files/bin", "dist/bin"}) {
+    const QString candidate =
+        QDir(protonPath).filePath(QString::fromLatin1(subdir) + "/wine");
+    if (QFileInfo::exists(candidate))
+      return candidate;
+  }
+  return {};
+}
+
+/// Apply a single game's registry entry via wine regedit.
+///
+/// Looks up the game by name in NaK's KNOWN_GAMES, builds a .reg file that
+/// maps the install path to the game's registry key, and imports it with
+/// wine regedit (wrapped in SLR if available).
+static QString applyGameRegistryNative(const QString& prefixPath,
+                                       const QString& protonPath,
+                                       const QString& gameName,
+                                       const QString& installPath,
+                                       void (*logCb)(const char*))
+{
+  // Find wine binary.
+  const QString wineBin = findWineBinary(protonPath);
+  if (wineBin.isEmpty())
+    return QStringLiteral("Wine binary not found in Proton at %1").arg(protonPath);
+
+  // Look up registry path/value from known games.
+  const KnownGame* foundGame = nullptr;
+  for (int i = 0; i < KNOWN_GAMES_COUNT; ++i) {
+    if (gameName == QString::fromLatin1(KNOWN_GAMES[i].name)) {
+      foundGame = &KNOWN_GAMES[i];
+      break;
+    }
+  }
+
+  if (!foundGame || !foundGame->registry_path || !foundGame->registry_value)
+    return QStringLiteral("Unknown game: %1").arg(gameName);
+
+  const QString rPath = QString::fromLatin1(foundGame->registry_path);
+  const QString rVal  = QString::fromLatin1(foundGame->registry_value);
+
+  // Convert Linux path → Wine Z: drive path with escaped backslashes for .reg.
+  const QString winePath = "Z:" + QString(installPath).replace('/', "\\\\");
+
+  // Wow6432Node key: strip the leading "Software\" prefix.
+  const int firstBackslash = rPath.indexOf('\\');
+  const QString wow64Key =
+      (firstBackslash >= 0) ? rPath.mid(firstBackslash + 1) : rPath;
+
+  const QString regContent = QStringLiteral(
+      "Windows Registry Editor Version 5.00\n\n"
+      "[HKEY_LOCAL_MACHINE\\%1]\n\"%2\"=\"%3\"\n\n"
+      "[HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node\\%4]\n\"%5\"=\"%6\"\n\n")
+      .arg(rPath, rVal, winePath, wow64Key, rVal, winePath);
+
+  // Write temp .reg file.
+  const QString tmpDir = fluorineDataDir() + "/tmp";
+  QDir().mkpath(tmpDir);
+  const QString regFile = tmpDir + "/game_reg_apply.reg";
+
+  {
+    QFile f(regFile);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
+      return QStringLiteral("Failed to write registry file: %1").arg(regFile);
+    f.write(regContent.toUtf8());
+  }
+
+  if (logCb) {
+    const QByteArray msg =
+        QStringLiteral("Applying registry for %1...").arg(gameName).toUtf8();
+    logCb(msg.constData());
+  }
+
+  // Build the command — wrap in SLR if available.
+  QProcess proc;
+  QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+  env.insert("WINEPREFIX",       prefixPath);
+  env.insert("WINEDLLOVERRIDES", "mshtml=d");
+  env.insert("PROTON_USE_XALIA", "0");
+  proc.setProcessEnvironment(env);
+
+  const QString slr = getSlrRunScript();
+  if (!slr.isEmpty()) {
+
+    QStringList args;
+    // Expose directories to the container.
+    const QString wineDir = QFileInfo(wineBin).absolutePath();
+    if (!wineDir.isEmpty())
+      args << QStringLiteral("--filesystem=%1").arg(wineDir);
+    if (!prefixPath.isEmpty())
+      args << QStringLiteral("--filesystem=%1").arg(prefixPath);
+    if (!protonPath.isEmpty())
+      args << QStringLiteral("--filesystem=%1").arg(protonPath);
+    if (QDir(tmpDir).exists())
+      args << QStringLiteral("--filesystem=%1").arg(tmpDir);
+    args << "--" << wineBin << "regedit" << regFile;
+
+    proc.setProgram(slr);
+    proc.setArguments(args);
+  } else {
+    proc.setProgram(wineBin);
+    proc.setArguments({"regedit", regFile});
+  }
+
+  proc.setProcessChannelMode(QProcess::MergedChannels);
+  proc.start();
+  proc.waitForFinished(60000);
+  QFile::remove(regFile);
+
+  if (proc.exitStatus() != QProcess::NormalExit || proc.exitCode() != 0)
+    return QStringLiteral("wine regedit failed (exit code %1)").arg(proc.exitCode());
+
+  if (logCb) {
+    const QByteArray msg =
+        QStringLiteral("Registry applied for %1").arg(gameName).toUtf8();
+    logCb(msg.constData());
+  }
+  return {};  // success
+}
 }
 
 ProtonSettingsTab::ProtonSettingsTab(Settings& s, SettingsDialog& d)
@@ -126,24 +251,19 @@ void ProtonSettingsTab::populateProtons()
 {
   ui->protonVersionCombo->clear();
 
-  const NakProtonList protonList = nak_find_steam_protons();
+  const auto protonList = findSteamProtons();
 
-  for (size_t i = 0; i < protonList.count; ++i) {
-    const NakSteamProton& proton = protonList.protons[i];
+  for (int i = 0; i < protonList.size(); ++i) {
+    const SteamProtonInfo& proton = protonList[i];
 
-    const QString protonName = QString::fromUtf8(proton.name ? proton.name : "");
-    const QString protonPath = QString::fromUtf8(proton.path ? proton.path : "");
-
-    if (protonName.isEmpty() || protonPath.isEmpty()) {
+    if (proton.name.isEmpty() || proton.path.isEmpty()) {
       continue;
     }
 
-    ui->protonVersionCombo->addItem(protonName);
-    ui->protonVersionCombo->setItemData(ui->protonVersionCombo->count() - 1, protonPath,
+    ui->protonVersionCombo->addItem(proton.name);
+    ui->protonVersionCombo->setItemData(ui->protonVersionCombo->count() - 1, proton.path,
                                         Qt::UserRole + 1);
   }
-
-  nak_proton_list_free(protonList);
 
   if (auto cfg = FluorineConfig::load(); cfg.has_value()) {
     const int idx = ui->protonVersionCombo->findText(cfg->proton_name);
@@ -293,7 +413,7 @@ void ProtonSettingsTab::onOpenPrefixFolder()
 
 void ProtonSettingsTab::onDownloadSLR()
 {
-  if (nak_slr_is_installed()) {
+  if (isSlrInstalled()) {
     QMessageBox::information(parentWidget(), tr("Steam Linux Runtime"),
         tr("Steam Linux Runtime is already installed."));
     return;
@@ -313,21 +433,19 @@ void ProtonSettingsTab::onDownloadSLR()
     *cancelFlag = 1;
   });
 
-  auto* watcher = new QFutureWatcher<char*>(this);
-  connect(watcher, &QFutureWatcher<char*>::finished, this,
+  auto* watcher = new QFutureWatcher<QString>(this);
+  connect(watcher, &QFutureWatcher<QString>::finished, this,
       [this, watcher, progress, cancelFlag] {
         progress->close();
         watcher->deleteLater();
         progress->deleteLater();
         ui->downloadSLRButton->setEnabled(true);
 
-        char* err = watcher->result();
-        if (err) {
-          const QString msg = QString::fromUtf8(err);
-          nak_string_free(err);
-          MOBase::log::error("[SLR] Download failed: {}", msg);
+        const QString err = watcher->result();
+        if (!err.isEmpty()) {
+          MOBase::log::error("[SLR] Download failed: {}", err);
           QMessageBox::warning(parentWidget(), tr("Steam Linux Runtime"),
-              tr("Download failed:\n%1").arg(msg));
+              tr("Download failed:\n%1").arg(err));
         } else {
           MOBase::log::info("[SLR] Steam Linux Runtime installed successfully");
           QMessageBox::information(parentWidget(), tr("Steam Linux Runtime"),
@@ -337,8 +455,8 @@ void ProtonSettingsTab::onDownloadSLR()
       });
 
   int* cancelPtr = cancelFlag;
-  watcher->setFuture(QtConcurrent::run([cancelPtr]() -> char* {
-    return nak_download_slr(nullptr, nullptr, cancelPtr);
+  watcher->setFuture(QtConcurrent::run([cancelPtr]() -> QString {
+    return downloadSlr(nullptr, nullptr, cancelPtr);
   }));
   progress->show();
 }
@@ -534,12 +652,8 @@ void ProtonSettingsTab::showGameRegistryDialog()
 
   auto* gameCombo = new QComboBox(&dialog);
 
-  size_t knownCount  = 0;
-  const NakKnownGame* knownGames = nak_get_known_games(&knownCount);
-
-  for (size_t i = 0; i < knownCount; ++i) {
-    const QString name =
-        QString::fromUtf8(knownGames[i].name ? knownGames[i].name : "");
+  for (int i = 0; i < KNOWN_GAMES_COUNT; ++i) {
+    const QString name = QString::fromLatin1(KNOWN_GAMES[i].name);
     if (!name.isEmpty()) {
       gameCombo->addItem(name);
     }
@@ -572,22 +686,18 @@ void ProtonSettingsTab::showGameRegistryDialog()
     const QString gameName = gameCombo->currentText();
     if (gameName.isEmpty()) return;
 
-    // Use nak_detect_all_games to find the install path
-    NakGameList gameList = nak_detect_all_games();
-    for (size_t i = 0; i < gameList.count; ++i) {
-      const QString detected =
-          QString::fromUtf8(gameList.games[i].name ? gameList.games[i].name : "");
-      if (detected.contains(gameName, Qt::CaseInsensitive) ||
-          gameName.contains(detected, Qt::CaseInsensitive)) {
-        const QString path = QString::fromUtf8(
-            gameList.games[i].install_path ? gameList.games[i].install_path : "");
-        if (!path.isEmpty()) {
-          pathEdit->setText(path);
+    // Use detectAllGames to find the install path
+    const GameScanResult scanResult = detectAllGames();
+    for (int i = 0; i < scanResult.games.size(); ++i) {
+      const DetectedGame& detected = scanResult.games[i];
+      if (detected.name.contains(gameName, Qt::CaseInsensitive) ||
+          gameName.contains(detected.name, Qt::CaseInsensitive)) {
+        if (!detected.install_path.isEmpty()) {
+          pathEdit->setText(detected.install_path);
           break;
         }
       }
     }
-    nak_game_list_free(gameList);
   };
 
   QObject::connect(gameCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -631,24 +741,15 @@ void ProtonSettingsTab::showGameRegistryDialog()
   m_pendingProtonPath = protonPath;
 
   m_installWatcher.setFuture(
-      QtConcurrent::run([prefixPath, protonName, protonPath,
+      QtConcurrent::run([prefixPath, protonPath,
                          selectedGame, gamePath]() -> InstallResult {
-        const QByteArray prefixUtf8    = prefixPath.toUtf8();
-        const QByteArray protonNmUtf8  = protonName.toUtf8();
-        const QByteArray protonPthUtf8 = protonPath.toUtf8();
-        const QByteArray gameUtf8      = selectedGame.toUtf8();
-        const QByteArray pathUtf8      = gamePath.toUtf8();
-
-        char* error = nak_apply_registry_for_game_path(
-            prefixUtf8.constData(), protonNmUtf8.constData(),
-            protonPthUtf8.constData(), gameUtf8.constData(),
-            pathUtf8.constData(), &ProtonSettingsTab::logCallback);
+        const QString err = applyGameRegistryNative(
+            prefixPath, protonPath, selectedGame, gamePath,
+            &ProtonSettingsTab::logCallback);
 
         InstallResult r;
-        if (error != nullptr) {
-          r.error = QString::fromUtf8(error);
-          nak_string_free(error);
-        }
+        if (!err.isEmpty())
+          r.error = err;
 
         return r;
       }));
@@ -720,3 +821,4 @@ void ProtonSettingsTab::onInstallFinished()
   ui->protonStatusLabel->setText(tr("Done"));
   refreshState();
 }
+

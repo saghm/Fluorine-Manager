@@ -15,9 +15,8 @@
 #include <gamebryosavegameinfo.h>
 #include <gamebryounmanagedmods.h>
 
-#ifdef HAS_NAK_FFI
-#include <nak_ffi.h>
-#include "scopeguard.h"
+#ifndef _WIN32
+#include "gamedetection.h"
 #endif
 
 #include <QCoreApplication>
@@ -85,23 +84,17 @@ QString GameFalloutTTW::identifyGamePath() const
   QString path = "Software\\Bethesda Softworks\\FalloutNV";
   result       = findInRegistry(HKEY_LOCAL_MACHINE, path.toStdWString().c_str(),
                                 L"Installed Path");
-#elif defined(HAS_NAK_FFI)
+#else
   // TTW uses FalloutNV as its base game, so look for Fallout New Vegas
-  // (the base class would try matching "TTW" which NaK doesn't know about)
-  NakGameList gameList = nak_detect_all_games();
-  ON_BLOCK_EXIT([&]() {
-    nak_game_list_free(gameList);
-  });
-
-  for (size_t i = 0; i < gameList.count; ++i) {
-    const NakGame& game = gameList.games[i];
-    QString detectedName = QString::fromUtf8(game.name);
-    if (detectedName.contains("Fallout", Qt::CaseInsensitive) &&
-        detectedName.contains("Vegas", Qt::CaseInsensitive)) {
-      QString detectedPath = QString::fromUtf8(game.install_path);
-      if (looksValid(QDir(detectedPath))) {
-        result = detectedPath;
-        break;
+  {
+    const GameScanResult scanResult = detectAllGames();
+    for (const DetectedGame& game : scanResult.games) {
+      if (game.name.contains("Fallout", Qt::CaseInsensitive) &&
+          game.name.contains("Vegas", Qt::CaseInsensitive)) {
+        if (looksValid(QDir(game.install_path))) {
+          result = game.install_path;
+          break;
+        }
       }
     }
   }

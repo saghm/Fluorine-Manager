@@ -58,11 +58,7 @@ target_link_libraries(game_gamebryo
         $<IF:$<TARGET_EXISTS:lz4::lz4>,lz4::lz4,PkgConfig::LZ4>
 )
 
-# NaK FFI for game detection (replaces Windows registry)
-if(TARGET mo2::nak_ffi)
-    target_link_libraries(game_gamebryo PRIVATE mo2::nak_ffi)
-    target_compile_definitions(game_gamebryo PRIVATE HAS_NAK_FFI)
-endif()
+# Game detection symbols are in libuibase.so (already linked via mo2::uibase).
 
 target_include_directories(game_gamebryo PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 

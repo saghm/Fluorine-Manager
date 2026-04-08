@@ -39,8 +39,9 @@
 #include <winver.h>
 #endif
 
-#ifdef HAS_NAK_FFI
-#include <nak_ffi.h>
+#ifndef _WIN32
+#include "gamedetection.h"
+#include "steamdetection.h"
 #endif
 
 #include <optional>
@@ -230,12 +231,9 @@ QFileInfo GameGamebryo::findInGameFolder(const QString& relativePath) const
 
 QString GameGamebryo::identifyGamePath() const
 {
-#ifdef HAS_NAK_FFI
-  // Use NaK to detect game installations on Linux
-  NakGameList gameList = nak_detect_all_games();
-  ON_BLOCK_EXIT([&]() {
-    nak_game_list_free(gameList);
-  });
+#ifndef _WIN32
+  // Detect game installations on Linux.
+  const GameScanResult scanResult = detectAllGames();
 
   QString shortName = gameShortName();
   QString fullName  = gameName();
@@ -258,17 +256,14 @@ QString GameGamebryo::identifyGamePath() const
     return anyToken;
   };
 
-  for (size_t i = 0; i < gameList.count; ++i) {
-    const NakGame& game = gameList.games[i];
-    QString detectedName = QString::fromUtf8(game.name);
-    QString detectedPath = QString::fromUtf8(game.install_path);
-    if (detectedName.compare(fullName, Qt::CaseInsensitive) == 0 ||
-        detectedName.compare(shortName, Qt::CaseInsensitive) == 0 ||
-        detectedName.contains(fullName, Qt::CaseInsensitive) ||
-        detectedName.contains(shortName, Qt::CaseInsensitive) ||
-        tokensMatch(detectedName, fullName) || tokensMatch(detectedName, shortName)) {
-      if (looksValid(QDir(detectedPath))) {
-        return detectedPath;
+  for (const DetectedGame& game : scanResult.games) {
+    if (game.name.compare(fullName, Qt::CaseInsensitive) == 0 ||
+        game.name.compare(shortName, Qt::CaseInsensitive) == 0 ||
+        game.name.contains(fullName, Qt::CaseInsensitive) ||
+        game.name.contains(shortName, Qt::CaseInsensitive) ||
+        tokensMatch(game.name, fullName) || tokensMatch(game.name, shortName)) {
+      if (looksValid(QDir(game.install_path))) {
+        return game.install_path;
       }
     }
   }
@@ -857,14 +852,8 @@ QString GameGamebryo::parseEpicGamesLocation(const QStringList& manifests)
 QString GameGamebryo::parseSteamLocation(const QString& appid,
                                          const QString& directoryName)
 {
-#ifdef HAS_NAK_FFI
-  // Use NaK to find Steam path
-  char* steamPathC = nak_find_steam_path();
-  QString steamLocation;
-  if (steamPathC) {
-    steamLocation = QString::fromUtf8(steamPathC);
-    nak_string_free(steamPathC);
-  }
+#ifndef _WIN32
+  QString steamLocation = findSteamPath();
 #elif defined(_WIN32)
   QString path = "Software\\Valve\\Steam";
   QString steamLocation =

@@ -56,6 +56,7 @@ struct Mo2FsContext
     uint64_t size = 0;
     std::chrono::system_clock::time_point mtime{};
     std::string real_path;
+    mode_t cached_mode = 0;
   };
   struct OpenDir
   {
@@ -97,6 +98,9 @@ struct Mo2FsContext
     }
   };
   std::unordered_map<std::pair<fuse_ino_t, std::string>, LookupCacheEntry, PairHash> lookup_cache;
+  // Reverse index: parent_ino → set of normalized child names in lookup_cache.
+  // Makes invalidation O(children) instead of O(total_cache_size).
+  std::unordered_map<fuse_ino_t, std::vector<std::string>> lookup_cache_by_parent;
   mutable std::mutex lookup_cache_mutex;
 
   std::atomic<uint64_t> next_dh{1};

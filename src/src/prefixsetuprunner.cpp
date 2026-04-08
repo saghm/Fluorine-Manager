@@ -2,7 +2,9 @@
 
 #include "fluorinepaths.h"
 
-#include <nak_ffi.h>
+#include "gamedetection.h"
+#include "steamdetection.h"
+#include "prefixsymlinks.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -1284,9 +1286,8 @@ bool PrefixSetupRunner::stepGameDetection()
 {
   emit logMessage("Auto-detecting installed games...");
 
-  NakGameList gameList = nak_detect_all_games();
-  if (gameList.count == 0) {
-    nak_game_list_free(gameList);
+  GameScanResult scanResult = detectAllGames();
+  if (scanResult.games.isEmpty()) {
     emit logMessage("No games detected");
     return true;
   }
@@ -1295,15 +1296,14 @@ bool PrefixSetupRunner::stepGameDetection()
   QString regContent = QStringLiteral("Windows Registry Editor Version 5.00\n\n");
   int gameCount = 0;
 
-  for (size_t i = 0; i < gameList.count; ++i) {
-    const NakGame& game = gameList.games[i];
-    if (!game.registry_path || !game.registry_value)
+  for (const DetectedGame& game : scanResult.games) {
+    if (game.registry_path.isEmpty() || game.registry_value.isEmpty())
       continue;
 
-    const QString gameName    = QString::fromUtf8(game.name);
-    const QString installPath = QString::fromUtf8(game.install_path);
-    const QString rPath       = QString::fromUtf8(game.registry_path);
-    const QString rVal        = QString::fromUtf8(game.registry_value);
+    const QString& gameName    = game.name;
+    const QString& installPath = game.install_path;
+    const QString& rPath       = game.registry_path;
+    const QString& rVal        = game.registry_value;
 
     // Convert Linux path to Wine Z: drive path with escaped backslashes.
     QString winePath = "Z:" + QString(installPath).replace('/', "\\\\");
@@ -1318,8 +1318,6 @@ bool PrefixSetupRunner::stepGameDetection()
     emit logMessage(QStringLiteral("  Found: %1 -> %2").arg(gameName, installPath));
     ++gameCount;
   }
-
-  nak_game_list_free(gameList);
 
   if (gameCount == 0) {
     emit logMessage("No games with valid registry paths");
@@ -1420,18 +1418,10 @@ bool PrefixSetupRunner::stepPostSetup()
   emit logMessage("Running post-setup tasks...");
 
   // Ensure AppData temp directory exists.
-  const QByteArray prefixUtf8 = m_prefixPath.toUtf8();
-  nak_ensure_temp_directory(prefixUtf8.constData());
+  ensureTempDirectory(m_prefixPath);
 
   // Create game symlinks.
-  nak_create_game_symlinks_auto(prefixUtf8.constData());
-
-  // Ensure DXVK config.
-  if (char* err = nak_ensure_dxvk_conf(); err != nullptr) {
-    emit logMessage(QStringLiteral("Warning: dxvk.conf: %1").arg(QString::fromUtf8(err)));
-    nak_string_free(err);
-    // Non-fatal.
-  }
+  createGameSymlinksAuto(m_prefixPath);
 
   emit logMessage("Post-setup complete");
   return true;
@@ -1640,13 +1630,10 @@ QString PrefixSetupRunner::findProtonScript() const
 
 QString PrefixSetupRunner::detectSteamPath() const
 {
-  // Use NaK FFI first.
-  if (char* path = nak_find_steam_path(); path != nullptr) {
-    QString result = QString::fromUtf8(path);
-    nak_string_free(path);
-    if (!result.isEmpty())
-      return result;
-  }
+  // Use native Steam detection first.
+  const QString steamPath = findSteamPath();
+  if (!steamPath.isEmpty())
+    return steamPath;
 
   // Fallback.
   const QString home = QDir::homePath();
