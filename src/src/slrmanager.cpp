@@ -47,6 +47,7 @@ QByteArray httpGet(const QString& url, const int* cancelFlag,
       return {};
   }
 
+  QByteArray inMemoryBuf;
   qint64 totalBytes = -1;
   qint64 received   = 0;
 
@@ -57,6 +58,8 @@ QByteArray httpGet(const QString& url, const int* cancelFlag,
     received += chunk.size();
     if (outFile.isOpen())
       outFile.write(chunk);
+    else
+      inMemoryBuf.append(chunk);
     if (progressCb && totalBytes > 0)
       progressCb(static_cast<float>(received) / static_cast<float>(totalBytes));
   });
@@ -87,11 +90,8 @@ QByteArray httpGet(const QString& url, const int* cancelFlag,
     return {};
   }
 
-  QByteArray body;
-  if (destFile.isEmpty())
-    body = reply->readAll();  // small responses fully buffered
   reply->deleteLater();
-  return body;
+  return inMemoryBuf;
 }
 
 }  // namespace
