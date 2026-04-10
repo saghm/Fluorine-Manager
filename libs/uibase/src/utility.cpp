@@ -152,6 +152,7 @@ static bool shellOpCopy(const QStringList& sourceNames,
     for (const auto& src : sourceNames) {
       QFileInfo srcInfo(src);
       QString dest = destinationNames[0] + "/" + srcInfo.fileName();
+      QFile::remove(dest);
       if (!QFile::copy(src, dest)) {
         return false;
       }
@@ -169,6 +170,7 @@ static bool shellOpCopy(const QStringList& sourceNames,
     if (!destInfo.dir().exists()) {
       destInfo.dir().mkpath(".");
     }
+    QFile::remove(destinationNames[i]);
     if (!QFile::copy(sourceNames[i], destinationNames[i])) {
       return false;
     }
