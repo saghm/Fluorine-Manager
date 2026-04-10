@@ -1583,7 +1583,15 @@ void mo2_rename(fuse_req_t req, fuse_ino_t parent, const char* name,
                 fuse_ino_t newparent, const char* newname, unsigned int flags)
 {
   Mo2FsContext* ctx = getContext(req);
-  if (ctx == nullptr || name == nullptr || newname == nullptr || flags != 0) {
+  if (ctx == nullptr || name == nullptr || newname == nullptr) {
+    fuse_reply_err(req, EINVAL);
+    return;
+  }
+
+  // Reject unsupported flags (only RENAME_NOREPLACE is supported).
+  // Wine uses renameat2(RENAME_NOREPLACE) for MoveFileW() calls where
+  // ReplaceIfExists is FALSE (e.g. xEdit saving plugins).
+  if (flags & ~(unsigned int)RENAME_NOREPLACE) {
     fuse_reply_err(req, EINVAL);
     return;
   }
@@ -1606,7 +1614,18 @@ void mo2_rename(fuse_req_t req, fuse_ino_t parent, const char* name,
     return;
   }
 
+  // RENAME_NOREPLACE: fail if destination already exists in the VFS
+  if (flags & RENAME_NOREPLACE) {
+    const auto destSnap = snapshotForPath(ctx, newRelative);
+    if (destSnap.found) {
+      fuse_reply_err(req, EEXIST);
+      return;
+    }
+  }
+
   if (!ctx->overwrite->rename(oldRelative, newRelative)) {
+    std::fprintf(stderr, "[VFS] rename EACCES: '%s' -> '%s' (flags=%u, backing=%d)\n",
+                 oldRelative.c_str(), newRelative.c_str(), flags, oldSnap.is_backing);
     fuse_reply_err(req, EACCES);
     return;
   }
