@@ -773,6 +773,9 @@ QString ModInfoRegular::getDescription() const
         .arg(name());
   } else {
     const std::set<int>& categories = getCategories();
+    if (categories.empty()) {
+      return QString();
+    }
     std::wostringstream categoryString;
     categoryString << ToWString(tr("Categories: <br>"));
     CategoryFactory& categoryFactory = CategoryFactory::instance();

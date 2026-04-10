@@ -929,9 +929,9 @@ bool Profile::enableLocalSaves(bool enable)
            "games)"),
         QDialogButtonBox::No | QDialogButtonBox::Yes | QDialogButtonBox::Cancel,
         QDialogButtonBox::No);
-    if (res == QDialogButtonBox::Yes) {
+    if (res == QMessageBox::Yes) {
       shellDelete(QStringList(m_Directory.absoluteFilePath("saves")));
-    } else if (res == QDialogButtonBox::No) {
+    } else if (res == QMessageBox::No) {
       // No action
     } else {
       return false;
@@ -990,7 +990,7 @@ bool Profile::enableLocalSettings(bool enable)
                                    QDialogButtonBox::No | QDialogButtonBox::Yes |
                                        QDialogButtonBox::Cancel,
                                    QDialogButtonBox::No);
-    if (res == QDialogButtonBox::Yes) {
+    if (res == QMessageBox::Yes) {
       QStringList filesToDelete;
       for (QString file : m_GamePlugin->iniFiles()) {
         QString resolved = MOBase::resolveFileCaseInsensitive(
@@ -998,7 +998,7 @@ bool Profile::enableLocalSettings(bool enable)
         filesToDelete << resolved;
       }
       shellDelete(filesToDelete, true);
-    } else if (res == QDialogButtonBox::No) {
+    } else if (res == QMessageBox::No) {
       // No action
     } else {
       return false;
