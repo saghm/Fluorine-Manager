@@ -2266,16 +2266,16 @@ bool OrganizerCore::checkGameRegistryKey()
   static const QMap<QString, QPair<QString, QString>> gameRegistryKeys = {
     {"Enderal",    {"Software\\SureAI\\Enderal",                            "Install_Path"}},
     {"EnderalSE",  {"Software\\SureAI\\EnderalSE",                          "Install_Path"}},
-    {"Fallout3",   {"Software\\Bethesda Softworks\\Fallout3",               "Installed Path"}},
-    {"Fallout4",   {"Software\\Bethesda Softworks\\Fallout4",               "Installed Path"}},
-    {"Fallout4VR", {"Software\\Bethesda Softworks\\Fallout 4 VR",           "Installed Path"}},
-    {"FalloutNV",  {"Software\\Bethesda Softworks\\FalloutNV",              "Installed Path"}},
-    {"Morrowind",  {"Software\\Bethesda Softworks\\Morrowind",              "Installed Path"}},
-    {"Oblivion",   {"Software\\Bethesda Softworks\\Oblivion",               "Installed Path"}},
-    {"Skyrim",     {"Software\\Bethesda Softworks\\Skyrim",                 "Installed Path"}},
-    {"SkyrimSE",   {"Software\\Bethesda Softworks\\Skyrim Special Edition", "Installed Path"}},
-    {"SkyrimVR",   {"Software\\Bethesda Softworks\\Skyrim VR",              "Installed Path"}},
-    {"TTW",        {"Software\\Bethesda Softworks\\FalloutNV",              "Installed Path"}},
+    {"Fallout3",   {"Software\\Bethesda Softworks\\Fallout3",               "installed path"}},
+    {"Fallout4",   {"Software\\Bethesda Softworks\\Fallout4",               "installed path"}},
+    {"Fallout4VR", {"Software\\Bethesda Softworks\\Fallout 4 VR",           "installed path"}},
+    {"FalloutNV",  {"Software\\Bethesda Softworks\\FalloutNV",              "installed path"}},
+    {"Morrowind",  {"Software\\Bethesda Softworks\\Morrowind",              "installed path"}},
+    {"Oblivion",   {"Software\\Bethesda Softworks\\Oblivion",               "installed path"}},
+    {"Skyrim",     {"Software\\Bethesda Softworks\\Skyrim",                 "installed path"}},
+    {"SkyrimSE",   {"Software\\Bethesda Softworks\\Skyrim Special Edition", "installed path"}},
+    {"SkyrimVR",   {"Software\\Bethesda Softworks\\Skyrim VR",              "installed path"}},
+    {"TTW",        {"Software\\Bethesda Softworks\\FalloutNV",              "installed path"}},
   };
 
   const auto* game = managedGame();
@@ -2306,8 +2306,11 @@ bool OrganizerCore::checkGameRegistryKey()
     return true;
   }
 
-  // Convert Linux path to Wine Z: path for comparison
-  const QString winePath = "Z:" + QString(gameDir).replace("/", "\\");
+  // Convert Linux path to Wine Z: path for comparison.
+  // Trailing backslash required — game launchers expect it (matches Steam's format).
+  QString winePath = "Z:" + QString(gameDir).replace("/", "\\");
+  if (!winePath.endsWith('\\'))
+    winePath += '\\';
 
   // Read the current registry value (check both normal and Wow6432Node)
   QString registryPath = prefix.readHklmValue(subKey, valueName);
