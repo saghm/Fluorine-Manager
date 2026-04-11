@@ -2316,8 +2316,17 @@ bool OrganizerCore::checkGameRegistryKey()
     registryPath = prefix.readHklmValue(wow64Key, valueName);
   }
 
+  // Normalize trailing separators before comparing — Steam writes paths with
+  // a trailing backslash, so the registry value may differ only in that.
+  auto stripTrailingSep = [](QString s) {
+    while (s.endsWith('\\') || s.endsWith('/'))
+      s.chop(1);
+    return s;
+  };
+
   if (registryPath.isEmpty() ||
-      registryPath.compare(winePath, Qt::CaseInsensitive) != 0) {
+      stripTrailingSep(registryPath).compare(stripTrailingSep(winePath),
+                                             Qt::CaseInsensitive) != 0) {
     const QString displayRegPath = registryPath.isEmpty()
         ? tr("<not set>") : registryPath;
 

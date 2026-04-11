@@ -1306,7 +1306,10 @@ bool PrefixSetupRunner::stepGameDetection()
     const QString& rVal        = game.registry_value;
 
     // Convert Linux path to Wine Z: drive path with escaped backslashes.
+    // Trailing backslash required — game launchers expect it (matches Steam's format).
     QString winePath = "Z:" + QString(installPath).replace('/', "\\\\");
+    if (!winePath.endsWith("\\\\"))
+      winePath += "\\\\";
 
     regContent += QStringLiteral(
         "[HKEY_LOCAL_MACHINE\\%1]\n\"%2\"=\"%3\"\n\n"
