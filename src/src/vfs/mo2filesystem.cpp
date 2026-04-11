@@ -1623,11 +1623,32 @@ void mo2_rename(fuse_req_t req, fuse_ino_t parent, const char* name,
     }
   }
 
+  std::string newRealPath;
+
   if (!ctx->overwrite->rename(oldRelative, newRelative)) {
-    std::fprintf(stderr, "[VFS] rename EACCES: '%s' -> '%s' (flags=%u, backing=%d)\n",
-                 oldRelative.c_str(), newRelative.c_str(), flags, oldSnap.is_backing);
-    fuse_reply_err(req, EACCES);
-    return;
+    // Source file is not in staging or overwrite — it's a backing (game) file
+    // or a mod file. Copy it to staging at the destination path instead of
+    // moving the original. This is the VFS equivalent of a rename: the file
+    // appears at the new path and disappears from the old path in the virtual
+    // view, but we never modify the real game/mod directories.
+    if (oldSnap.is_directory) {
+      fuse_reply_err(req, EACCES);
+      return;
+    }
+
+    try {
+      if (oldSnap.is_backing && ctx->backing_dir_fd >= 0) {
+        newRealPath = ctx->overwrite->copyOnWriteFromFd(ctx->backing_dir_fd,
+                                                        newRelative);
+      } else {
+        newRealPath = ctx->overwrite->copyOnWrite(oldSnap.real_path, newRelative);
+      }
+    } catch (...) {
+      std::fprintf(stderr, "[VFS] rename COW failed: '%s' -> '%s'\n",
+                   oldRelative.c_str(), newRelative.c_str());
+      fuse_reply_err(req, EIO);
+      return;
+    }
   }
 
   {
@@ -1638,10 +1659,12 @@ void mo2_rename(fuse_req_t req, fuse_ino_t parent, const char* name,
     if (oldSnap.is_directory) {
       ctx->tree->root.insertDirectory(splitPath(newRelative));
     } else {
-      const std::string staged = ctx->overwrite->stagingPath(newRelative);
-      const std::string over   = ctx->overwrite->overwritePath(newRelative);
-      const std::string real   = fs::exists(staged) ? staged : over;
-      ctx->tree->root.insertFile(splitPath(newRelative), real, oldSnap.size,
+      if (newRealPath.empty()) {
+        const std::string staged = ctx->overwrite->stagingPath(newRelative);
+        const std::string over   = ctx->overwrite->overwritePath(newRelative);
+        newRealPath = fs::exists(staged) ? staged : over;
+      }
+      ctx->tree->root.insertFile(splitPath(newRelative), newRealPath, oldSnap.size,
                                  oldSnap.mtime, "Staging");
     }
     invalidateNodeCache(ctx, newRelative);
