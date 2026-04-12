@@ -363,6 +363,17 @@ BIN_DST="${FLUORINE_DATA}/bin"
 HERE_REAL="$(readlink -f "${HERE}")"
 DST_REAL="$(readlink -f "${BIN_DST}" 2>/dev/null || echo "")"
 if [ "${HERE_REAL}" != "${DST_REAL}" ]; then
+    # Manifest lists top-level entries that belong to Fluorine. Without it we
+    # can't distinguish our files from whatever else the user parked next to
+    # the launcher (e.g. extracted into ~/Downloads alongside their mods).
+    MANIFEST="${HERE}/.fluorine-manifest"
+    if [ ! -f "${MANIFEST}" ] || [ ! -f "${HERE}/ModOrganizer-core" ]; then
+        echo "ERROR: Fluorine launcher can't find its bundle files in ${HERE}." >&2
+        echo "Extract the release archive into its own directory and run the" >&2
+        echo "launcher from there — not from a folder containing other files." >&2
+        exit 1
+    fi
+
     # Fingerprint from size+mtime (not inode) so re-extracting the same tarball
     # onto a different filesystem doesn't trigger a spurious full resync.
     CURRENT_VER="$(stat -c '%s:%Y' "${HERE}/ModOrganizer-core" 2>/dev/null || echo "unknown")"
@@ -375,7 +386,14 @@ if [ "${HERE_REAL}" != "${DST_REAL}" ]; then
         STAGE="${BIN_DST}.new"
         rm -rf "${STAGE}"
         mkdir -p "${STAGE}"
-        (cd "${HERE}" && tar --exclude-vcs -cf - .) | (cd "${STAGE}" && tar -xf -)
+        # Copy only entries listed in the manifest — never the whole HERE dir,
+        # or we'd slurp any unrelated files sitting next to the launcher.
+        while IFS= read -r entry; do
+            [ -z "${entry}" ] && continue
+            [ -e "${HERE}/${entry}" ] || continue
+            cp -a "${HERE}/${entry}" "${STAGE}/"
+        done < "${MANIFEST}"
+        cp -a "${MANIFEST}" "${STAGE}/"
         rm -rf "${BIN_DST}"
         mv "${STAGE}" "${BIN_DST}"
         echo "${CURRENT_VER}" > "${MARKER}"
@@ -439,6 +457,14 @@ mkdir -p "${OUT_DIR}/icons"
 cp -f /src/data/icons/com.fluorine.manager.desktop "${OUT_DIR}/icons/"
 cp -f /src/data/icons/com.fluorine.manager.png "${OUT_DIR}/icons/"
 cp -f /src/data/icons/com.fluorine.manager.metainfo.xml "${OUT_DIR}/icons/"
+
+# ── Manifest of top-level entries ──
+# The launcher's sync step copies only files listed here into
+# ~/.local/share/fluorine/bin/. Without a manifest it would have to guess
+# (previously: tar the whole extraction dir), and would slurp any unrelated
+# files the user parked next to the launcher — e.g. 38 GB of mods in Downloads.
+(cd "${OUT_DIR}" && ls -A | grep -v '^\.fluorine-manifest$') > "${OUT_DIR}/.fluorine-manifest"
+echo "Wrote manifest: $(wc -l < "${OUT_DIR}/.fluorine-manifest") entries"
 
 # ── Determine build mode ──
 # BUILD_MODE is passed from build.sh: tarball (default), installer, appimage, all
