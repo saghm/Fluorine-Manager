@@ -40,7 +40,6 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "envwindows.h"
 #include "shared/windows_error.h"
 #include <Shellapi.h>
-#include <usvfs/usvfs.h>
 #else
 #include <QProcess>
 #include <QStandardPaths>

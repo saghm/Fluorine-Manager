@@ -39,12 +39,8 @@
 #include <uibase/scopeguard.h>
 #include <uibase/filesystemutilities.h>
 #include <uibase/utility.h>
-#ifdef _WIN32
-#include <usvfs/usvfs.h>
-#else
 #include "fluorineconfig.h"
 #include "wineprefix.h"
-#endif
 
 #include <chrono>
 #include <cstdio>

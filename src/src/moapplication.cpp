@@ -319,9 +319,8 @@ int MOApplication::setup(MOMultiProcess& multiProcess, bool forceSelect)
 #ifndef GITID
 #define GITID "unknown"
 #endif
-  log::info("starting Mod Organizer version {} revision {} in {}, usvfs: {}",
-            createVersionInfo().string(), GITID, QCoreApplication::applicationDirPath(),
-            MOShared::getUsvfsVersionString());
+  log::info("starting Mod Organizer version {} revision {} in {}",
+            createVersionInfo().string(), GITID, QCoreApplication::applicationDirPath());
 
   if (multiProcess.secondary()) {
     log::debug("another instance of MO is running but --multiple was given");

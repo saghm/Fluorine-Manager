@@ -90,8 +90,7 @@ AboutDialog::AboutDialog(const QString& version, QWidget* parent)
   ui->revisionLabel->setText(ui->revisionLabel->text() + " unknown");
 #endif
 
-  ui->usvfsLabel->setText(ui->usvfsLabel->text() + " " +
-                          MOShared::getUsvfsVersionString());
+  ui->usvfsLabel->setText(ui->usvfsLabel->text() + " FUSE 3");
   ui->licenseText->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
 }
 

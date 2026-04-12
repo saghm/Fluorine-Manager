@@ -22,10 +22,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "../mainwindow.h"
 #include "windows_error.h"
 #include <uibase/log.h>
-#ifdef _WIN32
-#include <usvfs/usvfs.h>
-#include <usvfs/usvfs_version.h>
-#else
+#ifndef _WIN32
 #include <pthread.h>
 #include <filesystem>
 #include <algorithm>
@@ -326,40 +323,6 @@ Version createVersionInfo()
 }
 #endif
 
-#ifdef _WIN32
-QString getUsvfsDLLVersion()
-{
-  QString s = usvfsVersionString();
-  if (s.isEmpty()) {
-    s = "?";
-  }
-  return s;
-}
-
-QString getUsvfsVersionString()
-{
-  const QString dll    = getUsvfsDLLVersion();
-  const QString header = USVFS_VERSION_STRING;
-
-  QString usvfsVersion;
-
-  if (dll == header) {
-    return dll;
-  } else {
-    return "dll is " + dll + ", compiled against " + header;
-  }
-}
-#else
-QString getUsvfsDLLVersion()
-{
-  return "N/A (Linux)";
-}
-
-QString getUsvfsVersionString()
-{
-  return "N/A (Linux - using FUSE VFS)";
-}
-#endif
 
 #ifdef _WIN32
 void SetThisThreadName(const QString& s)

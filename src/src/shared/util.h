@@ -56,7 +56,6 @@ std::wstring ToLowerCopy(std::wstring_view text);
 bool CaseInsensitiveEqual(const std::wstring& lhs, const std::wstring& rhs);
 
 MOBase::Version createVersionInfo();
-QString getUsvfsVersionString();
 
 void SetThisThreadName(const QString& s);
 void checkDuplicateShortcuts(const QMenu& m);

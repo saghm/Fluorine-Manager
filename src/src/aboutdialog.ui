@@ -107,7 +107,7 @@
          <item>
           <widget class="QLabel" name="usvfsLabel">
            <property name="text">
-            <string>usvfs:</string>
+            <string>VFS:</string>
            </property>
           </widget>
          </item>

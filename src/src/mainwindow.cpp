@@ -81,11 +81,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <uibase/tutorialmanager.h>
 #include <uibase/utility.h>
 #include <uibase/versioninfo.h>
-#ifdef _WIN32
-#include <usvfs/usvfs.h>
-#else
 #include "fluorinepaths.h"
-#endif
 
 #include "directoryrefresher.h"
 #include "shared/directoryentry.h"

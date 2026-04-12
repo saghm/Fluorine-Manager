@@ -55,11 +55,6 @@ list(APPEND ORGANIZER_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/settingsdialogproton.h
     ${CMAKE_CURRENT_SOURCE_DIR}/wineprefix.h)
 
-# Remove Windows-only sources (replaced by Linux equivalents)
-list(REMOVE_ITEM ORGANIZER_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/usvfsconnector.cpp)
-list(REMOVE_ITEM ORGANIZER_HEADERS
-    ${CMAKE_CURRENT_SOURCE_DIR}/usvfsconnector.h)
 
 # Remove WebEngine-dependent sources when not available
 if(NOT Qt6WebEngineWidgets_FOUND)
