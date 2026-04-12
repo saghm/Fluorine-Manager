@@ -636,17 +636,6 @@ void PluginList::addInformation(const QString& name, const QString& message)
   }
 }
 
-void PluginList::addLootReport(const QString& name, Loot::Plugin plugin)
-{
-  auto iter = m_ESPsByName.find(name);
-
-  if (iter != m_ESPsByName.end()) {
-    m_AdditionalInfo[name].loot = std::move(plugin);
-  } else {
-    log::warn("failed to associate loot report for \"{}\"", name);
-  }
-}
-
 bool PluginList::isEnabled(int index)
 {
   return m_ESPs.at(index).enabled;
@@ -1595,67 +1584,9 @@ QVariant PluginList::tooltipData(const QModelIndex& modelIndex) const
 
       toolTip += "</ul>";
     }
-
-    // loot
-    toolTip += makeLootTooltip(itor->second.loot);
   }
 
   return toolTip;
-}
-
-QString PluginList::makeLootTooltip(const Loot::Plugin& loot) const
-{
-  QString s;
-
-  for (auto&& f : loot.incompatibilities) {
-    s += "<li>" +
-         tr("Incompatible with %1")
-             .arg(f.displayName.isEmpty() ? f.name : f.displayName) +
-         "</li>";
-  }
-
-  for (auto&& m : loot.missingMasters) {
-    s += "<li>" + tr("Depends on missing %1").arg(m) + "</li>";
-  }
-
-  for (auto&& m : loot.messages) {
-    s += "<li>";
-
-    switch (m.type) {
-    case log::Warning:
-      s += tr("Warning") + ": ";
-      break;
-
-    case log::Error:
-      s += tr("Error") + ": ";
-      break;
-
-    case log::Info:  // fall-through
-    case log::Debug:
-    default:
-      // nothing
-      break;
-    }
-
-    s += m.text + "</li>";
-  }
-
-  for (auto&& d : loot.dirty) {
-    s += "<li>" + d.toString(false) + "</li>";
-  }
-
-  for (auto&& c : loot.clean) {
-    s += "<li>" + c.toString(true) + "</li>";
-  }
-
-  if (!s.isEmpty()) {
-    s = "<hr>"
-        "<ul style=\"margin-top:0px; padding-top:0px; margin-left:15px; "
-        "-qt-list-indent: 0;\">" +
-        s + "</ul>";
-  }
-
-  return s;
 }
 
 QVariant PluginList::iconData(const QModelIndex& modelIndex) const
@@ -1712,45 +1643,17 @@ QVariant PluginList::iconData(const QModelIndex& modelIndex) const
     result.append(":/MO/gui/unchecked-checkbox");
   }
 
-  if (info && !info->loot.dirty.empty()) {
-    result.append(":/MO/gui/edit_clear");
-  }
-
   return result;
 }
 
-bool PluginList::isProblematic(const ESPInfo& esp, const AdditionalInfo* info) const
+bool PluginList::isProblematic(const ESPInfo& esp, const AdditionalInfo*) const
 {
-  if (esp.masterUnset.size() > 0) {
-    return true;
-  }
-
-  if (info) {
-    if (!info->loot.incompatibilities.empty()) {
-      return true;
-    }
-
-    if (!info->loot.missingMasters.empty()) {
-      return true;
-    }
-  }
-
-  return false;
+  return esp.masterUnset.size() > 0;
 }
 
-bool PluginList::hasInfo(const ESPInfo& esp, const AdditionalInfo* info) const
+bool PluginList::hasInfo(const ESPInfo&, const AdditionalInfo* info) const
 {
-  if (info) {
-    if (!info->messages.empty()) {
-      return true;
-    }
-
-    if (!info->loot.messages.empty()) {
-      return true;
-    }
-  }
-
-  return false;
+  return info && !info->messages.empty();
 }
 
 bool PluginList::setData(const QModelIndex& modIndex, const QVariant& value, int role)

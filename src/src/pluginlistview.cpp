@@ -25,8 +25,7 @@ using namespace MOBase;
 
 PluginListView::PluginListView(QWidget* parent)
     : QTreeView(parent), m_sortProxy(nullptr),
-      m_Scrollbar(new ViewMarkingScrollBar(this, Qt::BackgroundRole)),
-      m_didUpdateMasterList(false)
+      m_Scrollbar(new ViewMarkingScrollBar(this, Qt::BackgroundRole))
 {
   setVerticalScrollBar(m_Scrollbar);
   MOBase::setCustomizableColumns(this);
@@ -177,50 +176,6 @@ void PluginListView::onFilterChanged(const QString& filter)
   updatePluginCount();
 }
 
-void PluginListView::onSortButtonClicked()
-{
-  const bool offline = m_core->settings().network().offlineMode();
-
-  auto r = QMessageBox::No;
-
-  if (offline) {
-    r = QMessageBox::question(topLevelWidget(), tr("Sorting plugins"),
-                              tr("Are you sure you want to sort your plugins list?") +
-                                  "\r\n\r\n" +
-                                  tr("Note: You are currently in offline mode and LOOT "
-                                     "will not update the master list."),
-                              QMessageBox::Yes | QMessageBox::No);
-  } else {
-    r = QMessageBox::question(topLevelWidget(), tr("Sorting plugins"),
-                              tr("Are you sure you want to sort your plugins list?"),
-                              QMessageBox::Yes | QMessageBox::No);
-  }
-
-  if (r != QMessageBox::Yes) {
-    return;
-  }
-
-  m_core->savePluginList();
-
-  topLevelWidget()->setEnabled(false);
-  Guard g([=, this]() {
-    topLevelWidget()->setEnabled(true);
-  });
-
-  // don't try to update the master list in offline mode
-  const bool didUpdateMasterList = offline ? true : m_didUpdateMasterList;
-
-  if (runLoot(topLevelWidget(), *m_core, didUpdateMasterList)) {
-    // don't assume the master list was updated in offline mode
-    if (!offline) {
-      m_didUpdateMasterList = true;
-    }
-
-    m_core->refreshESPList(false);
-    m_core->savePluginList();
-  }
-}
-
 std::pair<QModelIndex, QModelIndexList> PluginListView::selected() const
 {
   return {indexViewToModel(currentIndex()),
@@ -257,13 +212,6 @@ void PluginListView::setup(OrganizerCore& core, MainWindow* mw, Ui::MainWindow* 
   connect(core.pluginList(), &PluginList::esplist_changed, [=, this] {
     updatePluginCount();
   });
-
-#ifdef _WIN32
-  // sort
-  connect(mwui->sortButton, &QPushButton::clicked, [=, this] {
-    onSortButtonClicked();
-  });
-#endif
 
   // filter
   connect(ui.filter, &QLineEdit::textChanged, m_sortProxy,

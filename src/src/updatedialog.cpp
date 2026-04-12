@@ -2,7 +2,6 @@
 #include "ui_updatedialog.h"
 
 #ifdef MO2_WEBENGINE
-#include "lootdialog.h"  // for MarkdownPage
 #include <QWebChannel>
 #endif
 

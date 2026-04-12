@@ -21,7 +21,6 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #define SETTINGS_H
 
 #include "envdump.h"
-#include <lootcli/lootcli.h>
 #include <questionboxmemory.h>
 #include <uibase/filterwidget.h>
 #include <uibase/log.h>
@@ -703,14 +702,10 @@ class DiagnosticsSettings
 public:
   DiagnosticsSettings(QSettings& settings);
 
-  // log level for both MO and usvfs
+  // log level for MO
   //
   MOBase::log::Levels logLevel() const;
   void setLogLevel(MOBase::log::Levels level);
-
-  // log level for loot
-  lootcli::LogLevels lootLogLevel() const;
-  void setLootLogLevel(lootcli::LogLevels level);
 
   // crash dump type for both MO and usvfs
   //

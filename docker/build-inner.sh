@@ -49,10 +49,6 @@ cp -f "${RUNDIR}/ModOrganizer" "${OUT_DIR}/ModOrganizer-core"
 [ -f "${RUNDIR}/README-PORTABLE.txt" ] && cp -f "${RUNDIR}/README-PORTABLE.txt" "${OUT_DIR}/"
 [ -f "/src/src/fluorine-manager" ] && cp -f "/src/src/fluorine-manager" "${OUT_DIR}/"
 
-# lootcli (spawned by MO2 for load-order sorting).
-LOOTCLI="build/libs/lootcli/src/lootcli"
-[ -f "${LOOTCLI}" ] && cp -f "${LOOTCLI}" "${OUT_DIR}/"
-
 # wrestool/icotool no longer needed — icon extraction is built into the C++ PE parser
 
 # ── MO2 plugins (.so) ──
@@ -164,8 +160,6 @@ collect_deps "${OUT_DIR}/ModOrganizer-core" >> "${ALL_DEPS}"
 find "${OUT_DIR}/plugins" -name "*.so" -exec sh -c 'ldd "$1" 2>/dev/null | grep "=>" | awk "{print \$3}" | grep "^/"' _ {} \; >> "${ALL_DEPS}"
 # Our own libs
 find "${OUT_DIR}/lib" -name "*.so*" -exec sh -c 'ldd "$1" 2>/dev/null | grep "=>" | awk "{print \$3}" | grep "^/"' _ {} \; >> "${ALL_DEPS}"
-# lootcli
-[ -f "${OUT_DIR}/lootcli" ] && collect_deps "${OUT_DIR}/lootcli" >> "${ALL_DEPS}"
 sort -u "${ALL_DEPS}" | while read -r dep; do
     dep_name="$(basename "${dep}")"
     # Skip system libs
@@ -230,13 +224,6 @@ if [ -d "${QT6_PLUGIN_DIR}" ]; then
     echo "Bundled Qt6 plugins from ${QT6_PLUGIN_DIR}"
 else
     echo "WARNING: Could not find Qt6 plugin directory"
-fi
-
-# libloot (custom-built, never on user systems).
-if [ -f /usr/local/lib/libloot.so.0 ]; then
-    cp -Lf /usr/local/lib/libloot.so.0 "${OUT_DIR}/lib/"
-    # Create the unversioned symlink too.
-    ln -sf libloot.so.0 "${OUT_DIR}/lib/libloot.so"
 fi
 
 # ── Bundle PBS Python 3.12 runtime ──
@@ -328,16 +315,12 @@ strip --strip-unneeded "${OUT_DIR}/ModOrganizer-core" 2>/dev/null || true
 find "${OUT_DIR}/plugins" -name "*.so" -exec strip --strip-unneeded {} \; 2>/dev/null || true
 find "${OUT_DIR}/dlls" -name "*.so" -o -name "*.dll" | xargs -r strip --strip-unneeded 2>/dev/null || true
 find "${OUT_DIR}/lib" -name "*.so" -exec strip --strip-unneeded {} \; 2>/dev/null || true
-for tool in lootcli; do
-    [ -f "${OUT_DIR}/${tool}" ] && strip --strip-unneeded "${OUT_DIR}/${tool}" 2>/dev/null || true
-done
 
 # ── Fix RPATH so binaries find libs without LD_LIBRARY_PATH ──
 # Use --force-rpath to set DT_RPATH (not DT_RUNPATH) for reliable
 # library resolution regardless of LD_LIBRARY_PATH.
 echo "Patching RPATH..."
 patchelf --force-rpath --set-rpath '$ORIGIN/lib' "${OUT_DIR}/ModOrganizer-core"
-[ -f "${OUT_DIR}/lootcli" ] && patchelf --force-rpath --set-rpath '$ORIGIN/lib' "${OUT_DIR}/lootcli"
 find "${OUT_DIR}/plugins" -maxdepth 1 -name "*.so" -exec patchelf --force-rpath --set-rpath '$ORIGIN/../lib' {} \; 2>/dev/null || true
 find "${OUT_DIR}/plugins/libs" -name "*.so" -exec patchelf --force-rpath --set-rpath '$ORIGIN/../../lib' {} \; 2>/dev/null || true
 find "${OUT_DIR}/lib" \( -name "*.so" -o -name "*.so.*" \) -exec patchelf --force-rpath --set-rpath '$ORIGIN' {} \; 2>/dev/null || true
@@ -624,7 +607,6 @@ build_appimage() {
     fi
 
     patchelf --force-rpath --set-rpath '$ORIGIN/../lib' "${APPDIR}/usr/bin/ModOrganizer-core"
-    [ -f "${APPDIR}/usr/bin/lootcli" ] && patchelf --force-rpath --set-rpath '$ORIGIN/../lib' "${APPDIR}/usr/bin/lootcli"
     find "${APPDIR}/usr/bin/plugins" -name "*.so" -exec patchelf --force-rpath --set-rpath '$ORIGIN/../../lib' {} \; 2>/dev/null || true
     find "${APPDIR}/usr/lib" -name "*.so" -exec patchelf --force-rpath --set-rpath '$ORIGIN' {} \; 2>/dev/null || true
 

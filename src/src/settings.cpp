@@ -2429,17 +2429,6 @@ void DiagnosticsSettings::setLogLevel(log::Levels level)
   set(m_Settings, "Settings", "log_level", level);
 }
 
-lootcli::LogLevels DiagnosticsSettings::lootLogLevel() const
-{
-  return get<lootcli::LogLevels>(m_Settings, "Settings", "loot_log_level",
-                                 lootcli::LogLevels::Info);
-}
-
-void DiagnosticsSettings::setLootLogLevel(lootcli::LogLevels level)
-{
-  set(m_Settings, "Settings", "loot_log_level", level);
-}
-
 env::CoreDumpTypes DiagnosticsSettings::coreDumpType() const
 {
   return get<env::CoreDumpTypes>(m_Settings, "Settings", "crash_dumps_type",

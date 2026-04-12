@@ -2441,28 +2441,6 @@ programs you are intentionally running.</string>
         </widget>
        </item>
        <item>
-        <widget class="QGroupBox" name="groupBox_7">
-         <property name="title">
-          <string>Integrated LOOT</string>
-         </property>
-         <layout class="QFormLayout" name="formLayout_2">
-          <property name="fieldGrowthPolicy">
-           <enum>QFormLayout::FieldsStayAtSizeHint</enum>
-          </property>
-          <item row="0" column="0">
-           <widget class="QLabel" name="label_32">
-            <property name="text">
-             <string>LOOT Log Level</string>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="1">
-           <widget class="QComboBox" name="lootLogLevel"/>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
         <widget class="LinkLabel" name="diagnosticsExplainedLabel">
          <property name="toolTip">
           <string>Click a link to open the location</string>

@@ -72,35 +72,6 @@ RUN /opt/python-bundled/bin/pip3 install --no-cache-dir \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
     sh -s -- -y --default-toolchain stable --profile minimal
 
-# ── Build and install libloot ──
-ARG LIBLOOT_REF=master
-RUN git clone --depth 1 --branch ${LIBLOOT_REF} \
-      https://github.com/loot/libloot.git /tmp/libloot && \
-    cmake -S /tmp/libloot/cpp -B /tmp/libloot/build -G Ninja \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DBUILD_SHARED_LIBS=ON \
-      -DLIBLOOT_INSTALL_DOCS=OFF \
-      -DBUILD_TESTING=OFF \
-      -DCMAKE_INSTALL_PREFIX=/usr/local && \
-    cmake --build /tmp/libloot/build --parallel && \
-    cmake --install /tmp/libloot/build && \
-    # Create pkg-config metadata
-    mkdir -p /usr/local/lib/pkgconfig && \
-    printf '%s\n' \
-      'prefix=/usr/local' \
-      'exec_prefix=${prefix}' \
-      'libdir=${prefix}/lib' \
-      'includedir=${prefix}/include' \
-      '' \
-      'Name: libloot' \
-      'Description: LOOT C++ API library' \
-      'Version: 0.29.0' \
-      'Libs: -L${libdir} -lloot' \
-      'Cflags: -I${includedir}' \
-      > /usr/local/lib/pkgconfig/libloot.pc && \
-    ldconfig && \
-    rm -rf /tmp/libloot
-
 # ── Pre-download linuxdeploy tooling (optional, only for AppImage builds) ──
 # Set BUILD_APPIMAGE=1 to include linuxdeploy in the image.
 # Without it, only tarball and installer builds are available.

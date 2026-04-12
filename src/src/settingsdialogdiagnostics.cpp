@@ -10,7 +10,6 @@ DiagnosticsSettingsTab::DiagnosticsSettingsTab(Settings& s, SettingsDialog& d)
     : SettingsTab(s, d)
 {
   setLogLevel();
-  setLootLogLevel();
   setCrashDumpTypesBox();
 
   ui->dumpsMaxEdit->setValue(settings().diagnostics().maxCoreDumps());
@@ -49,32 +48,6 @@ void DiagnosticsSettingsTab::setLogLevel()
   }
 }
 
-void DiagnosticsSettingsTab::setLootLogLevel()
-{
-  using L = lootcli::LogLevels;
-
-  auto v = [](L level) {
-    return QVariant(static_cast<int>(level));
-  };
-
-  ui->lootLogLevel->clear();
-
-  ui->lootLogLevel->addItem(QObject::tr("Trace"), v(L::Trace));
-  ui->lootLogLevel->addItem(QObject::tr("Debug"), v(L::Debug));
-  ui->lootLogLevel->addItem(QObject::tr("Info (recommended)"), v(L::Info));
-  ui->lootLogLevel->addItem(QObject::tr("Warning"), v(L::Warning));
-  ui->lootLogLevel->addItem(QObject::tr("Error"), v(L::Error));
-
-  const auto sel = settings().diagnostics().lootLogLevel();
-
-  for (int i = 0; i < ui->lootLogLevel->count(); ++i) {
-    if (ui->lootLogLevel->itemData(i) == v(sel)) {
-      ui->lootLogLevel->setCurrentIndex(i);
-      break;
-    }
-  }
-}
-
 void DiagnosticsSettingsTab::setCrashDumpTypesBox()
 {
   ui->dumpsTypeBox->clear();
@@ -107,7 +80,4 @@ void DiagnosticsSettingsTab::update()
       static_cast<env::CoreDumpTypes>(ui->dumpsTypeBox->currentData().toInt()));
 
   settings().diagnostics().setMaxCoreDumps(ui->dumpsMaxEdit->value());
-
-  settings().diagnostics().setLootLogLevel(
-      static_cast<lootcli::LogLevels>(ui->lootLogLevel->currentData().toInt()));
 }

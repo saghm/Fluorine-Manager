@@ -204,8 +204,6 @@ QString UnmanagedModName()
   return QObject::tr("<Unmanaged>");
 }
 
-bool runLoot(QWidget* parent, OrganizerCore& core, bool didUpdateMasterList);
-
 void setFilterShortcuts(QWidget* widget, QLineEdit* edit)
 {
   auto activate = [=] {
@@ -394,8 +392,6 @@ MainWindow::MainWindow(Settings& settings, OrganizerCore& organizerCore,
   ui->groupCombo->installEventFilter(noWheel);
   ui->profileBox->installEventFilter(noWheel);
 
-  updateSortButton();
-
   connect(&m_PluginContainer, SIGNAL(diagnosisUpdate()), this,
           SLOT(scheduleCheckForProblems()));
 
@@ -417,10 +413,6 @@ MainWindow::MainWindow(Settings& settings, OrganizerCore& organizerCore,
           SLOT(updateAvailable()));
   connect(m_OrganizerCore.updater(), SIGNAL(motdAvailable(QString)), this,
           SLOT(motdReceived(QString)));
-  connect(&m_OrganizerCore, &OrganizerCore::refreshTriggered, this, [this]() {
-    updateSortButton();
-  });
-
   connect(&NexusInterface::instance(), SIGNAL(requestNXMDownload(QString)),
           &m_OrganizerCore, SLOT(downloadRequestedNXM(QString)));
   connect(&NexusInterface::instance(),
@@ -656,11 +648,6 @@ void MainWindow::resetButtonIcons()
       QIcon::fromTheme("edit-undo", QIcon(":/MO/gui/restore")));
   ui->saveModsButton->setIcon(
       QIcon::fromTheme("document-save", QIcon(":/MO/gui/backup")));
-#ifdef _WIN32
-  ui->sortButton->setIcon(QIcon::fromTheme("view-sort-ascending", QIcon(":/MO/gui/sort")));
-#else
-  ui->sortButton->setVisible(false);
-#endif
   ui->restoreButton->setIcon(
       QIcon::fromTheme("edit-undo", QIcon(":/MO/gui/restore")));
   ui->saveButton->setIcon(QIcon::fromTheme("document-save", QIcon(":/MO/gui/backup")));
@@ -669,9 +656,6 @@ void MainWindow::resetButtonIcons()
   ui->openFolderMenu->setIconSize(QSize(16, 16));
   ui->restoreModsButton->setIconSize(QSize(16, 16));
   ui->saveModsButton->setIconSize(QSize(16, 16));
-#ifdef _WIN32
-  ui->sortButton->setIconSize(QSize(16, 16));
-#endif
   ui->restoreButton->setIconSize(QSize(16, 16));
   ui->saveButton->setIconSize(QSize(16, 16));
 }
@@ -2967,8 +2951,6 @@ void MainWindow::on_actionSettings_triggered()
 
   m_OrganizerCore.refreshLists();
 
-  updateSortButton();
-
   if (settings.paths().profiles() != oldProfilesDirectory) {
     refreshProfiles();
   }
@@ -3247,21 +3229,6 @@ void MainWindow::toggleUpdateAction()
 {
   const auto& s = m_OrganizerCore.settings();
   ui->actionUpdate->setVisible(s.checkForUpdates());
-}
-
-void MainWindow::updateSortButton()
-{
-#ifdef _WIN32
-  if (m_OrganizerCore.managedGame()->sortMechanism() !=
-      IPluginGame::SortMechanism::NONE) {
-    ui->sortButton->setEnabled(true);
-    ui->sortButton->setToolTip(tr("Sort the plugins using LOOT."));
-  } else {
-    ui->sortButton->setDisabled(true);
-    ui->sortButton->setToolTip(tr("There is no supported sort mechanism for this game. "
-                                  "You will probably have to use a third-party tool."));
-  }
-#endif
 }
 
 void MainWindow::nxmEndorsementsAvailable(QVariant userData, QVariant resultData, int)

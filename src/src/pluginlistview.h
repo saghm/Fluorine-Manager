@@ -38,7 +38,6 @@ protected slots:
   void onDoubleClicked(const QModelIndex& index);
 
   void onFilterChanged(const QString& filter);
-  void onSortButtonClicked();
 
 protected:
   friend class PluginListContextMenu;
@@ -79,8 +78,6 @@ private:
   PluginListSortProxy* m_sortProxy;
   ModListViewActions* m_modActions;
   ViewMarkingScrollBar* m_Scrollbar;
-
-  bool m_didUpdateMasterList;
 };
 
 #endif  // PLUGINLISTVIEW_H

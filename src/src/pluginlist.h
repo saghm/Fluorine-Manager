@@ -20,7 +20,6 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef PLUGINLIST_H
 #define PLUGINLIST_H
 
-#include "loot.h"
 #include "profile.h"
 #include <ifiletree.h>
 #include <ipluginlist.h>
@@ -161,16 +160,11 @@ public:
   void clearInformation(const QString& name);
 
   /**
-   * @brief add additional information on a mod (i.e. from loot)
+   * @brief add additional information on a mod
    * @param name name of the plugin to add information about
    * @param message the message to add to the plugin
    */
   void addInformation(const QString& name, const QString& message);
-
-  /**
-   * adds information from a loot report
-   */
-  void addLootReport(const QString& name, Loot::Plugin plugin);
 
   /**
    * @brief test if a plugin is enabled
@@ -368,7 +362,6 @@ private:
   struct AdditionalInfo
   {
     QStringList messages;
-    Loot::Plugin loot;
   };
 
 private:
@@ -435,7 +428,6 @@ private:
   QVariant tooltipData(const QModelIndex& modelIndex) const;
   QVariant iconData(const QModelIndex& modelIndex) const;
 
-  QString makeLootTooltip(const Loot::Plugin& loot) const;
   bool isProblematic(const ESPInfo& esp, const AdditionalInfo* info) const;
   bool hasInfo(const ESPInfo& esp, const AdditionalInfo* info) const;
 };

@@ -104,7 +104,6 @@ target_link_libraries(organizer PRIVATE
     libbsarch_OOP
     mo2::bsatk
     mo2::esptk
-    mo2::lootcli-header
     # Qt6
     Qt6::Widgets
     Qt6::Concurrent

@@ -3,7 +3,7 @@
 
 #include <QDialog>
 
-#include "lootdialog.h"  // for MarkdownDocument
+#include "markdowndocument.h"
 #include <expanderwidget.h>
 
 namespace Ui
