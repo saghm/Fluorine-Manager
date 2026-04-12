@@ -387,6 +387,12 @@ MOBase::IGameFeatures* OrganizerProxy::gameFeatures() const
   return m_GameFeaturesProxy.get();
 }
 
+bool OrganizerProxy::previewFileData(QWidget* parent, const QString& fileName,
+                                     const QByteArray& fileData)
+{
+  return m_Proxied->previewFileData(parent, fileName, fileData);
+}
+
 std::shared_ptr<MOBase::IProfile> OrganizerProxy::profile() const
 {
   return m_Proxied->currentProfile();

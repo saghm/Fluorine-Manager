@@ -70,3 +70,15 @@ int SimpleFileTreeItem::row() const
 
   return 0;
 }
+
+QString SimpleFileTreeItem::fullPath(QChar separator) const
+{
+  // Walk up, collecting names. Skip the root sentinel (parent == nullptr).
+  QStringList parts;
+  const SimpleFileTreeItem* node = this;
+  while (node && node->m_parentItem) {
+    parts.prepend(node->m_itemData.value(0).toString());
+    node = node->m_parentItem;
+  }
+  return parts.join(separator);
+}

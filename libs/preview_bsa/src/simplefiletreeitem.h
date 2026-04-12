@@ -1,6 +1,7 @@
 #ifndef SIMPLEFILETREEITEM_H
 #define SIMPLEFILETREEITEM_H
 
+#include <QString>
 #include <QVariant>
 #include <QVector>
 
@@ -21,6 +22,12 @@ public:
   QVariant data(int column) const;
   int row() const;
   SimpleFileTreeItem* parentItem();
+
+  /**
+   * Walk up to the root, joining each ancestor's name with @p separator.
+   * Returns the archive-relative path of this item.
+   */
+  QString fullPath(QChar separator = QLatin1Char('/')) const;
 
 private:
   QVector<SimpleFileTreeItem*> m_childItems;

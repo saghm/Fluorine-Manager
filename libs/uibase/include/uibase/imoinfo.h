@@ -21,11 +21,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef IMOINFO_H
 #define IMOINFO_H
 
+#include <QByteArray>
 #include <QDir>
 #include <QList>
 #include <QMainWindow>
 #include <QString>
 #include <QVariant>
+#include <QWidget>
 #include <cstdint>
 #include <any>
 #include <functional>
@@ -368,6 +370,25 @@ public:
    * @return interface to game features.
    */
   virtual IGameFeatures* gameFeatures() const = 0;
+
+  /**
+   * @brief show a preview dialog for a file loaded from an in-memory buffer.
+   *
+   * Routes @p fileData through the first registered IPluginPreview that
+   * supports @p fileName's extension and archives. Used by plugins that have
+   * already extracted a blob from a container (e.g. preview_bsa) and want to
+   * hand it off to another preview plugin (e.g. preview_nif) without writing
+   * it to a temp file.
+   *
+   * @param parent   parent for the modal preview dialog
+   * @param fileName virtual filename; used for extension dispatch and as the
+   *                 dialog title
+   * @param fileData raw file bytes
+   * @return true if a preview plugin was found and the dialog was shown;
+   *         false otherwise (no suitable plugin / empty data).
+   */
+  virtual bool previewFileData(QWidget* parent, const QString& fileName,
+                               const QByteArray& fileData) = 0;
 
   /**
    * @brief runs a program using the virtual filesystem

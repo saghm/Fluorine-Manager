@@ -29,12 +29,24 @@ else()
             BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include
             FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/libbsarch/libbsarch.h
     )
-    # Set default symbol visibility to hidden, export only marked symbols
+    # Set default symbol visibility to hidden, export only marked symbols.
+    # libbsarch.cpp uses BSARCH_DLL_API which maps to
+    # __attribute__((visibility("default"))) when BSARCH_DLL_EXPORT is set,
+    # so the C API stays exported while the bsatk bridge stays internal.
     target_compile_options(libbsarch PRIVATE -fvisibility=hidden)
 endif()
 target_include_directories(libbsarch PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/libbsarch)
-set_target_properties(libbsarch PROPERTIES DEBUG_POSTFIX "d" CXX_STANDARD 11)
+if(WIN32)
+    set_target_properties(libbsarch PROPERTIES DEBUG_POSTFIX "d" CXX_STANDARD 11)
+else()
+    # Linux impl is backed by bsatk and needs C++17 for std::string::data()
+    # non-const and the rest of the bsatk API.
+    set_target_properties(libbsarch PROPERTIES DEBUG_POSTFIX "d" CXX_STANDARD 17)
+endif()
 target_link_libraries(libbsarch PUBLIC mo2::dds-header)
+if(NOT WIN32)
+    target_link_libraries(libbsarch PRIVATE mo2::bsatk)
+endif()
 target_compile_definitions(libbsarch PRIVATE BSARCH_DLL_EXPORT)
 
 # preprocessor definitions

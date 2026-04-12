@@ -112,6 +112,23 @@ public:
    * @return ERROR_NONE on success or an error code
    */
   EErrorCode extract(File::Ptr file, const char* outputDirectory) const;
+
+  /**
+   * extract a file from the archive directly into an in-memory buffer.
+   * @param file descriptor of the file to extract
+   * @param result output buffer; cleared and filled with uncompressed file data
+   * @return ERROR_NONE on success or an error code
+   */
+  EErrorCode extractToMemory(File::Ptr file,
+                             std::vector<unsigned char>& result) const;
+
+  /**
+   * find a file in the archive by its relative path.
+   * @param path relative path inside the archive (separators may be / or \,
+   *             matching is case-insensitive).
+   * @return the file descriptor, or nullptr if no such file exists.
+   */
+  File::Ptr findFile(const std::string& path) const;
   /**
    * @return archive flags
    */
@@ -211,8 +228,8 @@ private:
   void getDX10Header(DirectX::DDS_HEADER_DXT10& DX10Header, File::Ptr file,
                      DirectX::DDS_HEADER DDSHeader) const;
 
-  EErrorCode extractDirect(File::Ptr file, std::ofstream& outFile) const;
-  EErrorCode extractCompressed(File::Ptr file, std::ofstream& outFile) const;
+  EErrorCode extractDirect(File::Ptr file, std::ostream& outFile) const;
+  EErrorCode extractCompressed(File::Ptr file, std::ostream& outFile) const;
 
   void createFolders(const std::string& targetDirectory, Folder::Ptr folder);
 

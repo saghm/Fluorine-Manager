@@ -27,6 +27,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <boost/interprocess/sync/scoped_lock.hpp>
 #include <boost/shared_array.hpp>
 #include <boost/thread.hpp>
+#include <cctype>
 #include <cstring>
 #include <fstream>
 #include <iostream>
@@ -34,6 +35,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <lz4frame.h>
 #include <memory>
 #include <queue>
+#include <sstream>
 #include <sys/stat.h>
 #include <zlib.h>
 #ifdef _WIN32
@@ -621,7 +623,7 @@ void Archive::getDX10Header(DirectX::DDS_HEADER_DXT10& DX10Header, File::Ptr fil
 
 static const BSAULong CHUNK_SIZE = 128 * 1024;
 
-EErrorCode Archive::extractDirect(File::Ptr file, std::ofstream& outFile) const
+EErrorCode Archive::extractDirect(File::Ptr file, std::ostream& outFile) const
 {
   EErrorCode result = ERROR_NONE;
   if (file->m_FileSize == 0) {
@@ -744,7 +746,7 @@ std::shared_ptr<unsigned char[]> Archive::decompress(unsigned char* inBuffer,
   }
 }
 
-EErrorCode Archive::extractCompressed(File::Ptr file, std::ofstream& outFile) const
+EErrorCode Archive::extractCompressed(File::Ptr file, std::ostream& outFile) const
 {
   EErrorCode result = ERROR_NONE;
   if (file->m_FileSize == 0) {
@@ -879,6 +881,102 @@ EErrorCode Archive::extract(File::Ptr file, const char* outputDirectory) const
   }
   outputFile.close();
   return result;
+}
+
+EErrorCode Archive::extractToMemory(File::Ptr file,
+                                    std::vector<unsigned char>& result) const
+{
+  result.clear();
+  if (!file) {
+    return ERROR_INVALIDDATA;
+  }
+
+  std::ostringstream stream(std::ios::out | std::ios::binary);
+  EErrorCode rc = ERROR_NONE;
+  if (compressed(file)) {
+    rc = extractCompressed(file, stream);
+  } else {
+    rc = extractDirect(file, stream);
+  }
+
+  if (rc != ERROR_NONE) {
+    return rc;
+  }
+
+  const std::string& data = stream.str();
+  result.assign(reinterpret_cast<const unsigned char*>(data.data()),
+                reinterpret_cast<const unsigned char*>(data.data() + data.size()));
+  return ERROR_NONE;
+}
+
+static bool iequals_bsa(const std::string& lhs, const std::string& rhs)
+{
+  if (lhs.size() != rhs.size()) {
+    return false;
+  }
+  for (std::size_t i = 0; i < lhs.size(); ++i) {
+    if (std::tolower(static_cast<unsigned char>(lhs[i])) !=
+        std::tolower(static_cast<unsigned char>(rhs[i]))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Normalize a path for case-insensitive, separator-agnostic comparison:
+// all forward slashes, all lowercase. Used by findFile only — doesn't mutate
+// stored names.
+static std::string normalize_bsa_path(const std::string& in)
+{
+  std::string out;
+  out.reserve(in.size());
+  for (char ch : in) {
+    if (ch == '\\') {
+      ch = '/';
+    }
+    out.push_back(static_cast<char>(
+        std::tolower(static_cast<unsigned char>(ch))));
+  }
+  // strip any leading separator
+  std::size_t start = 0;
+  while (start < out.size() && out[start] == '/') {
+    ++start;
+  }
+  return out.substr(start);
+}
+
+static void collect_files_recursive(Folder::Ptr folder,
+                                    std::vector<File::Ptr>& out)
+{
+  for (unsigned int i = 0; i < folder->getNumFiles(); ++i) {
+    out.push_back(folder->getFile(i));
+  }
+  for (unsigned int i = 0; i < folder->getNumSubFolders(); ++i) {
+    collect_files_recursive(folder->getSubFolder(i), out);
+  }
+}
+
+File::Ptr Archive::findFile(const std::string& path) const
+{
+  if (!m_RootFolder || path.empty()) {
+    return nullptr;
+  }
+
+  const std::string want = normalize_bsa_path(path);
+
+  // BSAs store flat folder names like "meshes\\actors\\character". On Linux
+  // std::filesystem::path doesn't treat '\\' as a separator, so bsatk builds
+  // a flat folder tree there. Rather than trying to reverse-engineer the
+  // structure, iterate every File in the archive and compare its full path
+  // (normalized) against the caller-supplied one.
+  std::vector<File::Ptr> allFiles;
+  collect_files_recursive(m_RootFolder, allFiles);
+  for (const File::Ptr& entry : allFiles) {
+    if (normalize_bsa_path(entry->getFilePath()) == want) {
+      return entry;
+    }
+  }
+  return nullptr;
 }
 
 void Archive::readFiles(std::queue<FileInfo>& queue, boost::mutex& mutex,

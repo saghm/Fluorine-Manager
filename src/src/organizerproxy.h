@@ -75,6 +75,9 @@ public:  // IOrganizer interface
   MOBase::IGameFeatures* gameFeatures() const override;
   MOBase::IInstanceManager* instanceManager() const override { return nullptr; }
 
+  bool previewFileData(QWidget* parent, const QString& fileName,
+                       const QByteArray& fileData) override;
+
   HANDLE startApplication(const QString& executable,
                           const QStringList& args = QStringList(),
                           const QString& cwd = "", const QString& profile = "",

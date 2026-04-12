@@ -109,6 +109,16 @@ if [ -d "libs/preview_dds/src/DDS" ]; then
 fi
 [ -d "build/src/src/plugins/data" ] && cp -a "build/src/src/plugins/data" "${OUT_DIR}/plugins/"
 
+# preview_nif shaders. ShaderManager loads them from
+# IOrganizer::getPluginDataPath()/shaders/, which on Linux is
+# OrganizerCore::pluginDataPath() = <basePath>/plugin_data (see
+# src/src/organizercore.cpp:971). Stage accordingly.
+if [ -d "libs/preview_nif/data/shaders" ]; then
+    mkdir -p "${OUT_DIR}/plugin_data/shaders"
+    find "libs/preview_nif/data/shaders" -type f \( -name "*.vert" -o -name "*.frag" \) \
+        -exec cp -f {} "${OUT_DIR}/plugin_data/shaders/" \;
+fi
+
 # ── Stylesheets (themes) ──
 if [ -d "build/src/src/stylesheets" ]; then
     cp -a "build/src/src/stylesheets" "${OUT_DIR}/"

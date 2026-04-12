@@ -19,6 +19,7 @@ along with Bsa Preview plugin.  If not, see <http://www.gnu.org/licenses/>.
 #include "previewbsa.h"
 
 #include <QApplication>
+#include <QDialog>
 #include <QFileInfo>
 #include <QImageReader>
 #include <QLabel>
@@ -26,6 +27,7 @@ along with Bsa Preview plugin.  If not, see <http://www.gnu.org/licenses/>.
 #include <QScreen>
 #include <QStandardItemModel>
 #include <QTextEdit>
+#include <QTimer>
 #include <QTreeView>
 #include <QTreeWidget>
 #include <QVBoxLayout>
@@ -35,7 +37,13 @@ along with Bsa Preview plugin.  If not, see <http://www.gnu.org/licenses/>.
 #include <uibase/log.h>
 #include <uibase/utility.h>
 
+#include "simplefiletreeitem.h"
 #include "simplefiletreemodel.h"
+
+#include <uibase/imoinfo.h>
+
+#include <memory>
+#include <vector>
 
 using namespace MOBase;
 
@@ -132,29 +140,30 @@ QWidget* PreviewBsa::genBsaPreview(const QString& fileName, const QSize&)
   QVBoxLayout* layout = new QVBoxLayout();
 
   QLabel* infoLabel = new QLabel();
-  BSA::Archive arch;  // bs_archive_auto is easier to use, but is less performant when
-                      // working with memory
-  BSA::EErrorCode res = arch.read(fileName.toLocal8Bit().constData(), true);
+
+  // Kept alive via shared_ptr captured by the double-click lambda below so
+  // we can extract files from the still-open archive on demand without
+  // re-reading it each time.
+  auto archive = std::make_shared<BSA::Archive>();
+  BSA::EErrorCode res =
+      archive->read(fileName.toLocal8Bit().constData(), true);
   if ((res != BSA::ERROR_NONE) && (res != BSA::ERROR_INVALIDHASHES)) {
     log::error("invalid bsa '{}', error {}", fileName, res);
     infoLabel->setText("Unable to parse archive. Unrecognized format.");
-    arch.close();
+    archive->close();
     return wrapper;
   }
-  const BSA::Folder::Ptr archiveDir = arch.getRoot();
+  const BSA::Folder::Ptr archiveDir = archive->getRoot();
   readFiles(archiveDir);
   QString infoString =
       tr("Archive Format: %1 , Compression: %2 , File count: %3 , Version: %4 , "
          "Archive type: %5 , Archive flags: %6");
-  // tr("Archive Format: %1 , Compression: %2 , File count: %3 , Version: %4 , "
-  //    "Archive type: %5 , Archive flags: %6 , Contents flags: %7");
-  infoString = infoString.arg(getFormat(arch.getType()))
-                   .arg((arch.getFlags() & 0x00000004) ? tr("yes") : tr("no"))
+  infoString = infoString.arg(getFormat(archive->getType()))
+                   .arg((archive->getFlags() & 0x00000004) ? tr("yes") : tr("no"))
                    .arg(m_Files.size())
-                   .arg(getVersion(arch.getType()))
-                   .arg(arch.getType())
-                   .arg("0x" + QString::number(arch.getFlags(), 16));
-  //.arg("0x" + QString::number(arch.get_file_flags(), 16));
+                   .arg(getVersion(archive->getType()))
+                   .arg(archive->getType())
+                   .arg("0x" + QString::number(archive->getFlags(), 16));
   infoLabel->setText(infoString);
   layout->addWidget(infoLabel);
 
@@ -173,8 +182,50 @@ QWidget* PreviewBsa::genBsaPreview(const QString& fileName, const QSize&)
   view->setSortingEnabled(true);
   view->sortByColumn(0, Qt::SortOrder::AscendingOrder);
 
+  // Double-click: extract the selected file from the archive and hand the
+  // raw bytes to another preview plugin via IOrganizer::previewFileData.
+  // The view's model is wrapped in FilterWidgetProxyModel, so walk up via
+  // index.parent() + DisplayRole (proxy-transparent) instead of using
+  // index.internalPointer() directly.
+  IOrganizer* mo = m_MOInfo;
+  QObject::connect(
+      view, &QTreeView::doubleClicked, view,
+      [mo, archive, view](const QModelIndex& index) {
+        if (!index.isValid()) return;
+
+        // Ignore folders — only files have no children.
+        if (index.model()->rowCount(index) > 0) {
+          return;
+        }
+
+        QStringList parts;
+        QModelIndex cur = index;
+        while (cur.isValid()) {
+          parts.prepend(cur.data(Qt::DisplayRole).toString());
+          cur = cur.parent();
+        }
+        const QString path = parts.join('/');
+        if (path.isEmpty()) return;
+
+        BSA::File::Ptr file = archive->findFile(path.toStdString());
+        if (!file) {
+          log::warn("preview_bsa: file not found in archive: {}", path);
+          return;
+        }
+        std::vector<unsigned char> data;
+        if (archive->extractToMemory(file, data) != BSA::ERROR_NONE) {
+          log::warn("preview_bsa: extract failed for: {}", path);
+          return;
+        }
+        QByteArray bytes(reinterpret_cast<const char*>(data.data()),
+                         static_cast<int>(data.size()));
+
+        if (!mo->previewFileData(view->window(), path, bytes)) {
+          log::warn("preview_bsa: no preview plugin for: {}", path);
+        }
+      });
+
   wrapper->setLayout(layout);
-  arch.close();
   return wrapper;
 }
 

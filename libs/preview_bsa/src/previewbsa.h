@@ -62,7 +62,7 @@ private:
       m_PreviewGenerators;
 
 private:
-  const MOBase::IOrganizer* m_MOInfo;
+  MOBase::IOrganizer* m_MOInfo;
   QStringList m_Files;
 };
 

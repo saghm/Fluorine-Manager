@@ -337,6 +337,8 @@ public:
   bool previewFileWithAlternatives(QWidget* parent, QString filename,
                                    int selectedOrigin = -1);
   bool previewFile(QWidget* parent, const QString& originName, const QString& path);
+  bool previewFileData(QWidget* parent, const QString& fileName,
+                       const QByteArray& fileData);
 
   void loginSuccessfulUpdate(bool necessary);
   void loginFailedUpdate(const QString& message);
