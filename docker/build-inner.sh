@@ -363,16 +363,23 @@ BIN_DST="${FLUORINE_DATA}/bin"
 HERE_REAL="$(readlink -f "${HERE}")"
 DST_REAL="$(readlink -f "${BIN_DST}" 2>/dev/null || echo "")"
 if [ "${HERE_REAL}" != "${DST_REAL}" ]; then
-    # Use the main binary's mtime as a version fingerprint.
-    CURRENT_VER="$(stat -c '%i:%Y' "${HERE}/ModOrganizer-core" 2>/dev/null || echo "unknown")"
+    # Fingerprint from size+mtime (not inode) so re-extracting the same tarball
+    # onto a different filesystem doesn't trigger a spurious full resync.
+    CURRENT_VER="$(stat -c '%s:%Y' "${HERE}/ModOrganizer-core" 2>/dev/null || echo "unknown")"
     MARKER="${BIN_DST}/.version"
 
     if [ ! -f "${MARKER}" ] || [ "$(cat "${MARKER}" 2>/dev/null)" != "${CURRENT_VER}" ]; then
-        echo "Syncing Fluorine to ${BIN_DST}..." >&2
+        echo "Syncing Fluorine to ${BIN_DST} (this may take a minute on first launch)..." >&2
+        # Stage into bin.new/ then rename. Protects the existing install if the
+        # user Ctrl+C's mid-sync or the copy fails partway.
+        STAGE="${BIN_DST}.new"
+        rm -rf "${STAGE}"
+        mkdir -p "${STAGE}"
+        (cd "${HERE}" && tar --exclude-vcs -cf - .) | (cd "${STAGE}" && tar -xf -)
         rm -rf "${BIN_DST}"
-        mkdir -p "${BIN_DST}"
-        (cd "${HERE}" && tar --exclude-vcs -cf - .) | (cd "${BIN_DST}" && tar -xf -)
+        mv "${STAGE}" "${BIN_DST}"
         echo "${CURRENT_VER}" > "${MARKER}"
+        echo "Sync complete." >&2
     fi
 fi
 
