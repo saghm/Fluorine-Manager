@@ -54,6 +54,7 @@
 #include <QNetworkInterface>
 #include <QProcess>
 #include <QRegularExpression>
+#include <QTemporaryFile>
 #include <QTextStream>
 #include <QTimer>
 #include <QUrl>
@@ -1307,8 +1308,13 @@ bool OrganizerCore::previewFileWithAlternatives(QWidget* parent, QString fileNam
     return false;
   }
 
-  // set up preview dialog
-  PreviewDialog preview(fileName, parent);
+  // Standalone top-level window (no QObject parent) to decouple from the
+  // enclosing ModInfoDialog stack frame. ApplicationModal stacks it on
+  // top of any already-open modal dialog. WA_DeleteOnClose cleans up.
+  auto* preview = new PreviewDialog(fileName, nullptr);
+  preview->setAttribute(Qt::WA_DeleteOnClose);
+  preview->setWindowModality(Qt::ApplicationModal);
+  (void)parent;
 
   auto addFunc = [&](int originId, std::wstring archiveName = L"") {
     FilesOrigin& origin = directoryStructure()->getOriginByID(originId);
@@ -1321,7 +1327,7 @@ bool OrganizerCore::previewFileWithAlternatives(QWidget* parent, QString fileNam
       if (wid == nullptr) {
         reportError(tr("failed to generate preview for %1").arg(filePath));
       } else {
-        preview.addVariant(ToQString(origin.getName()), wid);
+        preview->addVariant(ToQString(origin.getName()), wid);
       }
     } else if (archiveName != L"") {
       auto archiveFile = directoryStructure()->searchFile(archiveName);
@@ -1337,7 +1343,7 @@ bool OrganizerCore::previewFileWithAlternatives(QWidget* parent, QString fileNam
           if (wid == nullptr) {
             reportError(tr("failed to generate preview for %1").arg(filePath));
           } else {
-            preview.addVariant(ToQString(origin.getName()), wid);
+            preview->addVariant(ToQString(origin.getName()), wid);
           }
         } catch (std::exception& e) {
         }
@@ -1382,10 +1388,13 @@ bool OrganizerCore::previewFileWithAlternatives(QWidget* parent, QString fileNam
     }
   }
 
-  if (preview.numVariants() > 0) {
-    preview.exec();
+  if (preview->numVariants() > 0) {
+    preview->show();
+    preview->raise();
+    preview->activateWindow();
     return true;
   } else {
+    delete preview;
     QMessageBox::information(parent, tr("Sorry"),
                              tr("Sorry, can't preview anything. This function "
                                 "currently does not support extracting from bsas."));
@@ -1402,17 +1411,59 @@ bool OrganizerCore::previewFile(QWidget* parent, const QString& originName,
     return false;
   }
 
-  PreviewDialog preview(path, parent);
-
   QWidget* wid = m_PluginContainer->previewGenerator().genPreview(path);
   if (wid == nullptr) {
     reportError(tr("Failed to generate preview for %1").arg(path));
     return false;
   }
 
-  preview.addVariant(originName, wid);
-  preview.exec();
+  // Standalone top-level window — no QObject parent so lifetime is
+  // decoupled from the enclosing ModInfoDialog (which is stack-allocated
+  // in modlistviewactions.cpp, so passing &dialog as parent makes preview
+  // a child of a stack object). ApplicationModal makes preview stack on
+  // top of the outer modal ModInfoDialog — newest modal wins. Without
+  // modality, ModInfoDialog blocks all input on the preview.
+  // WA_DeleteOnClose handles cleanup when user closes it.
+  auto* preview = new PreviewDialog(path, nullptr);
+  preview->setAttribute(Qt::WA_DeleteOnClose);
+  preview->setWindowModality(Qt::ApplicationModal);
+  preview->addVariant(originName, wid);
+  preview->show();
+  preview->raise();
+  preview->activateWindow();
+  (void)parent;
 
+  return true;
+}
+
+bool OrganizerCore::previewFileData(QWidget* parent, const QString& fileName,
+                                    const QByteArray& fileData)
+{
+  if (fileData.isEmpty()) {
+    return false;
+  }
+
+  const QString ext = QFileInfo(fileName).suffix().toLower();
+  if (!m_PluginContainer->previewGenerator().previewSupported(ext, true)) {
+    return false;
+  }
+
+  QWidget* wid =
+      m_PluginContainer->previewGenerator().genArchivePreview(fileData, fileName);
+  if (wid == nullptr) {
+    return false;
+  }
+
+  // Use QDialog::open() instead of exec(). open() is async window-modal —
+  // it shows the dialog modal to its parent but returns immediately without
+  // starting a nested QEventLoop. Nesting exec() inside a caller that's
+  // itself running in QDialog::exec() (mod info filetree → preview_bsa file
+  // tree → nif preview) has been causing event-loop unwinding to softlock
+  // on close. WA_DeleteOnClose cleans up automatically.
+  auto* preview = new PreviewDialog(fileName, parent);
+  preview->setAttribute(Qt::WA_DeleteOnClose);
+  preview->addVariant(QFileInfo(fileName).fileName(), wid);
+  preview->open();
   return true;
 }
 
