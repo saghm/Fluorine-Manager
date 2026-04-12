@@ -366,7 +366,7 @@ if [ "${HERE_REAL}" != "${DST_REAL}" ]; then
     # Manifest lists top-level entries that belong to Fluorine. Without it we
     # can't distinguish our files from whatever else the user parked next to
     # the launcher (e.g. extracted into ~/Downloads alongside their mods).
-    MANIFEST="${HERE}/.fluorine-manifest"
+    MANIFEST="${HERE}/fluorine-manifest.txt"
     if [ ! -f "${MANIFEST}" ] || [ ! -f "${HERE}/ModOrganizer-core" ]; then
         echo "ERROR: Fluorine launcher can't find its bundle files in ${HERE}." >&2
         echo "Extract the release archive into its own directory and run the" >&2
@@ -463,8 +463,8 @@ cp -f /src/data/icons/com.fluorine.manager.metainfo.xml "${OUT_DIR}/icons/"
 # ~/.local/share/fluorine/bin/. Without a manifest it would have to guess
 # (previously: tar the whole extraction dir), and would slurp any unrelated
 # files the user parked next to the launcher — e.g. 38 GB of mods in Downloads.
-(cd "${OUT_DIR}" && ls -A | grep -v '^\.fluorine-manifest$') > "${OUT_DIR}/.fluorine-manifest"
-echo "Wrote manifest: $(wc -l < "${OUT_DIR}/.fluorine-manifest") entries"
+(cd "${OUT_DIR}" && ls -A | grep -v '^fluorine-manifest\.txt$') > "${OUT_DIR}/fluorine-manifest.txt"
+echo "Wrote manifest: $(wc -l < "${OUT_DIR}/fluorine-manifest.txt") entries"
 
 # ── Determine build mode ──
 # BUILD_MODE is passed from build.sh: tarball (default), installer, appimage, all
