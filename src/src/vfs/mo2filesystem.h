@@ -122,6 +122,12 @@ struct Mo2FsContext
   std::atomic<uint64_t> readdir_ns{0};
   std::atomic<uint64_t> open_ns{0};
   std::atomic<uint64_t> read_ns{0};
+  // CPU snapshot from previous stats tick (microseconds, from getrusage).
+  // Used to compute per-tick CPU delta so we can distinguish disk-bound vs
+  // CPU-bound slowness in the VFS layer.
+  std::atomic<uint64_t> last_cpu_user_us{0};
+  std::atomic<uint64_t> last_cpu_sys_us{0};
+  std::atomic<uint64_t> last_tick_wall_ns{0};
   std::unordered_map<std::string, uint64_t> lookup_hit_paths;
   std::unordered_map<std::string, uint64_t> lookup_miss_paths;
   std::unordered_map<std::string, uint64_t> getattr_paths;

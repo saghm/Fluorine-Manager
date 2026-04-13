@@ -103,6 +103,47 @@ void maybeLogCounters(Mo2FsContext* ctx)
                ons / 1e6, avgUs(ons, oc),
                rdns / 1e6, avgUs(rdns, rdc));
 
+  // Process-wide CPU usage + delta since last tick. Lets us tell whether
+  // high per-op wall time is spent burning CPU (parsing, mutex contention)
+  // or blocked on disk IO (delta CPU ≪ delta wall).
+  {
+    struct rusage ru{};
+    if (::getrusage(RUSAGE_SELF, &ru) == 0) {
+      const uint64_t user_us =
+          static_cast<uint64_t>(ru.ru_utime.tv_sec) * 1000000ull +
+          static_cast<uint64_t>(ru.ru_utime.tv_usec);
+      const uint64_t sys_us =
+          static_cast<uint64_t>(ru.ru_stime.tv_sec) * 1000000ull +
+          static_cast<uint64_t>(ru.ru_stime.tv_usec);
+      const uint64_t now_ns = static_cast<uint64_t>(
+          std::chrono::duration_cast<std::chrono::nanoseconds>(
+              std::chrono::steady_clock::now().time_since_epoch())
+              .count());
+
+      const uint64_t prev_user =
+          ctx->last_cpu_user_us.exchange(user_us, std::memory_order_relaxed);
+      const uint64_t prev_sys =
+          ctx->last_cpu_sys_us.exchange(sys_us, std::memory_order_relaxed);
+      const uint64_t prev_wall =
+          ctx->last_tick_wall_ns.exchange(now_ns, std::memory_order_relaxed);
+
+      const double d_user_s =
+          prev_user == 0 ? 0.0 : (user_us - prev_user) / 1e6;
+      const double d_sys_s =
+          prev_sys == 0 ? 0.0 : (sys_us - prev_sys) / 1e6;
+      const double d_wall_s =
+          prev_wall == 0 ? 0.0 : (now_ns - prev_wall) / 1e9;
+      const double busy_pct =
+          d_wall_s > 0.0 ? ((d_user_s + d_sys_s) / d_wall_s) * 100.0 : 0.0;
+
+      const long rss_mb = ru.ru_maxrss / 1024;  // ru_maxrss is KB on Linux
+      std::fprintf(
+          stderr,
+          "[VFS] cpu user=%.2fs sys=%.2fs (Δuser=%.2fs Δsys=%.2fs Δwall=%.2fs busy=%.1f%%) rss=%ldMB\n",
+          user_us / 1e6, sys_us / 1e6, d_user_s, d_sys_s, d_wall_s, busy_pct, rss_mb);
+    }
+  }
+
   auto logTop = [](const char* label, const std::unordered_map<std::string, uint64_t>& m) {
     if (m.empty()) {
       return;
