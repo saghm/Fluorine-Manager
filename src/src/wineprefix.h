@@ -32,6 +32,13 @@ public:
   bool syncProfileInisBack(
       const QList<QPair<QString, QString>>& iniMappings) const;
 
+  // Sync plugins.txt / loadorder.txt from the prefix AppData back to the
+  // profile after a tool like LOOT may have edited them.  Picks the newest
+  // case-insensitive variant of each file.
+  bool syncPluginsBack(const QString& profilePluginsPath,
+                       const QString& profileLoadOrderPath,
+                       const QString& dataDir) const;
+
   // Restore any stale .mo2linux_backup INI/save files left by a crash.
   // Should be called at startup before any game runs.
   void restoreStaleBackups() const;

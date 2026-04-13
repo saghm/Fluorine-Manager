@@ -2617,14 +2617,9 @@ bool OrganizerCore::beforeRun(
 
 void OrganizerCore::afterRun(const QFileInfo& binary, DWORD exitCode)
 {
-  // need to remove our stored load order because it may be outdated if a
-  // foreign tool changed the file time. After removing that file,
-  // refreshESPList will use the file time as the order
-  if (managedGame()->loadOrderMechanism() ==
-      IPluginGame::LoadOrderMechanism::FileTime) {
-    log::debug("removing loadorder.txt");
-    QFile::remove(m_CurrentProfile->getLoadOrderFileName());
-  }
+  const bool fileTimeLoadOrder =
+      managedGame()->loadOrderMechanism() ==
+      IPluginGame::LoadOrderMechanism::FileTime;
 
 #ifndef _WIN32
   // Unmount the FUSE VFS now that the application has exited.  unmount()
@@ -2695,10 +2690,33 @@ void OrganizerCore::afterRun(const QFileInfo& binary, DWORD exitCode)
                       prefixPathStr);
           }
         }
+
+        // Sync plugins.txt / loadorder.txt back from the prefix.  LOOT and
+        // similar tools edit the deployed copies in AppData/Local/<Game>/ —
+        // without this sync, their changes are lost when refreshESPList
+        // rereads the untouched profile copy and savePluginList clobbers
+        // them with the old in-memory order.
+        const QString profilePluginsPath = m_CurrentProfile->getPluginsFileName();
+        const QString profileLoadOrderPath =
+            m_CurrentProfile->getLoadOrderFileName();
+        if (!prefix.syncPluginsBack(profilePluginsPath, profileLoadOrderPath,
+                                    dataDirName)) {
+          log::warn("Failed to sync plugins.txt / loadorder.txt back from prefix '{}'",
+                    prefixPathStr);
+        }
       }
     }
   }
 #endif
+
+  // FileTime-based games (Skyrim LE, FO3, FNV) derive the load order from
+  // plugin file mtimes rather than loadorder.txt.  Drop the profile copy so
+  // refreshESPList falls back to file times — LOOT updates those directly
+  // on the .esp files via FUSE setattr.
+  if (fileTimeLoadOrder) {
+    log::debug("removing loadorder.txt (FileTime load order mechanism)");
+    QFile::remove(m_CurrentProfile->getLoadOrderFileName());
+  }
 
   // Refresh directory structure after VFS is unmounted so the refresher
   // reads the real (vanilla) data directory plus individual mod directories,

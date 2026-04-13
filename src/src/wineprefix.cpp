@@ -532,6 +532,70 @@ bool WinePrefix::syncProfileInisBack(
   return allCopied;
 }
 
+bool WinePrefix::syncPluginsBack(const QString& profilePluginsPath,
+                                 const QString& profileLoadOrderPath,
+                                 const QString& dataDir) const
+{
+  if (!isValid()) {
+    MOBase::log::error("syncPluginsBack: prefix '{}' is not valid", m_prefixPath);
+    return false;
+  }
+
+  const QString pluginsDir = QDir(appdataLocal()).filePath(dataDir);
+  if (!QDir(pluginsDir).exists()) {
+    MOBase::log::debug("syncPluginsBack: prefix plugins dir '{}' does not exist",
+                       pluginsDir);
+    return true;
+  }
+
+  auto pickNewest = [&](const QString& canonicalName) -> QString {
+    const QStringList variants =
+        findCaseVariants(QDir(pluginsDir).filePath(canonicalName));
+    QString newest;
+    QDateTime newestTime;
+    for (const QString& v : variants) {
+      const QFileInfo fi(v);
+      if (!newestTime.isValid() || fi.lastModified() > newestTime) {
+        newestTime = fi.lastModified();
+        newest     = v;
+      }
+    }
+    return newest;
+  };
+
+  bool ok = true;
+
+  const QString newestPlugins = pickNewest("plugins.txt");
+  if (!newestPlugins.isEmpty()) {
+    MOBase::log::info("syncPluginsBack: '{}' <- '{}'", profilePluginsPath,
+                      newestPlugins);
+    if (!copyFileWithParents(newestPlugins, profilePluginsPath)) {
+      MOBase::log::error("syncPluginsBack: failed to copy plugins.txt back to '{}'",
+                         profilePluginsPath);
+      ok = false;
+    }
+  } else {
+    MOBase::log::debug("syncPluginsBack: no plugins.txt variant found in '{}'",
+                       pluginsDir);
+  }
+
+  const QString newestLoadOrder = pickNewest("loadorder.txt");
+  if (!newestLoadOrder.isEmpty()) {
+    MOBase::log::info("syncPluginsBack: '{}' <- '{}'", profileLoadOrderPath,
+                      newestLoadOrder);
+    if (!copyFileWithParents(newestLoadOrder, profileLoadOrderPath)) {
+      MOBase::log::error("syncPluginsBack: failed to copy loadorder.txt back to '{}'",
+                         profileLoadOrderPath);
+      ok = false;
+    }
+  } else {
+    MOBase::log::debug("syncPluginsBack: no loadorder.txt variant found in '{}'",
+                       pluginsDir);
+  }
+
+  return ok;
+}
+
 // ── Wine registry (.reg file) access ─────────────────────────────────────────
 
 // Wine .reg files use doubled backslashes in key paths:
