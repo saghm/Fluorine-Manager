@@ -53,10 +53,14 @@ jobs:
             -v "${{ github.workspace }}:/src:rw" \
             -v "$HOME/.cache/fluorine-ccache:/ccache:rw" \
             -e CCACHE_DIR=/ccache \
+            -e CCACHE_BASEDIR=/src \
+            -e CCACHE_COMPILERCHECK=content \
+            -e CCACHE_SLOPPINESS=time_macros,include_file_mtime,include_file_ctime,pch_defines \
+            -e CCACHE_MAXSIZE=5G \
             -e BUILD_MODE=tarball \
             -w /src \
             fluorine-builder:latest \
-            bash /src/docker/build-inner.sh
+            bash -c 'ccache -s; bash /src/docker/build-inner.sh; echo "=== ccache stats after build ==="; ccache -s'
 
       - name: Upload build
         uses: actions/upload-artifact@v4
