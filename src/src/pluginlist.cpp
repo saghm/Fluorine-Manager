@@ -1972,7 +1972,11 @@ PluginList::ESPInfo::ESPInfo(const QString& name, bool forceLoaded, bool forceEn
 #endif
 
   try {
-    ESP::File file(ToWString(parsePath));
+    // Linux filesystem is UTF-8. ToWString → wstring → naive wchar_t->char
+    // copy in esptk truncates non-ASCII (ö, –), producing "file not found"
+    // on paths like "Mörskom Estate" or "Official Master Files – Cleaned".
+    // Pass UTF-8 bytes directly.
+    ESP::File file(parsePath.toStdString());
     auto extension     = name.right(3).toLower();
     hasMasterExtension = (extension == "esm");
     hasLightExtension  = (extension == "esl");

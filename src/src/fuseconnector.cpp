@@ -311,8 +311,16 @@ bool FuseConnector::mount(
   // NOTE: Do NOT include mount_point here — low-level API passes it
   // separately to fuse_session_mount(). Including it here causes
   // "fuse: unknown option(s)" error.
+  //
+  // max_read=1MB: raise per-read-request cap from default 128KB.  Must
+  // match conn->max_read set in mo2_init() or libfuse rejects the mount
+  // with a max-read-mismatch error.  Going higher than 1MB triggers
+  // "fuse: reading device: Invalid argument" on some kernels where
+  // libfuse's receive buffer is sized off max_write + header and the
+  // kernel reads don't fit.  1MB is the safe ceiling.
   std::vector<std::string> argvStorage = {
-      "mo2fuse", "-o", "fsname=mo2linux", "-o", "noatime", "-o", "default_permissions"};
+      "mo2fuse", "-o", "fsname=mo2linux", "-o", "noatime",
+      "-o", "default_permissions", "-o", "max_read=1048576"};
 
   std::vector<char*> argv;
   argv.reserve(argvStorage.size());

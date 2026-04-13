@@ -23,6 +23,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <QLabel>
 #include <QPainter>
 #include <QPixmapCache>
+#include <algorithm>
 #include <log.h>
 
 using namespace MOBase;
@@ -48,7 +49,11 @@ void IconDelegate::paintIcons(QPainter* painter, const QStyleOptionViewItem& opt
   painter->save();
 
   int iconWidth = icons.size() > 0 ? ((option.rect.width() / icons.size()) - 4) : 16;
-  iconWidth     = std::min(16, iconWidth);
+  // Clamp: narrow content columns can make the per-icon slot 0 or negative,
+  // which causes QIcon::pixmap() to return null and log "failed to load icon"
+  // spuriously.  Keep at least 8px so the pixmap call always succeeds; excess
+  // icons may clip, which is better than paint-side failures.
+  iconWidth = std::clamp(iconWidth, 8, 16);
 
   const int margin = (option.rect.height() - iconWidth) / 2;
 

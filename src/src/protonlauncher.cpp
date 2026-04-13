@@ -525,6 +525,22 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
   env.insert("DOTNET_ROOT", "");
   env.insert("DOTNET_MULTILEVEL_LOOKUP", "0");
 
+  // Force-disable DXVK graphics-pipeline-library.  GPL causes very long shader
+  // compile stalls on first launch for heavily modded Bethesda games and the
+  // benefit is modest for us.  We write a small dxvk.conf into the prefix and
+  // point DXVK_CONFIG_FILE at it so every DXVK-rendered process picks it up.
+  if (!m_prefixPath.isEmpty()) {
+    const QString dxvkConfPath = QDir(m_prefixPath).filePath("dxvk.conf");
+    QFile dxvkConfFile(dxvkConfPath);
+    if (dxvkConfFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+      dxvkConfFile.write("dxvk.enableGraphicsPipelineLibrary = False\n");
+      dxvkConfFile.close();
+      env.insert("DXVK_CONFIG_FILE", dxvkConfPath);
+    } else {
+      MOBase::log::warn("Failed to write dxvk.conf at '{}'", dxvkConfPath);
+    }
+  }
+
   for (auto it = m_wrapperEnvVars.cbegin(); it != m_wrapperEnvVars.cend(); ++it) {
     env.insert(it.key(), it.value());
   }

@@ -17,8 +17,30 @@ ESP::File::File(const std::wstring& fileName)
 #ifdef _WIN32
   m_File.open(fileName, std::fstream::in | std::fstream::binary);
 #else
-  // Linux: convert wstring to string (UTF-8)
-  std::string narrowName(fileName.begin(), fileName.end());
+  // Linux: properly encode wstring → UTF-8. The old naive
+  // `string(w.begin(), w.end())` copy truncated any codepoint > 0x7F
+  // (e.g. ö U+00F6, – U+2013) which broke paths like "Mörskom Estate" or
+  // "Official Master Files – Cleaned".
+  std::string narrowName;
+  narrowName.reserve(fileName.size());
+  for (wchar_t wc : fileName) {
+    const auto cp = static_cast<uint32_t>(wc);
+    if (cp < 0x80) {
+      narrowName.push_back(static_cast<char>(cp));
+    } else if (cp < 0x800) {
+      narrowName.push_back(static_cast<char>(0xC0 | (cp >> 6)));
+      narrowName.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    } else if (cp < 0x10000) {
+      narrowName.push_back(static_cast<char>(0xE0 | (cp >> 12)));
+      narrowName.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+      narrowName.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    } else {
+      narrowName.push_back(static_cast<char>(0xF0 | (cp >> 18)));
+      narrowName.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+      narrowName.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+      narrowName.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    }
+  }
   m_File.open(narrowName, std::fstream::in | std::fstream::binary);
 #endif
   init();

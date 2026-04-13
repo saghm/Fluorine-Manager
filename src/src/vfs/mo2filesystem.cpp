@@ -2,11 +2,13 @@
 
 #include <fcntl.h>
 #include <linux/fs.h>
+#include <sys/resource.h>
 #include <sys/time.h>
 #include <unistd.h>
 
 #include <algorithm>
 #include <chrono>
+#include <climits>
 #include <cstring>
 #include <filesystem>
 
@@ -33,6 +35,25 @@ void fillStatForFile(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid,
                      mode_t cached_mode = 0);
 void invalidateLookupCache(Mo2FsContext* ctx, const std::string& dirPath);
 
+// RAII helper that records per-op wall-clock nanoseconds into a counter.
+struct OpTimer
+{
+  std::atomic<uint64_t>* sink;
+  std::chrono::steady_clock::time_point start;
+  explicit OpTimer(std::atomic<uint64_t>* s)
+      : sink(s), start(std::chrono::steady_clock::now()) {}
+  ~OpTimer()
+  {
+    if (sink == nullptr) return;
+    const auto end = std::chrono::steady_clock::now();
+    const uint64_t ns = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
+    sink->fetch_add(ns, std::memory_order_relaxed);
+  }
+  OpTimer(const OpTimer&)            = delete;
+  OpTimer& operator=(const OpTimer&)  = delete;
+};
+
 void maybeLogCounters(Mo2FsContext* ctx)
 {
   if (ctx == nullptr) {
@@ -44,24 +65,43 @@ void maybeLogCounters(Mo2FsContext* ctx)
     return;
   }
 
+  const uint64_t lc = ctx->lookup_count.load(std::memory_order_relaxed);
+  const uint64_t gc = ctx->getattr_count.load(std::memory_order_relaxed);
+  const uint64_t rc = ctx->readdir_count.load(std::memory_order_relaxed);
+  const uint64_t oc = ctx->open_count.load(std::memory_order_relaxed);
+  const uint64_t rdc = ctx->read_count.load(std::memory_order_relaxed);
+  const uint64_t ic = ctx->ioctl_count.load(std::memory_order_relaxed);
+
   std::fprintf(stderr,
                "[VFS] ops lookup=%llu getattr=%llu readdir=%llu open=%llu read=%llu ioctl=%llu",
-               static_cast<unsigned long long>(
-                   ctx->lookup_count.load(std::memory_order_relaxed)),
-               static_cast<unsigned long long>(
-                   ctx->getattr_count.load(std::memory_order_relaxed)),
-               static_cast<unsigned long long>(
-                   ctx->readdir_count.load(std::memory_order_relaxed)),
-               static_cast<unsigned long long>(
-                   ctx->open_count.load(std::memory_order_relaxed)),
-               static_cast<unsigned long long>(
-                   ctx->read_count.load(std::memory_order_relaxed)),
-               static_cast<unsigned long long>(
-                   ctx->ioctl_count.load(std::memory_order_relaxed)));
+               static_cast<unsigned long long>(lc),
+               static_cast<unsigned long long>(gc),
+               static_cast<unsigned long long>(rc),
+               static_cast<unsigned long long>(oc),
+               static_cast<unsigned long long>(rdc),
+               static_cast<unsigned long long>(ic));
   {
     std::scoped_lock lock(ctx->open_files_mutex);
     std::fprintf(stderr, " open_handles=%zu\n", ctx->open_files.size());
   }
+
+  // Per-op wall-clock totals and averages (microseconds).
+  auto avgUs = [](uint64_t ns, uint64_t count) -> double {
+    return count == 0 ? 0.0 : (static_cast<double>(ns) / 1000.0) / static_cast<double>(count);
+  };
+  const uint64_t lns = ctx->lookup_ns.load(std::memory_order_relaxed);
+  const uint64_t gns = ctx->getattr_ns.load(std::memory_order_relaxed);
+  const uint64_t rns = ctx->readdir_ns.load(std::memory_order_relaxed);
+  const uint64_t ons = ctx->open_ns.load(std::memory_order_relaxed);
+  const uint64_t rdns = ctx->read_ns.load(std::memory_order_relaxed);
+  std::fprintf(stderr,
+               "[VFS] time lookup=%.1fms/%.1fus-avg getattr=%.1fms/%.1fus readdir=%.1fms/%.1fus "
+               "open=%.1fms/%.1fus read=%.1fms/%.1fus\n",
+               lns / 1e6, avgUs(lns, lc),
+               gns / 1e6, avgUs(gns, gc),
+               rns / 1e6, avgUs(rns, rc),
+               ons / 1e6, avgUs(ons, oc),
+               rdns / 1e6, avgUs(rdns, rdc));
 
   auto logTop = [](const char* label, const std::unordered_map<std::string, uint64_t>& m) {
     if (m.empty()) {
@@ -167,23 +207,22 @@ void invalidateNodeCache(Mo2FsContext* ctx, const std::string& path)
     std::shared_lock lock(ctx->inode_mutex);
     ino = ctx->inodes->get(path);
   }
-  if (ino != 0) {
-    ctx->node_cache.erase(ino);
-  }
-
-  // Also invalidate the parent directory's cache entry since its children
-  // map has changed (new/removed child).
+  fuse_ino_t parentIno = 0;
   const auto slash = path.rfind('/');
   if (slash != std::string::npos) {
     const std::string parentPath = path.substr(0, slash);
-    fuse_ino_t parentIno = 0;
-    {
-      std::shared_lock lock(ctx->inode_mutex);
-      parentIno = ctx->inodes->get(parentPath);
-    }
-    if (parentIno != 0) {
-      ctx->node_cache.erase(parentIno);
-    }
+    std::shared_lock lock(ctx->inode_mutex);
+    parentIno = ctx->inodes->get(parentPath);
+  }
+
+  std::scoped_lock nlock(ctx->node_cache_mutex);
+  if (ino != 0) {
+    ctx->node_cache.erase(ino);
+  }
+  // Also invalidate the parent directory's cache entry since its children
+  // map has changed (new/removed child).
+  if (parentIno != 0) {
+    ctx->node_cache.erase(parentIno);
   }
 }
 
@@ -315,9 +354,12 @@ const VfsNode* resolveByInode(Mo2FsContext* ctx, fuse_ino_t ino)
   }
 
   // Check node_cache (fast path — no splitPath, no tree walk)
-  auto cacheIt = ctx->node_cache.find(ino);
-  if (cacheIt != ctx->node_cache.end()) {
-    return cacheIt->second;
+  {
+    std::scoped_lock nlock(ctx->node_cache_mutex);
+    auto cacheIt = ctx->node_cache.find(ino);
+    if (cacheIt != ctx->node_cache.end()) {
+      return cacheIt->second;
+    }
   }
 
   // Cache miss — resolve via inode→path→tree walk
@@ -332,9 +374,12 @@ const VfsNode* resolveByInode(Mo2FsContext* ctx, fuse_ino_t ino)
 
   const VfsNode* node = ctx->tree->root.resolve(splitPath(path));
   if (node != nullptr) {
-    // Safe: we hold tree_mutex shared, and mutations hold it exclusively
-    // so they can clear stale entries before any pointer becomes dangling.
-    const_cast<std::unordered_map<fuse_ino_t, const VfsNode*>&>(ctx->node_cache)[ino] = node;
+    // Validity of node pointer is tied to tree_mutex shared (held by caller)
+    // — mutations acquire tree_mutex exclusive and clear the cache before
+    // any pointer becomes dangling.  Serialize map write against other
+    // concurrent shared readers.
+    std::scoped_lock nlock(ctx->node_cache_mutex);
+    ctx->node_cache[ino] = node;
   }
   return node;
 }
@@ -735,6 +780,28 @@ void mo2_init(void* userdata, struct fuse_conn_info* conn)
 {
   auto* ctx = static_cast<Mo2FsContext*>(userdata);
 
+  // Bump RLIMIT_NOFILE.  We hold one real fd per open file so games that
+  // stream hundreds of BSAs concurrently would otherwise hit the default
+  // 1024 soft limit.  Raise to hard limit (or a sane cap).
+  {
+    struct rlimit rl{};
+    if (getrlimit(RLIMIT_NOFILE, &rl) == 0) {
+      rlim_t wanted = rl.rlim_max;
+      if (wanted == RLIM_INFINITY || wanted > 1048576) {
+        wanted = 1048576;
+      }
+      if (rl.rlim_cur < wanted) {
+        rl.rlim_cur = wanted;
+        if (setrlimit(RLIMIT_NOFILE, &rl) != 0) {
+          std::fprintf(stderr, "[VFS] setrlimit(NOFILE) failed: errno=%d\n", errno);
+        } else {
+          std::fprintf(stderr, "[VFS] RLIMIT_NOFILE raised to %llu\n",
+                       static_cast<unsigned long long>(rl.rlim_cur));
+        }
+      }
+    }
+  }
+
   // ── Disable AUTO_INVAL_DATA (CRITICAL for performance) ──
   // AUTO_INVAL_DATA forces a getattr() on EVERY read() to check mtime,
   // completely bypassing attr_timeout.  This alone causes ~4x throughput
@@ -799,15 +866,23 @@ void mo2_init(void* userdata, struct fuse_conn_info* conn)
   conn->max_background      = 32767;
   conn->congestion_threshold = 24576;
 
-  // Request large read/write buffers.  The kernel caps these at its own
-  // compiled-in maximum, so overshooting is harmless.
-  constexpr unsigned int EIGHT_MB = 8 * 1048576;
-  if (conn->max_readahead < EIGHT_MB) {
-    conn->max_readahead = EIGHT_MB;
+  // Request large read/write buffers.  libfuse sizes its receive buffer at
+  // session creation time based on (max_write + header); overshooting here
+  // yields a mismatch where the kernel expects room for a big write but
+  // libfuse's buffer is smaller, and reads from /dev/fuse fail with EINVAL.
+  // Stay conservative: 1MB matches libfuse's bufsize ceiling on most kernels
+  // and is the largest value the kernel's FUSE driver typically accepts.
+  constexpr unsigned int ONE_MB = 1 * 1024 * 1024;
+  if (conn->max_readahead < ONE_MB) {
+    conn->max_readahead = ONE_MB;
   }
-  if (conn->max_write < EIGHT_MB) {
-    conn->max_write = EIGHT_MB;
+  if (conn->max_write < ONE_MB) {
+    conn->max_write = ONE_MB;
   }
+  // max_read MUST match the "-o max_read=..." mount option passed to
+  // fuse_session_new() or libfuse errors out with
+  //   "init() and fuse_session_new() requested different maximum read size"
+  conn->max_read = ONE_MB;
 
   std::fprintf(stderr,
                "[VFS] init: auto_inval=%d explicit_inval=%d readdirplus=%d "
@@ -825,6 +900,7 @@ void mo2_lookup(fuse_req_t req, fuse_ino_t parent, const char* name)
     fuse_reply_err(req, EINVAL);
     return;
   }
+  OpTimer _t(&ctx->lookup_ns);
   ctx->lookup_count.fetch_add(1, std::memory_order_relaxed);
   maybeLogCounters(ctx);
 
@@ -896,7 +972,8 @@ void mo2_lookup(fuse_req_t req, fuse_ino_t parent, const char* name)
       const std::string key = normalizeForLookup(lr.canonical_name);
       auto it = parentNode->dir_info.children.find(key);
       if (it != parentNode->dir_info.children.end()) {
-        const_cast<std::unordered_map<fuse_ino_t, const VfsNode*>&>(ctx->node_cache)[childIno] = it->second.get();
+        std::scoped_lock nlock(ctx->node_cache_mutex);
+        ctx->node_cache[childIno] = it->second.get();
       }
     }
   }
@@ -933,6 +1010,7 @@ void mo2_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* /*fi*/)
     fuse_reply_err(req, EINVAL);
     return;
   }
+  OpTimer _t(&ctx->getattr_ns);
   ctx->getattr_count.fetch_add(1, std::memory_order_relaxed);
   maybeLogCounters(ctx);
 
@@ -1043,6 +1121,7 @@ void mo2_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
     fuse_reply_err(req, EINVAL);
     return;
   }
+  OpTimer _t(&ctx->readdir_ns);
   ctx->readdir_count.fetch_add(1, std::memory_order_relaxed);
   maybeLogCounters(ctx);
 
@@ -1130,6 +1209,7 @@ void mo2_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
     fuse_reply_err(req, EINVAL);
     return;
   }
+  OpTimer _t(&ctx->readdir_ns);
   ctx->readdir_count.fetch_add(1, std::memory_order_relaxed);
   maybeLogCounters(ctx);
 
@@ -1227,6 +1307,7 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
     fuse_reply_err(req, EINVAL);
     return;
   }
+  OpTimer _t(&ctx->open_ns);
   ctx->open_count.fetch_add(1, std::memory_order_relaxed);
   maybeLogCounters(ctx);
 
@@ -1262,6 +1343,10 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
   //   3. Everything else (untracked mod files, base-game files) → open R/O
   //      now, lazy COW to Overwrite on first actual write().  This avoids
   //      COW from Wine metadata ops (O_RDWR without writing).
+  //
+  // Read strategy: always open a real backing fd at open() time so mo2_read
+  // can splice from it without re-opening per read call.  Avoids N syscalls
+  // per file for games that stream large BSAs in many small chunks.
   int fd = -1;
 
   if (writable) {
@@ -1309,6 +1394,16 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
       fuse_reply_err(req, EIO);
       return;
     }
+  } else {
+    // Read-only open: keep a real fd so mo2_read can splice without
+    // re-opening the backing file on every read() call.
+    if (isBacking && ctx->backing_dir_fd >= 0) {
+      fd = openat(ctx->backing_dir_fd, realPath.c_str(), O_RDONLY);
+    } else {
+      fd = open(realPath.c_str(), O_RDONLY);
+    }
+    // Non-fatal: fall back to lazy per-read open if we hit EMFILE etc.
+    // mo2_read handles fd=-1 by opening temporarily.
   }
 
   const uint64_t fh = ctx->next_fh.fetch_add(1, std::memory_order_relaxed);
@@ -1339,6 +1434,7 @@ void mo2_read(fuse_req_t req, fuse_ino_t /*ino*/, size_t size, off_t off,
     fuse_reply_err(req, EINVAL);
     return;
   }
+  OpTimer _t(&ctx->read_ns);
   ctx->read_count.fetch_add(1, std::memory_order_relaxed);
   maybeLogCounters(ctx);
 

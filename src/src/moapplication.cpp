@@ -868,6 +868,48 @@ QString extractBaseStyleFromStyleSheet(QFile& stylesheet, const QString& default
 
 }  // namespace
 
+#ifndef _WIN32
+// Walk a directory and create lowercase symlinks for any file whose name
+// contains uppercase letters, if the lowercase name doesn't already exist.
+// QSS files authored on Windows often reference asset files with lowercase
+// names but the actual files on disk use mixed case — on a case-sensitive
+// filesystem Qt's url() resolver fails.  Shimming lowercase symlinks lets
+// the existing paths resolve without touching the original files.
+static void createLowercaseStylesheetShims(const QString& dirPath)
+{
+  namespace fs = std::filesystem;
+  std::error_code ec;
+  if (!fs::exists(dirPath.toStdString(), ec) ||
+      !fs::is_directory(dirPath.toStdString(), ec)) {
+    return;
+  }
+  for (auto it = fs::recursive_directory_iterator(
+           dirPath.toStdString(),
+           fs::directory_options::skip_permission_denied, ec);
+       !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
+    const auto& entry = *it;
+    if (!entry.is_regular_file(ec)) continue;
+
+    const std::string name = entry.path().filename().string();
+    std::string lowerName = name;
+    std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    if (lowerName == name) continue;  // already lowercase
+
+    const auto parent = entry.path().parent_path();
+    const auto lowerPath = parent / lowerName;
+    if (fs::exists(lowerPath, ec)) continue;
+
+    std::error_code lec;
+    fs::create_symlink(name, lowerPath, lec);
+    if (lec) {
+      log::debug("stylesheet shim: failed to link '{}' -> '{}': {}",
+                 lowerPath.string(), name, lec.message());
+    }
+  }
+}
+#endif
+
 void MOApplication::updateStyle(const QString& fileName)
 {
   if (QStyleFactory::keys().contains(fileName)) {
@@ -876,6 +918,11 @@ void MOApplication::updateStyle(const QString& fileName)
   } else {
     QFile stylesheet(fileName);
     if (stylesheet.exists()) {
+#ifndef _WIN32
+      // Pre-create lowercase shims so url(foo.svg) in the QSS resolves even
+      // when the on-disk file is Foo.svg.
+      createLowercaseStylesheetShims(QFileInfo(fileName).absolutePath());
+#endif
       setStyle(new ProxyStyle(QStyleFactory::create(
           extractBaseStyleFromStyleSheet(stylesheet, m_defaultStyle))));
       setStyleSheet(QString("file:///%1").arg(fileName));

@@ -64,6 +64,7 @@ find build/libs -type f \( \
     -name "libinibakery.so" -o \
     -name "libbsa_extractor.so" -o \
     -name "libbsa_packer.so" -o \
+    -name "libbsplugins.so" -o \
     -name "libproxy.so" \
 \) -exec cp -f {} "${OUT_DIR}/plugins/" \;
 

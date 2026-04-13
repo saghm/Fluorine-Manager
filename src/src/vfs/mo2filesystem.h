@@ -26,7 +26,11 @@ struct Mo2FsContext
 
   // Fast inode→VfsNode* cache.  Pointers are valid while tree_mutex is held
   // (shared for reads).  Invalidated under exclusive tree_mutex during mutations.
-  std::unordered_map<fuse_ino_t, const VfsNode*> node_cache;  // protected by tree_mutex
+  // Access (read + write) is serialized by node_cache_mutex — tree_mutex-shared
+  // is NOT enough because multiple shared readers would race when populating
+  // the cache on miss.
+  std::unordered_map<fuse_ino_t, const VfsNode*> node_cache;
+  mutable std::mutex node_cache_mutex;
 
   std::unique_ptr<OverwriteManager> overwrite;
   std::shared_ptr<TrackedWrites> tracked_writes;
@@ -111,6 +115,13 @@ struct Mo2FsContext
   std::atomic<uint64_t> read_count{0};
   std::atomic<uint64_t> ioctl_count{0};
   std::atomic<uint64_t> op_tick{0};
+  // Cumulative wall-clock nanoseconds spent inside each op handler.
+  // Paired with the *_count fields so we can report avg latency per op.
+  std::atomic<uint64_t> lookup_ns{0};
+  std::atomic<uint64_t> getattr_ns{0};
+  std::atomic<uint64_t> readdir_ns{0};
+  std::atomic<uint64_t> open_ns{0};
+  std::atomic<uint64_t> read_ns{0};
   std::unordered_map<std::string, uint64_t> lookup_hit_paths;
   std::unordered_map<std::string, uint64_t> lookup_miss_paths;
   std::unordered_map<std::string, uint64_t> getattr_paths;

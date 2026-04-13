@@ -42,8 +42,10 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <QHttp2Configuration>
 #include <QInputDialog>
 #include <QMessageBox>
+#include <QRegularExpression>
 #include <QTextDocument>
 #include <QTimer>
+#include <QUrlQuery>
 
 #include <boost/bind/bind.hpp>
 #include <regex>
@@ -54,6 +56,28 @@ using namespace MOBase;
 // modid/fileid with downloads
 
 static const char UNFINISHED[] = ".unfinished";
+
+// Heuristic: does this filename look like a CDN object key that should be
+// replaced by the server's Content-Disposition filename if available?
+// Nexus v2 file metadata sometimes returns `file_name` as a CDN-path UUID
+// (e.g. "91/83/bb/9183bbff-...") rather than the actual archive name.
+static bool looksLikeCdnObjectKey(const QString& name)
+{
+  if (name.isEmpty()) {
+    return true;
+  }
+  // Real archive filenames always end in an archive suffix.  If the name
+  // has no recognized archive extension, assume it's a CDN key.
+  static const QStringList kArchiveSuffixes = {
+      ".zip", ".rar", ".7z",  ".tar", ".gz", ".bz2",
+      ".xz",  ".exe", ".msi", ".bsa", ".ba2"};
+  for (const auto& suf : kArchiveSuffixes) {
+    if (name.endsWith(suf, Qt::CaseInsensitive)) {
+      return false;
+    }
+  }
+  return true;
+}
 
 unsigned int DownloadManager::DownloadInfo::s_NextDownloadID = 1U;
 int DownloadManager::m_DirWatcherDisabler                    = 0;
@@ -478,26 +502,50 @@ void DownloadManager::queryDownloadListInfo()
 bool DownloadManager::addDownload(const QStringList& URLs, QString gameName, int modID,
                                   int fileID, const ModRepositoryFileInfo* fileInfo)
 {
-  QString fileName = QFileInfo(URLs.first()).fileName();
-  if (fileName.isEmpty()) {
-    fileName = "unknown";
-  } else {
-    fileName = QUrl::fromPercentEncoding(fileName.toUtf8());
+  // Parse the URL properly instead of feeding it to QFileInfo — QFileInfo
+  // doesn't understand URLs, so its fileName() can pull in query-string junk
+  // on Linux and we end up saving downloads as UUIDs from the S3 object key.
+  const QUrl parsedUrl = QUrl::fromEncoded(URLs.first().toLocal8Bit());
+
+  QString fileName;
+
+  // Nexus S3-signed download URLs carry the desired filename in the
+  // `response-content-disposition` query parameter, e.g.
+  //   response-content-disposition=attachment;filename="JohnnyGuitar NVSE - 5.06.7z"
+  // (percent-encoded on the wire).  QUrlQuery decodes values for us.  This
+  // must be checked first — the URL path itself is just the CDN object key,
+  // which looks like "9183bb...b-fdcf" and is useless as a filename.
+  const QUrlQuery query(parsedUrl);
+  const QString kDispoKey = QStringLiteral("response-content-disposition");
+  if (query.hasQueryItem(kDispoKey)) {
+    const QString disposition =
+        query.queryItemValue(kDispoKey, QUrl::FullyDecoded);
+    // RFC 6266: filename="quoted" or filename=unquoted-token or filename*=ext-value.
+    static const QRegularExpression rxQuoted(
+        QStringLiteral("filename=\"([^\"]+)\""));
+    static const QRegularExpression rxUnquoted(
+        QStringLiteral("filename=([^;\\s]+)"));
+    static const QRegularExpression rxExtValue(
+        QStringLiteral("filename\\*=[^']*'[^']*'([^;\\s]+)"));
+    QRegularExpressionMatch m = rxQuoted.match(disposition);
+    if (!m.hasMatch()) m = rxExtValue.match(disposition);
+    if (!m.hasMatch()) m = rxUnquoted.match(disposition);
+    if (m.hasMatch()) {
+      fileName = QUrl::fromPercentEncoding(m.captured(1).toUtf8());
+    }
   }
 
-  // Temporary URLs for S3-compatible storage are signed for a single method, removing
-  // the ability to make HEAD requests to such URLs. We can use the
-  // response-content-disposition GET parameter, setting the Content-Disposition header,
-  // to predetermine intended file name without a subrequest.
-  if (fileName.contains("response-content-disposition=")) {
-    std::regex exp("filename=\"(.+)\"");
-    std::cmatch result;
-    if (std::regex_search(fileName.toStdString().c_str(), result, exp)) {
-      fileName = MOBase::sanitizeFileName(QString::fromUtf8(result.str(1).c_str()));
-      if (fileName.isEmpty()) {
-        fileName = "unknown";
-      }
+  // Fall back to the last path segment of the URL if the disposition trick
+  // didn't produce anything.
+  if (fileName.isEmpty()) {
+    fileName = parsedUrl.fileName();
+    if (!fileName.isEmpty()) {
+      fileName = QUrl::fromPercentEncoding(fileName.toUtf8());
     }
+  }
+
+  if (fileName.isEmpty()) {
+    fileName = "unknown";
   }
 
   QUrl preferredUrl = QUrl::fromEncoded(URLs.first().toLocal8Bit());
@@ -2365,7 +2413,10 @@ void DownloadManager::downloadFinished(int index)
       QString oldName = QFileInfo(info->m_Output).fileName();
 
       startDisableDirWatcher();
-      if (!newName.isEmpty() && (oldName.isEmpty())) {
+      // Rename to Content-Disposition if either we have no name yet, or the
+      // name we seeded from the API looks like a CDN object key.
+      if (!newName.isEmpty() &&
+          (oldName.isEmpty() || looksLikeCdnObjectKey(info->m_FileName))) {
         info->setName(getDownloadFileName(newName), true);
       } else {
         info->setName(m_OutputDirectory + "/" + info->m_FileName,
@@ -2407,8 +2458,17 @@ void DownloadManager::metaDataChanged()
 
   DownloadInfo* info = findDownload(this->sender(), &index);
   if (info != nullptr) {
-    QString newName = getFileNameFromNetworkReply(info->m_Reply);
-    if (!newName.isEmpty() && (info->m_FileName.isEmpty())) {
+    const QString newName = getFileNameFromNetworkReply(info->m_Reply);
+    // Prefer Content-Disposition over whatever we seeded from the API when
+    // the seeded name looks like a CDN object key.  Otherwise only take it
+    // if we have no name at all yet.
+    const bool shouldReplace =
+        !newName.isEmpty() &&
+        (info->m_FileName.isEmpty() || looksLikeCdnObjectKey(info->m_FileName));
+
+    if (shouldReplace) {
+      log::info("metaDataChanged: replacing '{}' with Content-Disposition '{}'",
+                info->m_FileName, newName);
       startDisableDirWatcher();
       info->setName(getDownloadFileName(newName), true);
       endDisableDirWatcher();

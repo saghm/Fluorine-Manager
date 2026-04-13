@@ -114,6 +114,14 @@ namespace mo2::python {
                  [](Version const& version) {
                      return version.string(Version::FormatCondensed);
                  })
+            // Compatibility shim: older plugins call .canonicalString() on
+            // whatever IOrganizer.appVersion() returned, which used to be a
+            // VersionInfo.  It now returns Version, so we mirror the old name
+            // here.  LazyModlistExport and friends use this.
+            .def("canonicalString",
+                 [](Version const& version) {
+                     return version.string(Version::FormatCondensed);
+                 })
             .def(py::self < py::self)
             .def(py::self > py::self)
             .def(py::self <= py::self)
