@@ -30,7 +30,18 @@ static const char* GITHUB_REPO  = "SulfurNitride/Fluorine-Bethini-Pie-Performanc
 static const char* RELEASE_TAG  = "latest";
 static const char* ASSET_NAME   = "BethiniPie-linux.tar.gz";
 
-// Maps Fluorine gameName() to BethIni Pie's Bethini.json INI directory key
+// Maps Fluorine managedGame()->gameName() to the BethINI Pie app name.
+// MO2 game plugins sometimes return a short name (e.g. "New Vegas") that
+// differs from BethINI Pie's app folder name ("Fallout New Vegas").
+static const QMap<QString, QString> s_MO2ToBethiniName = {
+    {"Skyrim Special Edition", "Skyrim Special Edition"},
+    {"Fallout 4", "Fallout 4"},
+    {"Fallout New Vegas", "Fallout New Vegas"},
+    {"New Vegas", "Fallout New Vegas"},
+    {"Starfield", "Starfield"},
+};
+
+// Maps the BethINI Pie app name to its Bethini.json INI directory key.
 static const QMap<QString, QString> s_GameIniKeys = {
     {"Skyrim Special Edition", "sSkyrim Special EditionINIPath"},
     {"Fallout 4", "sFallout 4INIPath"},
@@ -125,10 +136,8 @@ QString BethiniPie::bethiniGameName() const
 {
   if (!m_MOInfo || !m_MOInfo->managedGame())
     return {};
-  QString game = m_MOInfo->managedGame()->gameName();
-  if (s_GameIniKeys.contains(game))
-    return game;
-  return {};
+  const QString mo2Name = m_MOInfo->managedGame()->gameName();
+  return s_MO2ToBethiniName.value(mo2Name);
 }
 
 QString BethiniPie::iniDirectoryKey() const

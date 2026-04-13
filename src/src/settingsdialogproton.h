@@ -30,12 +30,10 @@ private:
   void onDeletePrefix();
   void onRecreatePrefix();
   void onOpenPrefixFolder();
-  void onFixGameRegistries();
   void onWinetricks();
   void onBrowsePrefixLocation();
   void onDownloadSLR();
 
-  void showGameRegistryDialog();
   QString ensureWinetricks();
   QString findProtonWine(const QString& protonPath);
 
