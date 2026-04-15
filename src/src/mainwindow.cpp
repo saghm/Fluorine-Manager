@@ -397,6 +397,13 @@ MainWindow::MainWindow(Settings& settings, OrganizerCore& organizerCore,
 
   connect(&m_OrganizerCore, &OrganizerCore::directoryStructureReady, this,
           &MainWindow::onDirectoryStructureChanged);
+
+  // OrganizerCore::modStatusChanged updates the DirectoryStructure in place
+  // but never emits directoryStructureReady, so without this the Data tab
+  // stays stale until the user clicks Refresh. Route the ModList signal to
+  // DataTab::updateTree directly.
+  connect(m_OrganizerCore.modList(), &ModList::modStatesChanged, this,
+          [this] { m_DataTab->updateTree(); });
   connect(m_OrganizerCore.directoryRefresher(),
           SIGNAL(progress(const DirectoryRefreshProgress*)), this,
           SLOT(refresherProgress(const DirectoryRefreshProgress*)));
