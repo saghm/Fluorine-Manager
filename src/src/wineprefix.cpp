@@ -548,9 +548,22 @@ bool WinePrefix::syncPluginsBack(const QString& profilePluginsPath,
     return true;
   }
 
-  auto pickNewest = [&](const QString& canonicalName) -> QString {
+  // Pick the newest case variant, sync it to the profile, then mirror its
+  // content back into every sibling variant in the prefix so they don't
+  // drift. LOOT (and similar tools) only edit whichever case variant they
+  // opened; without this mirror the untouched sibling keeps stale content
+  // until the next deployPlugins, which can confuse anything that reads
+  // the prefix before then.
+  auto syncOne = [&](const QString& canonicalName,
+                     const QString& profilePath) -> bool {
     const QStringList variants =
         findCaseVariants(QDir(pluginsDir).filePath(canonicalName));
+    if (variants.isEmpty()) {
+      MOBase::log::debug("syncPluginsBack: no {} variant found in '{}'",
+                         canonicalName, pluginsDir);
+      return true;
+    }
+
     QString newest;
     QDateTime newestTime;
     for (const QString& v : variants) {
@@ -560,39 +573,40 @@ bool WinePrefix::syncPluginsBack(const QString& profilePluginsPath,
         newest     = v;
       }
     }
-    return newest;
+
+    MOBase::log::info("syncPluginsBack: '{}' <- '{}'", profilePath, newest);
+    if (!copyFileWithParents(newest, profilePath)) {
+      MOBase::log::error("syncPluginsBack: failed to copy {} back to '{}'",
+                         canonicalName, profilePath);
+      return false;
+    }
+
+    // Mirror newest content into any stale sibling variants so the prefix
+    // stays consistent regardless of which casing the next reader opens.
+    for (const QString& sibling : variants) {
+      if (sibling == newest) {
+        continue;
+      }
+      if (!QFile::remove(sibling)) {
+        MOBase::log::warn("syncPluginsBack: failed to remove stale sibling '{}'",
+                          sibling);
+        continue;
+      }
+      if (!QFile::copy(newest, sibling)) {
+        MOBase::log::warn("syncPluginsBack: failed to mirror '{}' -> '{}'",
+                          newest, sibling);
+      }
+    }
+    return true;
   };
 
   bool ok = true;
-
-  const QString newestPlugins = pickNewest("plugins.txt");
-  if (!newestPlugins.isEmpty()) {
-    MOBase::log::info("syncPluginsBack: '{}' <- '{}'", profilePluginsPath,
-                      newestPlugins);
-    if (!copyFileWithParents(newestPlugins, profilePluginsPath)) {
-      MOBase::log::error("syncPluginsBack: failed to copy plugins.txt back to '{}'",
-                         profilePluginsPath);
-      ok = false;
-    }
-  } else {
-    MOBase::log::debug("syncPluginsBack: no plugins.txt variant found in '{}'",
-                       pluginsDir);
+  if (!syncOne("plugins.txt", profilePluginsPath)) {
+    ok = false;
   }
-
-  const QString newestLoadOrder = pickNewest("loadorder.txt");
-  if (!newestLoadOrder.isEmpty()) {
-    MOBase::log::info("syncPluginsBack: '{}' <- '{}'", profileLoadOrderPath,
-                      newestLoadOrder);
-    if (!copyFileWithParents(newestLoadOrder, profileLoadOrderPath)) {
-      MOBase::log::error("syncPluginsBack: failed to copy loadorder.txt back to '{}'",
-                         profileLoadOrderPath);
-      ok = false;
-    }
-  } else {
-    MOBase::log::debug("syncPluginsBack: no loadorder.txt variant found in '{}'",
-                       pluginsDir);
+  if (!syncOne("loadorder.txt", profileLoadOrderPath)) {
+    ok = false;
   }
-
   return ok;
 }
 

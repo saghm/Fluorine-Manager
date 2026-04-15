@@ -13,12 +13,21 @@ import lzma
 import os
 import shutil
 import struct
+import sys
 import tempfile
 import zipfile
 import zlib
 from pathlib import Path
 
 import mobase
+
+
+def _log_error(msg: str) -> None:
+    print(f"[OMOD] {msg}", file=sys.stderr)
+
+
+def _log_warn(msg: str) -> None:
+    print(f"[OMOD] WARNING: {msg}", file=sys.stderr)
 
 
 class OmodInstaller(mobase.IPluginInstallerCustom):
@@ -79,7 +88,7 @@ class OmodInstaller(mobase.IPluginInstallerCustom):
         try:
             return self._do_install(mod_name, archive_name)
         except Exception as e:
-            mobase.log(mobase.LogLevel.ERROR, f"OMOD install failed: {e}")
+            _log_error(f"OMOD install failed: {e}")
             return mobase.InstallResult.FAILED
 
     def _do_install(
@@ -91,7 +100,7 @@ class OmodInstaller(mobase.IPluginInstallerCustom):
             names = zf.namelist()
 
             if "config" not in names:
-                mobase.log(mobase.LogLevel.WARNING, "OMOD: no config entry found")
+                _log_warn("no config entry found")
                 return mobase.InstallResult.NOT_ATTEMPTED
 
             config = self._parse_config(zf.read("config"))
@@ -127,9 +136,7 @@ class OmodInstaller(mobase.IPluginInstallerCustom):
                         file_list.append(rel)
 
                 if not file_list:
-                    mobase.log(
-                        mobase.LogLevel.WARNING, "OMOD: no files extracted"
-                    )
+                    _log_warn("no files extracted")
                     return mobase.InstallResult.FAILED
 
                 # Repackage as a standard zip for MO2's installer.
@@ -155,10 +162,7 @@ class OmodInstaller(mobase.IPluginInstallerCustom):
         if stream_name not in names:
             return
         if crc_name not in names:
-            mobase.log(
-                mobase.LogLevel.WARNING,
-                f"OMOD: {stream_name} present but {crc_name} missing",
-            )
+            _log_warn(f"{stream_name} present but {crc_name} missing")
             return
 
         file_list = self._parse_crc_file(zf.read(crc_name))
@@ -171,11 +175,10 @@ class OmodInstaller(mobase.IPluginInstallerCustom):
         offset = 0
         for path, size in file_list:
             if offset + size > len(decompressed):
-                mobase.log(
-                    mobase.LogLevel.WARNING,
-                    f"OMOD: truncated stream for {path} "
+                _log_warn(
+                    f"truncated stream for {path} "
                     f"(need {size} bytes at offset {offset}, "
-                    f"have {len(decompressed)})",
+                    f"have {len(decompressed)})"
                 )
                 break
 
