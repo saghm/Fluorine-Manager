@@ -484,8 +484,20 @@ void PrefixSetupRunner::start()
     if (m_steps[i].status == SetupStep::Succeeded)
       continue;
 
-    allOk = runStep(i) && allOk;
+    const bool stepOk = runStep(i);
+    allOk             = stepOk && allOk;
     emit progressChanged(static_cast<float>(i + 1) / total);
+
+    // The prefix-init step is a hard prerequisite for everything that
+    // follows. If it fails (e.g. broken Proton install), running downstream
+    // steps just produces a cascade of misleading "version mismatch" errors
+    // against a half-initialized prefix. Surface the real error and stop.
+    if (!stepOk && m_steps[i].id == "proton_init") {
+      emit logMessage(
+          "Prefix initialization failed — skipping remaining setup steps. "
+          "Fix the Proton installation and retry.");
+      break;
+    }
   }
 
   emit finished(allOk);
@@ -625,7 +637,8 @@ QProcess* PrefixSetupRunner::buildWrappedProcess(
 int PrefixSetupRunner::runProcess(const QString& exe,
                                   const QStringList& args,
                                   const QMap<QString, QString>& extraEnv,
-                                  int timeoutMs)
+                                  int timeoutMs,
+                                  QByteArray* captured)
 {
   QProcess* proc = buildWrappedProcess(exe, extraEnv);
 
@@ -643,8 +656,10 @@ int PrefixSetupRunner::runProcess(const QString& exe,
 
     if (proc->canReadLine() || proc->bytesAvailable() > 0) {
       const QByteArray data = proc->readAll();
-      if (!data.isEmpty())
+      if (!data.isEmpty()) {
+        if (captured) captured->append(data);
         emitFilteredOutput(this, data);
+      }
     }
 
     if (isCancelled()) {
@@ -656,8 +671,10 @@ int PrefixSetupRunner::runProcess(const QString& exe,
   }
 
   const QByteArray remaining = proc->readAll();
-  if (!remaining.isEmpty())
+  if (!remaining.isEmpty()) {
+    if (captured) captured->append(remaining);
     emitFilteredOutput(this, remaining);
+  }
 
   const int exitCode = proc->exitCode();
   proc->deleteLater();
@@ -785,12 +802,33 @@ bool PrefixSetupRunner::stepProtonInit()
 
   emit logMessage("Initializing Wine prefix with Proton...");
 
+  QByteArray protonOutput;
   const int rc = runProcess(protonScript,
                             {"run", "wineboot", "-u"},
-                            env);
+                            env, -1, &protonOutput);
   if (rc != 0) {
-    m_steps.last().errorMessage =
-        QStringLiteral("proton wineboot failed (exit code %1)").arg(rc);
+    // Detect a broken Proton install: setup_prefix copies DLLs from Proton's
+    // bundled default_pfx template, so a FileNotFoundError there means the
+    // Proton distribution itself is missing files — not a Fluorine issue.
+    const QByteArray out = protonOutput;
+    if (out.contains("FileNotFoundError") &&
+        out.contains("default_pfx/drive_c")) {
+      int start = out.indexOf("default_pfx/drive_c");
+      int end   = out.indexOf('\'', start);
+      if (end < 0) end = out.indexOf('"', start);
+      const QString missing =
+          (end > start) ? QString::fromUtf8(out.mid(start, end - start))
+                        : QStringLiteral("default_pfx/drive_c/...");
+      m_steps.last().errorMessage =
+          QStringLiteral(
+              "Proton install is incomplete: missing '%1'. "
+              "Reinstall or verify your Proton build (e.g. GE-Proton) — "
+              "this is not a Fluorine bug.")
+              .arg(missing);
+    } else {
+      m_steps.last().errorMessage =
+          QStringLiteral("proton wineboot failed (exit code %1)").arg(rc);
+    }
     return false;
   }
 

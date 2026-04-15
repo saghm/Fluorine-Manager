@@ -2,6 +2,7 @@
 #define PREFIXSETUPRUNNER_H
 
 #include <QAtomicInt>
+#include <QByteArray>
 #include <QObject>
 #include <QProcess>
 #include <QString>
@@ -63,11 +64,14 @@ private:
   bool isCancelled() const { return m_cancelled.loadAcquire() != 0; }
 
   /// Run an external process with SLR wrapping and log its output.
-  /// Returns exit code (0 = success).
+  /// Returns exit code (0 = success).  If captured is non-null, a copy of
+  /// the merged stdout/stderr output is appended to it for post-mortem
+  /// pattern matching.
   int runProcess(const QString& exe,
                  const QStringList& args,
                  const QMap<QString, QString>& extraEnv,
-                 int timeoutMs = -1);
+                 int timeoutMs = -1,
+                 QByteArray* captured = nullptr);
 
   /// Run a plain host command (NO SLR wrapping).
   /// Used for host utilities like curl, unzip that must not run in the container.
