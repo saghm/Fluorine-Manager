@@ -68,6 +68,52 @@ bool copyTreeContents(const QString& sourceRoot, const QString& destinationRoot)
   return true;
 }
 
+// Mirror deletions from source into destination: remove any file in the
+// destination tree that does not exist at the matching relative path in
+// source.  Then prune resulting empty directories.  Used to propagate
+// in-game save deletions from the prefix back to the profile.
+bool mirrorDeletions(const QString& sourceRoot, const QString& destinationRoot)
+{
+  if (!QDir(destinationRoot).exists()) {
+    return true;
+  }
+
+  const QDir srcDir(sourceRoot);
+  QDirIterator it(destinationRoot, QDir::Files | QDir::Hidden | QDir::System,
+                  QDirIterator::Subdirectories);
+  while (it.hasNext()) {
+    const QString destFile = it.next();
+    const QString relativePath = QDir(destinationRoot).relativeFilePath(destFile);
+    const QString sourceFile = srcDir.filePath(relativePath);
+    if (!QFile::exists(sourceFile)) {
+      if (!QFile::remove(destFile)) {
+        MOBase::log::warn("mirrorDeletions: failed to remove '{}'", destFile);
+      } else {
+        MOBase::log::debug("mirrorDeletions: removed '{}'", destFile);
+      }
+    }
+  }
+
+  // Prune empty directories bottom-up.
+  QStringList dirs;
+  QDirIterator dirIt(destinationRoot,
+                     QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden,
+                     QDirIterator::Subdirectories);
+  while (dirIt.hasNext()) {
+    dirs.append(dirIt.next());
+  }
+  std::sort(dirs.begin(), dirs.end(),
+            [](const QString& a, const QString& b) { return a.length() > b.length(); });
+  for (const QString& d : dirs) {
+    QDir qd(d);
+    if (qd.isEmpty(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden)) {
+      qd.rmdir(".");
+    }
+  }
+
+  return true;
+}
+
 bool restoreBackedUpSaves(const QString& liveUpper, const QString& liveLower,
                           const QString& backupUpper, const QString& backupLower)
 {
@@ -165,7 +211,8 @@ QString WinePrefix::userProfilePath() const
   return QDir(driveC()).filePath("users/steamuser");
 }
 
-bool WinePrefix::deployPlugins(const QStringList& plugins, const QString& dataDir) const
+bool WinePrefix::deployPlugins(const QStringList& plugins, const QString& dataDir,
+                               PluginListMechanism mechanism) const
 {
   if (!isValid()) {
     MOBase::log::error("deployPlugins: prefix '{}' is not valid (drive_c not found)",
@@ -173,22 +220,28 @@ bool WinePrefix::deployPlugins(const QStringList& plugins, const QString& dataDi
     return false;
   }
 
+  if (mechanism == PluginListMechanism::None) {
+    MOBase::log::debug("deployPlugins: game has no plugin-list mechanism, skipping");
+    return true;
+  }
+
   const QString pluginsDir = QDir(appdataLocal()).filePath(dataDir);
-  MOBase::log::info("deployPlugins: target dir='{}', count={}", pluginsDir,
-                    plugins.size());
+  MOBase::log::info("deployPlugins: target dir='{}', count={}, mechanism={}",
+                    pluginsDir, plugins.size(),
+                    mechanism == PluginListMechanism::PluginsTxt ? "PluginsTxt"
+                                                                 : "FileTime");
 
   if (!QDir().mkpath(pluginsDir)) {
     MOBase::log::error("deployPlugins: failed to create directory '{}'", pluginsDir);
     return false;
   }
 
-  // Remove all case variants of plugins.txt and loadorder.txt before writing.
-  // Linux is case-sensitive, so a stale "plugins.txt" can coexist with
-  // "Plugins.txt" and the game may read the wrong one (e.g. FalloutNV reads
-  // lowercase "plugins.txt").
-  const QString pluginsPath  = QDir(pluginsDir).filePath("Plugins.txt");
-  const QString loadOrderPath = QDir(pluginsDir).filePath("loadorder.txt");
-  for (const QString& variant : findCaseVariants(pluginsPath)) {
+  // Clear ALL stale plugin-list files in AppData — any case of "plugins.txt"
+  // and any "loadorder.txt".  loadorder.txt is MO2-internal (profile only);
+  // leaving a stale one in the prefix confuses sync-back if mechanism changes.
+  const QString pluginsCanonical = QDir(pluginsDir).filePath("plugins.txt");
+  const QString loadOrderPath    = QDir(pluginsDir).filePath("loadorder.txt");
+  for (const QString& variant : findCaseVariants(pluginsCanonical)) {
     MOBase::log::debug("deployPlugins: removing stale plugins variant '{}'", variant);
     QFile::remove(variant);
   }
@@ -197,9 +250,19 @@ bool WinePrefix::deployPlugins(const QStringList& plugins, const QString& dataDi
     QFile::remove(variant);
   }
 
-  QFile pluginsFile(pluginsPath);
+  // PluginsTxt games (SSE/AE, FO4, Starfield, ...) read "Plugins.txt" with
+  // '*' prefix for enabled.  FileTime games (FNV, FO3, Skyrim LE) read
+  // lowercase "plugins.txt" listing enabled plugins only (no prefix) and
+  // derive order from file mtimes.  Lines are already in the correct game
+  // format because they come straight from the profile's plugins.txt, which
+  // MO2 writes per-game via writePluginLists().
+  const bool useCapitalP = mechanism == PluginListMechanism::PluginsTxt;
+  const QString targetPath =
+      QDir(pluginsDir).filePath(useCapitalP ? "Plugins.txt" : "plugins.txt");
+
+  QFile pluginsFile(targetPath);
   if (!pluginsFile.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
-    MOBase::log::error("deployPlugins: failed to open '{}' for writing", pluginsPath);
+    MOBase::log::error("deployPlugins: failed to open '{}' for writing", targetPath);
     return false;
   }
 
@@ -209,35 +272,7 @@ bool WinePrefix::deployPlugins(const QStringList& plugins, const QString& dataDi
   }
   pluginsFile.close();
   MOBase::log::info("deployPlugins: wrote {} plugins to '{}'", plugins.size(),
-                    pluginsPath);
-
-  // Also write lowercase "plugins.txt" for games that expect it (e.g. FalloutNV).
-  const QString pluginsLower = QDir(pluginsDir).filePath("plugins.txt");
-  if (pluginsLower != pluginsPath) {
-    QFile::remove(pluginsLower);
-    if (!QFile::copy(pluginsPath, pluginsLower)) {
-      MOBase::log::warn("deployPlugins: failed to create lowercase copy '{}'",
-                        pluginsLower);
-    }
-  }
-
-  QFile loadOrderFile(loadOrderPath);
-  if (!loadOrderFile.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
-    MOBase::log::error("deployPlugins: failed to open '{}' for writing",
-                       loadOrderPath);
-    return false;
-  }
-
-  QTextStream loadOrderStream(&loadOrderFile);
-  for (const QString& plugin : plugins) {
-    QString line = plugin;
-    if (line.startsWith('*')) {
-      line.remove(0, 1);
-    }
-
-    loadOrderStream << line << "\r\n";
-  }
-  MOBase::log::info("deployPlugins: wrote loadorder.txt to '{}'", loadOrderPath);
+                    targetPath);
 
   return true;
 }
@@ -384,6 +419,11 @@ bool WinePrefix::syncSavesBack(const QString& profileSaveDir,
   if (!QDir().mkpath(profileSaveDir)) {
     return false;
   }
+
+  // Mirror deletions first, then copy remaining files.  Without the delete
+  // pass, a save the user deleted in-game would remain in the profile
+  // because copyTreeContents only copies files present in the source.
+  mirrorDeletions(sourceSavesDir, profileSaveDir);
 
   const bool copied = copyTreeContents(sourceSavesDir, profileSaveDir);
   if (!copied) {
@@ -533,12 +573,16 @@ bool WinePrefix::syncProfileInisBack(
 }
 
 bool WinePrefix::syncPluginsBack(const QString& profilePluginsPath,
-                                 const QString& profileLoadOrderPath,
-                                 const QString& dataDir) const
+                                 const QString& dataDir,
+                                 PluginListMechanism mechanism) const
 {
   if (!isValid()) {
     MOBase::log::error("syncPluginsBack: prefix '{}' is not valid", m_prefixPath);
     return false;
+  }
+
+  if (mechanism == PluginListMechanism::None) {
+    return true;
   }
 
   const QString pluginsDir = QDir(appdataLocal()).filePath(dataDir);
@@ -548,66 +592,62 @@ bool WinePrefix::syncPluginsBack(const QString& profilePluginsPath,
     return true;
   }
 
-  // Pick the newest case variant, sync it to the profile, then mirror its
-  // content back into every sibling variant in the prefix so they don't
-  // drift. LOOT (and similar tools) only edit whichever case variant they
-  // opened; without this mirror the untouched sibling keeps stale content
-  // until the next deployPlugins, which can confuse anything that reads
-  // the prefix before then.
-  auto syncOne = [&](const QString& canonicalName,
-                     const QString& profilePath) -> bool {
-    const QStringList variants =
-        findCaseVariants(QDir(pluginsDir).filePath(canonicalName));
-    if (variants.isEmpty()) {
-      MOBase::log::debug("syncPluginsBack: no {} variant found in '{}'",
-                         canonicalName, pluginsDir);
-      return true;
-    }
-
-    QString newest;
-    QDateTime newestTime;
-    for (const QString& v : variants) {
-      const QFileInfo fi(v);
-      if (!newestTime.isValid() || fi.lastModified() > newestTime) {
-        newestTime = fi.lastModified();
-        newest     = v;
-      }
-    }
-
-    MOBase::log::info("syncPluginsBack: '{}' <- '{}'", profilePath, newest);
-    if (!copyFileWithParents(newest, profilePath)) {
-      MOBase::log::error("syncPluginsBack: failed to copy {} back to '{}'",
-                         canonicalName, profilePath);
-      return false;
-    }
-
-    // Mirror newest content into any stale sibling variants so the prefix
-    // stays consistent regardless of which casing the next reader opens.
-    for (const QString& sibling : variants) {
-      if (sibling == newest) {
-        continue;
-      }
-      if (!QFile::remove(sibling)) {
-        MOBase::log::warn("syncPluginsBack: failed to remove stale sibling '{}'",
-                          sibling);
-        continue;
-      }
-      if (!QFile::copy(newest, sibling)) {
-        MOBase::log::warn("syncPluginsBack: failed to mirror '{}' -> '{}'",
-                          newest, sibling);
-      }
-    }
+  // Pick the newest case variant of the game's plugin-list file, sync it
+  // to the profile, then mirror that content into every sibling variant in
+  // the prefix so they don't drift.  LOOT edits whichever case it opened;
+  // without mirroring, the untouched sibling keeps stale content.
+  // loadorder.txt is MO2-internal — never touched in the prefix and never
+  // read back; MO2 re-derives it from the synced plugins file.
+  const QStringList variants =
+      findCaseVariants(QDir(pluginsDir).filePath("plugins.txt"));
+  if (variants.isEmpty()) {
+    MOBase::log::debug("syncPluginsBack: no plugins.txt variant found in '{}'",
+                       pluginsDir);
     return true;
-  };
+  }
 
-  bool ok = true;
-  if (!syncOne("plugins.txt", profilePluginsPath)) {
-    ok = false;
+  QString newest;
+  QDateTime newestTime;
+  for (const QString& v : variants) {
+    const QFileInfo fi(v);
+    if (!newestTime.isValid() || fi.lastModified() > newestTime) {
+      newestTime = fi.lastModified();
+      newest     = v;
+    }
   }
-  if (!syncOne("loadorder.txt", profileLoadOrderPath)) {
-    ok = false;
+
+  MOBase::log::info("syncPluginsBack: '{}' <- '{}'", profilePluginsPath, newest);
+  if (!copyFileWithParents(newest, profilePluginsPath)) {
+    MOBase::log::error("syncPluginsBack: failed to copy plugins.txt back to '{}'",
+                       profilePluginsPath);
+    return false;
   }
-  return ok;
+
+  for (const QString& sibling : variants) {
+    if (sibling == newest) {
+      continue;
+    }
+    if (!QFile::remove(sibling)) {
+      MOBase::log::warn("syncPluginsBack: failed to remove stale sibling '{}'",
+                        sibling);
+      continue;
+    }
+    if (!QFile::copy(newest, sibling)) {
+      MOBase::log::warn("syncPluginsBack: failed to mirror '{}' -> '{}'",
+                        newest, sibling);
+    }
+  }
+
+  // Clear any stale loadorder.txt that an older build may have written.
+  // The game never reads it; leaving it around only invites confusion.
+  for (const QString& stale :
+       findCaseVariants(QDir(pluginsDir).filePath("loadorder.txt"))) {
+    MOBase::log::debug("syncPluginsBack: removing stale loadorder variant '{}'",
+                       stale);
+    QFile::remove(stale);
+  }
+
+  return true;
 }
 
 // ── Wine registry (.reg file) access ─────────────────────────────────────────

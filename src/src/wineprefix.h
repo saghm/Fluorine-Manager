@@ -9,6 +9,14 @@
 class WinePrefix
 {
 public:
+  // Mirrors MOBase::IPluginGame::LoadOrderMechanism without pulling that
+  // header into wineprefix.  Callers translate from the game feature.
+  enum class PluginListMechanism {
+    None,        // no plugin list file in AppData
+    FileTime,    // lowercase "plugins.txt" (enabled-only), order via mtime
+    PluginsTxt,  // "Plugins.txt" with '*' prefix for enabled (SSE/AE/FO4/Starfield)
+  };
+
   explicit WinePrefix(const QString& prefixPath);
 
   bool isValid() const;  // drive_c/ exists
@@ -18,26 +26,33 @@ public:
   QString appdataLocal() const;   // .../AppData/Local
   QString userProfilePath() const; // drive_c/users/steamuser
 
-  // Deploy profile files into prefix
-  bool deployPlugins(const QStringList& plugins, const QString& dataDir) const;
+  // Deploy profile files into prefix.  Only the plugin list file the game
+  // actually reads is written — loadorder.txt is MO2-internal and never
+  // belongs in AppData/Local/<Game>/.
+  bool deployPlugins(const QStringList& plugins, const QString& dataDir,
+                     PluginListMechanism mechanism) const;
   bool deployProfileIni(const QString& sourceIniPath,
                         const QString& targetIniPath) const;
   bool deployProfileSaves(const QString& profileSaveDir,
                           const QString& absoluteSaveDir,
                           bool clearDestination) const;
 
-  // Sync saves back from prefix to profile
+  // Sync saves back from prefix to profile.  Mirrors deletions: profile
+  // files absent from the prefix are removed so in-game save deletions
+  // propagate.
   bool syncSavesBack(const QString& profileSaveDir,
                      const QString& absoluteSaveDir) const;
   bool syncProfileInisBack(
       const QList<QPair<QString, QString>>& iniMappings) const;
 
-  // Sync plugins.txt / loadorder.txt from the prefix AppData back to the
-  // profile after a tool like LOOT may have edited them.  Picks the newest
-  // case-insensitive variant of each file.
+  // Sync the game's plugin-list file from the prefix AppData back to the
+  // profile after a tool like LOOT may have edited it.  Picks the newest
+  // case-insensitive variant.  Only the Plugins.txt/plugins.txt file the
+  // game reads is synced — loadorder.txt is never written to the prefix
+  // and is not read back.
   bool syncPluginsBack(const QString& profilePluginsPath,
-                       const QString& profileLoadOrderPath,
-                       const QString& dataDir) const;
+                       const QString& dataDir,
+                       PluginListMechanism mechanism) const;
 
   // Restore any stale .mo2linux_backup INI/save files left by a crash.
   // Should be called at startup before any game runs.

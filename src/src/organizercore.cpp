@@ -2517,12 +2517,26 @@ bool OrganizerCore::beforeRun(
           pluginsFile.close();
 
           if (!plugins.isEmpty()) {
-            log::info(
-                "Deploying plugin list to '{}' and '{}' (load order to '{}')",
-                QDir(pluginsTargetDir).filePath("Plugins.txt"),
-                QDir(pluginsTargetDir).filePath("plugins.txt"),
-                QDir(pluginsTargetDir).filePath("loadorder.txt"));
-            if (prefix.deployPlugins(plugins, dataDirName)) {
+            WinePrefix::PluginListMechanism wineMech =
+                WinePrefix::PluginListMechanism::None;
+            switch (managedGame()->loadOrderMechanism()) {
+            case IPluginGame::LoadOrderMechanism::PluginsTxt:
+              wineMech = WinePrefix::PluginListMechanism::PluginsTxt;
+              break;
+            case IPluginGame::LoadOrderMechanism::FileTime:
+              wineMech = WinePrefix::PluginListMechanism::FileTime;
+              break;
+            case IPluginGame::LoadOrderMechanism::None:
+              wineMech = WinePrefix::PluginListMechanism::None;
+              break;
+            }
+            const QString pluginListFile =
+                wineMech == WinePrefix::PluginListMechanism::PluginsTxt
+                    ? QString("Plugins.txt")
+                    : QString("plugins.txt");
+            log::info("Deploying plugin list to '{}'",
+                      QDir(pluginsTargetDir).filePath(pluginListFile));
+            if (prefix.deployPlugins(plugins, dataDirName, wineMech)) {
               log::debug("Deployed {} plugins to prefix '{}' (dataDirName='{}')",
                          plugins.size(), prefixPathStr, dataDirName);
             } else {
@@ -2691,17 +2705,28 @@ void OrganizerCore::afterRun(const QFileInfo& binary, DWORD exitCode)
           }
         }
 
-        // Sync plugins.txt / loadorder.txt back from the prefix.  LOOT and
-        // similar tools edit the deployed copies in AppData/Local/<Game>/ —
+        // Sync the game's plugin-list file back from the prefix.  LOOT and
+        // similar tools edit the deployed copy in AppData/Local/<Game>/ —
         // without this sync, their changes are lost when refreshESPList
         // rereads the untouched profile copy and savePluginList clobbers
-        // them with the old in-memory order.
+        // them with the old in-memory order.  loadorder.txt is MO2-internal
+        // and not written to or read from the prefix.
+        WinePrefix::PluginListMechanism wineMech =
+            WinePrefix::PluginListMechanism::None;
+        switch (managedGame()->loadOrderMechanism()) {
+        case IPluginGame::LoadOrderMechanism::PluginsTxt:
+          wineMech = WinePrefix::PluginListMechanism::PluginsTxt;
+          break;
+        case IPluginGame::LoadOrderMechanism::FileTime:
+          wineMech = WinePrefix::PluginListMechanism::FileTime;
+          break;
+        case IPluginGame::LoadOrderMechanism::None:
+          wineMech = WinePrefix::PluginListMechanism::None;
+          break;
+        }
         const QString profilePluginsPath = m_CurrentProfile->getPluginsFileName();
-        const QString profileLoadOrderPath =
-            m_CurrentProfile->getLoadOrderFileName();
-        if (!prefix.syncPluginsBack(profilePluginsPath, profileLoadOrderPath,
-                                    dataDirName)) {
-          log::warn("Failed to sync plugins.txt / loadorder.txt back from prefix '{}'",
+        if (!prefix.syncPluginsBack(profilePluginsPath, dataDirName, wineMech)) {
+          log::warn("Failed to sync plugins.txt back from prefix '{}'",
                     prefixPathStr);
         }
       }
