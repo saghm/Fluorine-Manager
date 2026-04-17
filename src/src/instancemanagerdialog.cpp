@@ -948,11 +948,12 @@ void InstanceManagerDialog::downloadSLRIfNeeded()
   }
 
   auto* progress = new QProgressDialog(
-      tr("Downloading Steam Linux Runtime (~180 MB)...\n"
+      tr("Downloading Steam Linux Runtime (~200 MB)...\n"
          "This only happens once. Check the MO2 log for details."),
       tr("Cancel"), 0, 0, this); // 0,0 = indeterminate
   progress->setWindowTitle(tr("Steam Linux Runtime"));
   progress->setWindowModality(Qt::WindowModal);
+  progress->setAttribute(Qt::WA_ShowWithoutActivating);
   progress->setMinimumDuration(0);
 
   auto* cancelFlag = new int(0);

@@ -127,6 +127,7 @@ if [ -d "build/src/src/stylesheets" ]; then
 fi
 
 
+
 # ── 7z runtime ──
 SO7="build/src/src/dlls/7z.so"
 if [ -f "${SO7}" ]; then
@@ -140,6 +141,9 @@ cp -f build/libs/archive/src/libarchive.so "${OUT_DIR}/lib/"
 cp -f build/libs/plugin_python/src/runner/librunner.so "${OUT_DIR}/lib/"
 if [ -f "libs/bsa_ffi/target/release/libbsa_ffi.so" ]; then
     cp -f libs/bsa_ffi/target/release/libbsa_ffi.so "${OUT_DIR}/lib/"
+fi
+if [ -f "libs/steam_appinfo_ffi/target/release/libsteam_appinfo_ffi.so" ]; then
+    cp -f libs/steam_appinfo_ffi/target/release/libsteam_appinfo_ffi.so "${OUT_DIR}/lib/"
 fi
 
 # Boost (version-pinned to container, won't exist on most user systems).

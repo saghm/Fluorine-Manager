@@ -27,7 +27,8 @@ list(REMOVE_ITEM ORGANIZER_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/vdfparser.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/iconextractor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/prefixsymlinks.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/slrmanager.cpp)
+    ${CMAKE_CURRENT_SOURCE_DIR}/slrmanager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/steamappinfo.cpp)
 file(GLOB ORGANIZER_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/shared/*.h

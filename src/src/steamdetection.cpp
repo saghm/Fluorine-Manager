@@ -152,9 +152,19 @@ QVector<SteamProtonInfo> findSteamProtons()
     QVector<SteamProtonInfo> builtin;
     scanProtonDir(steamPath + "/steamapps/common", true, builtin);
     // Keep only entries whose folder name starts with "Proton".
+    // Proton 11 is blacklisted: its current Wine tree deadlocks during
+    // wineboot -u on modern kernels (ntsync / futex_wait_multiple races),
+    // causing prefix init to hang indefinitely. Users should fall back to
+    // Proton 10 / Proton-Experimental / GE-Proton until Proton 11 stabilizes.
     for (auto& p : builtin) {
-      if (p.name.startsWith(QStringLiteral("Proton")))
-        protons.append(std::move(p));
+      if (!p.name.startsWith(QStringLiteral("Proton")))
+        continue;
+      if (p.name.startsWith(QStringLiteral("Proton 11"))) {
+        MOBase::log::warn("Skipping '{}' — known-broken on Linux, use Proton 10 or GE-Proton",
+                          p.name.toStdString());
+        continue;
+      }
+      protons.append(std::move(p));
     }
   }
 

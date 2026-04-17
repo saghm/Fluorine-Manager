@@ -2370,11 +2370,12 @@ void MainWindow::on_startButton_clicked()
     }
     if (useSLR && !isSlrInstalled()) {
       auto* progress = new QProgressDialog(
-          tr("Downloading Steam Linux Runtime (~180 MB)...\n"
+          tr("Downloading Steam Linux Runtime (~200 MB)...\n"
              "This is required to launch games. Check the MO2 log for details."),
           tr("Cancel"), 0, 0, this);
       progress->setWindowTitle(tr("Steam Linux Runtime"));
       progress->setWindowModality(Qt::WindowModal);
+      progress->setAttribute(Qt::WA_ShowWithoutActivating);
       progress->setMinimumDuration(0);
 
       int cancelFlag = 0;

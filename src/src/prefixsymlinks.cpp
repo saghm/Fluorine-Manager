@@ -1,9 +1,11 @@
 #include "prefixsymlinks.h"
 #include "gamedetection.h"
+#include "steamappinfo.h"
 
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <algorithm>
 #include <uibase/log.h>
 #include <unistd.h>
 
@@ -39,14 +41,20 @@ QString findPrefixUsername(const QString& usersDir)
   return QStringLiteral("steamuser");
 }
 
-/// Create a symlink if the path doesn't already exist (or is already correct).
-bool createSymlinkIfNeeded(const QString& linkPath, const QString& target)
+/// Create a symlink. If a stale symlink already points elsewhere and
+/// `replaceStale` is true, replace it. Never clobbers a real directory.
+bool createSymlinkIfNeeded(const QString& linkPath, const QString& target,
+                           bool replaceStale)
 {
   QFileInfo fi(linkPath);
-  if (fi.exists() || fi.isSymLink()) {
-    if (fi.isSymLink() && fi.symLinkTarget() == target)
+  if (fi.isSymLink()) {
+    if (fi.symLinkTarget() == target)
       return true;
-    return false;  // something else exists
+    if (!replaceStale)
+      return false;
+    QFile::remove(linkPath);
+  } else if (fi.exists()) {
+    return false;  // real directory — don't clobber
   }
 
   QDir().mkpath(QFileInfo(linkPath).absolutePath());
@@ -58,9 +66,11 @@ bool createSymlinkIfNeeded(const QString& linkPath, const QString& target)
 }
 
 /// Scan all subdirectories in gameBase and symlink them into nakBase.
+/// `replaceStale` — when true, stale symlinks (e.g. left from a previous
+/// run pointing to a lower-priority prefix) get overwritten.
 int scanAndLinkAll(const QString& nakBase, const QString& gameBase,
                    const QString& label, const QString& gameName,
-                   bool skipMyGames = false)
+                   bool skipMyGames = false, bool replaceStale = false)
 {
   QDir dir(gameBase);
   if (!dir.exists())
@@ -76,7 +86,7 @@ int scanAndLinkAll(const QString& nakBase, const QString& gameBase,
     const QString linkPath = nakBase + "/" + folder;
     const QString target   = gameBase + "/" + folder;
 
-    if (createSymlinkIfNeeded(linkPath, target)) {
+    if (createSymlinkIfNeeded(linkPath, target, replaceStale)) {
       MOBase::log::info("Linked {}/{} -> {} ({})", label, folder, target, gameName);
       ++count;
     }
@@ -114,8 +124,51 @@ void createGameSymlinksAuto(const QString& prefixPath)
   QDir().mkpath(appdataLocal);
   QDir().mkpath(appdataRoaming);
 
+  // Sort detected games so that actual Games win over Tools/Editors when
+  // two prefixes share a folder name (e.g. Skyrim SE vs Creation Kit both
+  // have "My Games/Skyrim Special Edition"). Without this, scanAndLinkAll
+  // would pick whichever appeared first and shadow the real game.
+  // Locate Steam install (mirrors the path list in findSteamInstallations()).
+  QString steamPath;
+  {
+    const QString home = QDir::homePath();
+    static const char* PATHS[] = {
+        ".local/share/Steam", ".steam/debian-installation", ".steam/steam",
+        ".var/app/com.valvesoftware.Steam/data/Steam",
+        ".var/app/com.valvesoftware.Steam/.local/share/Steam",
+        "snap/steam/common/.local/share/Steam",
+    };
+    for (const char* rel : PATHS) {
+      const QString full = QDir(home).filePath(QString::fromLatin1(rel));
+      if (QFileInfo::exists(full + "/appcache/appinfo.vdf")) {
+        steamPath = full;
+        break;
+      }
+    }
+  }
+  const QHash<quint32, SteamAppInfo>& appInfo =
+      steamPath.isEmpty() ? QHash<quint32, SteamAppInfo>{}
+                          : loadSteamAppInfo(steamPath);
+
+  auto appType = [&appInfo](const QString& appIdStr) -> QString {
+    bool ok = false;
+    const quint32 id = appIdStr.toUInt(&ok);
+    if (!ok)
+      return {};
+    const auto it = appInfo.constFind(id);
+    return it == appInfo.constEnd() ? QString{} : it->type;
+  };
+
+  std::vector<DetectedGame> ranked(result.games.begin(), result.games.end());
+  std::stable_sort(ranked.begin(), ranked.end(),
+                   [&](const DetectedGame& a, const DetectedGame& b) {
+                     return steamAppTypeRank(appType(a.app_id))
+                            < steamAppTypeRank(appType(b.app_id));
+                   });
+
   int linked = 0;
-  for (const DetectedGame& game : result.games) {
+  bool first = true;
+  for (const DetectedGame& game : ranked) {
     if (game.prefix_path.isEmpty())
       continue;
 
@@ -123,14 +176,24 @@ void createGameSymlinksAuto(const QString& prefixPath)
     const QString gameUsername = findPrefixUsername(gameUsersDir);
     const QString gameUserDir  = gameUsersDir + "/" + gameUsername;
 
+    // Only the highest-ranked candidate is allowed to replace stale symlinks
+    // from previous runs. Lower-ranked tools/demos must not overwrite real
+    // games' links even if they happen to share a folder name.
+    const bool replaceStale = first;
+    first = false;
+
     linked += scanAndLinkAll(myGames, gameUserDir + "/Documents/My Games",
-                             QStringLiteral("Documents/My Games"), game.name);
+                             QStringLiteral("Documents/My Games"), game.name,
+                             false, replaceStale);
     linked += scanAndLinkAll(documents, gameUserDir + "/Documents",
-                             QStringLiteral("Documents"), game.name, true);
+                             QStringLiteral("Documents"), game.name, true,
+                             replaceStale);
     linked += scanAndLinkAll(appdataLocal, gameUserDir + "/AppData/Local",
-                             QStringLiteral("AppData/Local"), game.name);
+                             QStringLiteral("AppData/Local"), game.name,
+                             false, replaceStale);
     linked += scanAndLinkAll(appdataRoaming, gameUserDir + "/AppData/Roaming",
-                             QStringLiteral("AppData/Roaming"), game.name);
+                             QStringLiteral("AppData/Roaming"), game.name,
+                             false, replaceStale);
   }
 
   if (linked > 0)

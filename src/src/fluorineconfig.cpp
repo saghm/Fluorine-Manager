@@ -7,6 +7,11 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QStandardPaths>
+#include <QThread>
+#include <uibase/log.h>
+
+#include <csignal>
+#include <sys/types.h>
 
 namespace
 {
@@ -122,10 +127,56 @@ QString FluorineConfig::compatDataPath() const
 void FluorineConfig::destroyPrefix() const
 {
   const QString compatData = compatDataPath();
-  if (!compatData.isEmpty()) {
-    QDir dir(compatData);
-    if (dir.exists()) {
-      dir.removeRecursively();
+  if (compatData.isEmpty()) {
+    deleteConfig();
+    return;
+  }
+
+  // Kill any wine processes still bound to this prefix. Otherwise they hold
+  // file handles that keep the files around (still on disk even after unlink
+  // until the last fd is closed) and can prevent directory removal on some
+  // filesystems.
+  const QString cleanCompat = QDir::cleanPath(compatData);
+  const QString cleanPrefix = QDir::cleanPath(compatData + "/pfx");
+  QDir procDir("/proc");
+  const QStringList pids =
+      procDir.entryList({QStringLiteral("[0-9]*")}, QDir::Dirs);
+  QList<qint64> victims;
+  for (const QString& pid : pids) {
+    QFile envF("/proc/" + pid + "/environ");
+    if (!envF.open(QIODevice::ReadOnly))
+      continue;
+    const QByteArray environ = envF.readAll();
+    for (const QByteArray& kv : environ.split('\0')) {
+      QString val;
+      if (kv.startsWith("WINEPREFIX="))
+        val = QString::fromUtf8(kv.mid(11));
+      else if (kv.startsWith("STEAM_COMPAT_DATA_PATH="))
+        val = QString::fromUtf8(kv.mid(23));
+      else
+        continue;
+      const QString clean = QDir::cleanPath(val);
+      if (clean == cleanCompat || clean == cleanPrefix) {
+        bool ok = false;
+        const qint64 p = pid.toLongLong(&ok);
+        if (ok)
+          victims.append(p);
+        break;
+      }
+    }
+  }
+
+  for (qint64 p : victims)
+    ::kill(static_cast<pid_t>(p), SIGKILL);
+  if (!victims.isEmpty())
+    QThread::msleep(200);
+
+  QDir dir(compatData);
+  if (dir.exists()) {
+    if (!dir.removeRecursively()) {
+      MOBase::log::warn("destroyPrefix: failed to remove '{}' — files may be "
+                        "locked by lingering processes",
+                        compatData.toStdString());
     }
   }
 

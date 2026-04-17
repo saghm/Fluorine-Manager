@@ -1,0 +1,11 @@
+[package]
+name = "mo2_steam_appinfo_ffi"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "steam_appinfo_ffi"
+crate-type = ["cdylib"]
+
+[dependencies]
+steam-vdf-parser = { path = "vendor/steam-vdf-parser" }

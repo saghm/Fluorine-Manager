@@ -16,6 +16,13 @@ const char* BASE_URL     = "https://repo.steampowered.com/steamrt4/images/latest
 const char* ARCHIVE_NAME = "SteamLinuxRuntime_4.tar.xz";
 const char* EXTRACTED_DIR = "SteamLinuxRuntime_4";
 
+// steamrt4 (Debian bookworm-based) ships without xrandr, which Proton-GE
+// and some protonfixes require at launch. We inject it from the Debian
+// x11-xserver-utils package.
+const char* XRANDR_DEB_URL =
+    "http://ftp.debian.org/debian/pool/main/x/x11-xserver-utils/"
+    "x11-xserver-utils_7.7+11_amd64.deb";
+
 QString slrInstallDir()
 {
   return QDir::homePath() + "/.local/share/fluorine/steamrt";
@@ -173,7 +180,59 @@ QString downloadSlr(const std::function<void(float)>& progressCb,
   if (!QFileInfo::exists(slrRunScriptPath()))
     return QStringLiteral("Extraction succeeded but run script not found");
 
-  // 4. Save BUILD_ID.
+  // 4. Inject xrandr into the container (steamrt4 ships without it, but
+  // Proton-GE and several protonfixes invoke xrandr during launch).
+  {
+    status(QStringLiteral("Injecting xrandr into runtime..."));
+    const QString debPath = installDir + "/x11-xserver-utils.deb";
+    httpGet(QString::fromLatin1(XRANDR_DEB_URL), cancelFlag, nullptr, debPath);
+    if (!QFileInfo::exists(debPath)) {
+      MOBase::log::warn("Failed to download xrandr .deb — runtime will lack xrandr");
+    } else {
+      const QString tmpExtract = installDir + "/xrandr_tmp";
+      QDir(tmpExtract).removeRecursively();
+      QDir().mkpath(tmpExtract);
+
+      QProcess ar;
+      ar.setWorkingDirectory(tmpExtract);
+      ar.start(QStringLiteral("ar"), {QStringLiteral("x"), debPath, QStringLiteral("data.tar.xz")});
+      ar.waitForFinished(30000);
+
+      QProcess untar;
+      untar.setWorkingDirectory(tmpExtract);
+      untar.start(QStringLiteral("tar"),
+                  {QStringLiteral("xf"), QStringLiteral("data.tar.xz"),
+                   QStringLiteral("./usr/bin/xrandr")});
+      untar.waitForFinished(30000);
+
+      const QString xrandrSrc = tmpExtract + "/usr/bin/xrandr";
+      if (QFileInfo::exists(xrandrSrc)) {
+        // Place xrandr in a dedicated dir that Fluorine's installer never
+        // touches (the fluorine/bin dir gets overwritten on every install).
+        // Launchers expose this dir via --filesystem and prepend it to PATH.
+        const QString xrandrDir = installDir + "/xrandr-bin";
+        QDir().mkpath(xrandrDir);
+        const QString dst = xrandrDir + "/xrandr";
+        QFile::remove(dst);
+        if (QFile::copy(xrandrSrc, dst)) {
+          QFile::setPermissions(dst, QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                                     QFileDevice::ExeOwner | QFileDevice::ReadGroup |
+                                     QFileDevice::ExeGroup | QFileDevice::ReadOther |
+                                     QFileDevice::ExeOther);
+          MOBase::log::info("Installed xrandr to {}", dst.toStdString());
+        } else {
+          MOBase::log::warn("Failed to copy xrandr into fluorine bin dir");
+        }
+      } else {
+        MOBase::log::warn("xrandr .deb extracted but binary not found");
+      }
+
+      QDir(tmpExtract).removeRecursively();
+      QFile::remove(debPath);
+    }
+  }
+
+  // 5. Save BUILD_ID.
   {
     QFile f(localBuildIdPath());
     if (f.open(QIODevice::WriteOnly))

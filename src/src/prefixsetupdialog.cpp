@@ -32,6 +32,10 @@ PrefixSetupDialog::PrefixSetupDialog(const QString& prefixPath,
   setMinimumSize(700, 500);
   resize(800, 600);
   setModal(true);
+  // Don't steal focus from other applications when the window manager pops
+  // this on top — users frequently leave the prefix setup running in the
+  // background while doing other work.
+  setAttribute(Qt::WA_ShowWithoutActivating);
 
   buildUI();
 

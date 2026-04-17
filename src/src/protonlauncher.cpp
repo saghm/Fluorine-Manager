@@ -480,7 +480,24 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
         slrArgs << QStringLiteral("--filesystem=%1").arg(protonDir);
       }
 
-      slrArgs << "--" << protonScript << protonArgs;
+      // Expose dedicated xrandr dir so container sees our injected xrandr
+      // (steamrt4 ships without it, required by Proton-GE protonfixes).
+      // Pressure-vessel forces PATH=/usr/bin:/bin inside the container and
+      // ignores host PATH, so we prepend via `env PATH=...` as the command.
+      QStringList containerCmd;
+      {
+        const QString xrandrDir =
+            QDir::homePath() + "/.local/share/fluorine/steamrt/xrandr-bin";
+        if (QDir(xrandrDir).exists()) {
+          slrArgs << QStringLiteral("--filesystem=%1").arg(xrandrDir);
+          containerCmd << QStringLiteral("/usr/bin/env")
+                       << QStringLiteral("PATH=%1:/usr/bin:/bin").arg(xrandrDir);
+        }
+      }
+      containerCmd << protonScript << protonArgs;
+
+      slrArgs << "--";
+      slrArgs.append(containerCmd);
       wrapProgram(m_wrapperCommands, runScript, slrArgs, program, arguments);
     } else {
       MOBase::log::warn("SLR enabled but run script not found — launching without SLR");
@@ -493,6 +510,16 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
   env.remove("PYTHONHOME");
   cleanAppImageEnv(env);
+
+  // Prepend fluorine's bin dir to PATH so the container sees our injected
+  // xrandr (steamrt4 ships without it; Proton-GE protonfixes require it).
+  {
+    const QString fluorineBin =
+        QDir::homePath() + "/.local/share/fluorine/bin";
+    const QString existing = env.value("PATH");
+    env.insert("PATH", existing.isEmpty() ? fluorineBin
+                                          : fluorineBin + ":" + existing);
+  }
 
   if (!m_prefixPath.isEmpty()) {
     env.insert("WINEPREFIX", m_prefixPath);

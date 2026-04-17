@@ -334,60 +334,84 @@ bool WinePrefix::deployProfileIni(const QString& sourceIniPath,
 
 bool WinePrefix::deployProfileSaves(const QString& profileSaveDir,
                                     const QString& absoluteSaveDir,
-                                    bool clearDestination) const
+                                    bool /*clearDestination*/) const
 {
   if (!isValid()) {
     MOBase::log::error("deployProfileSaves: prefix '{}' is not valid", m_prefixPath);
     return false;
   }
 
-  MOBase::log::debug("deployProfileSaves: profileSaveDir='{}', absoluteSaveDir='{}', "
-                     "clearDestination={}",
-                     profileSaveDir, absoluteSaveDir, clearDestination);
+  MOBase::log::debug("deployProfileSaves: profileSaveDir='{}', absoluteSaveDir='{}'",
+                     profileSaveDir, absoluteSaveDir);
+
+  // Ensure the profile saves dir exists — the game will write into it
+  // directly via the symlink.
+  if (!QDir().mkpath(profileSaveDir)) {
+    MOBase::log::error("deployProfileSaves: cannot create profile saves dir '{}'",
+                       profileSaveDir);
+    return false;
+  }
 
   const QFileInfo saveDirInfo(absoluteSaveDir);
   const QString parentDir = saveDirInfo.dir().absolutePath();
   const QString leafName = saveDirInfo.fileName();
-  const QString backupUpper =
-      QDir(parentDir).filePath(".mo2linux_backup_" + leafName);
-  const QString backupLower =
-      QDir(parentDir).filePath(".mo2linux_backup_" + leafName.toLower());
   const QString lowerSaveDir =
       QDir(parentDir).filePath(leafName.toLower());
 
-  if (clearDestination) {
-    // Recover from any stale backup left by an interrupted run.
-    if ((QDir(backupUpper).exists() || QDir(backupLower).exists()) &&
-        !restoreBackedUpSaves(absoluteSaveDir, lowerSaveDir,
-                              backupUpper, backupLower)) {
-      MOBase::log::warn("deployProfileSaves: failed to restore stale backup");
-      return false;
-    }
-
-    if (QDir(absoluteSaveDir).exists() &&
-        !QDir().rename(absoluteSaveDir, backupUpper)) {
-      MOBase::log::warn("deployProfileSaves: failed to backup '{}' -> '{}'",
-                        absoluteSaveDir, backupUpper);
-      return false;
-    }
-    if (absoluteSaveDir != lowerSaveDir &&
-        QDir(lowerSaveDir).exists() &&
-        !QDir().rename(lowerSaveDir, backupLower)) {
-      MOBase::log::warn("deployProfileSaves: failed to backup '{}' -> '{}'",
-                        lowerSaveDir, backupLower);
-      return false;
-    }
-  }
-
-  if (!QDir().mkpath(absoluteSaveDir)) {
+  if (!QDir().mkpath(parentDir)) {
     return false;
   }
 
-  if (!QDir(profileSaveDir).exists()) {
+  // Symlink both the proper-case and lowercase save dirs straight to the
+  // profile saves dir. Writes land in the profile immediately — no copy-in
+  // / copy-out dance, crash-safe, and profile switches only swap the link.
+  auto relink = [&profileSaveDir](const QString& linkPath) -> bool {
+    QFileInfo fi(linkPath);
+    if (fi.isSymLink()) {
+      QFile::remove(linkPath);
+    } else if (QDir(linkPath).exists()) {
+      // Existing real directory from a pre-symlink install. Preserve any
+      // contents by copying into the profile, then remove so we can link.
+      copyTreeContents(linkPath, profileSaveDir);
+      QDir(linkPath).removeRecursively();
+    } else if (fi.exists()) {
+      QFile::remove(linkPath);
+    }
+    if (!QFile::link(profileSaveDir, linkPath)) {
+      MOBase::log::warn("deployProfileSaves: failed to symlink '{}' -> '{}'",
+                        linkPath, profileSaveDir);
+      return false;
+    }
     return true;
-  }
+  };
 
-  return copyTreeContents(profileSaveDir, absoluteSaveDir);
+  if (!relink(absoluteSaveDir))
+    return false;
+  if (absoluteSaveDir != lowerSaveDir && !relink(lowerSaveDir))
+    return false;
+
+  return true;
+}
+
+void WinePrefix::undeployProfileSaves(const QString& absoluteSaveDir) const
+{
+  if (!isValid())
+    return;
+
+  const QFileInfo saveDirInfo(absoluteSaveDir);
+  const QString parentDir = saveDirInfo.dir().absolutePath();
+  const QString leafName = saveDirInfo.fileName();
+  const QString lowerSaveDir =
+      QDir(parentDir).filePath(leafName.toLower());
+
+  auto unlinkIfSymlink = [](const QString& path) {
+    if (QFileInfo(path).isSymLink()) {
+      QFile::remove(path);
+    }
+  };
+  unlinkIfSymlink(absoluteSaveDir);
+  if (absoluteSaveDir != lowerSaveDir)
+    unlinkIfSymlink(lowerSaveDir);
 }
 
 bool WinePrefix::syncSavesBack(const QString& profileSaveDir,
@@ -400,6 +424,13 @@ bool WinePrefix::syncSavesBack(const QString& profileSaveDir,
 
   MOBase::log::debug("syncSavesBack: profileSaveDir='{}', absoluteSaveDir='{}'",
                      profileSaveDir, absoluteSaveDir);
+
+  // With the symlink-based deploy, writes already land in the profile — no
+  // sync needed. Fall through to the legacy copy path only for pre-existing
+  // installs where the save dir is still a real directory.
+  if (QFileInfo(absoluteSaveDir).isSymLink()) {
+    return true;
+  }
 
   const QFileInfo saveDirInfo(absoluteSaveDir);
   const QString parentDir = saveDirInfo.dir().absolutePath();

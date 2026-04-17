@@ -291,11 +291,12 @@ void ProtonSettingsTab::onDownloadSLR()
 
   ui->downloadSLRButton->setEnabled(false);
   auto* progress = new QProgressDialog(
-      tr("Downloading Steam Linux Runtime (~180 MB)...\n"
+      tr("Downloading Steam Linux Runtime (~200 MB)...\n"
          "Check the MO2 log for progress details."),
       tr("Cancel"), 0, 0, parentWidget());
   progress->setWindowTitle(tr("Steam Linux Runtime"));
   progress->setWindowModality(Qt::WindowModal);
+  progress->setAttribute(Qt::WA_ShowWithoutActivating);
   progress->setMinimumDuration(0);
 
   auto* cancelFlag = new int(0);

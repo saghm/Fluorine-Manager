@@ -130,6 +130,10 @@ private:
   QString fluorineTmpDir() const;
   QMap<QString, QString> baseWineEnv() const;
 
+  /// Kill any wineboot/wineserver/pv-adverb processes still bound to
+  /// m_prefixPath from a previous aborted run. Safe to call when none exist.
+  void killStalePrefixProcesses() const;
+
   // -- state -----------------------------------------------------------------
   QString m_prefixPath;
   QString m_protonPath;

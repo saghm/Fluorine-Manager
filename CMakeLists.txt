@@ -159,6 +159,8 @@ if(BUILD_BSA_FFI)
     add_subdirectory(libs/bsa_ffi)
 endif()
 
+add_subdirectory(libs/steam_appinfo_ffi)
+
 if(BUILD_PLUGIN_PYTHON)
   # If an explicit Python executable was provided (Docker/CI), use it directly.
   # Otherwise, bootstrap a local venv with uv for source builds.

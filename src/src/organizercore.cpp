@@ -2683,6 +2683,20 @@ void OrganizerCore::afterRun(const QFileInfo& binary, DWORD exitCode)
             log::warn("Failed to sync saves back from prefix '{}' to '{}'",
                       prefixPathStr, profileSavesDir);
           }
+
+          // Remove the __MO_Saves symlinks and revert the prefix INI so a
+          // vanilla launch outside MO2 uses the default Saves dir.
+          prefix.undeployProfileSaves(absoluteSaveDir);
+          const QStringList iniFiles = managedGame()->iniFiles();
+          if (!iniFiles.isEmpty()) {
+            const QString prefixIni =
+                QDir(resolvePrefixGameDocumentsDir(prefix, dataDirName))
+                    .filePath(QFileInfo(iniFiles.first()).fileName());
+            MOBase::WriteRegistryValue("General", "sLocalSavePath",
+                                       "Saves\\", prefixIni);
+            log::debug("Restored prefix INI '{}': sLocalSavePath=Saves\\",
+                       prefixIni);
+          }
         }
 
         if (m_CurrentProfile->localSettingsEnabled()) {

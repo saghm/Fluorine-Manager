@@ -42,6 +42,13 @@ public:
   // propagate.
   bool syncSavesBack(const QString& profileSaveDir,
                      const QString& absoluteSaveDir) const;
+
+  /// Remove the __MO_Saves symlink(s) deployed by deployProfileSaves so a
+  /// vanilla game launch outside MO2 uses the prefix's default Saves dir.
+  /// Only removes entries that are actually symlinks — real directories
+  /// from a pre-symlink install are left alone.
+  void undeployProfileSaves(const QString& absoluteSaveDir) const;
+
   bool syncProfileInisBack(
       const QList<QPair<QString, QString>>& iniMappings) const;
 

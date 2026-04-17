@@ -25,6 +25,9 @@
 
 #include <log.h>
 
+#include <csignal>
+#include <sys/types.h>
+
 // ============================================================================
 // Constants
 // ============================================================================
@@ -784,6 +787,12 @@ bool PrefixSetupRunner::stepProtonInit()
     return false;
   }
 
+  // Kill any stale wineboot/wineserver/pv-adverb processes bound to this
+  // prefix. If a previous run was aborted mid-init, those processes hold
+  // registry/filesystem locks and any new wineboot -u deadlocks waiting
+  // for them. Nothing cleans them up automatically.
+  killStalePrefixProcesses();
+
   const QString steamPath = detectSteamPath();
 
   // The compatdata path is the PARENT of the pfx directory.
@@ -798,6 +807,13 @@ bool PrefixSetupRunner::stepProtonInit()
   env["DISPLAY"]                          = "";
   env["WAYLAND_DISPLAY"]                  = "";
   env["WINEDLLOVERRIDES"] = "msdia80.dll=n;conhost.exe=d;cmd.exe=d";
+  // ntsync on kernel 7.0+ can deadlock wineboot -u during prefix init
+  // under Proton 11 (wineboot blocks in ntsync_char_ioctl forever). Force
+  // the older fsync/esync fallback for the init phase — once the prefix
+  // is created, regular game launches can use whatever sync they want.
+  env["WINE_DISABLE_FAST_SYNC"] = "1";
+  env["PROTON_NO_NTSYNC"]       = "1";
+  env["WINENTSYNC"]             = "0";
 
   emit logMessage("Initializing Wine prefix with Proton...");
 
@@ -1724,6 +1740,86 @@ QString PrefixSetupRunner::detectSLRRunScript() const
 QString PrefixSetupRunner::fluorineBinDir() const
 {
   return fluorineDataDir() + "/bin";
+}
+
+void PrefixSetupRunner::killStalePrefixProcesses() const
+{
+  if (m_prefixPath.isEmpty())
+    return;
+
+  const QString cleanPrefix = QDir::cleanPath(m_prefixPath);
+  const QString cleanCompat = QDir::cleanPath(QDir(m_prefixPath).filePath(".."));
+
+  QDir procDir("/proc");
+  const QStringList pids =
+      procDir.entryList({QStringLiteral("[0-9]*")}, QDir::Dirs);
+
+  QList<qint64> victims;
+  for (const QString& pid : pids) {
+    // Read cmdline (fast filter for wine-like processes).
+    QFile cmdF("/proc/" + pid + "/cmdline");
+    if (!cmdF.open(QIODevice::ReadOnly))
+      continue;
+    QByteArray cmdline = cmdF.readAll();
+    if (cmdline.isEmpty())
+      continue;
+    const QString cmdStr = QString::fromUtf8(cmdline.replace('\0', ' '));
+    const bool wineLike = cmdStr.contains("wineboot") ||
+                          cmdStr.contains("wineserver") ||
+                          cmdStr.contains("pv-adverb") ||
+                          cmdStr.contains("wine-preloader") ||
+                          cmdStr.contains("steam.exe");
+    if (!wineLike)
+      continue;
+
+    // Definitive match: process's own WINEPREFIX env points at our prefix.
+    // Wine processes have Windows-style cmdlines ("c:\windows\...") that
+    // don't include the Linux prefix path, so cmdline-matching misses them.
+    bool mine = cmdStr.contains(cleanPrefix) || cmdStr.contains(cleanCompat);
+    if (!mine) {
+      QFile envF("/proc/" + pid + "/environ");
+      if (envF.open(QIODevice::ReadOnly)) {
+        QByteArray environ = envF.readAll();
+        for (const QByteArray& kv : environ.split('\0')) {
+          if (kv.startsWith("WINEPREFIX=")) {
+            const QString val = QString::fromUtf8(kv.mid(11));
+            if (QDir::cleanPath(val) == cleanPrefix)
+              mine = true;
+            break;
+          }
+          if (kv.startsWith("STEAM_COMPAT_DATA_PATH=")) {
+            const QString val = QString::fromUtf8(kv.mid(23));
+            if (QDir::cleanPath(val) == cleanCompat)
+              mine = true;
+          }
+        }
+      }
+    }
+
+    if (mine) {
+      bool ok = false;
+      const qint64 p = pid.toLongLong(&ok);
+      if (ok)
+        victims.append(p);
+    }
+  }
+
+  if (victims.isEmpty())
+    return;
+
+  MOBase::log::warn("Found {} stale wine process(es) bound to prefix — killing",
+                    victims.size());
+  for (qint64 p : victims)
+    ::kill(static_cast<pid_t>(p), SIGTERM);
+
+  QThread::msleep(300);
+
+  for (qint64 p : victims) {
+    if (::kill(static_cast<pid_t>(p), 0) == 0)
+      ::kill(static_cast<pid_t>(p), SIGKILL);
+  }
+
+  QThread::msleep(100);
 }
 
 QString PrefixSetupRunner::fluorineCacheDir() const
