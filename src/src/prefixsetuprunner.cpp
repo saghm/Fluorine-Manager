@@ -797,14 +797,16 @@ bool PrefixSetupRunner::stepProtonInit()
   env["SteamGameId"]                      = QString::number(m_appId);
   env["DISPLAY"]                          = "";
   env["WAYLAND_DISPLAY"]                  = "";
-  env["WINEDEBUG"]                        = "-all";
   env["WINEDLLOVERRIDES"] = "msdia80.dll=n;conhost.exe=d;cmd.exe=d";
 
   emit logMessage("Initializing Wine prefix with Proton...");
 
   QByteArray protonOutput;
+  // waitforexitandrun (not "run") is required for Proton 11+ which uses
+  // use_sessions=1 — a plain "run" forks into a session manager that never
+  // exits, hanging prefix init.
   const int rc = runProcess(protonScript,
-                            {"run", "wineboot", "-u"},
+                            {"waitforexitandrun", "wineboot", "-u"},
                             env, -1, &protonOutput);
   if (rc != 0) {
     // Detect a broken Proton install: setup_prefix copies DLLs from Proton's
@@ -1692,15 +1694,22 @@ QString PrefixSetupRunner::detectSteamPath() const
 
 QString PrefixSetupRunner::detectSLRRunScript() const
 {
-  // Check NaK-downloaded SLR first.
-  const QString nakSlr = fluorineDataDir() + "/steamrt/SteamLinuxRuntime_sniper/run";
-  if (QFileInfo::exists(nakSlr))
-    return nakSlr;
+  // Check Fluorine-downloaded SLR first (steamrt4 preferred, sniper fallback).
+  const QStringList nakCandidates = {
+      fluorineDataDir() + "/steamrt/SteamLinuxRuntime_4/run",
+      fluorineDataDir() + "/steamrt/SteamLinuxRuntime_sniper/run",
+  };
+  for (const QString& p : nakCandidates) {
+    if (QFileInfo::exists(p))
+      return p;
+  }
 
   const QString steamPath = detectSteamPath();
 
   const QStringList candidates = {
+      steamPath + "/steamapps/common/SteamLinuxRuntime_4/run",
       steamPath + "/steamapps/common/SteamLinuxRuntime_sniper/run",
+      QDir::homePath() + "/.local/share/Steam/steamapps/common/SteamLinuxRuntime_4/run",
       QDir::homePath() + "/.local/share/Steam/steamapps/common/SteamLinuxRuntime_sniper/run",
       "/usr/lib/pressure-vessel/wrap",
   };

@@ -10,7 +10,7 @@ __attribute__((visibility("default"))) bool isSlrInstalled();
 /// Returns the path to the SLR `run` script, or empty if not installed.
 __attribute__((visibility("default"))) QString getSlrRunScript();
 
-/// Download and install SteamLinuxRuntime_sniper (~180 MB).
+/// Download and install SteamLinuxRuntime_4 (steamrt4, ~200 MB).
 /// Skips if already at the latest version (BUILD_ID check).
 /// Returns empty string on success, or an error message.
 __attribute__((visibility("default")))

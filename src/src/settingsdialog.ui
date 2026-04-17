@@ -1799,7 +1799,7 @@ If you disable this feature, MO will only display official DLCs this way. Please
              <string>Download Steam Linux Runtime</string>
             </property>
             <property name="toolTip">
-             <string>Download SteamLinuxRuntime_sniper (~180 MB) from Valve's servers. Provides GStreamer, 32-bit libs, and an FHS environment for non-FHS distros (NixOS, etc.). Required for the "Use SLR" option in the Instance Manager.</string>
+             <string>Download SteamLinuxRuntime_4 (steamrt4, ~200 MB) from Valve's servers. Provides GStreamer, 32-bit libs, and an FHS environment for non-FHS distros (NixOS, etc.). Required for the "Use SLR" option in the Instance Manager and for Proton 11+.</string>
             </property>
            </widget>
           </item>

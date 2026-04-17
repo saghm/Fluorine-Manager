@@ -12,9 +12,9 @@
 
 namespace {
 
-const char* BASE_URL     = "https://repo.steampowered.com/steamrt3/images/latest-public-beta";
-const char* ARCHIVE_NAME = "SteamLinuxRuntime_sniper.tar.xz";
-const char* EXTRACTED_DIR = "SteamLinuxRuntime_sniper";
+const char* BASE_URL     = "https://repo.steampowered.com/steamrt4/images/latest-public-beta";
+const char* ARCHIVE_NAME = "SteamLinuxRuntime_4.tar.xz";
+const char* EXTRACTED_DIR = "SteamLinuxRuntime_4";
 
 QString slrInstallDir()
 {
@@ -147,7 +147,7 @@ QString downloadSlr(const std::function<void(float)>& progressCb,
   const QString archivePath = installDir + "/" + ARCHIVE_NAME;
 
   // 2. Download.
-  status(QStringLiteral("Downloading Steam Linux Runtime (sniper, ~180 MB)..."));
+  status(QStringLiteral("Downloading Steam Linux Runtime (steamrt4, ~200 MB)..."));
   httpGet(QStringLiteral("%1/%2").arg(QLatin1String(BASE_URL), QLatin1String(ARCHIVE_NAME)),
           cancelFlag, progress, archivePath);
   progress(1.0f);

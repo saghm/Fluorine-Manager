@@ -135,18 +135,19 @@ QString detectSteamPath()
   return {};
 }
 
-// Find the Steam Linux Runtime (sniper) run script.
+// Find the Steam Linux Runtime run script (steamrt4 preferred, sniper fallback).
 // SLR wraps the Proton launch in a pressure-vessel container that provides
 // GStreamer, 32-bit libs, and an FHS-compliant environment — required on
-// NixOS and other non-FHS distros.
+// NixOS and other non-FHS distros. Proton 11+ requires steamrt4.
 // Returns empty string if SLR is not installed.
 QString detectSLRRunScript()
 {
   const QString steamPath = detectSteamPath();
 
-  // Common SLR sniper locations relative to Steam install
   const QStringList candidates = {
+      steamPath + "/steamapps/common/SteamLinuxRuntime_4/run",
       steamPath + "/steamapps/common/SteamLinuxRuntime_sniper/run",
+      QDir::home().filePath(".local/share/Steam/steamapps/common/SteamLinuxRuntime_4/run"),
       QDir::home().filePath(".local/share/Steam/steamapps/common/SteamLinuxRuntime_sniper/run"),
       "/usr/lib/pressure-vessel/wrap",
   };
