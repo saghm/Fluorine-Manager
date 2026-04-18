@@ -553,6 +553,35 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
   env.insert("DOTNET_ROOT", "");
   env.insert("DOTNET_MULTILEVEL_LOOKUP", "0");
 
+  // Ensure Wine's Unix codepage is UTF-8 so non-ASCII filenames (CJK,
+  // Cyrillic, accented Latin) round-trip correctly between Linux FS and
+  // Win32 WCHAR APIs.  Wine picks the codepage from LC_ALL > LC_CTYPE >
+  // LANG via nl_langinfo(CODESET); a C/POSIX locale collapses to CP1252
+  // and makes MSVC std::filesystem throw "Invalid name" on CJK entries
+  // (WineHQ#46039, Proton#3434).  Steam's pressure-vessel can strip the
+  // user's locale, so we override only if no UTF-8 locale is already set
+  // — keeps de_DE.UTF-8, ja_JP.UTF-8 etc. intact for users who have them.
+  {
+    const auto isUtf8 = [](const QString& v) {
+      return v.contains("UTF-8", Qt::CaseInsensitive) ||
+             v.contains("UTF8", Qt::CaseInsensitive);
+    };
+    const QString lcAll   = env.value("LC_ALL");
+    const QString lcCtype = env.value("LC_CTYPE");
+    const QString lang    = env.value("LANG");
+    const bool haveUtf8 =
+        (!lcAll.isEmpty() && isUtf8(lcAll)) ||
+        (lcAll.isEmpty() && !lcCtype.isEmpty() && isUtf8(lcCtype)) ||
+        (lcAll.isEmpty() && lcCtype.isEmpty() && isUtf8(lang));
+    if (!haveUtf8) {
+      MOBase::log::info("Locale not UTF-8 (LC_ALL='{}', LC_CTYPE='{}', "
+                        "LANG='{}'); forcing C.UTF-8 for Wine",
+                        lcAll, lcCtype, lang);
+      env.insert("LC_ALL", "C.UTF-8");
+      env.insert("LANG", "C.UTF-8");
+    }
+  }
+
   // Force-disable DXVK graphics-pipeline-library.  GPL causes very long shader
   // compile stalls on first launch for heavily modded Bethesda games and the
   // benefit is modest for us.  We write a small dxvk.conf into the prefix and
