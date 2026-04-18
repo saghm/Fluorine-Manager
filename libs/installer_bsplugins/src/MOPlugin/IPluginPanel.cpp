@@ -37,6 +37,10 @@ bool IPluginPanel::init(MOBase::IOrganizer* organizer)
   }
 
   organizer->onUserInterfaceInitialized([this, organizer](QMainWindow* mainWindow) {
+    if (!organizer->isPluginEnabled(this)) {
+      return;
+    }
+
     const auto tabWidget = mainWindow->findChild<QTabWidget*>(u"tabWidget"_s);
 
     if (tabWidget == nullptr) {

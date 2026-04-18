@@ -603,6 +603,26 @@ bool WinePrefix::syncProfileInisBack(
   return allCopied;
 }
 
+QDateTime WinePrefix::prefixPluginsMTime(const QString& dataDir) const
+{
+  if (!isValid()) {
+    return {};
+  }
+  const QString pluginsDir = QDir(appdataLocal()).filePath(dataDir);
+  if (!QDir(pluginsDir).exists()) {
+    return {};
+  }
+  QDateTime newest;
+  for (const QString& v :
+       findCaseVariants(QDir(pluginsDir).filePath("plugins.txt"))) {
+    const QDateTime t = QFileInfo(v).lastModified();
+    if (!newest.isValid() || t > newest) {
+      newest = t;
+    }
+  }
+  return newest;
+}
+
 bool WinePrefix::syncPluginsBack(const QString& profilePluginsPath,
                                  const QString& dataDir,
                                  PluginListMechanism mechanism) const

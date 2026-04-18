@@ -277,6 +277,20 @@ void PluginsSettingsTab::on_checkboxEnabled_clicked(bool checked)
     dialog().setExitNeeded(Exit::Restart);
   }
 
+  // Panel plugins swap UI tabs at init and cannot be hot-unloaded.
+  static const QStringList panelPluginNames = {
+      QStringLiteral("Bethesda Plugin Manager"),
+  };
+  if (panelPluginNames.contains(plugin->name())) {
+    QMessageBox::information(
+        parentWidget(), QObject::tr("Restart required"),
+        QObject::tr("The '%1' plugin manages a UI panel. Restart Fluorine Manager "
+                    "for the change to take effect.")
+            .arg(plugin->localizedName()),
+        QMessageBox::Ok);
+    dialog().setExitNeeded(Exit::Restart);
+  }
+
   updateListItems();
 }
 

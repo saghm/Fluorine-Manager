@@ -2503,6 +2503,46 @@ bool OrganizerCore::beforeRun(
                                    localSavesFeature.get(), m_CurrentProfile);
         log::info("Wine prefix save target: '{}'", absoluteSaveDir);
 
+        // If the prefix's plugin-list file is newer than the profile's
+        // (e.g. LOOT ran outside MO2 and edited it), sync back first so
+        // external edits aren't clobbered by the deploy below.
+        {
+          WinePrefix::PluginListMechanism preMech =
+              WinePrefix::PluginListMechanism::None;
+          switch (managedGame()->loadOrderMechanism()) {
+          case IPluginGame::LoadOrderMechanism::PluginsTxt:
+            preMech = WinePrefix::PluginListMechanism::PluginsTxt;
+            break;
+          case IPluginGame::LoadOrderMechanism::FileTime:
+            preMech = WinePrefix::PluginListMechanism::FileTime;
+            break;
+          case IPluginGame::LoadOrderMechanism::None:
+            break;
+          }
+          if (preMech != WinePrefix::PluginListMechanism::None) {
+            const QString profilePluginsPath =
+                m_CurrentProfile->getPluginsFileName();
+            const QDateTime prefixMTime =
+                prefix.prefixPluginsMTime(dataDirName);
+            const QDateTime profileMTime =
+                QFileInfo(profilePluginsPath).lastModified();
+            if (prefixMTime.isValid() &&
+                (!profileMTime.isValid() || prefixMTime > profileMTime)) {
+              log::info("Prefix plugins.txt newer than profile "
+                        "(prefix={}, profile={}), syncing back before deploy",
+                        prefixMTime.toString(Qt::ISODate),
+                        profileMTime.toString(Qt::ISODate));
+              if (prefix.syncPluginsBack(profilePluginsPath, dataDirName,
+                                         preMech)) {
+                refreshESPList(true);
+              } else {
+                log::warn("Pre-deploy sync-back failed; proceeding with "
+                          "deploy — external edits may be lost");
+              }
+            }
+          }
+        }
+
         // Read plugin lines from profile's plugins.txt
         QFile pluginsFile(m_CurrentProfile->getPluginsFileName());
         if (pluginsFile.open(QIODevice::ReadOnly | QIODevice::Text)) {

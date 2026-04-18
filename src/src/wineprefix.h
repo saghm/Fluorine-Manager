@@ -1,6 +1,7 @@
 #ifndef WINEPREFIX_H
 #define WINEPREFIX_H
 
+#include <QDateTime>
 #include <QString>
 #include <QStringList>
 #include <QList>
@@ -60,6 +61,11 @@ public:
   bool syncPluginsBack(const QString& profilePluginsPath,
                        const QString& dataDir,
                        PluginListMechanism mechanism) const;
+
+  // Last-modified time of the newest plugin-list variant in the prefix.
+  // Invalid QDateTime if no variant exists.  Used to decide whether to
+  // sync-back (prefix newer, e.g. external LOOT run) before deploying.
+  QDateTime prefixPluginsMTime(const QString& dataDir) const;
 
   // Restore any stale .mo2linux_backup INI/save files left by a crash.
   // Should be called at startup before any game runs.
