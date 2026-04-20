@@ -417,6 +417,37 @@ ProtonLauncher& ProtonLauncher::setUseTerminal(bool useTerminal)
   return *this;
 }
 
+ProtonLauncher& ProtonLauncher::setSavesBindMount(const QString& source,
+                                                  const QString& target)
+{
+  m_bindMountSource = source.trimmed();
+  m_bindMountTarget = target.trimmed();
+  return *this;
+}
+
+bool ProtonLauncher::unprivilegedBindMountSupported()
+{
+  // Need both an `unshare` binary and a kernel that lets unprivileged users
+  // enter a user namespace with CAP_SYS_ADMIN (which is what makes
+  // `mount --bind` work without root).  Debian stable + some hardened
+  // kernels disable this via a sysctl; treat missing/zero as "no".
+  if (QStandardPaths::findExecutable("unshare").isEmpty()) {
+    return false;
+  }
+
+  QFile f(QStringLiteral("/proc/sys/kernel/unprivileged_userns_clone"));
+  if (f.open(QIODevice::ReadOnly)) {
+    const QByteArray v = f.readAll().trimmed();
+    // File exists and explicitly says "0" -> disabled.  Any other value
+    // (including "1") or an unreadable/missing file -> assume enabled, which
+    // is the modern-kernel default.
+    if (v == "0") {
+      return false;
+    }
+  }
+  return true;
+}
+
 std::pair<bool, qint64> ProtonLauncher::launch() const
 {
   qint64 pid = -1;
@@ -604,6 +635,35 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
 
   for (auto it = m_envVars.cbegin(); it != m_envVars.cend(); ++it) {
     env.insert(it.key(), it.value());
+  }
+
+  // If a saves bind mount was requested (and the kernel supports
+  // unprivileged user namespaces), wrap the whole invocation in
+  // `unshare --user --mount -r` so the mount lives only inside the game's
+  // process tree and is torn down automatically on exit.  Must happen
+  // AFTER wrapProgram but BEFORE startWithEnv so that SLR/pressure-vessel
+  // inherits the mount from the outer namespace.
+  if (!m_bindMountSource.isEmpty() && !m_bindMountTarget.isEmpty() &&
+      unprivilegedBindMountSupported()) {
+    const QString unshareBin = QStandardPaths::findExecutable("unshare");
+    QStringList newArgs;
+    newArgs << "--user" << "--mount" << "-r" << "--"
+            << "/bin/sh" << "-c"
+            << "mount --bind \"$1\" \"$2\" && shift 2 && exec \"$@\""
+            << "_mo2bind"
+            << m_bindMountSource
+            << m_bindMountTarget
+            << program;
+    newArgs.append(arguments);
+    program   = unshareBin;
+    arguments = newArgs;
+    MOBase::log::info("Saves bind mount: '{}' -> '{}'", m_bindMountSource,
+                      m_bindMountTarget);
+  } else if (!m_bindMountSource.isEmpty()) {
+    MOBase::log::warn("Saves bind mount requested but unprivileged user "
+                      "namespaces unavailable; game will write to prefix "
+                      "'{}' directly",
+                      m_bindMountTarget);
   }
 
   MOBase::log::info("Proton launch: '{}' run '{}'", protonScript, m_binary);

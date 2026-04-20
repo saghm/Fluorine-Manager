@@ -65,6 +65,13 @@ struct SpawnParameters
 #else
   int stdOut = -1;
   int stdErr = -1;
+  // When both are set and unprivileged user namespaces are available,
+  // spawn() wraps the launch so `saveBindMountTarget` becomes a live view
+  // of `saveBindMountSource` for the duration of the game process tree.
+  // Used to redirect `<prefix>/__MO_Saves` to the profile's saves dir
+  // without symlinks, which Wine can accidentally replace.
+  QString saveBindMountSource;
+  QString saveBindMountTarget;
 #endif
 };
 

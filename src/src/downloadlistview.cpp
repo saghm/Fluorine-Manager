@@ -415,20 +415,24 @@ void DownloadListView::issueDeleteSelected()
   auto* proxy = qobject_cast<QSortFilterProxyModel*>(model());
   if (!proxy) return;
 
-  QList<int> sourceRows;
+  // Capture filenames (not indices): removeDownload() runs refreshList()
+  // internally, which rebuilds m_ActiveDownloads from disk enumeration and
+  // can reorder entries, so stale indices from before the first delete may
+  // point at the wrong file or be out of range.
+  QStringList fileNames;
   for (const auto& idx : selectionModel()->selectedRows()) {
     int row = proxy->mapToSource(idx).row();
     auto state = m_Manager->getState(row);
     if (state >= DownloadManager::STATE_READY) {
-      sourceRows.append(row);
+      fileNames.append(m_Manager->getFileName(row));
     }
   }
 
-  if (sourceRows.isEmpty()) return;
+  if (fileNames.isEmpty()) return;
 
   const auto r = MOBase::TaskDialog(this, tr("Delete downloads"))
                      .main(tr("Are you sure you want to delete %1 download(s)?")
-                               .arg(sourceRows.size()))
+                               .arg(fileNames.size()))
                      .icon(QMessageBox::Question)
                      .button({tr("Move to the Recycle Bin"), QMessageBox::Yes})
                      .button({tr("Cancel"), QMessageBox::Cancel})
@@ -436,10 +440,18 @@ void DownloadListView::issueDeleteSelected()
 
   if (r != QMessageBox::Yes) return;
 
-  // Delete in reverse order so indices remain valid
-  std::sort(sourceRows.begin(), sourceRows.end(), std::greater<int>());
-  for (int row : sourceRows) {
-    emit removeDownload(row, true);
+  for (const QString& name : fileNames) {
+    const int total = m_Manager->numTotalDownloads();
+    int row = -1;
+    for (int i = 0; i < total; ++i) {
+      if (m_Manager->getFileName(i) == name) {
+        row = i;
+        break;
+      }
+    }
+    if (row >= 0) {
+      emit removeDownload(row, true);
+    }
   }
 }
 

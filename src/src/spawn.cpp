@@ -686,6 +686,10 @@ int spawn(const SpawnParameters &sp, pid_t &processId) {
     if (!wrapper.isEmpty()) {
       launcher.setWrapper(wrapper);
     }
+
+    if (!sp.saveBindMountSource.isEmpty() && !sp.saveBindMountTarget.isEmpty()) {
+      launcher.setSavesBindMount(sp.saveBindMountSource, sp.saveBindMountTarget);
+    }
   } else {
     MOBase::log::info("Proton disabled for this executable, launching directly");
   }

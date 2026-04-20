@@ -26,6 +26,18 @@ public:
   ProtonLauncher& addEnvVar(const QString& key, const QString& value);
   ProtonLauncher& setUseTerminal(bool useTerminal);
 
+  // Bind-mount `source` over `target` inside a per-launch user+mount
+  // namespace so the game's view of `target` redirects to `source`.  Used to
+  // make `<prefix>/__MO_Saves` resolve to the profile's saves dir without
+  // symlinks (which Wine can accidentally replace with a real directory).
+  // Both paths must already exist before launch; the mount is torn down
+  // automatically when the game process tree exits.
+  ProtonLauncher& setSavesBindMount(const QString& source, const QString& target);
+
+  // True iff the running kernel supports unprivileged user namespaces with
+  // CAP_SYS_ADMIN so that `setSavesBindMount` will actually take effect.
+  static bool unprivilegedBindMountSupported();
+
   // Launch dispatch: Proton -> Direct
   std::pair<bool, qint64> launch() const;
 
@@ -47,6 +59,8 @@ private:
   QMap<QString, QString> m_envVars;
   QMap<QString, QString> m_wrapperEnvVars;
   bool m_useTerminal = false;
+  QString m_bindMountSource;
+  QString m_bindMountTarget;
 };
 
 #endif  // PROTONLAUNCHER_H

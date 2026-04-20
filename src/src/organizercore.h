@@ -310,7 +310,9 @@ public:
 
   bool beforeRun(const QFileInfo& binary, const QDir& cwd, const QString& arguments,
                  const QString& profileName, const QString& customOverwrite,
-                 const QList<MOBase::ExecutableForcedLoadSetting>& forcedLibraries);
+                 const QList<MOBase::ExecutableForcedLoadSetting>& forcedLibraries,
+                 QString* saveBindMountSource = nullptr,
+                 QString* saveBindMountTarget = nullptr);
 
 #ifndef _WIN32
   bool checkGameRegistryKey();

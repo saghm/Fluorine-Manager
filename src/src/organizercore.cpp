@@ -40,6 +40,7 @@
 #include <uibase/filesystemutilities.h>
 #include <uibase/utility.h>
 #include "fluorineconfig.h"
+#include "protonlauncher.h"
 #include "wineprefix.h"
 
 #include <chrono>
@@ -2416,9 +2417,12 @@ bool OrganizerCore::checkGameRegistryKey()
 bool OrganizerCore::beforeRun(
     const QFileInfo& binary, const QDir& cwd, const QString& arguments,
     const QString& profileName, const QString& customOverwrite,
-    const QList<MOBase::ExecutableForcedLoadSetting>& forcedLibraries)
+    const QList<MOBase::ExecutableForcedLoadSetting>& forcedLibraries,
+    QString* saveBindMountSource, QString* saveBindMountTarget)
 {
   saveCurrentProfile();
+  if (saveBindMountSource) saveBindMountSource->clear();
+  if (saveBindMountTarget) saveBindMountTarget->clear();
 
   // need to wait until directory structure is ready
   if (m_DirectoryUpdate) {
@@ -2620,14 +2624,43 @@ bool OrganizerCore::beforeRun(
         if (m_CurrentProfile->localSavesEnabled()) {
           const QString profileSavesDir =
               QDir(m_CurrentProfile->absolutePath()).filePath("saves");
-          log::info("Save deploy target: '{}' -> '{}'", profileSavesDir,
-                    absoluteSaveDir);
-          if (!prefix.deployProfileSaves(profileSavesDir, absoluteSaveDir, true)) {
-            log::warn("Failed to deploy profile saves from '{}' to prefix '{}'",
-                      profileSavesDir, prefixPathStr);
+
+          const bool useBindMount =
+              saveBindMountSource && saveBindMountTarget &&
+              ProtonLauncher::unprivilegedBindMountSupported();
+
+          if (useBindMount) {
+            // Clean up any stale symlink from previous symlink-based runs:
+            // mount --bind won't traverse a symlink as the target.
+            if (QFileInfo(absoluteSaveDir).isSymLink()) {
+              QFile::remove(absoluteSaveDir);
+            }
+            const QFileInfo leafInfo(absoluteSaveDir);
+            const QString lowerSaveDir =
+                QDir(leafInfo.dir().absolutePath())
+                    .filePath(leafInfo.fileName().toLower());
+            if (lowerSaveDir != absoluteSaveDir &&
+                QFileInfo(lowerSaveDir).isSymLink()) {
+              QFile::remove(lowerSaveDir);
+            }
+
+            // Both endpoints must exist before the kernel can bind them.
+            QDir().mkpath(profileSavesDir);
+            QDir().mkpath(absoluteSaveDir);
+
+            *saveBindMountSource = profileSavesDir;
+            *saveBindMountTarget = absoluteSaveDir;
+            log::info("Save bind mount: '{}' -> '{}'", profileSavesDir,
+                      absoluteSaveDir);
           } else {
-            log::debug("Deployed profile saves '{}' -> '{}' in prefix '{}'",
-                       profileSavesDir, absoluteSaveDir, prefixPathStr);
+            log::info("Save deploy target: '{}' -> '{}'", profileSavesDir,
+                      absoluteSaveDir);
+            if (!prefix.deployProfileSaves(profileSavesDir, absoluteSaveDir,
+                                            true)) {
+              log::warn("Failed to deploy profile saves from '{}' to "
+                        "prefix '{}'",
+                        profileSavesDir, prefixPathStr);
+            }
           }
 
           // Ensure the prefix INI points to __MO_Saves so the game reads
@@ -2717,16 +2750,27 @@ void OrganizerCore::afterRun(const QFileInfo& binary, DWORD exitCode)
         if (m_CurrentProfile->localSavesEnabled()) {
           const QString profileSavesDir =
               QDir(m_CurrentProfile->absolutePath()).filePath("saves");
-          log::info("Save sync target: '{}' <- '{}'", profileSavesDir,
-                    absoluteSaveDir);
-          if (!prefix.syncSavesBack(profileSavesDir, absoluteSaveDir)) {
-            log::warn("Failed to sync saves back from prefix '{}' to '{}'",
-                      prefixPathStr, profileSavesDir);
-          }
 
-          // Remove the __MO_Saves symlinks and revert the prefix INI so a
-          // vanilla launch outside MO2 uses the default Saves dir.
-          prefix.undeployProfileSaves(absoluteSaveDir);
+          // Bind-mount path: writes already landed live in the profile via
+          // the per-launch mount namespace, which teardown automatically
+          // when the game exited.  Nothing to sync and nothing to undeploy.
+          // The symlink path below only runs on kernels without
+          // unprivileged user namespaces.
+          const bool usedBindMount =
+              !QFileInfo(absoluteSaveDir).isSymLink() &&
+              ProtonLauncher::unprivilegedBindMountSupported();
+          if (!usedBindMount) {
+            log::info("Save sync target: '{}' <- '{}'", profileSavesDir,
+                      absoluteSaveDir);
+            if (!prefix.syncSavesBack(profileSavesDir, absoluteSaveDir)) {
+              log::warn("Failed to sync saves back from prefix '{}' to '{}'",
+                        prefixPathStr, profileSavesDir);
+            }
+
+            // Remove the __MO_Saves symlinks and revert the prefix INI so a
+            // vanilla launch outside MO2 uses the default Saves dir.
+            prefix.undeployProfileSaves(absoluteSaveDir);
+          }
           const QStringList iniFiles = managedGame()->iniFiles();
           if (!iniFiles.isEmpty()) {
             const QString prefixIni =

@@ -1356,10 +1356,19 @@ std::optional<ProcessRunner::Results> ProcessRunner::runBinary() {
   // saves profile, sets up usvfs, notifies plugins, etc.; can return false if
   // a plugin doesn't want the program to run (such as when checkFNIS fails to
   // run FNIS and the user clicks cancel)
+#ifdef _WIN32
   if (!m_core.beforeRun(m_sp.binary, m_sp.currentDirectory, m_sp.arguments,
                         m_profileName, m_customOverwrite, m_forcedLibraries)) {
     return Error;
   }
+#else
+  if (!m_core.beforeRun(m_sp.binary, m_sp.currentDirectory, m_sp.arguments,
+                        m_profileName, m_customOverwrite, m_forcedLibraries,
+                        &m_sp.saveBindMountSource,
+                        &m_sp.saveBindMountTarget)) {
+    return Error;
+  }
+#endif
 
   // parent widget used for any dialog popped up while checking for things
   QWidget *parent = (m_ui ? m_ui->mainWindow() : nullptr);
