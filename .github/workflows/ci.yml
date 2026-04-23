@@ -75,6 +75,11 @@ jobs:
 
       - name: Package tarball
         run: |
+          # The docker build runs as root inside the container, leaving
+          # build/ root-owned on the runner. Fix up ownership so subsequent
+          # steps (tar write, artifact upload) can operate on it as the
+          # regular runner user.
+          sudo chown -R "$(id -u):$(id -g)" build
           cd build
           ARCHIVE_NAME="fluorine-manager-beta.tar.gz"
           tar czf "${ARCHIVE_NAME}" fluorine-manager/
