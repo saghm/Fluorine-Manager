@@ -161,6 +161,7 @@ void mo2_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
                  struct fuse_file_info* fi);
 void mo2_unlink(fuse_req_t req, fuse_ino_t parent, const char* name);
 void mo2_mkdir(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t mode);
+void mo2_rmdir(fuse_req_t req, fuse_ino_t parent, const char* name);
 void mo2_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi);
 void mo2_releasedir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi);
 #if FUSE_USE_VERSION < 35

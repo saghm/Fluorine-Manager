@@ -63,7 +63,7 @@ QString GameFallout4::gameName() const
 void GameFallout4::detectGame()
 {
   m_GamePath    = identifyGamePath();
-  m_MyGamesPath = determineMyGamesPath("Fallout4");
+  m_MyGamesPath = determineMyGamesPath("Fallout4", !m_GamePath.isEmpty());
 }
 
 QList<ExecutableInfo> GameFallout4::executables() const

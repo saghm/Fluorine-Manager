@@ -20,6 +20,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "aboutdialog.h"
 #include "shared/util.h"
 #include "ui_aboutdialog.h"
+#include <fluorine_build_info.h>
 #include <utility.h>
 
 #include <QApplication>
@@ -78,17 +79,31 @@ AboutDialog::AboutDialog(const QString& version, QWidget* parent)
   addLicense("DXTex Headers", LICENSE_DXTEX);
   addLicense("Valve File VDF Reader", LICENSE_VDF);
 
+  // Show Fluorine Manager's own version (e.g. "0.1.4" stable or "0.1.4B202604231800"
+  // for beta builds) instead of the upstream MO2 engine version. The incoming
+  // `version` parameter is the engine version string and is retained on the
+  // revision line for reference.
+  QString displayVersion = QStringLiteral(FLUORINE_DISPLAY_VERSION);
+  if (FLUORINE_IS_BETA_BUILD) {
+    displayVersion += QStringLiteral(" (beta)");
+  }
   ui->nameLabel->setText(
       QString("<span style=\"font-size:12pt; font-weight:600;\">%1 %2</span>")
           .arg(ui->nameLabel->text())
-          .arg(version));
+          .arg(displayVersion));
+
+  QString revision = ui->revisionLabel->text() +
+                     QStringLiteral(" MO2 engine ") + version;
+  const QString commit = QStringLiteral(FLUORINE_BUILD_COMMIT);
+  if (!commit.isEmpty()) {
+    revision += QStringLiteral(" · ") + commit;
+  }
 #if defined(HGID)
-  ui->revisionLabel->setText(ui->revisionLabel->text() + " " + HGID);
+  revision += QStringLiteral(" · ") + HGID;
 #elif defined(GITID)
-  ui->revisionLabel->setText(ui->revisionLabel->text() + " " + GITID);
-#else
-  ui->revisionLabel->setText(ui->revisionLabel->text() + " unknown");
+  revision += QStringLiteral(" · ") + GITID;
 #endif
+  ui->revisionLabel->setText(revision);
 
   ui->usvfsLabel->setText(ui->usvfsLabel->text() + " FUSE 3");
   ui->licenseText->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));

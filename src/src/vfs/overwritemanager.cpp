@@ -171,6 +171,35 @@ bool OverwriteManager::removeFile(const std::string& relative_path)
   return false;
 }
 
+bool OverwriteManager::removeDirectory(const std::string& relative_path,
+                                       bool* out_not_empty)
+{
+  if (out_not_empty)
+    *out_not_empty = false;
+
+  std::error_code ec;
+  bool removedAny = false;
+
+  for (const fs::path candidate : {fs::path(stagingPath(relative_path)),
+                                   fs::path(overwritePath(relative_path))}) {
+    if (!fs::exists(candidate, ec))
+      continue;
+    if (!fs::is_directory(candidate, ec))
+      return false;
+
+    if (!fs::is_empty(candidate, ec)) {
+      if (out_not_empty)
+        *out_not_empty = true;
+      return false;
+    }
+
+    if (fs::remove(candidate, ec))
+      removedAny = true;
+  }
+
+  return removedAny;
+}
+
 bool OverwriteManager::createDirectory(const std::string& relative_path)
 {
   std::error_code ec;

@@ -148,7 +148,13 @@ protected:
 
   WORD getArch(QString const& program) const;
 
-  static QString determineMyGamesPath(const QString& gameName);
+  // createIfMissing=false is the safe default: the per-game plugin ctor
+  // calls this for every installed Bethesda game and we don't want to
+  // spam `Documents/My Games/<GameName>` directories for games the user
+  // isn't actually managing (see issue #55). Pass true only when we
+  // know the game is installed and likely to be used.
+  static QString determineMyGamesPath(const QString& gameName,
+                                      bool createIfMissing = false);
 
   static QString parseEpicGamesLocation(const QStringList& manifests);
 

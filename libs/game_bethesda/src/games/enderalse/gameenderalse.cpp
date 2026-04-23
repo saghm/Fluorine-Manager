@@ -55,7 +55,7 @@ void GameEnderalSE::detectGame()
 {
   m_GamePath = identifyGamePath();
   checkVariants();
-  m_MyGamesPath = determineMyGamesPath(gameDirectoryName());
+  m_MyGamesPath = determineMyGamesPath(gameDirectoryName(), !m_GamePath.isEmpty());
 }
 
 QString GameEnderalSE::identifyGamePath() const
@@ -99,7 +99,7 @@ void GameEnderalSE::setGamePath(const QString& path)
 {
   m_GamePath = path;
   checkVariants();
-  m_MyGamesPath = determineMyGamesPath(gameDirectoryName());
+  m_MyGamesPath = determineMyGamesPath(gameDirectoryName(), !m_GamePath.isEmpty());
 }
 
 QDir GameEnderalSE::savesDirectory() const

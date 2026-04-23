@@ -174,6 +174,7 @@ void setupFuseOps(struct fuse_lowlevel_ops* ops)
   ops->setattr = mo2_setattr;
   ops->unlink  = mo2_unlink;
   ops->mkdir   = mo2_mkdir;
+  ops->rmdir   = mo2_rmdir;
   ops->release = mo2_release;
   ops->releasedir = mo2_releasedir;
   // access handler removed: default_permissions mount option lets the kernel

@@ -3,6 +3,7 @@
 #include "fluorinepaths.h"
 
 #include "gamedetection.h"
+#include "slrmanager.h"
 #include "steamdetection.h"
 #include "prefixsymlinks.h"
 
@@ -592,6 +593,19 @@ QProcess* PrefixSetupRunner::buildWrappedProcess(
   restoreOrStrip("XDG_DATA_DIRS",   "FLUORINE_ORIG_XDG_DATA_DIRS");
   restoreOrStrip("QT_PLUGIN_PATH",  "FLUORINE_ORIG_QT_PLUGIN_PATH");
 
+  // Expose the injected xrandr (steamrt4 ships without it) so protonfixes
+  // and Proton-GE init scripts can find it. Pressure-vessel forces PATH
+  // inside the container, so we prepend the xrandr dir on the HOST PATH
+  // and also pass it through --filesystem below.
+  const QString xrandrDir =
+      QDir::homePath() + "/.local/share/fluorine/steamrt/xrandr-bin";
+  if (QDir(xrandrDir).exists()) {
+    const QString existing = env.value("PATH");
+    env.insert("PATH", existing.isEmpty()
+                           ? xrandrDir
+                           : xrandrDir + QLatin1Char(':') + existing);
+  }
+
   // Apply caller-provided env vars.
   for (auto it = extraEnv.begin(); it != extraEnv.end(); ++it) {
     env.insert(it.key(), it.value());
@@ -626,7 +640,22 @@ QProcess* PrefixSetupRunner::buildWrappedProcess(
     if (QDir(cacheDir).exists())
       slrArgs << QStringLiteral("--filesystem=%1").arg(cacheDir);
 
-    slrArgs << "--" << exe;
+    // Expose the injected xrandr bin dir so Proton-GE's protonfixes can
+    // invoke it during wineboot -u. Without this the container's PATH
+    // (forced to /usr/bin:/bin) has no xrandr and init fails on some
+    // modern Proton builds. See issue #49.
+    if (QDir(xrandrDir).exists())
+      slrArgs << QStringLiteral("--filesystem=%1").arg(xrandrDir);
+
+    // Pressure-vessel resets PATH inside the container. Wrap the exec
+    // through /usr/bin/env to inject the xrandr dir back into the
+    // container's PATH.
+    if (QDir(xrandrDir).exists()) {
+      slrArgs << "--" << QStringLiteral("/usr/bin/env")
+              << QStringLiteral("PATH=%1:/usr/bin:/bin").arg(xrandrDir) << exe;
+    } else {
+      slrArgs << "--" << exe;
+    }
 
     proc->setProgram(m_slrRunScript);
     proc->setArguments(slrArgs);
@@ -792,6 +821,17 @@ bool PrefixSetupRunner::stepProtonInit()
   // registry/filesystem locks and any new wineboot -u deadlocks waiting
   // for them. Nothing cleans them up automatically.
   killStalePrefixProcesses();
+
+  // Proton-GE invokes `xrandr` during protonfixes at wineboot time. The
+  // steamrt4 pressure-vessel container ships without it, so back-fill our
+  // injected copy before init if missing — otherwise the protonfix
+  // silently no-ops and prefix setup can hang or fall back to a broken
+  // state on multi-monitor machines. See issue #49.
+  if (!isXrandrInjected()) {
+    emit logMessage("xrandr helper missing; downloading…");
+    ensureXrandrInstalled(
+        nullptr, [this](const QString& msg) { emit logMessage(msg); });
+  }
 
   const QString steamPath = detectSteamPath();
 

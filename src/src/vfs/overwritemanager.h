@@ -20,6 +20,7 @@ public:
 
   bool rename(const std::string& old_relative, const std::string& new_relative);
   bool removeFile(const std::string& relative_path);
+  bool removeDirectory(const std::string& relative_path, bool* out_not_empty = nullptr);
   bool createDirectory(const std::string& relative_path);
 
   bool exists(const std::string& relative_path) const;

@@ -58,7 +58,7 @@ void GameSkyrimSE::detectGame()
 {
   m_GamePath = identifyGamePath();
   checkVariants();
-  m_MyGamesPath = determineMyGamesPath(gameDirectoryName());
+  m_MyGamesPath = determineMyGamesPath(gameDirectoryName(), !m_GamePath.isEmpty());
 }
 
 QString GameSkyrimSE::identifyGamePath() const
@@ -110,7 +110,7 @@ void GameSkyrimSE::setGamePath(const QString& path)
 {
   m_GamePath = path;
   checkVariants();
-  m_MyGamesPath = determineMyGamesPath(gameDirectoryName());
+  m_MyGamesPath = determineMyGamesPath(gameDirectoryName(), !m_GamePath.isEmpty());
 }
 
 QDir GameSkyrimSE::savesDirectory() const

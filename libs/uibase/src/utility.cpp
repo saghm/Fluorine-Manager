@@ -19,6 +19,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include <uibase/utility.h>
+#include <uibase/filesystemutilities.h>
 #include <uibase/log.h>
 #include <uibase/report.h>
 #ifndef _WIN32
@@ -44,10 +45,12 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <QtDebug>
 #include <cerrno>
 #include <cstring>
+#include <filesystem>
 #include <format>
 #include <iostream>
 #include <memory>
 #include <sstream>
+#include <system_error>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -532,18 +535,50 @@ namespace shell
 
   Result Rename(const QFileInfo& src, const QFileInfo& dest, bool copyAllowed)
   {
-    if (QFile::rename(src.absoluteFilePath(), dest.absoluteFilePath())) {
+    const QString srcPath  = src.absoluteFilePath();
+    const QString destPath = dest.absoluteFilePath();
+
+    std::error_code ec;
+    std::filesystem::rename(srcPath.toStdString(), destPath.toStdString(), ec);
+    if (!ec) {
       return Result::makeSuccess();
     }
 
+#ifndef _WIN32
+    // Case-sensitivity fallback: the source path may have been computed from a
+    // case-normalized index (e.g. DirectoryEntry's lowercased tree), so try
+    // resolving each component against the real filesystem.
+    if (ec.value() == ENOENT) {
+      const QString resolved = resolvePathCaseInsensitive(srcPath);
+      if (resolved != srcPath && QFileInfo::exists(resolved)) {
+        std::error_code ec2;
+        std::filesystem::rename(resolved.toStdString(), destPath.toStdString(),
+                                ec2);
+        if (!ec2) {
+          return Result::makeSuccess();
+        }
+        ec = ec2;
+      }
+    }
+#endif
+
     if (copyAllowed) {
-      if (QFile::copy(src.absoluteFilePath(), dest.absoluteFilePath())) {
-        QFile::remove(src.absoluteFilePath());
+      if (QFile::copy(srcPath, destPath)) {
+        QFile::remove(srcPath);
         return Result::makeSuccess();
       }
     }
 
-    return Result::makeFailure(ERROR_ACCESS_DENIED);
+    // Propagate the real errno text rather than a generic Windows code so the
+    // log line actually reflects what failed.
+    const int err = ec.value();
+    QString msg = QString::fromStdString(ec.message());
+    if (msg.isEmpty()) {
+      msg = QString("rename failed: errno=%1").arg(err);
+    }
+    return Result::makeFailure(err != 0 ? static_cast<DWORD>(err)
+                                        : ERROR_ACCESS_DENIED,
+                               msg);
   }
 
   Result CreateDirectories(const QDir& dir)
@@ -1051,7 +1086,18 @@ std::wstring formatSystemMessage(DWORD id)
   if (id == 0) {
     return L"Success";
   }
-  // If it looks like an errno value (small numbers), use strerror
+
+  // Try the Windows-style mapping first: our callers use a mix of
+  // ERROR_ACCESS_DENIED/ERROR_FILE_NOT_FOUND/etc., which overlap the errno
+  // number space (e.g. Windows 5 == ACCESS_DENIED, but errno 5 == EIO). If
+  // formatError returns a known mapping, use it; otherwise fall back to
+  // strerror for real errno values.
+  const QString winMsg = shell::formatError(static_cast<int>(id));
+  if (!winMsg.startsWith(QStringLiteral("Unknown error "))) {
+    const std::string s = winMsg.toStdString();
+    return std::wstring(s.begin(), s.end());
+  }
+
   if (id < 200) {
     const char* msg = strerror(static_cast<int>(id));
     if (msg) {

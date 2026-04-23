@@ -43,6 +43,20 @@ QDLLEXPORT bool validFileName(const QString& name);
  */
 QDLLEXPORT QString resolveFileCaseInsensitive(const QString& path);
 
+/**
+ * @brief Case-insensitively resolve every component of an absolute path.
+ *
+ * Unlike resolveFileCaseInsensitive(), walks each directory component and
+ * matches it case-insensitively against the real filesystem, so a path like
+ * `mods/foo/meshes/dlc01/bar.nif` resolves correctly when the on-disk
+ * directory is `meshes/DLC01/`.
+ *
+ * On Windows, returns the cleaned path as-is.
+ * On Linux, returns the first walk that resolves each component; if any
+ * component has no case-insensitive match, returns the cleaned input path.
+ */
+QDLLEXPORT QString resolvePathCaseInsensitive(const QString& path);
+
 }  // namespace MOBase
 
 #endif  // FILESYSTEM_H

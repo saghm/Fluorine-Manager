@@ -55,7 +55,7 @@ QString GameFallout4VR::gameName() const
 void GameFallout4VR::detectGame()
 {
   m_GamePath    = identifyGamePath();
-  m_MyGamesPath = determineMyGamesPath("Fallout4VR");
+  m_MyGamesPath = determineMyGamesPath("Fallout4VR", !m_GamePath.isEmpty());
 }
 
 QList<ExecutableInfo> GameFallout4VR::executables() const

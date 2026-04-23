@@ -18,4 +18,17 @@ QString downloadSlr(const std::function<void(float)>& progressCb,
                     const std::function<void(const QString&)>& statusCb,
                     const int* cancelFlag);
 
+/// Returns true if our injected xrandr helper is present.
+__attribute__((visibility("default"))) bool isXrandrInjected();
+
+/// Ensure xrandr is extracted into the steamrt install dir. Blocking, but
+/// small (~150 KB download). Used to back-fill xrandr for users whose SLR
+/// was installed before Fluorine started injecting it (issue #49) — pre-
+/// existing installs short-circuit downloadSlr() and would otherwise never
+/// get xrandr. Safe to call unconditionally.
+__attribute__((visibility("default")))
+bool ensureXrandrInstalled(
+    const int* cancelFlag,
+    const std::function<void(const QString&)>& statusCb);
+
 #endif // SLRMANAGER_H

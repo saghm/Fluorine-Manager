@@ -95,4 +95,61 @@ QString resolveFileCaseInsensitive(const QString& path)
 #endif
 }
 
+QString resolvePathCaseInsensitive(const QString& path)
+{
+#ifdef _WIN32
+  return QDir::cleanPath(path);
+#else
+  const QString clean = QDir::cleanPath(path);
+  if (QFileInfo::exists(clean)) {
+    return clean;
+  }
+
+  // Walk each component and match case-insensitively against the real
+  // filesystem. Stops as soon as a component has no case-insensitive match;
+  // returns the cleaned input in that case.
+  const QString prefix = clean.startsWith('/') ? QStringLiteral("/") : QString();
+  const QStringList parts =
+      clean.split('/', Qt::SkipEmptyParts);
+
+  QString current = prefix;
+  for (int i = 0; i < parts.size(); ++i) {
+    const QString& want = parts[i];
+    const QString next  = current.isEmpty() ? want : current + '/' + want;
+
+    if (QFileInfo::exists(next)) {
+      current = next;
+      continue;
+    }
+
+    QDir dir(current.isEmpty() ? QStringLiteral(".") : current);
+    if (!dir.exists()) {
+      return clean;
+    }
+
+    const QDir::Filters filters = (i + 1 < parts.size())
+                                      ? (QDir::Dirs | QDir::NoDotAndDotDot |
+                                         QDir::Hidden | QDir::System)
+                                      : (QDir::Dirs | QDir::Files |
+                                         QDir::NoDotAndDotDot | QDir::Hidden |
+                                         QDir::System);
+
+    bool matched = false;
+    for (const QString& entry : dir.entryList(filters)) {
+      if (entry.compare(want, Qt::CaseInsensitive) == 0) {
+        current = current.isEmpty() ? entry : current + '/' + entry;
+        matched = true;
+        break;
+      }
+    }
+
+    if (!matched) {
+      return clean;
+    }
+  }
+
+  return current;
+#endif
+}
+
 }  // namespace MOBase

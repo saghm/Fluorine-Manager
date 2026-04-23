@@ -1,6 +1,7 @@
 #include "organizercore.h"
 #include "categoriesdialog.h"
 #include "credentialsdialog.h"
+#include "fluorineupdater.h"
 #include "delayedfilewriter.h"
 #include "directoryrefresher.h"
 #include "env.h"
@@ -114,9 +115,19 @@ QString resolveWinePrefixPath(const Settings& settings,
     return cfg->prefix_path.trimmed();
   }
 
+  // Same precedence rule as spawn.cpp's resolvePrefixPath: explicit
+  // fluorine/prefix_path wins over the legacy Settings/* keys, which may
+  // have been auto-populated with an external manager's prefix (Heroic,
+  // Bottles). Without this, switching instances or rebuilding the Fluorine
+  // config can silently drop us onto the wrong prefix (issue #52).
   const QSettings instanceSettings(settings.filename(), QSettings::IniFormat);
+  const QString explicitPath =
+      instanceSettings.value("fluorine/prefix_path").toString().trimmed();
+  if (!explicitPath.isEmpty()) {
+    return explicitPath;
+  }
   for (const auto& key : {"Settings/proton_prefix_path", "Settings/prefix_path",
-                           "Proton/prefix_path", "fluorine/prefix_path"}) {
+                           "Proton/prefix_path"}) {
     const QString value = instanceSettings.value(key).toString().trimmed();
     if (!value.isEmpty()) {
       return value;
@@ -389,7 +400,43 @@ void OrganizerCore::checkForUpdates()
   // display the result
   if (m_UserInterface != nullptr) {
     m_Updater.testForUpdate(m_Settings);
+    checkForFluorineUpdates();
   }
+}
+
+void OrganizerCore::checkForFluorineUpdates()
+{
+  // Set up the Fluorine self-update checker lazily so repeated calls don't
+  // leak QNetworkAccessManager instances. The member is forward-declared in
+  // the header (pointer-only); the include lives here to keep the header
+  // lightweight for its many consumers.
+  if (m_FluorineUpdater == nullptr) {
+    m_FluorineUpdater = new FluorineUpdater(this);
+
+    connect(m_FluorineUpdater, &FluorineUpdater::updateAvailable, this,
+            [](const FluorineUpdater::ReleaseInfo& info) {
+              const QString channel =
+                  FluorineUpdater::channelToString(info.channel);
+              MOBase::log::info(
+                  "Fluorine update available ({}): {} at {}",
+                  channel,
+                  info.tagName.isEmpty() ? info.name : info.tagName,
+                  info.htmlUrl);
+            });
+    connect(m_FluorineUpdater, &FluorineUpdater::upToDate, this,
+            [](const FluorineUpdater::ReleaseInfo& info) {
+              MOBase::log::debug("Fluorine is up to date ({})",
+                                 FluorineUpdater::channelToString(info.channel));
+            });
+    connect(m_FluorineUpdater, &FluorineUpdater::checkFailed, this,
+            [](const QString& reason) {
+              MOBase::log::debug("Fluorine update check failed: {}", reason);
+            });
+  }
+
+  const FluorineUpdater::Channel channel = FluorineUpdater::channelFromString(
+      m_Settings.fluorineUpdateChannel(), FluorineUpdater::buildChannel());
+  m_FluorineUpdater->checkForUpdates(channel);
 }
 
 void OrganizerCore::connectPlugins(PluginContainer* container)

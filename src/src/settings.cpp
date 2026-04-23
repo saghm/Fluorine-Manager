@@ -18,6 +18,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "settings.h"
+#include <fluorine_build_info.h>
 #include "env.h"
 #include "envmetrics.h"
 #include "executableslist.h"
@@ -243,6 +244,22 @@ bool Settings::usePrereleases() const
 void Settings::setUsePrereleases(bool b)
 {
   set(m_Settings, "Settings", "use_prereleases", b);
+}
+
+QString Settings::fluorineUpdateChannel() const
+{
+#if FLUORINE_IS_BETA_BUILD
+  const QString defaultChannel = QStringLiteral("beta");
+#else
+  const QString defaultChannel = QStringLiteral("stable");
+#endif
+  return get<QString>(m_Settings, "Settings", "fluorine_update_channel",
+                      defaultChannel);
+}
+
+void Settings::setFluorineUpdateChannel(const QString& channel)
+{
+  set(m_Settings, "Settings", "fluorine_update_channel", channel);
 }
 
 bool Settings::profileLocalInis() const

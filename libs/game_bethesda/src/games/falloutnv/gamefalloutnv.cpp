@@ -102,7 +102,7 @@ void GameFalloutNV::setGamePath(const QString& path)
 {
   m_GamePath = path;
   checkVariants();
-  m_MyGamesPath = determineMyGamesPath(gameDirectoryName());
+  m_MyGamesPath = determineMyGamesPath(gameDirectoryName(), !m_GamePath.isEmpty());
 }
 
 QDir GameFalloutNV::savesDirectory() const
@@ -137,7 +137,7 @@ void GameFalloutNV::detectGame()
 {
   m_GamePath = identifyGamePath();
   checkVariants();
-  m_MyGamesPath = determineMyGamesPath(gameDirectoryName());
+  m_MyGamesPath = determineMyGamesPath(gameDirectoryName(), !m_GamePath.isEmpty());
 }
 
 QList<ExecutableInfo> GameFalloutNV::executables() const

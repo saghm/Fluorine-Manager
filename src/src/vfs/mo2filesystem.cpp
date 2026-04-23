@@ -2110,6 +2110,72 @@ void mo2_mkdir(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t /*mod
   replyEntryFromSnapshot(req, ctx, dirIno, snap);
 }
 
+void mo2_rmdir(fuse_req_t req, fuse_ino_t parent, const char* name)
+{
+  Mo2FsContext* ctx = getContext(req);
+  if (ctx == nullptr || name == nullptr) {
+    fuse_reply_err(req, EINVAL);
+    return;
+  }
+  if (std::strcmp(name, ".") == 0 || std::strcmp(name, "..") == 0) {
+    fuse_reply_err(req, EINVAL);
+    return;
+  }
+
+  bool ok = false;
+  const std::string parentPath = inodeToPath(ctx, parent, &ok);
+  if (!ok) {
+    fuse_reply_err(req, ENOENT);
+    return;
+  }
+
+  const std::string relative =
+      joinPath(parentPath, canonicalChildName(ctx, parentPath, name));
+
+  // Check VFS tree: the directory must exist and be empty in the merged view.
+  // Backing/mod entries are read-only, so reject rmdir on anything that still
+  // has children visible through the VFS.
+  {
+    std::shared_lock lock(ctx->tree_mutex);
+    const VfsNode* node = ctx->tree->root.resolve(splitPath(relative));
+    if (node == nullptr) {
+      fuse_reply_err(req, ENOENT);
+      return;
+    }
+    if (!node->is_directory) {
+      fuse_reply_err(req, ENOTDIR);
+      return;
+    }
+    if (!node->dir_info.children.empty()) {
+      fuse_reply_err(req, ENOTEMPTY);
+      return;
+    }
+  }
+
+  // Try to remove the real directory from staging/overwrite. If the directory
+  // is purely virtual (no real backing in staging/overwrite) that's fine —
+  // still accept the rmdir so the VFS view reflects the caller's intent.
+  bool notEmpty = false;
+  const bool removed = ctx->overwrite->removeDirectory(relative, &notEmpty);
+  if (notEmpty) {
+    fuse_reply_err(req, ENOTEMPTY);
+    return;
+  }
+  (void)removed;
+
+  {
+    std::unique_lock lock(ctx->tree_mutex);
+    invalidateNodeCache(ctx, relative);
+    if (ctx->tree->root.removeFromTree(splitPath(relative))) {
+      ctx->tree->dir_count =
+          ctx->tree->dir_count > 0 ? ctx->tree->dir_count - 1 : 0;
+    }
+  }
+  invalidateDirCache(ctx, parentPath);
+
+  fuse_reply_err(req, 0);
+}
+
 void mo2_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
 {
   Mo2FsContext* ctx = getContext(req);

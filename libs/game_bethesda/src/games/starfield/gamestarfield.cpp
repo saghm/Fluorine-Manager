@@ -67,7 +67,7 @@ QString GameStarfield::gameName() const
 void GameStarfield::detectGame()
 {
   m_GamePath    = identifyGamePath();
-  m_MyGamesPath = determineMyGamesPath("Starfield");
+  m_MyGamesPath = determineMyGamesPath("Starfield", !m_GamePath.isEmpty());
 }
 
 QString GameStarfield::identifyGamePath() const
@@ -77,16 +77,36 @@ QString GameStarfield::identifyGamePath() const
 
 QDir GameStarfield::dataDirectory() const
 {
+#ifdef _WIN32
+  // On Windows, USVFS hooks both the game-side Data folder (where SFSE
+  // loads plugins from) and My Games\Starfield\Data (where loose content
+  // lives) transparently, so MO2 can report the My Games path as primary.
   QDir dataDir = documentsDirectory().absoluteFilePath("Data");
   if (!dataDir.exists())
     dataDir.mkdir(dataDir.path());
   return documentsDirectory().absoluteFilePath("Data");
+#else
+  // On Linux we have a single FUSE mount, so the primary dataDirectory
+  // MUST be the game-install Data folder — that's where SFSE looks for
+  // plugins. If the mount lived under My Games/Starfield/Data, the
+  // base game Data folder would only see dangling symlinks and SFSE
+  // plugins would silently fail to load. See issue #56.
+  return gameDirectory().absoluteFilePath("Data");
+#endif
 }
 
 QMap<QString, QDir> GameStarfield::secondaryDataDirectories() const
 {
   QMap<QString, QDir> directories;
+#ifdef _WIN32
   directories.insert("game_data", gameDirectory().absoluteFilePath("Data"));
+#else
+  // Primary is now gameDirectory/Data; My Games/Starfield/Data still
+  // needs to exist so the launcher and loose-file content work. Get it
+  // populated via the secondary-mapping symlink path.
+  directories.insert("documents_data",
+                     documentsDirectory().absoluteFilePath("Data"));
+#endif
   return directories;
 }
 

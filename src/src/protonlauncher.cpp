@@ -104,12 +104,31 @@ QString compatDataPathFromPrefix(const QString& prefixPath)
   }
 
   QDir prefixDir(prefixPath);
+
+  // Case 1: prefix_path is `<compatdata>/pfx` — the usual Fluorine layout.
   if (prefixDir.dirName() == "pfx") {
     if (prefixDir.cdUp()) {
       return QDir::cleanPath(prefixDir.absolutePath());
     }
   }
 
+  // Case 2: prefix_path is the compatdata directory itself (contains `pfx/`).
+  // Steam expects STEAM_COMPAT_DATA_PATH to be the compatdata dir, not pfx.
+  if (prefixDir.exists(QStringLiteral("pfx/drive_c"))) {
+    return QDir::cleanPath(prefixDir.absolutePath());
+  }
+
+  // Case 3: prefix_path is a plain Wine prefix (contains drive_c directly,
+  // no pfx wrapper). Pointing STEAM_COMPAT_DATA_PATH at the parent would be
+  // wrong (Proton would look for `<parent>/pfx` which doesn't exist and
+  // create a fresh prefix there). Returning empty lets the caller skip
+  // setting STEAM_COMPAT_DATA_PATH — Proton then respects WINEPREFIX only.
+  if (prefixDir.exists(QStringLiteral("drive_c"))) {
+    return {};
+  }
+
+  // Last-resort legacy behaviour — keep the old fallback for callers that
+  // pass non-existent paths (prefix creation UI flow).
   return QDir::cleanPath(QFileInfo(prefixPath).dir().absolutePath());
 }
 

@@ -23,7 +23,16 @@ GeneralSettingsTab::GeneralSettingsTab(Settings& s, SettingsDialog& d)
 
   // updates
   ui->checkForUpdates->setChecked(settings().checkForUpdates());
-  ui->usePrereleaseBox->setChecked(settings().usePrereleases());
+  // The "beta versions" checkbox drives both the legacy Nexus-side pre-release
+  // opt-in and the Fluorine self-update channel, so a single toggle covers the
+  // user-visible concept of "I want beta builds".
+  const bool onBeta =
+      settings().fluorineUpdateChannel() == QStringLiteral("beta") ||
+      settings().usePrereleases();
+  ui->usePrereleaseBox->setChecked(onBeta);
+  ui->usePrereleaseBox->setToolTip(
+      QObject::tr("Receive rolling beta builds from the main branch. When "
+                  "off, only tagged stable releases are offered."));
 
   // profile defaults
   ui->localINIs->setChecked(settings().profileLocalInis());
@@ -68,6 +77,9 @@ void GeneralSettingsTab::update()
   // updates
   settings().setCheckForUpdates(ui->checkForUpdates->isChecked());
   settings().setUsePrereleases(ui->usePrereleaseBox->isChecked());
+  settings().setFluorineUpdateChannel(ui->usePrereleaseBox->isChecked()
+                                          ? QStringLiteral("beta")
+                                          : QStringLiteral("stable"));
 
   // profile defaults
   settings().setProfileLocalInis(ui->localINIs->isChecked());

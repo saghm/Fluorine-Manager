@@ -804,6 +804,107 @@ pid_t findTrackedProcess(pid_t rootPid, const QStringList &expected,
   return best;
 }
 
+// Scan every process owned by the current user for one whose comm or
+// cmdline matches an expected game executable (e.g. FalloutNV.exe,
+// SkyrimSE.exe). Used as a fallback after the immediate descendant tree
+// loses the game — Proton's session manager can reparent game processes
+// outside of our root PID's subtree, so a plain-descendant walk misses
+// them. Only processes inside the given WINEPREFIX are considered so we
+// don't latch onto an unrelated Wine/Proton session.
+pid_t findGameProcessInPrefix(const QStringList &expected,
+                              const QString &winePrefix,
+                              QString *matchedNameOut) {
+  if (expected.isEmpty()) {
+    return 0;
+  }
+
+  const uid_t myUid = ::getuid();
+  DIR *proc = opendir("/proc");
+  if (!proc) {
+    return 0;
+  }
+
+  QString expectedPrefixCanon;
+  if (!winePrefix.isEmpty()) {
+    expectedPrefixCanon = QDir(winePrefix).canonicalPath();
+  }
+
+  pid_t best = 0;
+  struct dirent *entry = nullptr;
+  while ((entry = readdir(proc)) != nullptr) {
+    if (entry->d_type != DT_DIR && entry->d_type != DT_UNKNOWN) continue;
+    const char *name = entry->d_name;
+    if (*name == '\0' || !std::isdigit(static_cast<unsigned char>(*name)))
+      continue;
+
+    const pid_t pid = static_cast<pid_t>(std::strtol(name, nullptr, 10));
+
+    struct stat st;
+    if (::stat(QString("/proc/%1").arg(pid).toStdString().c_str(), &st) != 0 ||
+        st.st_uid != myUid) {
+      continue;
+    }
+
+    QString matched;
+    if (!processMatchesExpected(pid, expected, &matched)) {
+      continue;
+    }
+
+    // Constrain to the same WINEPREFIX so we don't latch onto an unrelated
+    // Wine process (another instance, winetricks, etc.).
+    if (!expectedPrefixCanon.isEmpty()) {
+      const QString pidPrefix = readProcEnvVar(pid, "WINEPREFIX");
+      if (pidPrefix.isEmpty()) continue;
+      if (QDir(pidPrefix).canonicalPath() != expectedPrefixCanon) continue;
+    }
+
+    best = pid;
+    if (matchedNameOut) *matchedNameOut = matched;
+    break;
+  }
+  closedir(proc);
+  return best;
+}
+
+// Best-effort "hard kill" of the wineserver (and every Wine process it
+// owns) for the given prefix. Used when the user clicks Unlock in the
+// lock dialog — Proton's session manager can keep wineserver alive for
+// tens of seconds after the game exits, and that's exactly what the
+// user is asking us to short-circuit. We call `wineserver -k` if the
+// Proton distribution exposes one, then fall back to SIGKILL on the
+// wineserver pid so the prefix is freed regardless.
+void killWineserverForPrefix(const QString &winePrefix) {
+  if (winePrefix.isEmpty()) {
+    return;
+  }
+
+  const pid_t ws = findWineserver(winePrefix);
+  if (ws > 0) {
+    log::info("sending SIGTERM to wineserver {} for prefix '{}'", ws,
+              winePrefix.toStdString());
+    if (::kill(ws, SIGTERM) != 0 && errno != ESRCH) {
+      log::warn("SIGTERM on wineserver {} failed, errno={}", ws, errno);
+    }
+    // Give wineserver a short window to tear down cleanly, then SIGKILL
+    // if it's still hanging around — the whole point of the Unlock
+    // button is to not keep the user waiting.
+    for (int i = 0; i < 10; ++i) {
+      if (::kill(ws, 0) != 0 && errno == ESRCH) {
+        break;
+      }
+      QThread::msleep(100);
+    }
+    if (::kill(ws, 0) == 0) {
+      log::warn("wineserver {} did not exit on SIGTERM, sending SIGKILL",
+                ws);
+      ::kill(ws, SIGKILL);
+    }
+  } else {
+    log::debug("killWineserverForPrefix: no wineserver found for '{}'",
+               winePrefix.toStdString());
+  }
+}
+
 DWORD exitCodeFromWaitStatus(int status) {
   if (WIFEXITED(status)) {
     return static_cast<DWORD>(WEXITSTATUS(status));
@@ -873,30 +974,44 @@ ProcessRunner::Results waitForPid(pid_t pid, LPDWORD exitCode,
       // The tracked process is no longer a descendant of the root PID.
       // This can happen when:
       //  a) The root (proton) exits and wine/game processes get reparented
-      //  b) A launcher .exe (nvse_loader, skse_loader) exits after spawning
-      //     the actual game (FalloutNV.exe, SkyrimSE.exe)
+      //  b) A launcher .exe (nvse_loader, skse_loader, f4se_loader) exits
+      //     after spawning the actual game (FalloutNV.exe, SkyrimSE.exe,
+      //     Fallout4.exe)
       //
-      // Before declaring the game exited, check if the last tracked PID is
-      // still alive.  If not, fall back to waiting for wineserver — it stays
-      // alive as long as ANY wine process in the prefix is running.
+      // If the last tracked PID is still alive, keep polling it directly.
       if (lastTrackedPid > 0 && ::kill(lastTrackedPid, 0) == 0) {
         displayPid = lastTrackedPid;
         displayName = readProcComm(lastTrackedPid);
       } else {
-        const pid_t ws = findWineserver(winePrefix);
-        if (ws > 0) {
-          log::info("tracked process exited, waiting for wineserver {}", ws);
-          lastTrackedPid = ws;
+        // The previously tracked process is gone. Rescan the user's
+        // processes for any of the expected game executables in the same
+        // WINEPREFIX — Proton's session manager can reparent the game
+        // out of our descendant tree. If we find one, track that.
+        QString rescanName;
+        const pid_t rescanned =
+            findGameProcessInPrefix(expected, winePrefix, &rescanName);
+        if (rescanned > 0 && rescanned != lastTrackedPid) {
+          log::info("tracked process exited, resumed tracking game {}: {}",
+                    rescanned, rescanName.toStdString());
+          lastTrackedPid = rescanned;
           useKillPoll = true;
-          displayPid = ws;
-          displayName = QStringLiteral("wineserver");
+          displayPid = rescanned;
+          displayName = rescanName;
           continue;
         }
+
+        // No matching game process remains. Do NOT fall back to waiting
+        // for wineserver — Proton's session manager keeps wineserver
+        // alive for the prefix idle timeout (several seconds on modern
+        // Proton, much longer under load), and blocking MO2's lock on
+        // that is indistinguishable from a hang from the user's POV
+        // (issue: "Fluorine stuck tracking wineserver"). The game has
+        // truly exited once no expected executable is running.
         if (exitCode != nullptr) {
           *exitCode = 0;
         }
-        log::debug("tracked child process {} for root {} exited (no wineserver)",
-                   lastTrackedPid, pid);
+        log::debug("game processes for root {} exited; releasing lock "
+                   "(wineserver may linger in background)", pid);
         return ProcessRunner::Completed;
       }
     }
@@ -915,17 +1030,23 @@ ProcessRunner::Results waitForPid(pid_t pid, LPDWORD exitCode,
                                 : pid;
       if (::kill(pollPid, 0) != 0) {
         if (errno == ESRCH) {
-          // The polled process exited.  If it was the game (not wineserver),
-          // try falling back to wineserver — the real game may still be running
-          // (e.g. nvse_loader exits after spawning FalloutNV.exe).
+          // The polled process exited. Rescan the prefix for any other
+          // matching game executable (launcher .exe's like f4se_loader
+          // exit after spawning the real game binary, and Proton can
+          // reparent that binary out of our root's subtree).
           if (seenTrackedProcess) {
-            const pid_t ws = findWineserver(winePrefix);
-            if (ws > 0 && ws != pollPid) {
-              log::info("polled process {} exited, falling back to wineserver {}", pollPid, ws);
-              lastTrackedPid = ws;
+            QString rescanName;
+            const pid_t rescanned =
+                findGameProcessInPrefix(expected, winePrefix, &rescanName);
+            if (rescanned > 0 && rescanned != pollPid) {
+              log::info("polled process {} exited, resumed tracking game {}: {}",
+                        pollPid, rescanned, rescanName.toStdString());
+              lastTrackedPid = rescanned;
               continue;
             }
           }
+          // No game process remains — do NOT block on wineserver. See
+          // the equivalent note above for why.
           if (exitCode != nullptr) {
             *exitCode = 0;
           }
@@ -988,6 +1109,12 @@ ProcessRunner::Results waitForPid(pid_t pid, LPDWORD exitCode,
         if (::kill(displayPid, SIGTERM) != 0 && errno != ESRCH) {
           log::warn("failed to terminate {}, errno={}", displayPid, errno);
         }
+        // User clicked Unlock — they're asking us to stop waiting on the
+        // prefix, so also hard-kill the wineserver. Otherwise Proton's
+        // session manager keeps it alive for its idle timeout and the
+        // next launch inherits a dirty prefix. See the "stuck tracking
+        // wineserver" user report.
+        killWineserverForPrefix(winePrefix);
         return ProcessRunner::Cancelled;
 
       case UILocker::NoResult:

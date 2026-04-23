@@ -46,6 +46,18 @@ jobs:
           restore-keys: |
             ccache-${{ runner.os }}-
 
+      - name: Determine build channel
+        id: channel
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "channel=stable" >> "$GITHUB_OUTPUT"
+            echo "timestamp=" >> "$GITHUB_OUTPUT"
+          else
+            echo "channel=beta" >> "$GITHUB_OUTPUT"
+            echo "timestamp=$(date -u +%Y%m%d%H%M)" >> "$GITHUB_OUTPUT"
+          fi
+          echo "commit=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Build inside container
         run: |
           mkdir -p ~/.cache/fluorine-ccache
@@ -58,9 +70,24 @@ jobs:
             -e CCACHE_SLOPPINESS=time_macros,include_file_mtime,include_file_ctime,pch_defines \
             -e CCACHE_MAXSIZE=5G \
             -e BUILD_MODE=tarball \
+            -e FLUORINE_BUILD_CHANNEL=${{ steps.channel.outputs.channel }} \
+            -e FLUORINE_BUILD_TIMESTAMP=${{ steps.channel.outputs.timestamp }} \
+            -e FLUORINE_BUILD_COMMIT=${{ steps.channel.outputs.commit }} \
             -w /src \
             fluorine-builder:latest \
             bash -c 'ccache -s; bash /src/docker/build-inner.sh; echo "=== ccache stats after build ==="; ccache -s'
+
+      - name: Package tarball
+        run: |
+          cd build
+          if [[ "${{ steps.channel.outputs.channel }}" == "beta" ]]; then
+            ARCHIVE_NAME="fluorine-manager-beta.tar.gz"
+          else
+            ARCHIVE_NAME="fluorine-manager-${GITHUB_REF_NAME}.tar.gz"
+          fi
+          tar czf "${ARCHIVE_NAME}" fluorine-manager/
+          echo "archive=${ARCHIVE_NAME}" >> "$GITHUB_ENV"
+          echo "archive_path=build/${ARCHIVE_NAME}" >> "$GITHUB_ENV"
 
       - name: Upload build
         uses: actions/upload-artifact@v4
@@ -69,6 +96,81 @@ jobs:
           path: build/fluorine-manager/
           compression-level: 6
           if-no-files-found: warn
+
+      # -------------------------------------------------------------------
+      # Beta rolling release: every push to main overwrites the `beta` tag's
+      # release assets so the in-app updater always sees the latest build
+      # without cluttering the release history with new tags.
+      # -------------------------------------------------------------------
+      - name: Publish beta rolling release
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          TAG="beta"
+          BETA_TS="${{ steps.channel.outputs.timestamp }}"
+          BETA_COMMIT="${GITHUB_SHA}"
+          BETA_SHORT="${BETA_COMMIT:0:7}"
+          TITLE="Fluorine Manager beta ${BETA_TS} (${BETA_SHORT})"
+          NOTES_FILE="$(mktemp)"
+          {
+            echo "Rolling beta build from main @ ${BETA_SHORT}."
+            echo ""
+            echo "- Channel: beta"
+            echo "- Timestamp (UTC): ${BETA_TS}"
+            echo "- Commit: ${BETA_COMMIT}"
+            echo ""
+            echo "This release is overwritten with each successful CI build on main."
+            echo "For stable releases, see tagged v* releases."
+            echo ""
+            # Machine-parseable block used by the in-app updater to decide
+            # whether the currently-installed beta build already matches. Do
+            # not remove or reformat — the updater reads it line-by-line.
+            echo "<!-- fluorine-meta"
+            echo "channel=beta"
+            echo "timestamp=${BETA_TS}"
+            echo "commit=${BETA_COMMIT}"
+            echo "short=${BETA_SHORT}"
+            echo "-->"
+          } > "${NOTES_FILE}"
+
+          # Move the rolling tag to the current commit.
+          git tag -f "${TAG}" "${GITHUB_SHA}"
+          git push -f origin "refs/tags/${TAG}"
+
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release edit "${TAG}" \
+              --title "${TITLE}" \
+              --notes-file "${NOTES_FILE}" \
+              --prerelease
+            # Replace the tarball asset (clobber wins over upload+delete race).
+            gh release upload "${TAG}" "${archive_path}" --clobber
+          else
+            gh release create "${TAG}" "${archive_path}" \
+              --title "${TITLE}" \
+              --notes-file "${NOTES_FILE}" \
+              --prerelease
+          fi
+
+      # -------------------------------------------------------------------
+      # Stable release: triggered by pushing a v* tag. Uploads the tagged
+      # archive as a normal (non-prerelease) GitHub release.
+      # -------------------------------------------------------------------
+      - name: Publish stable release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release upload "${TAG}" "${archive_path}" --clobber
+          else
+            gh release create "${TAG}" "${archive_path}" \
+              --title "Fluorine Manager ${TAG}" \
+              --generate-notes
+          fi
 
   build-nixos-mobase:
     runs-on: ubuntu-latest

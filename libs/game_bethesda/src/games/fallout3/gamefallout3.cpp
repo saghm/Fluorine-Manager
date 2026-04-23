@@ -104,7 +104,7 @@ void GameFallout3::detectGame()
 {
   m_GamePath = identifyGamePath();
   setGameVariant(identifyVariant());
-  m_MyGamesPath = determineMyGamesPath("Fallout3");
+  m_MyGamesPath = determineMyGamesPath("Fallout3", !m_GamePath.isEmpty());
 }
 
 QList<ExecutableInfo> GameFallout3::executables() const

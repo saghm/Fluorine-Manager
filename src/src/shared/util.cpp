@@ -21,6 +21,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "../env.h"
 #include "../mainwindow.h"
 #include "windows_error.h"
+#include <fluorine_build_info.h>
 #include <uibase/log.h>
 #ifndef _WIN32
 #include <pthread.h>
@@ -319,7 +320,18 @@ Version createVersionInfo()
 #else
 Version createVersionInfo()
 {
-  return Version(2, 5, 2, 0);
+  // Fluorine Manager version is the user-facing one. The numeric components
+  // are injected by CMake from top-level FLUORINE_VERSION_* variables.
+#if FLUORINE_IS_BETA_BUILD
+  // Beta builds tag themselves as Development pre-releases so the update
+  // checker can distinguish them from stable tags when comparing versions.
+  return Version(FLUORINE_VERSION_MAJOR, FLUORINE_VERSION_MINOR,
+                 FLUORINE_VERSION_PATCH, 0,
+                 {Version::Development});
+#else
+  return Version(FLUORINE_VERSION_MAJOR, FLUORINE_VERSION_MINOR,
+                 FLUORINE_VERSION_PATCH, 0);
+#endif
 }
 #endif
 

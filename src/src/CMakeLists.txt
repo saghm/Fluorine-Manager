@@ -90,6 +90,8 @@ set_target_properties(organizer PROPERTIES
 target_include_directories(organizer PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_BINARY_DIR}
+    # Generated Fluorine build-info header lives alongside other generated files.
+    ${CMAKE_BINARY_DIR}/generated
     # Bare includes: source uses <iplugin*.h>, <log.h>, etc. without uibase/ prefix
     ${CMAKE_SOURCE_DIR}/libs/uibase/include/uibase
     ${CMAKE_SOURCE_DIR}/libs/uibase/include/uibase/game_features)

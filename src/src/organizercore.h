@@ -257,6 +257,7 @@ public:
   void updateModInfoFromDisc();
 
   void checkForUpdates();
+  void checkForFluorineUpdates();
   void startMOUpdate();
 
   Settings& settings();
@@ -557,6 +558,7 @@ private:
   Settings& m_Settings;
 
   SelfUpdater m_Updater;
+  class FluorineUpdater* m_FluorineUpdater = nullptr;
 
   SignalAboutToRunApplication m_AboutToRun;
   SignalFinishedRunApplication m_FinishedRun;

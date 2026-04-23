@@ -50,7 +50,7 @@ QString GameFallout76::gameName() const
 void GameFallout76::detectGame()
 {
   m_GamePath    = identifyGamePath();
-  m_MyGamesPath = determineMyGamesPath(gameName());
+  m_MyGamesPath = determineMyGamesPath(gameName(), !m_GamePath.isEmpty());
 }
 
 QList<ExecutableInfo> GameFallout76::executables() const

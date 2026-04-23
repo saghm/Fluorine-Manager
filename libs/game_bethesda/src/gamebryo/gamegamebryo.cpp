@@ -56,7 +56,7 @@ GameGamebryo::GameGamebryo() {}
 void GameGamebryo::detectGame()
 {
   m_GamePath    = identifyGamePath();
-  m_MyGamesPath = determineMyGamesPath(gameName());
+  m_MyGamesPath = determineMyGamesPath(gameName(), !m_GamePath.isEmpty());
 }
 
 bool GameGamebryo::init(MOBase::IOrganizer* moInfo)
@@ -714,7 +714,8 @@ QString GameGamebryo::getSpecialPath(const QString& name)
 }
 #endif  // _WIN32
 
-QString GameGamebryo::determineMyGamesPath(const QString& gameName)
+QString GameGamebryo::determineMyGamesPath(const QString& gameName,
+                                           bool createIfMissing)
 {
   const QString pattern = "%1/My Games/" + gameName;
 
@@ -781,21 +782,36 @@ QString GameGamebryo::determineMyGamesPath(const QString& gameName)
     }
   }
 
-  // If no existing directory was found, try to create it in the configured prefix
-  // so that the game launcher can populate it on first run.
+  // No existing directory found. By default we return the expected path
+  // (under the configured prefix) WITHOUT creating it — every Bethesda
+  // plugin constructs itself at startup, and pre-creating `My Games/<Game>`
+  // for every possible title (Fallout4, Oblivion, Morrowind, …) clutters
+  // the user's prefix with empty folders for games they don't have.
+  // See issue #55.
+  //
+  // Callers that actually need the directory (profile initialization,
+  // save writes, ini deployment) should mkpath on demand or pass
+  // createIfMissing=true explicitly.
   if (!configuredPrefix.isEmpty()) {
     const QString configuredDocs =
         QDir(configuredPrefix).filePath("drive_c/users/steamuser/Documents");
     const QString newPath = pattern.arg(configuredDocs);
-    if (QDir().mkpath(newPath)) {
-      MOBase::log::info("determineMyGamesPath: created '{}' for game '{}'", newPath,
-                        gameName);
+    if (createIfMissing) {
+      if (QDir().mkpath(newPath)) {
+        MOBase::log::info("determineMyGamesPath: created '{}' for game '{}'",
+                          newPath, gameName);
+        return newPath;
+      }
+    } else {
+      // Return the expected path for reference; callers may check for
+      // existence before writing.
       return newPath;
     }
   }
 
-  MOBase::log::warn("determineMyGamesPath: could not find My Games path for '{}'",
-                    gameName);
+  MOBase::log::debug(
+      "determineMyGamesPath: no existing My Games path for '{}' (create=false)",
+      gameName);
 #endif
 
   return {};

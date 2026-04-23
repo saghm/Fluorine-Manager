@@ -1,6 +1,48 @@
 cmake_minimum_required(VERSION 3.16)
 project(ModOrganizer2 VERSION 2.5.3 LANGUAGES C CXX)
 
+# ---------------------------------------------------------------------------
+# Fluorine Manager version (distinct from the MO2 engine version above).
+# ---------------------------------------------------------------------------
+set(FLUORINE_VERSION_MAJOR 0)
+set(FLUORINE_VERSION_MINOR 1)
+set(FLUORINE_VERSION_PATCH 4)
+set(FLUORINE_BUILD_CHANNEL "stable" CACHE STRING
+    "Build channel: 'stable' for tagged releases, 'beta' for rolling CI builds")
+set(FLUORINE_BUILD_TIMESTAMP "" CACHE STRING
+    "UTC timestamp (YYYYMMDDHHMM) appended to beta builds after a 'B' suffix")
+set(FLUORINE_BUILD_COMMIT "" CACHE STRING
+    "Short git commit SHA for the build, embedded in the About dialog")
+
+if(FLUORINE_BUILD_CHANNEL STREQUAL "beta")
+    set(FLUORINE_IS_BETA_BUILD 1)
+    if(FLUORINE_BUILD_TIMESTAMP STREQUAL "")
+        string(TIMESTAMP FLUORINE_BUILD_TIMESTAMP "%Y%m%d%H%M" UTC)
+    endif()
+else()
+    set(FLUORINE_IS_BETA_BUILD 0)
+endif()
+
+if(FLUORINE_BUILD_COMMIT STREQUAL "" AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+    find_program(GIT_EXECUTABLE git)
+    if(GIT_EXECUTABLE)
+        execute_process(
+            COMMAND ${GIT_EXECUTABLE} rev-parse --short HEAD
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            OUTPUT_VARIABLE FLUORINE_BUILD_COMMIT
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET)
+    endif()
+endif()
+
+configure_file(
+    "${CMAKE_SOURCE_DIR}/src/src/fluorine_build_info.h.in"
+    "${CMAKE_BINARY_DIR}/generated/fluorine_build_info.h"
+    @ONLY)
+include_directories("${CMAKE_BINARY_DIR}/generated")
+
+message(STATUS "[Fluorine] Version: ${FLUORINE_VERSION_MAJOR}.${FLUORINE_VERSION_MINOR}.${FLUORINE_VERSION_PATCH} channel=${FLUORINE_BUILD_CHANNEL} timestamp=${FLUORINE_BUILD_TIMESTAMP} commit=${FLUORINE_BUILD_COMMIT}")
+
 if(POLICY CMP0135)
   cmake_policy(SET CMP0135 NEW)
 endif()
