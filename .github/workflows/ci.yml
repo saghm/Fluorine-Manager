@@ -3,7 +3,6 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -46,16 +45,13 @@ jobs:
           restore-keys: |
             ccache-${{ runner.os }}-
 
-      - name: Determine build channel
+      - name: Determine build metadata
         id: channel
         run: |
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            echo "channel=stable" >> "$GITHUB_OUTPUT"
-            echo "timestamp=" >> "$GITHUB_OUTPUT"
-          else
-            echo "channel=beta" >> "$GITHUB_OUTPUT"
-            echo "timestamp=$(date -u +%Y%m%d%H%M)" >> "$GITHUB_OUTPUT"
-          fi
+          # CI only publishes beta rolling builds. Stable releases are cut
+          # manually against a tag — see CHANGELOG.md for the process.
+          echo "channel=beta" >> "$GITHUB_OUTPUT"
+          echo "timestamp=$(date -u +%Y%m%d%H%M)" >> "$GITHUB_OUTPUT"
           echo "commit=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Build inside container
@@ -80,11 +76,7 @@ jobs:
       - name: Package tarball
         run: |
           cd build
-          if [[ "${{ steps.channel.outputs.channel }}" == "beta" ]]; then
-            ARCHIVE_NAME="fluorine-manager-beta.tar.gz"
-          else
-            ARCHIVE_NAME="fluorine-manager-${GITHUB_REF_NAME}.tar.gz"
-          fi
+          ARCHIVE_NAME="fluorine-manager-beta.tar.gz"
           tar czf "${ARCHIVE_NAME}" fluorine-manager/
           echo "archive=${ARCHIVE_NAME}" >> "$GITHUB_ENV"
           echo "archive_path=build/${ARCHIVE_NAME}" >> "$GITHUB_ENV"
@@ -151,25 +143,6 @@ jobs:
               --title "${TITLE}" \
               --notes-file "${NOTES_FILE}" \
               --prerelease
-          fi
-
-      # -------------------------------------------------------------------
-      # Stable release: triggered by pushing a v* tag. Uploads the tagged
-      # archive as a normal (non-prerelease) GitHub release.
-      # -------------------------------------------------------------------
-      - name: Publish stable release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          if gh release view "${TAG}" >/dev/null 2>&1; then
-            gh release upload "${TAG}" "${archive_path}" --clobber
-          else
-            gh release create "${TAG}" "${archive_path}" \
-              --title "Fluorine Manager ${TAG}" \
-              --generate-notes
           fi
 
   build-nixos-mobase:
