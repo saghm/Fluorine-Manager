@@ -1366,7 +1366,15 @@ void MainWindow::showEvent(QShowEvent* event)
       m_OrganizerCore.settings().setFirstStart(false);
     } else {
       auto& settings = m_OrganizerCore.settings();
-      if (m_LastVersion < QVersionNumber(2, 5) &&
+      // The category migration dialog was meant to fire once per upgrade
+      // across the upstream MO2 2.4 -> 2.5 cut. Fluorine now stores its own
+      // 0.x.y version in the same slot, so lastVersion < 2.5 is true on
+      // every Fluorine launch and the dialog would nag forever. Skip it
+      // when lastVersion looks like a Fluorine build.
+      const bool fluorineVersionScheme =
+          m_LastVersion.majorVersion() == 0;
+      if (!fluorineVersionScheme &&
+          m_LastVersion < QVersionNumber(2, 5) &&
           !GlobalSettings::hideCategoryReminder()) {
         QMessageBox migrateCatDialog;
         migrateCatDialog.setWindowTitle("Category Migration");
