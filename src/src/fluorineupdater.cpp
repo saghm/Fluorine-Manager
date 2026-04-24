@@ -221,16 +221,26 @@ bool FluorineUpdater::parseStableRelease(const QJsonObject& obj,
     out.versionString.remove(0, 1);
   }
 
-  // Pick the first tar.gz asset as the download target.
+  // Pick a tar.gz asset if available, otherwise a zip.
   const QJsonArray assets = obj.value(QStringLiteral("assets")).toArray();
+  QString zipFallback;
   for (const QJsonValue& v : assets) {
     const QJsonObject a = v.toObject();
     const QString name  = a.value(QStringLiteral("name")).toString();
-    if (name.endsWith(QStringLiteral(".tar.gz"), Qt::CaseInsensitive)) {
-      out.downloadUrl =
-          a.value(QStringLiteral("browser_download_url")).toString();
+    const QString url   =
+        a.value(QStringLiteral("browser_download_url")).toString();
+    if (name.endsWith(QStringLiteral(".tar.gz"), Qt::CaseInsensitive) ||
+        name.endsWith(QStringLiteral(".tgz"), Qt::CaseInsensitive)) {
+      out.downloadUrl = url;
       break;
     }
+    if (name.endsWith(QStringLiteral(".zip"), Qt::CaseInsensitive) &&
+        zipFallback.isEmpty()) {
+      zipFallback = url;
+    }
+  }
+  if (out.downloadUrl.isEmpty()) {
+    out.downloadUrl = zipFallback;
   }
   return true;
 }
@@ -277,27 +287,42 @@ bool FluorineUpdater::parseBetaRelease(const QJsonObject& obj,
     }
   }
 
-  // Prefer a tar.gz asset with "beta" in the name, else first tar.gz.
+  // Prefer a .tar.gz asset with "beta" in the name, else any .tar.gz,
+  // else fall back to a .zip. GitHub Releases serves whatever we upload,
+  // but some CI flows produce zip artifacts; accepting both lets users
+  // swap formats without breaking the in-app updater.
   const QJsonArray assets = obj.value(QStringLiteral("assets")).toArray();
-  QString fallback;
+  QString tarFallback;
+  QString zipFallback;
+  auto isArchive = [](const QString& name) {
+    return name.endsWith(QStringLiteral(".tar.gz"), Qt::CaseInsensitive) ||
+           name.endsWith(QStringLiteral(".tgz"), Qt::CaseInsensitive) ||
+           name.endsWith(QStringLiteral(".zip"), Qt::CaseInsensitive);
+  };
+  auto isZip = [](const QString& name) {
+    return name.endsWith(QStringLiteral(".zip"), Qt::CaseInsensitive);
+  };
   for (const QJsonValue& v : assets) {
     const QJsonObject a = v.toObject();
     const QString name  = a.value(QStringLiteral("name")).toString();
-    if (!name.endsWith(QStringLiteral(".tar.gz"), Qt::CaseInsensitive)) {
+    if (!isArchive(name)) {
       continue;
     }
     const QString url =
         a.value(QStringLiteral("browser_download_url")).toString();
-    if (name.contains(QStringLiteral("beta"), Qt::CaseInsensitive)) {
+    if (name.contains(QStringLiteral("beta"), Qt::CaseInsensitive) &&
+        !isZip(name)) {
       out.downloadUrl = url;
       break;
     }
-    if (fallback.isEmpty()) {
-      fallback = url;
+    if (isZip(name)) {
+      if (zipFallback.isEmpty()) zipFallback = url;
+    } else if (tarFallback.isEmpty()) {
+      tarFallback = url;
     }
   }
   if (out.downloadUrl.isEmpty()) {
-    out.downloadUrl = fallback;
+    out.downloadUrl = !tarFallback.isEmpty() ? tarFallback : zipFallback;
   }
   return true;
 }

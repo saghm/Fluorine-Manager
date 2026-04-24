@@ -216,10 +216,16 @@ void UpdatesSettingsTab::onInstall()
       QStringLiteral("/fluorine");
   const QString stagingDir = dataRoot + QStringLiteral("/update-staging");
   QDir().mkpath(stagingDir);
-  const QString tarPath    = stagingDir + QStringLiteral("/download.tar.gz");
+  // Pick archive file extension from the download URL so tar vs unzip
+  // picks the right tool below.
+  const bool isZip =
+      downloadUrl.endsWith(QStringLiteral(".zip"), Qt::CaseInsensitive);
+  const QString archivePath =
+      stagingDir + (isZip ? QStringLiteral("/download.zip")
+                          : QStringLiteral("/download.tar.gz"));
   const QString extractDir = stagingDir + QStringLiteral("/extract");
 
-  QFile::remove(tarPath);
+  QFile::remove(archivePath);
   QDir(extractDir).removeRecursively();
   QDir().mkpath(extractDir);
 
@@ -237,11 +243,11 @@ void UpdatesSettingsTab::onInstall()
                    QNetworkRequest::NoLessSafeRedirectPolicy);
   QNetworkReply* reply = nam->get(req);
 
-  auto* outFile = new QFile(tarPath, reply);
+  auto* outFile = new QFile(archivePath, reply);
   if (!outFile->open(QIODevice::WriteOnly)) {
     m_statusLabel->setText(
         tr("<i>Install failed:</i> cannot open '%1' for writing")
-            .arg(tarPath));
+            .arg(archivePath));
     m_progressBar->setVisible(false);
     m_installButton->setEnabled(true);
     m_checkNowButton->setEnabled(true);
@@ -266,7 +272,7 @@ void UpdatesSettingsTab::onInstall()
       });
   QObject::connect(
       reply, &QNetworkReply::finished, m_installButton,
-      [this, reply, outFile, tarPath, extractDir, stagingDir]() {
+      [this, reply, outFile, archivePath, extractDir, stagingDir, isZip]() {
         outFile->close();
         const QNetworkReply::NetworkError err = reply->error();
         const QString errString               = reply->errorString();
@@ -282,22 +288,29 @@ void UpdatesSettingsTab::onInstall()
         }
 
         m_statusLabel->setText(tr("Extracting update…"));
-        m_progressBar->setRange(0, 0);  // indeterminate while tar runs
+        m_progressBar->setRange(0, 0);  // indeterminate while extract runs
 
-        auto* tar = new QProcess(m_installButton);
-        tar->setWorkingDirectory(extractDir);
-        tar->setProgram(QStringLiteral("tar"));
-        tar->setArguments({QStringLiteral("xzf"), tarPath});
+        auto* extractor = new QProcess(m_installButton);
+        extractor->setWorkingDirectory(extractDir);
+        if (isZip) {
+          extractor->setProgram(QStringLiteral("unzip"));
+          extractor->setArguments(
+              {QStringLiteral("-q"), archivePath});
+        } else {
+          extractor->setProgram(QStringLiteral("tar"));
+          extractor->setArguments(
+              {QStringLiteral("xzf"), archivePath});
+        }
         QObject::connect(
-            tar,
+            extractor,
             QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
             m_installButton,
-            [this, tar, tarPath, extractDir, stagingDir](
+            [this, extractor, archivePath, extractDir, stagingDir](
                 int code, QProcess::ExitStatus st) {
-              tar->deleteLater();
+              extractor->deleteLater();
               if (st != QProcess::NormalExit || code != 0) {
                 m_statusLabel->setText(
-                    tr("<i>Extraction failed:</i> tar exited with %1")
+                    tr("<i>Extraction failed:</i> extractor exited with %1")
                         .arg(code));
                 m_progressBar->setVisible(false);
                 m_installButton->setEnabled(true);
