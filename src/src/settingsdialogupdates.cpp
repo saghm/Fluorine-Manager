@@ -5,17 +5,34 @@
 #include "ui_settingsdialog.h"
 
 #include <fluorine_build_info.h>
+#include <log.h>
 
+#include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QCoreApplication>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
+#include <QProcess>
+#include <QProgressBar>
 #include <QPushButton>
+#include <QStandardPaths>
 #include <QTabWidget>
+#include <QTimer>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QWidget>
+
+#include <sys/types.h>
+#include <unistd.h>
 
 #include <algorithm>
 
@@ -25,7 +42,7 @@ UpdatesSettingsTab::UpdatesSettingsTab(Settings& s, SettingsDialog& d)
   // Build the tab contents programmatically so we don't have to hand-edit
   // settingsdialog.ui — the Updates section used to live on the General
   // tab; moving it to its own tab keeps General uncluttered and gives us
-  // room for a "Check for updates now" button + live status line.
+  // room for "Check now" + "Install & restart" buttons with progress.
   QWidget* page = new QWidget(ui->tabWidget);
   auto* layout  = new QVBoxLayout(page);
 
@@ -33,23 +50,19 @@ UpdatesSettingsTab::UpdatesSettingsTab(Settings& s, SettingsDialog& d)
   auto* infoGroup  = new QGroupBox(tr("Current build"), page);
   auto* infoLayout = new QFormLayout(infoGroup);
 
-  const QString currentVersion =
-      QStringLiteral(FLUORINE_DISPLAY_VERSION);
-  const QString channel =
-      QStringLiteral(FLUORINE_BUILD_CHANNEL);
-  const QString commit = QStringLiteral(FLUORINE_BUILD_COMMIT);
-  const QString timestamp = QStringLiteral(FLUORINE_BUILD_TIMESTAMP);
+  const QString currentVersion = QStringLiteral(FLUORINE_DISPLAY_VERSION);
+  const QString channel        = QStringLiteral(FLUORINE_BUILD_CHANNEL);
+  const QString commit         = QStringLiteral(FLUORINE_BUILD_COMMIT);
+  const QString timestamp      = QStringLiteral(FLUORINE_BUILD_TIMESTAMP);
 
   m_currentVersionLabel = new QLabel(currentVersion, infoGroup);
   infoLayout->addRow(tr("Version:"), m_currentVersionLabel);
 
   QString buildLine = QStringLiteral("channel=%1").arg(channel);
-  if (!commit.isEmpty()) {
+  if (!commit.isEmpty())
     buildLine += QStringLiteral("  commit=%1").arg(commit);
-  }
-  if (!timestamp.isEmpty()) {
+  if (!timestamp.isEmpty())
     buildLine += QStringLiteral("  timestamp=%1").arg(timestamp);
-  }
   m_buildInfoLabel = new QLabel(buildLine, infoGroup);
   m_buildInfoLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
   infoLayout->addRow(tr("Build:"), m_buildInfoLabel);
@@ -64,8 +77,8 @@ UpdatesSettingsTab::UpdatesSettingsTab(Settings& s, SettingsDialog& d)
                                     prefsGroup);
   m_checkForUpdates->setToolTip(
       tr("Query GitHub for a newer Fluorine Manager build when the app "
-         "starts. Nothing is installed automatically — you'll see a log "
-         "entry and can download the new build from the release page."));
+         "starts. Nothing is installed automatically — you'll see a notice "
+         "here and can install from the button below."));
   prefsLayout->addWidget(m_checkForUpdates);
 
   auto* channelRow = new QHBoxLayout();
@@ -75,11 +88,6 @@ UpdatesSettingsTab::UpdatesSettingsTab(Settings& s, SettingsDialog& d)
                         QStringLiteral("stable"));
   m_channelBox->addItem(tr("Beta (rolling build from main)"),
                         QStringLiteral("beta"));
-  m_channelBox->setToolTip(
-      tr("Stable: only tagged v* releases. Beta: the rolling `beta` "
-         "release that's replaced on every successful CI build. Beta "
-         "builds embed a commit hash and timestamp so the updater can "
-         "tell whether you're already on the latest one."));
   channelRow->addWidget(m_channelBox, 1);
   prefsLayout->addLayout(channelRow);
 
@@ -92,9 +100,18 @@ UpdatesSettingsTab::UpdatesSettingsTab(Settings& s, SettingsDialog& d)
   auto* buttonRow = new QHBoxLayout();
   m_checkNowButton =
       new QPushButton(tr("Check for updates now"), actionGroup);
+  m_installButton =
+      new QPushButton(tr("Install update && restart"), actionGroup);
+  m_installButton->setEnabled(false);
   buttonRow->addWidget(m_checkNowButton);
+  buttonRow->addWidget(m_installButton);
   buttonRow->addStretch(1);
   actionLayout->addLayout(buttonRow);
+
+  m_progressBar = new QProgressBar(actionGroup);
+  m_progressBar->setVisible(false);
+  m_progressBar->setRange(0, 100);
+  actionLayout->addWidget(m_progressBar);
 
   m_statusLabel = new QLabel(actionGroup);
   m_statusLabel->setTextFormat(Qt::RichText);
@@ -106,7 +123,7 @@ UpdatesSettingsTab::UpdatesSettingsTab(Settings& s, SettingsDialog& d)
   layout->addWidget(actionGroup);
   layout->addStretch(1);
 
-  // Insert as the second tab (right after General) so it's easy to find.
+  // Insert after General.
   const int insertIndex =
       std::max(1, std::min(ui->tabWidget->count(), 1));
   ui->tabWidget->insertTab(insertIndex, page, tr("Updates"));
@@ -122,11 +139,14 @@ UpdatesSettingsTab::UpdatesSettingsTab(Settings& s, SettingsDialog& d)
   QObject::connect(m_checkNowButton, &QPushButton::clicked, &d,
                    [this]() { onCheckNow(); });
 
+  QObject::connect(m_installButton, &QPushButton::clicked, &d,
+                   [this]() { onInstall(); });
+
   QObject::connect(m_updater, &FluorineUpdater::updateAvailable, &d,
           [this](const FluorineUpdater::ReleaseInfo& info) {
-            const QString url = info.htmlUrl.isEmpty()
-                                    ? QString()
-                                    : info.htmlUrl;
+            m_pendingUpdate = info;
+            m_updatePending = true;
+            const QString url = info.htmlUrl.isEmpty() ? QString() : info.htmlUrl;
             QString line = tr("<b>Update available:</b> %1")
                                .arg(info.name.isEmpty() ? info.tagName
                                                         : info.name);
@@ -137,9 +157,18 @@ UpdatesSettingsTab::UpdatesSettingsTab(Settings& s, SettingsDialog& d)
             }
             m_statusLabel->setText(line);
             m_checkNowButton->setEnabled(true);
+            m_installButton->setEnabled(!info.downloadUrl.isEmpty());
+            if (info.downloadUrl.isEmpty()) {
+              m_installButton->setToolTip(
+                  tr("This release has no .tar.gz asset attached."));
+            } else {
+              m_installButton->setToolTip(QString());
+            }
           });
   QObject::connect(m_updater, &FluorineUpdater::upToDate, &d,
           [this](const FluorineUpdater::ReleaseInfo&) {
+            m_updatePending = false;
+            m_installButton->setEnabled(false);
             m_statusLabel->setText(
                 tr("You're on the latest build for this channel."));
             m_checkNowButton->setEnabled(true);
@@ -157,8 +186,6 @@ void UpdatesSettingsTab::update()
   settings().setCheckForUpdates(m_checkForUpdates->isChecked());
   const QString channel = m_channelBox->currentData().toString();
   settings().setFluorineUpdateChannel(channel);
-  // Keep the legacy usePrereleases flag aligned so the Nexus-side pre-
-  // release toggle mirrors the Fluorine channel selection.
   settings().setUsePrereleases(channel == QStringLiteral("beta"));
 }
 
@@ -166,9 +193,197 @@ void UpdatesSettingsTab::onCheckNow()
 {
   m_statusLabel->setText(tr("Checking…"));
   m_checkNowButton->setEnabled(false);
+  m_installButton->setEnabled(false);
 
   const QString channel = m_channelBox->currentData().toString();
   const FluorineUpdater::Channel c = FluorineUpdater::channelFromString(
       channel, FluorineUpdater::buildChannel());
   m_updater->checkForUpdates(c);
+}
+
+void UpdatesSettingsTab::onInstall()
+{
+  if (!m_updatePending || m_pendingUpdate.downloadUrl.isEmpty()) {
+    return;
+  }
+
+  const QString downloadUrl = m_pendingUpdate.downloadUrl;
+
+  // Staging dir for the downloaded tarball. Separate from the live bin/
+  // so we can fall back cleanly if anything fails mid-extract.
+  const QString dataRoot =
+      QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) +
+      QStringLiteral("/fluorine");
+  const QString stagingDir = dataRoot + QStringLiteral("/update-staging");
+  QDir().mkpath(stagingDir);
+  const QString tarPath    = stagingDir + QStringLiteral("/download.tar.gz");
+  const QString extractDir = stagingDir + QStringLiteral("/extract");
+
+  QFile::remove(tarPath);
+  QDir(extractDir).removeRecursively();
+  QDir().mkpath(extractDir);
+
+  m_installButton->setEnabled(false);
+  m_checkNowButton->setEnabled(false);
+  m_progressBar->setVisible(true);
+  m_progressBar->setRange(0, 100);
+  m_progressBar->setValue(0);
+  m_statusLabel->setText(tr("Downloading update…"));
+
+  auto* nam = new QNetworkAccessManager(m_installButton);
+  QNetworkRequest req{QUrl(downloadUrl)};
+  req.setRawHeader("User-Agent", "Fluorine-Manager/updater");
+  req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                   QNetworkRequest::NoLessSafeRedirectPolicy);
+  QNetworkReply* reply = nam->get(req);
+
+  auto* outFile = new QFile(tarPath, reply);
+  if (!outFile->open(QIODevice::WriteOnly)) {
+    m_statusLabel->setText(
+        tr("<i>Install failed:</i> cannot open '%1' for writing")
+            .arg(tarPath));
+    m_progressBar->setVisible(false);
+    m_installButton->setEnabled(true);
+    m_checkNowButton->setEnabled(true);
+    reply->deleteLater();
+    return;
+  }
+
+  QObject::connect(reply, &QNetworkReply::readyRead, reply,
+                   [reply, outFile]() {
+                     outFile->write(reply->readAll());
+                   });
+  QObject::connect(
+      reply, &QNetworkReply::downloadProgress, m_progressBar,
+      [this](qint64 received, qint64 total) {
+        if (total > 0) {
+          m_progressBar->setRange(0, 100);
+          m_progressBar->setValue(
+              static_cast<int>((received * 100) / total));
+        } else {
+          m_progressBar->setRange(0, 0);  // indeterminate
+        }
+      });
+  QObject::connect(
+      reply, &QNetworkReply::finished, m_installButton,
+      [this, reply, outFile, tarPath, extractDir, stagingDir]() {
+        outFile->close();
+        const QNetworkReply::NetworkError err = reply->error();
+        const QString errString               = reply->errorString();
+        reply->deleteLater();
+
+        if (err != QNetworkReply::NoError) {
+          m_statusLabel->setText(
+              tr("<i>Download failed:</i> %1").arg(errString));
+          m_progressBar->setVisible(false);
+          m_installButton->setEnabled(true);
+          m_checkNowButton->setEnabled(true);
+          return;
+        }
+
+        m_statusLabel->setText(tr("Extracting update…"));
+        m_progressBar->setRange(0, 0);  // indeterminate while tar runs
+
+        auto* tar = new QProcess(m_installButton);
+        tar->setWorkingDirectory(extractDir);
+        tar->setProgram(QStringLiteral("tar"));
+        tar->setArguments({QStringLiteral("xzf"), tarPath});
+        QObject::connect(
+            tar,
+            QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            m_installButton,
+            [this, tar, tarPath, extractDir, stagingDir](
+                int code, QProcess::ExitStatus st) {
+              tar->deleteLater();
+              if (st != QProcess::NormalExit || code != 0) {
+                m_statusLabel->setText(
+                    tr("<i>Extraction failed:</i> tar exited with %1")
+                        .arg(code));
+                m_progressBar->setVisible(false);
+                m_installButton->setEnabled(true);
+                m_checkNowButton->setEnabled(true);
+                return;
+              }
+
+              // The tarball is packed as `fluorine-manager/…`. Locate the
+              // top-level dir (picks up a rename too, just in case).
+              QDir extract(extractDir);
+              const QStringList tops = extract.entryList(
+                  QDir::Dirs | QDir::NoDotAndDotDot);
+              if (tops.isEmpty()) {
+                m_statusLabel->setText(
+                    tr("<i>Install failed:</i> extracted archive is empty"));
+                m_progressBar->setVisible(false);
+                m_installButton->setEnabled(true);
+                m_checkNowButton->setEnabled(true);
+                return;
+              }
+              const QString newBundle =
+                  extract.absoluteFilePath(tops.first());
+              const QString newLauncher =
+                  newBundle + QStringLiteral("/fluorine-manager");
+              if (!QFileInfo::exists(newLauncher)) {
+                m_statusLabel->setText(
+                    tr("<i>Install failed:</i> launcher not found in "
+                       "extracted archive"));
+                m_progressBar->setVisible(false);
+                m_installButton->setEnabled(true);
+                m_checkNowButton->setEnabled(true);
+                return;
+              }
+
+              // Write a tiny helper script that waits for the current
+              // Fluorine process to exit (the fluorine-manager launcher
+              // refuses to re-sync itself while we're still holding bin/
+              // open) then execs the new launcher, which performs its
+              // own sync into ~/.local/share/fluorine/bin/.
+              const QString helperPath =
+                  stagingDir + QStringLiteral("/install.sh");
+              const qint64 currentPid = ::getpid();
+              QFile helper(helperPath);
+              if (!helper.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+                m_statusLabel->setText(
+                    tr("<i>Install failed:</i> cannot write install helper"));
+                m_progressBar->setVisible(false);
+                m_installButton->setEnabled(true);
+                m_checkNowButton->setEnabled(true);
+                return;
+              }
+              const QString script =
+                  QStringLiteral(
+                      "#!/usr/bin/env bash\n"
+                      "set -u\n"
+                      "OLD_PID=%1\n"
+                      "NEW_LAUNCHER=%2\n"
+                      "for _ in $(seq 1 200); do\n"
+                      "  if ! kill -0 \"$OLD_PID\" 2>/dev/null; then break; fi\n"
+                      "  sleep 0.1\n"
+                      "done\n"
+                      "exec \"$NEW_LAUNCHER\"\n")
+                      .arg(QString::number(currentPid), newLauncher);
+              helper.write(script.toUtf8());
+              helper.close();
+              QFile::setPermissions(
+                  helperPath,
+                  QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner |
+                      QFile::ReadGroup | QFile::ExeGroup |
+                      QFile::ReadOther | QFile::ExeOther);
+
+              m_statusLabel->setText(
+                  tr("Update staged. Restarting Fluorine Manager…"));
+
+              // Detach the helper so it survives our exit.
+              QProcess::startDetached(QStringLiteral("/usr/bin/env"),
+                                      {QStringLiteral("bash"), helperPath});
+
+              MOBase::log::info(
+                  "update installer: spawned helper to restart into {}",
+                  newLauncher);
+
+              // Give the signal a beat to propagate, then quit cleanly.
+              QTimer::singleShot(250, qApp,
+                                 []() { QCoreApplication::quit(); });
+            });
+        tar->start();
+      });
 }
