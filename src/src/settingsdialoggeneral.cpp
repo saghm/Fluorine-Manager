@@ -21,18 +21,10 @@ GeneralSettingsTab::GeneralSettingsTab(Settings& s, SettingsDialog& d)
   ui->hideDownloadInstallBox->setChecked(
       settings().interface().hideDownloadsAfterInstallation());
 
-  // updates
-  ui->checkForUpdates->setChecked(settings().checkForUpdates());
-  // The "beta versions" checkbox drives both the legacy Nexus-side pre-release
-  // opt-in and the Fluorine self-update channel, so a single toggle covers the
-  // user-visible concept of "I want beta builds".
-  const bool onBeta =
-      settings().fluorineUpdateChannel() == QStringLiteral("beta") ||
-      settings().usePrereleases();
-  ui->usePrereleaseBox->setChecked(onBeta);
-  ui->usePrereleaseBox->setToolTip(
-      QObject::tr("Receive rolling beta builds from the main branch. When "
-                  "off, only tagged stable releases are offered."));
+  // Update settings have moved to their own "Updates" tab. Hide the
+  // legacy controls here so the two UIs don't contradict each other.
+  ui->checkForUpdates->hide();
+  ui->usePrereleaseBox->hide();
 
   // profile defaults
   ui->localINIs->setChecked(settings().profileLocalInis());
@@ -74,12 +66,7 @@ void GeneralSettingsTab::update()
   settings().interface().setHideDownloadsAfterInstallation(
       ui->hideDownloadInstallBox->isChecked());
 
-  // updates
-  settings().setCheckForUpdates(ui->checkForUpdates->isChecked());
-  settings().setUsePrereleases(ui->usePrereleaseBox->isChecked());
-  settings().setFluorineUpdateChannel(ui->usePrereleaseBox->isChecked()
-                                          ? QStringLiteral("beta")
-                                          : QStringLiteral("stable"));
+  // Update settings are persisted by UpdatesSettingsTab (own tab).
 
   // profile defaults
   settings().setProfileLocalInis(ui->localINIs->isChecked());

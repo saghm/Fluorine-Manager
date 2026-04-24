@@ -217,10 +217,7 @@ static const char* WINE_SETTINGS_REG = R"(Windows Registry Editor Version 5.00
 "d3dx10_43"="native"
 "d3dx11_42"="native"
 "d3dx11_43"="native"
-"xinput1_1"="native"
-"xinput1_2"="native"
-"xinput1_3"="native"
-"xinput9_1_0"="native"
+; xinput left as builtin on Linux — native breaks controllers (SDL path).
 "xaudio2_0"="native,builtin"
 "xaudio2_1"="native,builtin"
 "xaudio2_2"="native,builtin"

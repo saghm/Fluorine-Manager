@@ -26,6 +26,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "settingsdialogplugins.h"
 #include "settingsdialogproton.h"
 #include "settingsdialogtheme.h"
+#include "settingsdialogupdates.h"
 #include "settingsdialogworkarounds.h"
 #include "ui_settingsdialog.h"
 
@@ -40,6 +41,8 @@ SettingsDialog::SettingsDialog(PluginContainer* pluginContainer, Settings& setti
 
   m_tabs.push_back(
       std::unique_ptr<SettingsTab>(new GeneralSettingsTab(settings, *this)));
+  m_tabs.push_back(
+      std::unique_ptr<SettingsTab>(new UpdatesSettingsTab(settings, *this)));
   m_tabs.push_back(std::unique_ptr<SettingsTab>(new ThemeSettingsTab(settings, *this)));
   m_tabs.push_back(
       std::unique_ptr<SettingsTab>(new ModListSettingsTab(settings, *this)));

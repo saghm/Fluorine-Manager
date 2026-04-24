@@ -603,6 +603,33 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
   env.insert("DOTNET_ROOT", "");
   env.insert("DOTNET_MULTILEVEL_LOOKUP", "0");
 
+  // Detect ntsync availability: newer Proton/Wine builds prefer the
+  // in-kernel ntsync driver for synchronization primitives, but it's
+  // only present on kernels ≥ 6.14 (or with the out-of-tree module
+  // loaded). When it's missing, games emit "Cannot open synchronization
+  // device: No such file or directory" and fall back to an unusable
+  // state (see issue from user on 2026-04-23). Force the esync/fsync
+  // fallback if /dev/ntsync isn't usable.
+  if (!QFileInfo::exists(QStringLiteral("/dev/ntsync"))) {
+    if (!env.contains("PROTON_NO_NTSYNC")) {
+      env.insert("PROTON_NO_NTSYNC", "1");
+    }
+    if (!env.contains("WINENTSYNC")) {
+      env.insert("WINENTSYNC", "0");
+    }
+    if (!env.contains("WINE_DISABLE_FAST_SYNC")) {
+      env.insert("WINE_DISABLE_FAST_SYNC", "1");
+    }
+    static bool warned = false;
+    if (!warned) {
+      MOBase::log::info(
+          "/dev/ntsync missing — disabling Proton fast-sync "
+          "(set PROTON_NO_NTSYNC=1, WINENTSYNC=0, WINE_DISABLE_FAST_SYNC=1). "
+          "Kernel ≥ 6.14 or the ntsync kmod is required for ntsync.");
+      warned = true;
+    }
+  }
+
   // Ensure Wine's Unix codepage is UTF-8 so non-ASCII filenames (CJK,
   // Cyrillic, accented Latin) round-trip correctly between Linux FS and
   // Win32 WCHAR APIs.  Wine picks the codepage from LC_ALL > LC_CTYPE >

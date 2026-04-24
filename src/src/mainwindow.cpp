@@ -20,6 +20,8 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
+#include <fluorine_build_info.h>
+
 #include "aboutdialog.h"
 #ifdef MO2_WEBENGINE
 #include "browserdialog.h"
@@ -694,10 +696,23 @@ MainWindow::~MainWindow()
 void MainWindow::updateWindowTitle(const APIUserAccount& user)
 {
   //"\xe2\x80\x93" is an "em dash", a longer "-"
+#if FLUORINE_IS_BETA_BUILD
+  // Beta builds mutate on every CI run, so a fixed semver is misleading —
+  // show the short commit hash instead so users can tell exactly which
+  // build they're on at a glance.
+  const QString commitShort = QStringLiteral(FLUORINE_BUILD_COMMIT);
+  const QString versionLabel =
+      commitShort.isEmpty()
+          ? QStringLiteral("beta")
+          : (QStringLiteral("beta @ ") + commitShort);
+#else
+  const QString versionLabel =
+      m_OrganizerCore.getVersion().string(Version::FormatCondensed);
+#endif
+
   QString title =
-      QString("%1 \xe2\x80\x93 Mod Organizer v%2")
-          .arg(m_OrganizerCore.managedGame()->displayGameName(),
-               m_OrganizerCore.getVersion().string(Version::FormatCondensed));
+      QString("%1 \xe2\x80\x93 Fluorine Manager %2")
+          .arg(m_OrganizerCore.managedGame()->displayGameName(), versionLabel);
 
   if (!user.name().isEmpty()) {
     const QString premium = (user.type() == APIUserAccountTypes::Premium ? "*" : "");
@@ -2286,15 +2301,28 @@ void MainWindow::processUpdates()
   }
 
   if (currentVersion < lastVersion) {
-    const auto text =
-        tr("Notice: Your current MO version (%1) is lower than the previously used one "
-           "(%2). "
-           "The GUI may not downgrade gracefully, so you may experience oddities. "
-           "However, there should be no serious issues.")
-            .arg(currentVersion.toString())
-            .arg(lastVersion.toString());
+    // Fluorine Manager versions its own 0.x.y releases separately from the
+    // embedded MO2 engine. Instances created under upstream MO2 (or an
+    // earlier Fluorine build that echoed the engine version) will have
+    // a stored 2.x.y — the "2 → 0" drop isn't a downgrade, it's a schema
+    // change. Detect that and suppress the warning.
+    const bool schemaTransition =
+        lastVersion.majorVersion() >= 2 && currentVersion.majorVersion() == 0;
+    if (!schemaTransition) {
+      const auto text =
+          tr("Notice: Your current Fluorine Manager version (%1) is lower than "
+             "the previously used one (%2). The GUI may not downgrade "
+             "gracefully, so you may experience oddities. However, there "
+             "should be no serious issues.")
+              .arg(currentVersion.toString())
+              .arg(lastVersion.toString());
 
-    log::warn("{}", text);
+      log::warn("{}", text);
+    } else {
+      log::debug(
+          "skipping downgrade warning: {} -> {} is MO2->Fluorine schema change",
+          lastVersion.toString(), currentVersion.toString());
+    }
   }
 }
 
