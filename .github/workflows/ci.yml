@@ -71,7 +71,7 @@ jobs:
             -e FLUORINE_BUILD_COMMIT=${{ steps.channel.outputs.commit }} \
             -w /src \
             fluorine-builder:latest \
-            bash -c 'ccache -s; bash /src/docker/build-inner.sh; echo "=== ccache stats after build ==="; ccache -s'
+            bash -c 'ccache -s; bash /src/docker/build-inner.sh; status=$?; echo "=== ccache stats after build ==="; ccache -s; exit $status'
 
       - name: Package tarball
         run: |

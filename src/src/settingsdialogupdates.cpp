@@ -1,6 +1,7 @@
 #include "settingsdialogupdates.h"
 
 #include "fluorineupdater.h"
+#include "settings.h"
 #include "ui_settingsdialog.h"
 
 #include <fluorine_build_info.h>

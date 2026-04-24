@@ -3,6 +3,8 @@
 
 #include "settingsdialog.h"
 
+#include <QCoreApplication>
+
 class QCheckBox;
 class QComboBox;
 class QLabel;
@@ -15,6 +17,7 @@ class FluorineUpdater;
 // "Check for updates now" button with live status feedback.
 class UpdatesSettingsTab : public SettingsTab
 {
+  Q_DECLARE_TR_FUNCTIONS(UpdatesSettingsTab)
 public:
   UpdatesSettingsTab(Settings& settings, SettingsDialog& dialog);
 
