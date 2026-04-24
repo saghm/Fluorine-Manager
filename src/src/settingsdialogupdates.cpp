@@ -397,6 +397,6 @@ void UpdatesSettingsTab::onInstall()
               QTimer::singleShot(250, qApp,
                                  []() { QCoreApplication::quit(); });
             });
-        tar->start();
+        extractor->start();
       });
 }
