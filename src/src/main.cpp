@@ -16,10 +16,13 @@
 #ifdef _WIN32
 #include <windows.h>
 #else
+#include <atomic>
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <execinfo.h>
+#include <sys/mount.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #endif
@@ -274,23 +277,37 @@ void setExceptionHandlers()
 // char[] so reading it in a signal handler is async-signal-safe.
 extern const char* getFuseMountPointForCrashCleanup();
 
-// Attempt to unmount FUSE from a signal handler context.
-// fork()+exec() is async-signal-safe on Linux.
-static void emergencyFuseUnmount()
+// Async-signal-safe-ish: try direct umount2(MNT_DETACH) first (single syscall,
+// no fork/malloc), then fall back to fusermount3 -uz.  Lazy detach is what
+// actually keeps us out of D-state — a normal unmount blocks indefinitely if
+// the mount is busy, which is exactly when we crash.
+static void emergencyFuseUnmount() noexcept
 {
   const char* mp = getFuseMountPointForCrashCleanup();
-  if (mp == nullptr) {
+  if (mp == nullptr || mp[0] == '\0') {
     return;
   }
 
+  // Step 1: direct lazy unmount.  Works without fusermount3 setuid helper if
+  // we own the mount (we do — it's our session).  Single syscall, no heap.
+  if (umount2(mp, MNT_DETACH) == 0) {
+    return;
+  }
+
+  // Step 2: fall back to fusermount3 -uz.  Don't waitpid() — a hung child
+  // would wedge the crash handler.  Detach with double-fork so PID 1 reaps it.
   const pid_t child = fork();
   if (child == 0) {
-    // Child — try lazy unmount so it always succeeds even if busy.
-    execlp("fusermount3", "fusermount3", "-uz", mp, nullptr);
-    execlp("fusermount", "fusermount", "-uz", mp, nullptr);
-    _exit(1);
+    // Intermediate child: fork again then exit so the grandchild is reparented.
+    const pid_t grand = fork();
+    if (grand == 0) {
+      execlp("fusermount3", "fusermount3", "-uz", mp, nullptr);
+      execlp("fusermount", "fusermount", "-uz", mp, nullptr);
+      _exit(1);
+    }
+    _exit(0);
   } else if (child > 0) {
-    // Parent — wait briefly for the child to finish.
+    // Reap the intermediate child only — it exits immediately.
     int status = 0;
     waitpid(child, &status, 0);
   }
@@ -318,8 +335,11 @@ static void linuxCrashHandler(int sig)
   backtrace_symbols_fd(frames, count, STDERR_FILENO);
   fprintf(stderr, "=== END BACKTRACE ===\n");
 
-  // Re-raise for core dump
-  raise(sig);
+  // Force-terminate the whole process group.  raise(sig) only delivers to the
+  // current thread and depends on the signal not being masked process-wide;
+  // libfuse blocks signals on its workers, so raise() can hang.  _exit() always
+  // terminates immediately and reaps every thread.
+  _exit(128 + sig);
 }
 
 static void linuxTermHandler(int sig)
@@ -327,16 +347,55 @@ static void linuxTermHandler(int sig)
   // Graceful shutdown: unmount FUSE and exit cleanly.
   signal(sig, SIG_DFL);
   emergencyFuseUnmount();
-  raise(sig);
+  _exit(128 + sig);
+}
+
+// std::terminate fires for uncaught C++ exceptions (including bad_alloc thrown
+// out of a noexcept boundary).  The default handler aborts via SIGABRT, but if
+// SIGABRT is masked on the throwing thread the process can hang.  Run our FUSE
+// cleanup first, then call abort() ourselves.
+static void linuxTerminateHandler() noexcept
+{
+  static std::atomic<bool> entered{false};
+  if (entered.exchange(true)) {
+    // Recursion (terminate during our own cleanup) — die immediately.
+    _exit(134);
+  }
+
+  emergencyFuseUnmount();
+
+  fprintf(stderr, "\n=== MO2 std::terminate ===\n");
+  void* frames[64];
+  int count = backtrace(frames, 64);
+  fprintf(stderr, "Backtrace (%d frames):\n", count);
+  backtrace_symbols_fd(frames, count, STDERR_FILENO);
+  fprintf(stderr, "=== END BACKTRACE ===\n");
+
+  std::abort();
 }
 
 void setExceptionHandlers()
 {
-  signal(SIGSEGV, linuxCrashHandler);
-  signal(SIGABRT, linuxCrashHandler);
-  signal(SIGFPE, linuxCrashHandler);
-  signal(SIGTERM, linuxTermHandler);
-  signal(SIGINT, linuxTermHandler);
+  // sigaction with SA_RESETHAND + no SA_RESTART; preferred over signal() since
+  // signal() semantics vary.  Don't block other fatal signals while handling
+  // one — we want a second crash to terminate immediately rather than recurse.
+  struct sigaction sa{};
+  sa.sa_handler = linuxCrashHandler;
+  sa.sa_flags   = SA_RESETHAND;
+  sigemptyset(&sa.sa_mask);
+  sigaction(SIGSEGV, &sa, nullptr);
+  sigaction(SIGABRT, &sa, nullptr);
+  sigaction(SIGFPE,  &sa, nullptr);
+  sigaction(SIGBUS,  &sa, nullptr);
+
+  struct sigaction term{};
+  term.sa_handler = linuxTermHandler;
+  term.sa_flags   = SA_RESETHAND;
+  sigemptyset(&term.sa_mask);
+  sigaction(SIGTERM, &term, nullptr);
+  sigaction(SIGINT,  &term, nullptr);
+
+  std::set_terminate(linuxTerminateHandler);
 }
 
 #endif

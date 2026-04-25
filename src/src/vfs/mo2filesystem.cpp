@@ -1210,6 +1210,13 @@ void mo2_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
   }
   samplePathStat(ctx, "readdir", path);
 
+  // Cap the buffer.  size comes from the kernel and is normally bounded by
+  // FUSE protocol limits, but a corrupt/oversized request would otherwise
+  // trigger a multi-MB allocation and risk std::bad_alloc.
+  constexpr size_t kReaddirBufMax = 1 * 1024 * 1024;
+  if (size > kReaddirBufMax) {
+    size = kReaddirBufMax;
+  }
   std::vector<char> buf(size);
   size_t used = 0;
 
@@ -1312,6 +1319,10 @@ void mo2_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
   }
   samplePathStat(ctx, "readdir", path);
 
+  constexpr size_t kReaddirPlusBufMax = 1 * 1024 * 1024;
+  if (size > kReaddirPlusBufMax) {
+    size = kReaddirPlusBufMax;
+  }
   std::vector<char> buf(size);
   size_t used = 0;
 
