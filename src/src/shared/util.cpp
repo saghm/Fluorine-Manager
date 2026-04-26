@@ -129,7 +129,19 @@ std::wstring ToWString(const std::string& source, bool utf8)
 }
 #endif
 
-static std::locale loc("");
+static std::locale makeUserLocale()
+{
+  // std::locale("") reads LANG/LC_* env vars. If user's system lacks the
+  // requested locale (e.g. en_US.UTF-8 not generated), constructor throws
+  // runtime_error. Fall back to "C" so startup doesn't abort.
+  try {
+    return std::locale("");
+  } catch (const std::runtime_error&) {
+    return std::locale::classic();
+  }
+}
+
+static std::locale loc = makeUserLocale();
 static auto locToLowerW = [](wchar_t in) -> wchar_t {
   return std::tolower(in, loc);
 };
