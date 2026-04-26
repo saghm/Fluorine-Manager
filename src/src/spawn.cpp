@@ -30,8 +30,10 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <QDir>
 #include <QFile>
 #include <QMessageBox>
+#include <QRegularExpression>
 #include <QSet>
 #include <QSettings>
+#include <QTextStream>
 #include <QtDebug>
 #include <uibase/errorcodes.h>
 #include <uibase/log.h>
@@ -520,12 +522,84 @@ QString firstExistingSetting(const QSettings &settings,
   return {};
 }
 
-// Remove dosdevices/<letter>: symlinks for any drive other than C: and Z:.
-// External tooling (Faugus, manual edits, modlist installers) can re-add
-// drives like X: that map subtrees of the host filesystem; Wine then prefers
-// the more specific drive when canonicalising paths, which mangles binary
-// paths we passed in as Z:\... into X:\...  Keeping this list minimal means
-// MO2 can rely on Z: being the only host-mapped drive.
+// Strip "<letter>:"="..." entries (other than C:/Z:) from the
+// [Software\\Wine\\Drives] section of system.reg.  Without this, Wine
+// recreates pruned dosdevices symlinks at the next prefix start from the
+// registry, so the more-specific drive (e.g. X:\Games) keeps winning over
+// Z:\home\user\Games during path canonicalisation.
+static QStringList pruneDriveRegistry(const QString &prefixPath) {
+  const QString regPath = QDir(prefixPath).filePath("system.reg");
+  QFile file(regPath);
+  if (!file.exists()) {
+    return {};
+  }
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    MOBase::log::warn("pruneDriveRegistry: cannot open '{}'",
+                      regPath.toStdString());
+    return {};
+  }
+
+  static const QRegularExpression sectionRe(
+      QStringLiteral(R"(^\[Software\\\\Wine\\\\Drives\])"),
+      QRegularExpression::CaseInsensitiveOption);
+  static const QRegularExpression driveRe(
+      QStringLiteral(R"(^"([A-Za-z]):"\s*=)"));
+
+  QStringList lines;
+  QStringList removed;
+  bool inDrives = false;
+
+  QTextStream in(&file);
+  while (!in.atEnd()) {
+    const QString line = in.readLine();
+    const QString trimmed = line.trimmed();
+
+    if (trimmed.startsWith('[')) {
+      inDrives = sectionRe.match(trimmed).hasMatch();
+      lines.append(line);
+      continue;
+    }
+
+    if (inDrives) {
+      const auto m = driveRe.match(trimmed);
+      if (m.hasMatch()) {
+        const QChar letter = m.captured(1).at(0).toLower();
+        if (letter != QLatin1Char('c') && letter != QLatin1Char('z')) {
+          removed << QString(letter.toUpper()) + QLatin1Char(':');
+          continue;  // drop this line
+        }
+      }
+    }
+
+    lines.append(line);
+  }
+  file.close();
+
+  if (removed.isEmpty()) {
+    return {};
+  }
+
+  if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate |
+                 QIODevice::Text)) {
+    MOBase::log::warn("pruneDriveRegistry: cannot rewrite '{}'",
+                      regPath.toStdString());
+    return {};
+  }
+  QTextStream out(&file);
+  for (const QString &l : lines) {
+    out << l << "\n";
+  }
+  return removed;
+}
+
+// Remove dosdevices/<letter>: symlinks for any drive other than C: and Z:,
+// and strip the matching [Software\\Wine\\Drives] entries from system.reg
+// so Wine doesn't recreate them at the next prefix start.  External tooling
+// (Faugus, manual edits, modlist installers) can re-add drives like X: that
+// map subtrees of the host filesystem; Wine then prefers the more specific
+// drive when canonicalising paths, which mangles binaries we passed in as
+// Z:\home\user\... into X:\....  Keeping the allowed list minimal means MO2
+// can rely on Z: being the only host-mapped drive.
 void pruneExtraDrives(const QString &prefixPath) {
   static const QSet<QString> kept = {QStringLiteral("c:"), QStringLiteral("z:")};
 
@@ -551,10 +625,24 @@ void pruneExtraDrives(const QString &prefixPath) {
     }
   }
 
-  if (!removed.isEmpty()) {
+  const QStringList regRemoved = pruneDriveRegistry(prefixPath);
+
+  QSet<QString> all;
+  for (const QString &d : removed) {
+    all.insert(d);
+  }
+  for (const QString &d : regRemoved) {
+    all.insert(d);
+  }
+  if (!all.isEmpty()) {
+    QStringList sorted(all.begin(), all.end());
+    sorted.sort();
     MOBase::log::info(
-        "Pruned stale drive letters from prefix '{}': {}", prefixPath,
-        removed.join(QStringLiteral(", ")).toStdString());
+        "Pruned stale drive letters from prefix '{}': {} (symlinks: {}, "
+        "registry: {})",
+        prefixPath, sorted.join(QStringLiteral(", ")).toStdString(),
+        removed.join(QStringLiteral(", ")).toStdString(),
+        regRemoved.join(QStringLiteral(", ")).toStdString());
   }
 }
 
