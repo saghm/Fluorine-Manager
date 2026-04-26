@@ -27,7 +27,10 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "settingsdialogworkarounds.h"
 #include "shared/appconfig.h"
 #include <QApplication>
+#include <QDir>
+#include <QFile>
 #include <QMessageBox>
+#include <QSet>
 #include <QSettings>
 #include <QtDebug>
 #include <uibase/errorcodes.h>
@@ -517,6 +520,44 @@ QString firstExistingSetting(const QSettings &settings,
   return {};
 }
 
+// Remove dosdevices/<letter>: symlinks for any drive other than C: and Z:.
+// External tooling (Faugus, manual edits, modlist installers) can re-add
+// drives like X: that map subtrees of the host filesystem; Wine then prefers
+// the more specific drive when canonicalising paths, which mangles binary
+// paths we passed in as Z:\... into X:\...  Keeping this list minimal means
+// MO2 can rely on Z: being the only host-mapped drive.
+void pruneExtraDrives(const QString &prefixPath) {
+  static const QSet<QString> kept = {QStringLiteral("c:"), QStringLiteral("z:")};
+
+  const QString dosdevices = QDir(prefixPath).filePath("dosdevices");
+  QDir dir(dosdevices);
+  if (!dir.exists()) {
+    return;
+  }
+
+  QStringList removed;
+  for (const QString &entry :
+       dir.entryList(QDir::NoDotAndDotDot | QDir::AllEntries)) {
+    const QString lower = entry.toLower();
+    if (lower.length() != 2 || !lower.endsWith(':') ||
+        !lower.at(0).isLetter()) {
+      continue;
+    }
+    if (kept.contains(lower)) {
+      continue;
+    }
+    if (QFile::remove(dir.filePath(entry))) {
+      removed << entry.toUpper();
+    }
+  }
+
+  if (!removed.isEmpty()) {
+    MOBase::log::info(
+        "Pruned stale drive letters from prefix '{}': {}", prefixPath,
+        removed.join(QStringLiteral(", ")).toStdString());
+  }
+}
+
 QString resolvePrefixPath() {
   // The Fluorine config is authoritative: it's the prefix the user
   // explicitly created through Settings > Proton and that Fluorine itself
@@ -702,6 +743,7 @@ int spawn(const SpawnParameters &sp, pid_t &processId) {
       return ENOENT;
     } else {
       MOBase::log::info("Using Wine prefix: {}", prefixPath);
+      pruneExtraDrives(prefixPath);
       launcher.setPrefix(prefixPath);
     }
 
