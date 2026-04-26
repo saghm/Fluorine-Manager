@@ -350,6 +350,16 @@
                  </property>
                 </widget>
                </item>
+               <item row="13" column="0" colspan="2">
+                <widget class="QCheckBox" name="steamOverlayCheckBox">
+                 <property name="text">
+                  <string>Enable Steam Overlay</string>
+                 </property>
+                 <property name="toolTip">
+                  <string>Inject the Steam overlay (Shift+Tab) into the game. Requires Steam running, the game's Steam App ID set, and that you own the game on Steam. Combines LD_PRELOAD of gameoverlayrenderer.so with the Steam Vulkan overlay layer (needed for DXVK-rendered games like Skyrim/Fallout).</string>
+                 </property>
+                </widget>
+               </item>
               </layout>
              </widget>
             </item>

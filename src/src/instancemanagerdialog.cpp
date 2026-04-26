@@ -252,6 +252,15 @@ InstanceManagerDialog::InstanceManagerDialog(PluginContainer& pc, QWidget* paren
     s.setValue("fluorine/vfs_root_builder", checked);
   });
 
+  connect(ui->steamOverlayCheckBox, &QCheckBox::toggled, [&](bool checked) {
+    const auto* inst = singleSelection();
+    if (!inst) return;
+    const QString ini = inst->iniPath();
+    if (ini.isEmpty()) return;
+    QSettings s(ini, QSettings::IniFormat);
+    s.setValue("fluorine/steam_overlay", checked);
+  });
+
   connect(ui->switchToInstance, &QPushButton::clicked, [&] {
     openSelectedInstance();
   });
@@ -829,6 +838,10 @@ void InstanceManagerDialog::fillData(const Instance& ii)
       ui->vfsRootBuilderCheckBox->blockSignals(true);
       ui->vfsRootBuilderCheckBox->setChecked(s.value("fluorine/vfs_root_builder", true).toBool());
       ui->vfsRootBuilderCheckBox->blockSignals(false);
+
+      ui->steamOverlayCheckBox->blockSignals(true);
+      ui->steamOverlayCheckBox->setChecked(s.value("fluorine/steam_overlay", false).toBool());
+      ui->steamOverlayCheckBox->blockSignals(false);
     } else {
       ui->prefixPath->clear();
       ui->protonVersion->clear();
@@ -841,6 +854,9 @@ void InstanceManagerDialog::fillData(const Instance& ii)
       ui->vfsRootBuilderCheckBox->blockSignals(true);
       ui->vfsRootBuilderCheckBox->setChecked(false);
       ui->vfsRootBuilderCheckBox->blockSignals(false);
+      ui->steamOverlayCheckBox->blockSignals(true);
+      ui->steamOverlayCheckBox->setChecked(false);
+      ui->steamOverlayCheckBox->blockSignals(false);
     }
   }
 
