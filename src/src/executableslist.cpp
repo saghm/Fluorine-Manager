@@ -150,12 +150,21 @@ ExecutablesList::getPluginExecutables(MOBase::IPluginGame const* game) const
 
   std::vector<Executable> v;
 
+  // Native Linux installs (e.g. native Stardew Valley) launch directly without
+  // Proton.  Their executables default to UseProton=false so the user doesn't
+  // have to flip every entry by hand after instance creation.
+  const bool nativeLinux = game->isNativeLinux();
+
   for (const ExecutableInfo& info : game->executables()) {
     if (!info.isValid()) {
       continue;
     }
 
-    v.push_back({info, Executable::UseApplicationIcon | Executable::UseProton});
+    Executable::Flags flags = Executable::UseApplicationIcon;
+    if (!nativeLinux) {
+      flags |= Executable::UseProton;
+    }
+    v.push_back({info, flags});
   }
 
   const QFileInfo eppBin(QCoreApplication::applicationDirPath() +

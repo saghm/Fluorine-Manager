@@ -145,6 +145,15 @@ public:
   /**
    * this function may be called before init()
    *
+   * @return true if the discovered installation is a native Linux build that
+   *         should be launched directly without Proton/Wine.  Default false:
+   *         Linux ports of MO2 historically run every game under Proton.
+   */
+  virtual bool isNativeLinux() const { return false; }
+
+  /**
+   * this function may be called before init()
+   *
    * @return an icon for this game
    */
   virtual QIcon gameIcon() const = 0;

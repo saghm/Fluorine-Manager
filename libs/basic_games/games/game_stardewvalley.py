@@ -1,4 +1,6 @@
-from PyQt6.QtCore import QFileInfo
+import sys
+
+from PyQt6.QtCore import QDir, QFileInfo
 
 import mobase
 
@@ -21,6 +23,17 @@ class StardewValleyModDataChecker(mobase.ModDataChecker):
         return mobase.ModDataChecker.INVALID
 
 
+def _has_native_linux_install(game_dir: QDir) -> bool:
+    # Native Linux Stardew ships a `StardewValley` shell-script launcher and
+    # has no `Stardew Valley.exe`.  Use that to distinguish from a Windows
+    # install dropped under a Wine prefix.
+    if sys.platform != "linux":
+        return False
+    if QFileInfo(game_dir, "Stardew Valley.exe").exists():
+        return False
+    return QFileInfo(game_dir, "StardewValley").exists()
+
+
 class StardewValleyGame(BasicGame):
     Name = "Stardew Valley Support Plugin"
     Author = "Syer10"
@@ -33,7 +46,7 @@ class StardewValleyGame(BasicGame):
     GameSteamId = 413150
     GameGogId = 1453375253
     GameBinary = "Stardew Valley.exe"
-    GameDataPath = "mods"
+    GameDataPath = "Mods"
     GameDocumentsDirectory = "%DOCUMENTS%/StardewValley"
     GameSavesDirectory = "%GAME_DOCUMENTS%/Saves"
     GameSupportURL = (
@@ -46,7 +59,26 @@ class StardewValleyGame(BasicGame):
         self._register_feature(StardewValleyModDataChecker())
         return True
 
+    def isNativeLinux(self) -> bool:
+        return _has_native_linux_install(self.gameDirectory())
+
+    def binaryName(self) -> str:
+        if self.isNativeLinux():
+            return "StardewValley"
+        return super().binaryName()
+
     def executables(self):
+        if self.isNativeLinux():
+            return [
+                mobase.ExecutableInfo(
+                    "SMAPI",
+                    QFileInfo(self.gameDirectory(), "StardewModdingAPI"),
+                ),
+                mobase.ExecutableInfo(
+                    "Stardew Valley",
+                    QFileInfo(self.gameDirectory(), "StardewValley"),
+                ),
+            ]
         return [
             mobase.ExecutableInfo(
                 "SMAPI", QFileInfo(self.gameDirectory(), "StardewModdingAPI.exe")
