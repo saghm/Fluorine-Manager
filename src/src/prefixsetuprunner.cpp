@@ -841,8 +841,10 @@ bool PrefixSetupRunner::stepProtonInit()
   env["STEAM_COMPAT_DATA_PATH"]           = cleanCompat;
   env["SteamAppId"]                       = QString::number(m_appId);
   env["SteamGameId"]                      = QString::number(m_appId);
-  env["DISPLAY"]                          = "";
-  env["WAYLAND_DISPLAY"]                  = "";
+  // Keep DISPLAY/WAYLAND_DISPLAY from the host: Proton-GE protonfixes runs
+  // `xrandr` during wineboot -u to detect monitors, and xrandr exits 1 if
+  // it can't open a display, which cascades to a failed prefix init on
+  // newer Proton-GE builds. wineboot -u is unattended and doesn't pop UI.
   env["WINEDLLOVERRIDES"] = "msdia80.dll=n;conhost.exe=d;cmd.exe=d";
   // ntsync on kernel 7.0+ can deadlock wineboot -u during prefix init
   // under Proton 11 (wineboot blocks in ntsync_char_ioctl forever). Force
