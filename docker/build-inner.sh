@@ -404,22 +404,48 @@ if [ "${HERE_REAL}" != "${DST_REAL}" ]; then
     MARKER="${BIN_DST}/.version"
 
     if [ ! -f "${MARKER}" ] || [ "$(cat "${MARKER}" 2>/dev/null)" != "${CURRENT_VER}" ]; then
-        echo "Syncing Fluorine to ${BIN_DST} (this may take a minute on first launch)..." >&2
-        # Stage into bin.new/ then rename. Protects the existing install if the
-        # user Ctrl+C's mid-sync or the copy fails partway.
-        STAGE="${BIN_DST}.new"
-        rm -rf "${STAGE}"
-        mkdir -p "${STAGE}"
-        # Copy only entries listed in the manifest — never the whole HERE dir,
-        # or we'd slurp any unrelated files sitting next to the launcher.
-        while IFS= read -r entry; do
-            [ -z "${entry}" ] && continue
-            [ -e "${HERE}/${entry}" ] || continue
-            cp -a "${HERE}/${entry}" "${STAGE}/"
-        done < "${MANIFEST}"
-        cp -a "${MANIFEST}" "${STAGE}/"
-        rm -rf "${BIN_DST}"
-        mv "${STAGE}" "${BIN_DST}"
+        if [ -d "${BIN_DST}" ]; then
+            echo "Updating Fluorine in ${BIN_DST}..." >&2
+        else
+            echo "Installing Fluorine to ${BIN_DST} (this may take a minute on first launch)..." >&2
+        fi
+        mkdir -p "${BIN_DST}"
+
+        # Overlay update — preserves anything the user dropped into bin/
+        # (custom plugins under plugins/, a portable instance with
+        # ModOrganizer.ini, downloaded mods, etc.). The manifest is our
+        # authoritative list of "ours"; everything else is left alone.
+        #
+        # Step 1: orphan removal. Top-level entries we shipped before but no
+        # longer ship get removed. Top-level granularity is enough — when the
+        # entry is still in both manifests (e.g. "plugins"), we don't touch
+        # the directory itself, only overwrite our own files inside.
+        OLD_MANIFEST="${BIN_DST}/fluorine-manifest.txt"
+        if [ -f "${OLD_MANIFEST}" ]; then
+            # comm -23 = lines unique to the OLD manifest. sort -u for comm.
+            while IFS= read -r entry; do
+                [ -z "${entry}" ] && continue
+                # Refuse anything that could escape BIN_DST.
+                case "${entry}" in /*|*..*|.|..) continue ;; esac
+                rm -rf "${BIN_DST:?}/${entry}"
+            done < <(comm -23 \
+                <(sort -u "${OLD_MANIFEST}") \
+                <(sort -u "${MANIFEST}"))
+        fi
+
+        # Step 2: overlay copy. tar piped to tar streams the manifested entries
+        # from HERE into BIN_DST. Existing directories stay; existing files we
+        # ship get overwritten with the new version; user-added files inside
+        # our directories (e.g. plugins/MyCustomPlugin.so) are preserved.
+        if ! tar -C "${HERE}" -cf - --files-from="${MANIFEST}" 2>/dev/null \
+             | tar -C "${BIN_DST}" --no-same-owner -xf - ; then
+            echo "ERROR: Fluorine sync failed mid-copy. The install may be in a broken state." >&2
+            echo "Re-extract the release archive and run the launcher again." >&2
+            exit 1
+        fi
+
+        # Refresh the manifest at the destination so the next update has it.
+        cp -af "${MANIFEST}" "${BIN_DST}/fluorine-manifest.txt"
         echo "${CURRENT_VER}" > "${MARKER}"
         echo "Sync complete." >&2
     fi
