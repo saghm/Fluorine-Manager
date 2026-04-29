@@ -668,8 +668,16 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
   // Proton-GE skips the built-in steam.exe bridge.  Without this, Proton
   // tries to initialise the Steam client which causes an assertion failure
   // for non-Steam executables.
+  //
+  // Use an EMPTY value, not "fluorine".  Proton's check is `"UMU_ID" in
+  // os.environ` (key presence) which is True for "" — so the steam.exe
+  // bridge is still skipped.  But protonfixes' setup_mount_drives keys on
+  // `os.environ.get('UMU_ID', '')` truthiness; with a non-empty value it
+  // mounts X:=$HOME, U:=/media, V:=/run/media, W:=/mnt and Wine then
+  // canonicalises game paths under X:\... instead of Z:\home\user\....
+  // Empty UMU_ID skips the mount block while preserving the bridge skip.
   if (!m_useSteamDrm) {
-    env.insert("UMU_ID", "fluorine");
+    env.insert("UMU_ID", "");
   }
 
   env.insert("DOTNET_ROOT", "");
