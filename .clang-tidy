@@ -1,0 +1,66 @@
+# Clang-tidy configuration for the Fluorine Manager Linux port.
+#
+# Scope: only files under src/src/ and any libs/ subdirectory we authored
+# (skse_log_redirector). Vendored upstream code (libs/uibase, libs/game_*,
+# libs/installer_fomod*, libs/preview_*, libs/check_fnis, libs/tool_*,
+# libs/bsa*, libs/esptk, libs/archive, libs/libbsarch, libs/usvfs,
+# libs/plugin_python, libs/basic_games, libs/script_extender_plugin_checker,
+# libs/form43_checker, libs/diagnose_basic, libs/dds-header, libs/cmake_common,
+# libs/vcpkg-registry, libs/lzokay.py, libs/winreg.py, libs/7zip, libs/lootcli,
+# libs/bsapacker, libs/bsa_extractor, libs/bsa_ffi, libs/steam_appinfo_ffi)
+# follows upstream MO2 / external projects and is excluded by lint.sh.
+#
+# Disabled checks (with rationale):
+#   - fuchsia / google / llvm / altera: house-style checks for projects that
+#     aren't this one.
+#   - cppcoreguidelines-pro-* / -avoid-c-arrays / -avoid-magic-numbers: too
+#     noisy for code that interfaces with Qt and Win32-shaped APIs.
+#   - modernize-use-trailing-return-type: stylistic preference.
+#   - readability-magic-numbers / -named-parameter / -function-cognitive-
+#     complexity / -identifier-length: noisy and largely subjective.
+#   - bugprone-easily-swappable-parameters / -branch-clone: too many false
+#     positives in plumbing code.
+#   - misc-include-cleaner / -no-recursion / -non-private-member-variables-
+#     in-classes: noisy and partly redundant with clangd.
+Checks: >
+  bugprone-*,
+  performance-*,
+  modernize-*,
+  readability-*,
+  clang-analyzer-*,
+  misc-const-correctness,
+  misc-redundant-expression,
+  misc-throw-by-value-catch-by-reference,
+  misc-unused-parameters,
+  -modernize-use-trailing-return-type,
+  -modernize-avoid-c-arrays,
+  -modernize-use-nodiscard,
+  -readability-magic-numbers,
+  -readability-named-parameter,
+  -readability-function-cognitive-complexity,
+  -readability-identifier-length,
+  -readability-implicit-bool-conversion,
+  -readability-uppercase-literal-suffix,
+  -readability-braces-around-statements,
+  -readability-else-after-return,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-branch-clone,
+  -bugprone-narrowing-conversions,
+  -performance-no-int-to-ptr,
+  -performance-avoid-endl
+
+WarningsAsErrors: ''
+
+# Apply checks only to our own headers — the regex matches src/src and our
+# authored libs subdirs. Vendored code lives under different paths.
+HeaderFilterRegex: '(^|/)(src/src/|libs/skse_log_redirector/)'
+
+FormatStyle: file
+
+CheckOptions:
+  - key: readability-identifier-naming.ClassCase
+    value: CamelCase
+  - key: readability-identifier-naming.PrivateMemberPrefix
+    value: m_
+  - key: misc-unused-parameters.IgnoreVirtual
+    value: 'true'
