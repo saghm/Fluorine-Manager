@@ -14,11 +14,7 @@ class WindowsInfo
 public:
   struct Version
   {
-#ifdef _WIN32
-    DWORD major = 0, minor = 0, build = 0;
-#else
     uint32_t major = 0, minor = 0, build = 0;
-#endif
 
     QString toString() const
     {
@@ -43,11 +39,7 @@ public:
     QString ID;
 
     // some sub-build number, may be empty
-#ifdef _WIN32
-    DWORD UBR;
-#else
     uint32_t UBR;
-#endif
 
     Release() : UBR(0) {}
   };
@@ -83,19 +75,8 @@ private:
   Release m_release;
   std::optional<bool> m_elevated;
 
-#ifdef _WIN32
-  // uses RtlGetVersion() to get the version number as reported by Windows
-  //
-  Version getReportedVersion(HINSTANCE ntdll) const;
-
-  // uses RtlGetNtVersionNumbers() to get the real version number
-  //
-  Version getRealVersion(HINSTANCE ntdll) const;
-#else
   // uses uname() to get the kernel version
-  //
   Version getKernelVersion() const;
-#endif
 
   // gets various information from the registry (Windows) or /etc/os-release (Linux)
   //
