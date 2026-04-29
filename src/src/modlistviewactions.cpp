@@ -405,8 +405,6 @@ void ModListViewActions::exportModListCSV() const
 
   grid->addWidget(groupBoxColumns);
 
-  QPushButton* ok     = new QPushButton("Ok");
-  QPushButton* cancel = new QPushButton("Cancel");
   QDialogButtonBox* buttons =
       new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
 
@@ -419,7 +417,6 @@ void ModListViewActions::exportModListCSV() const
 
   if (selection.exec() == QDialog::Accepted) {
 
-    unsigned int const numMods = ModInfo::getNumMods();
     int const selectedRowID    = buttonGroupRows->checkedId();
 
     try {

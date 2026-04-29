@@ -362,7 +362,7 @@ void NexusInterface::interpretNexusFileName(const QString& fileName, QString& mo
     auto splits = fileName.split(QRegularExpression("[^0-9]"), Qt::KeepEmptyParts);
     for (const auto& substr : splits) {
       bool ok   = false;
-      int const value = substr.toInt(&ok);
+      substr.toInt(&ok);
       if (ok) {
         QString highlight(fileName);
         highlight.insert(index, " *");
@@ -904,6 +904,9 @@ void NexusInterface::nextRequest()
         break;
       case UpdatePeriod::MONTH:
         period = "1m";
+        break;
+      case UpdatePeriod::NONE:
+        period = "1w";
         break;
       }
       url = QString("%1/games/%2/mods/updated?period=%3")

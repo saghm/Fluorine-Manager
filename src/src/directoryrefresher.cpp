@@ -45,7 +45,25 @@ using namespace MOShared;
 
 DirectoryStats::DirectoryStats()
 {
-  std::memset(this, 0, sizeof(DirectoryStats));
+  dirTimes = {};
+  fileTimes = {};
+  sortTimes = {};
+  subdirLookupTimes = {};
+  addDirectoryTimes = {};
+  filesLookupTimes = {};
+  addFileTimes = {};
+  addOriginToFileTimes = {};
+  addFileToOriginTimes = {};
+  addFileToRegisterTimes = {};
+  originExists = 0;
+  originCreate = 0;
+  originsNeededEnabled = 0;
+  subdirExists = 0;
+  subdirCreate = 0;
+  fileExists = 0;
+  fileCreate = 0;
+  filesInsertedInRegister = 0;
+  filesAssignedInRegister = 0;
 }
 
 DirectoryStats& DirectoryStats::operator+=(const DirectoryStats& o)

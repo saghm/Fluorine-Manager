@@ -189,7 +189,6 @@ void CreateInstanceDialog::next(bool allowFinish)
     return;
   }
 
-  const auto i    = ui->pages->currentIndex();
   const auto last = isOnLastPage();
 
   if (last) {
@@ -452,7 +451,6 @@ void CreateInstanceDialog::selectPage(std::size_t i)
 
 void CreateInstanceDialog::updateNavigation()
 {
-  const auto i    = ui->pages->currentIndex();
   const auto last = isOnLastPage();
 
   ui->next->setEnabled(canNext());

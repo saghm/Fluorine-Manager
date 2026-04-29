@@ -6,7 +6,6 @@
 #include <filesystem>
 #include <future>
 #include <mutex>
-#include <thread>
 
 namespace
 {
@@ -493,10 +492,6 @@ VfsTree buildDataDirVfs(const std::vector<CachedBaseFile>& cached_files,
   // Scan mod directories in parallel — each mod is independent.
   // Use a bounded number of threads to avoid overwhelming the IO subsystem.
   {
-    const size_t numThreads =
-        std::min(static_cast<size_t>(std::thread::hardware_concurrency()),
-                 std::max(mods.size(), size_t{1}));
-
     // Launch parallel scans
     std::vector<std::future<DirScanResult>> futures;
     futures.reserve(mods.size());

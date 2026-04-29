@@ -365,8 +365,6 @@ void DownloadManager::refreshList()
     // avoid triggering other refreshes
     ScopedDisableDirWatcher const scopedDirWatcher(this);
 
-    int const downloadsBefore = m_ActiveDownloads.size();
-
     // remove finished downloads
     for (QVector<DownloadInfo*>::iterator iter = m_ActiveDownloads.begin();
          iter != m_ActiveDownloads.end();) {
@@ -757,7 +755,6 @@ void DownloadManager::addNXMDownload(const QString& url)
     // Allow these downloads using the current managed game's API context.
     if (nxmInfo.game().compare("site", Qt::CaseInsensitive) == 0) {
       log::debug("NXM link is for nexusmods.com/site (game-agnostic tool), allowing download");
-      foundGame   = m_ManagedGame;
       apiGameName = nxmInfo.game();  // keep "site" for correct API URLs
     } else {
       log::debug("download requested for wrong game (game: {}, url: {})",
@@ -776,10 +773,9 @@ void DownloadManager::addNXMDownload(const QString& url)
   }
 
   for (auto tuple : m_PendingDownloads) {
-    if (std::get<0>(tuple).compare(apiGameName, Qt::CaseInsensitive) ==
-            0,
+    if (std::get<0>(tuple).compare(apiGameName, Qt::CaseInsensitive) == 0 &&
         std::get<1>(tuple) == nxmInfo.modId() &&
-            std::get<2>(tuple) == nxmInfo.fileId()) {
+        std::get<2>(tuple) == nxmInfo.fileId()) {
       const auto infoStr =
           tr("There is already a download queued for this file.\n\nMod %1\nFile %2")
               .arg(nxmInfo.modId())
@@ -1685,17 +1681,23 @@ void DownloadManager::setState(DownloadManager::DownloadInfo* info,
     }
   } break;
   case STATE_PAUSED: {
-    info->m_Reply->abort();
+    if (info->m_Reply != nullptr) {
+      info->m_Reply->abort();
+    }
     info->m_Output.close();
     m_DownloadPaused(row);
   } break;
   case STATE_ERROR: {
-    info->m_Reply->abort();
+    if (info->m_Reply != nullptr) {
+      info->m_Reply->abort();
+    }
     info->m_Output.close();
     m_DownloadFailed(row);
   } break;
   case STATE_CANCELED: {
-    info->m_Reply->abort();
+    if (info->m_Reply != nullptr) {
+      info->m_Reply->abort();
+    }
     m_DownloadFailed(row);
   } break;
   case STATE_FETCHINGMODINFO: {
@@ -1757,7 +1759,6 @@ void DownloadManager::downloadProgress(qint64 bytesReceived, qint64 bytesTotal)
         if (bytesTotal > info->m_TotalSize) {
           info->m_TotalSize = bytesTotal;
         }
-        int const oldProgress        = info->m_Progress.first;
         info->m_Progress.first = ((info->m_ResumePos + bytesReceived) * 100) /
                                  (info->m_ResumePos + bytesTotal);
 
@@ -2272,6 +2273,8 @@ void DownloadManager::nxmRequestFailed(QString gameName, int modID, int fileID,
   for (QVector<DownloadInfo*>::iterator iter = m_ActiveDownloads.begin();
        iter != m_ActiveDownloads.end(); ++iter, ++index) {
     DownloadInfo* info = *iter;
+    if (info == nullptr)
+      continue;
     if (info != userDataInfo)
       continue;
 
@@ -2362,7 +2365,7 @@ void DownloadManager::downloadFinished(int index)
     if (info->m_State == STATE_CANCELING) {
       setState(info, STATE_CANCELED);
     } else if (info->m_State == STATE_PAUSING) {
-      if (info->m_Output.isOpen() && info->m_HasData) {
+      if (info->m_Output.isOpen() && info->m_HasData && info->m_Reply != nullptr) {
         info->m_Output.write(info->m_Reply->readAll());
       }
       setState(info, STATE_PAUSED);
@@ -2378,6 +2381,7 @@ void DownloadManager::downloadFinished(int index)
             tr("We were unable to download the file due to errors after four retries. "
                "There may be an issue with the Nexus servers."));
       emit update(-1);
+      return;
     } else if (info->isPausedState() || info->m_State == STATE_PAUSING) {
       info->m_Output.close();
       createMetaFile(info);
@@ -2536,7 +2540,7 @@ void DownloadManager::checkDownloadTimeout()
 
 void DownloadManager::writeData(DownloadInfo* info)
 {
-  if (info != nullptr) {
+  if (info != nullptr && info->m_Reply != nullptr) {
     qint64 ret = info->m_Output.write(info->m_Reply->readAll());
     if (ret < info->m_Reply->size()) {
       QString const fileName =

@@ -118,7 +118,7 @@ void TransferSavesDialog::on_moveToLocalBtn_clicked()
           character, MOVE_SAVES TO_PROFILE, m_GamePlugin->savesDirectory(),
           m_GlobalSaves[character], m_Profile.savePath(),
           [this](const QString& source, const QString& destination) -> bool {
-            return shellMove(source, destination, this);
+            return shellMove(source, destination, false, this);
           },
           "Failed to move {} to {}")) {
     refreshGlobalSaves();
@@ -135,7 +135,7 @@ void TransferSavesDialog::on_copyToLocalBtn_clicked()
           character, COPY_SAVES TO_PROFILE, m_GamePlugin->savesDirectory(),
           m_GlobalSaves[character], m_Profile.savePath(),
           [this](const QString& source, const QString& destination) -> bool {
-            return shellCopy(source, destination, this);
+            return shellCopy(source, destination, false, this);
           },
           "Failed to copy {} to {}")) {
     refreshLocalSaves();
@@ -150,7 +150,7 @@ void TransferSavesDialog::on_moveToGlobalBtn_clicked()
           character, MOVE_SAVES TO_GLOBAL, m_Profile.savePath(),
           m_LocalSaves[character], m_GamePlugin->savesDirectory().absolutePath(),
           [this](const QString& source, const QString& destination) -> bool {
-            return shellMove(source, destination, this);
+            return shellMove(source, destination, false, this);
           },
           "Failed to move {} to {}")) {
     refreshGlobalSaves();
@@ -167,7 +167,7 @@ void TransferSavesDialog::on_copyToGlobalBtn_clicked()
           character, COPY_SAVES TO_GLOBAL, m_Profile.savePath(),
           m_LocalSaves[character], m_GamePlugin->savesDirectory().absolutePath(),
           [this](const QString& source, const QString& destination) -> bool {
-            return shellCopy(source, destination, this);
+            return shellCopy(source, destination, false, this);
           },
           "Failed to copy {} to {}")) {
     refreshGlobalSaves();

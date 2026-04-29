@@ -168,7 +168,6 @@ QByteArray tryExtractIcons(const QByteArray& fileData)
     return {};
 
   const char* coff = d + peOffset + 4;
-  uint16_t const machine     = r16(coff);
   uint16_t const numSections = r16(coff + 2);
   uint16_t const optHdrSize  = r16(coff + 16);
 

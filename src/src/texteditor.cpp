@@ -323,8 +323,6 @@ void TextEditor::highlightCurrentLine()
   if (!isReadOnly()) {
     QTextEdit::ExtraSelection selection;
 
-    QColor lineColor = QColor(Qt::yellow).lighter(160);
-
     selection.format.setBackground(m_highlightBackground);
     selection.format.setProperty(QTextFormat::FullWidthSelection, true);
     selection.cursor = textCursor();

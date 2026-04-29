@@ -19,7 +19,8 @@ public:
 
   virtual bool operator<(const QListWidgetItem& other) const
   {
-    return this->data(m_SortRole).value<T>() < other.data(m_SortRole).value<T>();
+    return this->data(m_SortRole).template value<T>() <
+           other.data(m_SortRole).template value<T>();
   }
 
 private:

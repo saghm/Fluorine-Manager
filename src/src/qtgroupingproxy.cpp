@@ -868,12 +868,10 @@ void QtGroupingProxy::modelRowsRemoved(const QModelIndex& parent, int start, int
       iter.toBack();
       while (iter.hasPrevious()) {
         iter.previous();
-        int groupIndex = iter.key();
         // has to be a modifiable reference for remove and replace operations
         QList<int>& groupList = iter.value();
         int rowIndex          = groupList.indexOf(start);
         if (rowIndex != -1) {
-          QModelIndex proxyParent = index(groupIndex, 0);
           groupList.removeAt(rowIndex);
         }
         // Now decrement all source rows that are after the removed row

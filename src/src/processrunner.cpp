@@ -629,7 +629,6 @@ ProcessRunner::Results waitForPid(pid_t pid, LPDWORD exitCode,
                     rescanned, rescanName.toStdString());
           lastTrackedPid = rescanned;
           useKillPoll    = true;
-          displayPid     = rescanned;
           displayName    = rescanName;
           continue;
         }

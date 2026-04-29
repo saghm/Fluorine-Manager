@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License
 along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef ARCHIVEFILENETRY_H
+#ifndef ARCHIVEFILENTRY_H
 #define ARCHIVEFILENTRY_H
 
 #include <archive/archive.h>

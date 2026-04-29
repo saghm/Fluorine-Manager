@@ -733,6 +733,10 @@ void NexusKeyValidator::onAttemptFailure(const ValidationAttempt& a)
   }
 
   switch (a.result()) {
+  case ValidationAttempt::None:
+  case ValidationAttempt::Success:
+    break;
+
   case ValidationAttempt::SoftError: {
     if (!nextTry()) {
       setFinished(a.result(), a.message(), {});

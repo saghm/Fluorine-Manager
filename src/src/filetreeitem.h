@@ -32,7 +32,7 @@ public:
   FileTreeItem(const FileTreeItem&)            = delete;
   FileTreeItem& operator=(const FileTreeItem&) = delete;
   FileTreeItem(FileTreeItem&&)                 = default;
-  FileTreeItem& operator=(FileTreeItem&&)      = default;
+  FileTreeItem& operator=(FileTreeItem&&)      = delete;
 
   void setOrigin(int originID, const std::wstring& realPath, Flags flags,
                  const std::wstring& mod);

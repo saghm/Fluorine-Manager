@@ -287,6 +287,9 @@ private:
   void updateMessage(UILocker::Reasons reason)
   {
     switch (reason) {
+    case UILocker::NoReason:
+      break;
+
     case UILocker::LockUI: {
       QString s;
 
@@ -324,6 +327,9 @@ private:
     auto* ly = m_buttons->layout();
 
     switch (reason) {
+    case UILocker::NoReason:
+      break;
+
     case UILocker::LockUI:  // fall-through
     case UILocker::OutputRequired: {
       auto* unlock = new QPushButton(QObject::tr("Unlock"));

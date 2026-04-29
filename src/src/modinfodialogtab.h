@@ -73,8 +73,8 @@ class ModInfoDialogTab : public QObject
 public:
   ModInfoDialogTab(const ModInfoDialogTab&)            = delete;
   ModInfoDialogTab& operator=(const ModInfoDialogTab&) = delete;
-  ModInfoDialogTab(ModInfoDialogTab&&)                 = default;
-  ModInfoDialogTab& operator=(ModInfoDialogTab&&)      = default;
+  ModInfoDialogTab(ModInfoDialogTab&&)                 = delete;
+  ModInfoDialogTab& operator=(ModInfoDialogTab&&)      = delete;
   ~ModInfoDialogTab()                          override = default;
 
   // called by ModInfoDialog every time this tab is selected; this will call

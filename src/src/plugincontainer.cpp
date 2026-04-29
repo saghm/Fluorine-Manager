@@ -1213,6 +1213,9 @@ void PluginContainer::loadPlugins()
       case Load:
         log::warn("user wants to load plugin '{}' anyway", fileName);
         break;
+
+      default:
+        break;
       }
 
       loadCheck.close();

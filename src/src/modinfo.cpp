@@ -131,11 +131,11 @@ ModInfo::Ptr ModInfo::getByIndex(unsigned int index)
 {
   QMutexLocker const locker(&s_Mutex);
 
-  if (index >= s_Collection.size() && index != ULONG_MAX) {
+  if (index == UINT_MAX)
+    return s_Collection[ModInfo::getIndex("Overwrite")];
+  if (index >= s_Collection.size()) {
     throw MyException(tr("invalid mod index: %1").arg(index));
   }
-  if (index == ULONG_MAX)
-    return s_Collection[ModInfo::getIndex("Overwrite")];
   return s_Collection[index];
 }
 

@@ -126,7 +126,6 @@ static QImage extractIconFromExe(const QString& exePath)
   // Section headers — find the section containing rsrcRVA.
   qint64 const secOff = optOff + optionalHdrSize;
   quint32 rsrcFileOff = 0;
-  quint32 rsrcVA      = 0;
   for (int i = 0; std::cmp_less(i , numSections); ++i) {
     QByteArray const sec = peek(secOff + i * 40, 40);
     if (sec.size() < 40)
@@ -136,7 +135,6 @@ static QImage extractIconFromExe(const QString& exePath)
     quint32 const rawOff   = u32(sec.constData() + 20);
     if (rsrcRVA >= virtAddr && rsrcRVA < virtAddr + virtSize) {
       rsrcFileOff = rawOff + (rsrcRVA - virtAddr);
-      rsrcVA      = virtAddr;
       break;
     }
   }

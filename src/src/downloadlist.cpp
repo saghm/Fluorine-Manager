@@ -172,6 +172,8 @@ QVariant DownloadList::data(const QModelIndex& index, int role) const
       case COL_STATUS:
         switch (m_manager.getState(index.row())) {
         // STATE_DOWNLOADING handled by DownloadProgressDelegate
+        case DownloadManager::STATE_DOWNLOADING:
+          return {};
         case DownloadManager::STATE_STARTED:
           return tr("Started");
         case DownloadManager::STATE_CANCELING:
@@ -196,6 +198,8 @@ QVariant DownloadList::data(const QModelIndex& index, int role) const
           return tr("Installed");
         case DownloadManager::STATE_UNINSTALLED:
           return tr("Uninstalled");
+        case DownloadManager::STATE_NOFETCH:
+          return {};
         }
       }
     }

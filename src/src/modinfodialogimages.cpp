@@ -610,7 +610,6 @@ void ImagesTab::updateScrollbar()
   }
 
   const auto geo           = makeGeometry();
-  const auto availableSize = ui->imagesThumbnails->size();
   const auto fullyVisible  = geo.fullyVisibleCount();
 
   if (fullyVisible >= m_files.size()) {

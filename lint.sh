@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Run clang-tidy over the files we authored, inside the build container so
+# Run clang-tidy over source translation units we maintain, inside the build container so
 # the toolchain (gcc 15, libstdc++, Qt 6.10 headers, etc.) matches what
 # generated build/compile_commands.json.
 #
@@ -57,12 +57,16 @@ for arg in "$@"; do
 done
 
 collect_files() {
+    # Headers are checked through their owning translation units. Running
+    # clang-tidy directly on every header produces duplicate diagnostics and
+    # false positives for Qt-generated include paths.
+    #
     # browserview / browserdialog depend on QtWebEngine which is Windows-only
     # in this fork (CMake removes them from ORGANIZER_SOURCES on Linux), so
     # clang-tidy can't parse their headers. Skip them.
     {
-        find src/src -type f \( -name '*.cpp' -o -name '*.h' \)
-        find libs/skse_log_redirector -type f \( -name '*.cpp' -o -name '*.h' \)
+        find src/src -type f -name '*.cpp'
+        find libs/skse_log_redirector -type f -name '*.cpp'
     } | grep -v -E '(/moc_|/ui_|/qrc_|_autogen/|/build/|browserview|browserdialog)'
 }
 
@@ -104,5 +108,8 @@ printf '%s\n' "${CONTAINER_PATHS[@]}" | \
             # stdbuf -oL forces line-buffered stdout so output flushes through
             # the podman pipe instead of being held until container exit.
             xargs -P '"${JOBS}"' -I{} stdbuf -oL clang-tidy '"${FIX_FLAG[*]:-}"' \
-                -p "$TIDY_DIR" --quiet {}
+                -p "$TIDY_DIR" \
+                --extra-arg=-Wno-ignored-gch \
+                --exclude-header-filter="(^|/)(build/|.*_autogen/|ui_.*\\.h$)" \
+                --quiet {}
         '
