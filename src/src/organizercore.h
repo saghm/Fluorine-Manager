@@ -315,9 +315,7 @@ public:
                  QString* saveBindMountSource = nullptr,
                  QString* saveBindMountTarget = nullptr);
 
-#ifndef _WIN32
   bool checkGameRegistryKey();
-#endif
 
   void afterRun(const QFileInfo& binary, DWORD exitCode);
 

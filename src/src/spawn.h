@@ -23,14 +23,8 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <QDir>
 #include <QFileInfo>
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <tchar.h>
-#include <windows.h>
-#else
 #include <sys/types.h>
 #include <unistd.h>
-#endif
 
 class QProcess;
 class Settings;
@@ -59,12 +53,8 @@ struct SpawnParameters
   bool hooked = false;
   bool useProton = true;
   bool useTerminal = false;
-#ifdef _WIN32
-  HANDLE stdOut = INVALID_HANDLE_VALUE;
-  HANDLE stdErr = INVALID_HANDLE_VALUE;
-#else
-  int stdOut = -1;
-  int stdErr = -1;
+  int stdOut       = -1;
+  int stdErr       = -1;
   // When both are set and unprivileged user namespaces are available,
   // spawn() wraps the launch so `saveBindMountTarget` becomes a live view
   // of `saveBindMountSource` for the duration of the game process tree.
@@ -72,7 +62,6 @@ struct SpawnParameters
   // without symlinks, which Wine can accidentally replace.
   QString saveBindMountSource;
   QString saveBindMountTarget;
-#endif
 };
 
 bool checkSteam(QWidget* parent, const SpawnParameters& sp, const QDir& gameDirectory,
@@ -81,14 +70,9 @@ bool checkSteam(QWidget* parent, const SpawnParameters& sp, const QDir& gameDire
 bool checkBlacklist(QWidget* parent, const SpawnParameters& sp, Settings& settings);
 
 /**
- * @brief spawn a binary with Mod Organizer injected
- * @return the process handle
+ * @brief spawn a binary, returning the new pid (or -1 on failure)
  **/
-#ifdef _WIN32
-HANDLE startBinary(QWidget* parent, const SpawnParameters& sp);
-#else
 pid_t startBinary(QWidget* parent, const SpawnParameters& sp);
-#endif
 
 enum class FileExecutionTypes
 {
@@ -110,35 +94,5 @@ FileExecutionContext getFileExecutionContext(QWidget* parent, const QFileInfo& t
 FileExecutionTypes getFileExecutionType(const QFileInfo& target);
 
 }  // namespace spawn
-
-#ifdef _WIN32
-// convenience functions to work with the external helper program, which is used
-// to make changes on the system that require administrative rights, so that
-// ModOrganizer itself can run without special privileges
-//
-namespace helper
-{
-
-/**
- * @brief sets the last modified time for all .bsa-files in the target directory well
- *into the past
- * @param moPath absolute path to the modOrganizer base directory
- * @param dataPath the path taht contains the .bsa-files, usually the data directory of
- *the game
- **/
-bool backdateBSAs(QWidget* parent, const std::wstring& moPath,
-                  const std::wstring& dataPath);
-
-/**
- * @brief waits for the current process to exit and restarts it as an administrator
- * @param moPath absolute path to the modOrganizer base directory
- * @param moFile file name of modOrganizer
- * @param workingDir current working directory
- **/
-bool adminLaunch(QWidget* parent, const std::wstring& moPath,
-                 const std::wstring& moFile, const std::wstring& workingDir);
-
-}  // namespace helper
-#endif  // _WIN32
 
 #endif  // SPAWN_H

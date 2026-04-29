@@ -63,16 +63,13 @@ std::optional<int> CommandLine::process(const std::wstring& line)
 {
   m_originalLine = line;
   try {
-#ifdef _WIN32
-    auto args = po::split_winmain(line);
-#else
-    // Convert wstring args to vector<wstring> for compatibility with wcommand_line_parser
+    // Convert wstring args to vector<wstring> for compatibility with
+    // wcommand_line_parser.
     auto narrow_args = po::split_unix(QString::fromStdWString(line).toStdString());
     std::vector<std::wstring> args;
     for (const auto& a : narrow_args) {
       args.push_back(QString::fromStdString(a).toStdWString());
     }
-#endif
     if (!args.empty()) {
       // remove program name
       args.erase(args.begin());
@@ -212,11 +209,7 @@ bool CommandLine::forwardToPrimary(MOMultiProcess& multiProcess)
   } else if (m_nxmLink) {
     multiProcess.sendMessage(*m_nxmLink);
   } else if (m_command && m_command->canForwardToPrimary()) {
-#ifdef _WIN32
-    multiProcess.sendMessage(QString::fromWCharArray(GetCommandLineW()));
-#else
     multiProcess.sendMessage(QString::fromStdWString(m_originalLine));
-#endif
   } else {
     return false;
   }
@@ -636,78 +629,11 @@ bool LaunchCommand::legacy() const
 
 std::optional<int> LaunchCommand::runEarly()
 {
-#ifdef _WIN32
-  // needs at least the working directory and process name
-  if (untouched().size() < 2) {
-    return 1;
-  }
-
-  std::vector<std::wstring> arg;
-  auto args = UntouchedCommandLineArguments(2, arg);
-
-  return SpawnWaitProcess(arg[1].c_str(), args);
-#else
-  // The launch command is a Windows-specific internal command for spawning
-  // processes from within the virtualized directory; not applicable on Linux
+  // The launch command is a Windows-specific internal command used to spawn
+  // processes from within USVFS; not applicable on Linux.
   log::error("The 'launch' command is not supported on Linux");
   return 1;
-#endif
 }
-
-#ifdef _WIN32
-int LaunchCommand::SpawnWaitProcess(LPCWSTR workingDirectory, LPCWSTR commandLine)
-{
-  PROCESS_INFORMATION pi{0};
-  STARTUPINFO si{0};
-  si.cb                        = sizeof(si);
-  std::wstring commandLineCopy = commandLine;
-
-  if (!CreateProcessW(NULL, &commandLineCopy[0], NULL, NULL, FALSE, 0, NULL,
-                      workingDirectory, &si, &pi)) {
-    // A bit of a problem where to log the error message here, at least this way you can
-    // get the message using a either DebugView or a live debugger:
-    std::wostringstream ost;
-    ost << L"CreateProcess failed: " << commandLine << ", " << GetLastError();
-    OutputDebugStringW(ost.str().c_str());
-    return -1;
-  }
-
-  WaitForSingleObject(pi.hProcess, INFINITE);
-
-  DWORD exitCode = (DWORD)-1;
-  ::GetExitCodeProcess(pi.hProcess, &exitCode);
-  CloseHandle(pi.hThread);
-  CloseHandle(pi.hProcess);
-  return static_cast<int>(exitCode);
-}
-
-// Parses the first parseArgCount arguments of the current process command line and
-// returns them in parsedArgs, the rest of the command line is returned untouched.
-LPCWSTR
-LaunchCommand::UntouchedCommandLineArguments(int parseArgCount,
-                                             std::vector<std::wstring>& parsedArgs)
-{
-  LPCWSTR cmd = GetCommandLineW();
-  LPCWSTR arg = nullptr;  // to skip executable name
-  for (; parseArgCount >= 0 && *cmd; ++cmd) {
-    if (*cmd == '"') {
-      int escaped = 0;
-      for (++cmd; *cmd && (*cmd != '"' || escaped % 2 != 0); ++cmd)
-        escaped = *cmd == '\\' ? escaped + 1 : 0;
-    }
-    if (*cmd == ' ') {
-      if (arg)
-        if (cmd - 1 > arg && *arg == '"' && *(cmd - 1) == '"')
-          parsedArgs.push_back(std::wstring(arg + 1, cmd - 1));
-        else
-          parsedArgs.push_back(std::wstring(arg, cmd));
-      arg = cmd + 1;
-      --parseArgCount;
-    }
-  }
-  return cmd;
-}
-#endif
 
 Command::Meta RunCommand::meta() const
 {

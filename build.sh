@@ -72,11 +72,16 @@ if [ "${BUILD_MODE}" = "shell" ]; then
 fi
 
 echo "=== Starting build (mode: ${BUILD_MODE}) ==="
+# BUILD_JOBS controls parallelism (override with `BUILD_JOBS=N ./build.sh`).
+# Defaults to all available cores; set to 4 by default for the in-progress
+# code-review pass to keep the host responsive.
+BUILD_JOBS="${BUILD_JOBS:-4}"
 ${DOCKER} run --rm \
     -v "${SCRIPT_DIR}:/src:rw" \
     -v "${CCACHE_DIR}:/ccache:rw" \
     -e CCACHE_DIR=/ccache \
     -e BUILD_MODE="${BUILD_MODE}" \
+    -e BUILD_JOBS="${BUILD_JOBS}" \
     -w /src \
     --device /dev/fuse \
     --cap-add SYS_ADMIN \

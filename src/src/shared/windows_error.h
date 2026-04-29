@@ -20,15 +20,9 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef WINDOWS_ERROR_H
 #define WINDOWS_ERROR_H
 
-#include <stdexcept>
-
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#else
 #include <cerrno>
 #include <cstring>
-#endif
+#include <stdexcept>
 
 namespace MOShared
 {
@@ -36,11 +30,7 @@ namespace MOShared
 class windows_error : public std::runtime_error
 {
 public:
-#ifdef _WIN32
-  windows_error(const std::string& message, int errorcode = ::GetLastError())
-#else
   windows_error(const std::string& message, int errorcode = errno)
-#endif
       : runtime_error(constructMessage(message, errorcode)), m_ErrorCode(errorcode)
   {}
   int getErrorCode() const { return m_ErrorCode; }

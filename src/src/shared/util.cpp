@@ -21,35 +21,20 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "../env.h"
 #include "../mainwindow.h"
 #include "windows_error.h"
+
 #include <fluorine_build_info.h>
 #include <uibase/log.h>
-#ifndef _WIN32
+
 #include <pthread.h>
-#include <filesystem>
 #include <algorithm>
 #include <cwctype>
-#endif
+#include <filesystem>
 
 using namespace MOBase;
 
 namespace MOShared
 {
 
-#ifdef _WIN32
-bool FileExists(const std::string& filename)
-{
-  DWORD dwAttrib = ::GetFileAttributesA(filename.c_str());
-
-  return (dwAttrib != INVALID_FILE_ATTRIBUTES);
-}
-
-bool FileExists(const std::wstring& filename)
-{
-  DWORD dwAttrib = ::GetFileAttributesW(filename.c_str());
-
-  return (dwAttrib != INVALID_FILE_ATTRIBUTES);
-}
-#else
 bool FileExists(const std::string& filename)
 {
   return std::filesystem::exists(filename);
@@ -59,7 +44,6 @@ bool FileExists(const std::wstring& filename)
 {
   return std::filesystem::exists(std::filesystem::path(filename));
 }
-#endif
 
 bool FileExists(const std::wstring& searchPath, const std::wstring& filename)
 {
@@ -68,71 +52,22 @@ bool FileExists(const std::wstring& searchPath, const std::wstring& filename)
   return FileExists(stream.str());
 }
 
-#ifdef _WIN32
-std::string ToString(const std::wstring& source, bool utf8)
-{
-  std::string result;
-  if (source.length() > 0) {
-    UINT codepage = CP_UTF8;
-    if (!utf8) {
-      codepage = AreFileApisANSI() ? GetACP() : GetOEMCP();
-    }
-    int sizeRequired = ::WideCharToMultiByte(codepage, 0, &source[0], -1, nullptr, 0,
-                                             nullptr, nullptr);
-    if (sizeRequired == 0) {
-      throw windows_error("failed to convert string to multibyte");
-    }
-    // the size returned by WideCharToMultiByte contains zero termination IF -1 is
-    // specified for the length. we don't want that \0 in the string because then the
-    // length field would be wrong. Because madness
-    result.resize(sizeRequired - 1, '\0');
-    ::WideCharToMultiByte(codepage, 0, &source[0], (int)source.size(), &result[0],
-                          sizeRequired, nullptr, nullptr);
-  }
-
-  return result;
-}
-
-std::wstring ToWString(const std::string& source, bool utf8)
-{
-  std::wstring result;
-  if (source.length() > 0) {
-    UINT codepage = CP_UTF8;
-    if (!utf8) {
-      codepage = AreFileApisANSI() ? GetACP() : GetOEMCP();
-    }
-    int sizeRequired = ::MultiByteToWideChar(
-        codepage, 0, source.c_str(), static_cast<int>(source.length()), nullptr, 0);
-    if (sizeRequired == 0) {
-      throw windows_error("failed to convert string to wide character");
-    }
-    result.resize(sizeRequired, L'\0');
-    ::MultiByteToWideChar(codepage, 0, source.c_str(),
-                          static_cast<int>(source.length()), &result[0], sizeRequired);
-  }
-
-  return result;
-}
-#else
 std::string ToString(const std::wstring& source, bool utf8)
 {
   Q_UNUSED(utf8);
-  // On Linux, use Qt for wstring -> string conversion (always UTF-8)
   return QString::fromStdWString(source).toStdString();
 }
 
 std::wstring ToWString(const std::string& source, bool utf8)
 {
   Q_UNUSED(utf8);
-  // On Linux, use Qt for string -> wstring conversion (always UTF-8)
   return QString::fromStdString(source).toStdWString();
 }
-#endif
 
 static std::locale makeUserLocale()
 {
-  // std::locale("") reads LANG/LC_* env vars. If user's system lacks the
-  // requested locale (e.g. en_US.UTF-8 not generated), constructor throws
+  // std::locale("") reads LANG/LC_* env vars. If the user's system lacks the
+  // requested locale (e.g. en_US.UTF-8 not generated), the constructor throws
   // runtime_error. Fall back to "C" so startup doesn't abort.
   try {
     return std::locale("");
@@ -142,41 +77,7 @@ static std::locale makeUserLocale()
 }
 
 static std::locale loc = makeUserLocale();
-static auto locToLowerW = [](wchar_t in) -> wchar_t {
-  return std::tolower(in, loc);
-};
 
-static auto locToLower = [](char in) -> char {
-  return std::tolower(in, loc);
-};
-
-#ifdef _WIN32
-std::string& ToLowerInPlace(std::string& text)
-{
-  CharLowerBuffA(const_cast<CHAR*>(text.c_str()), static_cast<DWORD>(text.size()));
-  return text;
-}
-
-std::string ToLowerCopy(const std::string& text)
-{
-  std::string result(text);
-  CharLowerBuffA(const_cast<CHAR*>(result.c_str()), static_cast<DWORD>(result.size()));
-  return result;
-}
-
-std::wstring& ToLowerInPlace(std::wstring& text)
-{
-  CharLowerBuffW(const_cast<WCHAR*>(text.c_str()), static_cast<DWORD>(text.size()));
-  return text;
-}
-
-std::wstring ToLowerCopy(const std::wstring& text)
-{
-  std::wstring result(text);
-  CharLowerBuffW(const_cast<WCHAR*>(result.c_str()), static_cast<DWORD>(result.size()));
-  return result;
-}
-#else
 std::string& ToLowerInPlace(std::string& text)
 {
   std::transform(text.begin(), text.end(), text.begin(), [](char c) {
@@ -204,7 +105,6 @@ std::wstring ToLowerCopy(const std::wstring& text)
   std::wstring result(text);
   return ToLowerInPlace(result);
 }
-#endif
 
 std::wstring ToLowerCopy(std::wstring_view text)
 {
@@ -227,109 +127,6 @@ bool CaseInsensitiveEqual(const std::wstring& lhs, const std::wstring& rhs)
                     });
 }
 
-#ifdef _WIN32
-VS_FIXEDFILEINFO GetFileVersion(const std::wstring& fileName)
-{
-  DWORD handle = 0UL;
-  DWORD size   = ::GetFileVersionInfoSizeW(fileName.c_str(), &handle);
-  if (size == 0) {
-    throw windows_error("failed to determine file version info size");
-  }
-
-  boost::scoped_array<char> buffer(new char[size]);
-  try {
-    handle = 0UL;
-    if (!::GetFileVersionInfoW(fileName.c_str(), handle, size, buffer.get())) {
-      throw windows_error("failed to determine file version info");
-    }
-
-    void* versionInfoPtr   = nullptr;
-    UINT versionInfoLength = 0;
-    if (!::VerQueryValue(buffer.get(), L"\\", &versionInfoPtr, &versionInfoLength)) {
-      throw windows_error("failed to determine file version");
-    }
-
-    VS_FIXEDFILEINFO result = *(VS_FIXEDFILEINFO*)versionInfoPtr;
-    return result;
-  } catch (...) {
-    throw;
-  }
-}
-
-std::wstring GetFileVersionString(const std::wstring& fileName)
-{
-  DWORD handle = 0UL;
-  DWORD size   = ::GetFileVersionInfoSizeW(fileName.c_str(), &handle);
-  if (size == 0) {
-    throw windows_error("failed to determine file version info size");
-  }
-
-  boost::scoped_array<char> buffer(new char[size]);
-  try {
-    handle = 0UL;
-    if (!::GetFileVersionInfoW(fileName.c_str(), handle, size, buffer.get())) {
-      throw windows_error("failed to determine file version info");
-    }
-
-    LPVOID strBuffer = nullptr;
-    UINT strLength   = 0;
-    if (!::VerQueryValue(buffer.get(), L"\\StringFileInfo\\040904B0\\ProductVersion",
-                         &strBuffer, &strLength)) {
-      throw windows_error("failed to determine file version");
-    }
-
-    return std::wstring((LPCTSTR)strBuffer);
-  } catch (...) {
-    throw;
-  }
-}
-
-Version createVersionInfo()
-{
-  VS_FIXEDFILEINFO version = GetFileVersion(env::thisProcessPath().native());
-
-  std::optional<Version::ReleaseType> releaseType;
-
-  if (version.dwFileFlags & VS_FF_PRERELEASE) {
-    // Pre-release builds need annotating
-    QString versionString =
-        QString::fromStdWString(GetFileVersionString(env::thisProcessPath().native()));
-
-    // The pre-release flag can be set without the string specifying what type of
-    // pre-release
-    bool noLetters = true;
-    for (QChar character : versionString) {
-      if (character.isLetter()) {
-        noLetters = false;
-        break;
-      }
-    }
-
-    if (!noLetters) {
-      // trust the string to make sense
-      return Version::parse(versionString, Version::ParseMode::MO2);
-    }
-
-    if (noLetters) {
-      // default to development when release type is unspecified
-      releaseType = Version::Development;
-    } else {
-    }
-  }
-
-  const int major    = version.dwFileVersionMS >> 16,
-            minor    = version.dwFileVersionMS & 0xFFFF,
-            patch    = version.dwFileVersionLS >> 16,
-            subpatch = version.dwFileVersionLS & 0xFFFF;
-
-  std::vector<std::variant<int, Version::ReleaseType>> prereleases;
-  if (releaseType) {
-    prereleases.push_back(*releaseType);
-  }
-
-  return Version(major, minor, patch, subpatch, std::move(prereleases));
-}
-#else
 Version createVersionInfo()
 {
   // Fluorine Manager version is the user-facing one. The numeric components
@@ -338,55 +135,26 @@ Version createVersionInfo()
   // Beta builds tag themselves as Development pre-releases so the update
   // checker can distinguish them from stable tags when comparing versions.
   return Version(FLUORINE_VERSION_MAJOR, FLUORINE_VERSION_MINOR,
-                 FLUORINE_VERSION_PATCH, 0,
-                 {Version::Development});
+                 FLUORINE_VERSION_PATCH, 0, {Version::Development});
 #else
   return Version(FLUORINE_VERSION_MAJOR, FLUORINE_VERSION_MINOR,
                  FLUORINE_VERSION_PATCH, 0);
 #endif
 }
-#endif
 
-
-#ifdef _WIN32
 void SetThisThreadName(const QString& s)
 {
-  using SetThreadDescriptionType = HRESULT(HANDLE hThread, PCWSTR lpThreadDescription);
-
-  static SetThreadDescriptionType* SetThreadDescription = [] {
-    SetThreadDescriptionType* p = nullptr;
-
-    env::LibraryPtr kernel32(LoadLibraryW(L"kernel32.dll"));
-    if (!kernel32) {
-      return p;
-    }
-
-    p = reinterpret_cast<SetThreadDescriptionType*>(
-        GetProcAddress(kernel32.get(), "SetThreadDescription"));
-
-    return p;
-  }();
-
-  if (SetThreadDescription) {
-    SetThreadDescription(GetCurrentThread(), s.toStdWString().c_str());
-  }
-}
-#else
-void SetThisThreadName(const QString& s)
-{
-  // On Linux, use pthread_setname_np (limited to 16 chars including null)
+  // pthread_setname_np is limited to 16 chars including the null terminator.
   std::string name = s.toStdString();
   if (name.size() > 15) {
     name.resize(15);
   }
   pthread_setname_np(pthread_self(), name.c_str());
 }
-#endif
 
 char shortcutChar(const QAction* a)
 {
   const auto text = a->text();
-  char shortcut   = 0;
 
   for (int i = 0; i < text.size(); ++i) {
     const auto c = text[i];

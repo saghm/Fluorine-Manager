@@ -1224,7 +1224,6 @@ void PluginContainer::loadPlugins()
 
   m_BundledPluginPath = AppConfig::pluginsPath();
 
-#ifndef _WIN32
   if (m_Organizer) {
     QString instancePluginPath =
         QDir(QDir::fromNativeSeparators(m_Organizer->basePath())).filePath("plugins");
@@ -1234,18 +1233,17 @@ void PluginContainer::loadPlugins()
       log::debug("instance plugin directory: {}",
                  QDir::toNativeSeparators(m_PluginPath));
 
-      // Migration: remove stale symlinks left by the old ensureBundledPluginsLinked()
-      // approach. Only symlinks are removed; real user files are left untouched.
-      {
-        QDirIterator cleanIter(instancePluginPath,
-                               QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
-        while (cleanIter.hasNext()) {
-          cleanIter.next();
-          if (QFileInfo(cleanIter.filePath()).isSymLink()) {
-            log::debug("removing stale plugin symlink '{}'",
-                       QDir::toNativeSeparators(cleanIter.filePath()));
-            QFile::remove(cleanIter.filePath());
-          }
+      // Migration: remove stale symlinks left by the old
+      // ensureBundledPluginsLinked() approach. Only symlinks are removed; real
+      // user files are left untouched.
+      QDirIterator cleanIter(instancePluginPath,
+                             QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
+      while (cleanIter.hasNext()) {
+        cleanIter.next();
+        if (QFileInfo(cleanIter.filePath()).isSymLink()) {
+          log::debug("removing stale plugin symlink '{}'",
+                     QDir::toNativeSeparators(cleanIter.filePath()));
+          QFile::remove(cleanIter.filePath());
         }
       }
     } else {
@@ -1254,9 +1252,6 @@ void PluginContainer::loadPlugins()
   } else {
     m_PluginPath = m_BundledPluginPath;
   }
-#else
-  m_PluginPath = m_BundledPluginPath;
-#endif
 
   log::debug("bundled plugins: {}", QDir::toNativeSeparators(m_BundledPluginPath));
   log::debug("looking for plugins in {}", QDir::toNativeSeparators(m_PluginPath));

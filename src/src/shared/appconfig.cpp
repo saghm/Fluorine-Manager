@@ -37,34 +37,28 @@ namespace AppConfig
 
 QString basePath()
 {
-#ifndef _WIN32
   const char* envBase = std::getenv("MO2_BASE_DIR");
   if (envBase && envBase[0] != '\0') {
     return QString::fromUtf8(envBase);
   }
-#endif
   return QCoreApplication::applicationDirPath();
 }
 
 QString pluginsPath()
 {
-#ifndef _WIN32
   const char* envDir = std::getenv("MO2_PLUGINS_DIR");
   if (envDir && envDir[0] != '\0') {
     return QString::fromUtf8(envDir);
   }
-#endif
   return basePath() + "/" + QString::fromStdWString(pluginPath());
 }
 
 QString dllsPath()
 {
-#ifndef _WIN32
   const char* envDir = std::getenv("MO2_DLLS_DIR");
   if (envDir && envDir[0] != '\0') {
     return QString::fromUtf8(envDir);
   }
-#endif
   return basePath() + "/dlls";
 }
 

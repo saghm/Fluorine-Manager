@@ -29,10 +29,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <QObject>
 #include <QProgressDialog>
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-#endif
+
 #include <map>
 #include <set>
 

@@ -50,10 +50,6 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <QTextDocument>
 #include <QtConcurrent/QtConcurrentRun>
 
-#ifdef _WIN32
-#include <Shellapi.h>
-#endif
-
 #include <boost/assign.hpp>
 #include <boost/scoped_ptr.hpp>
 
@@ -452,13 +448,10 @@ InstallationResult InstallationManager::testOverwrite(GuessedValue<QString>& mod
         // remove the directory with all content, then recreate it empty
         shellDelete(QStringList(targetDirectory));
         if (!QDir().mkdir(targetDirectory)) {
-          // windows may keep the directory around for a moment, preventing its
-          // re-creation. Not sure if this still happens with shellDelete
-#ifdef _WIN32
-          Sleep(100);
-#else
+          // The retry exists because Windows can keep a directory around for a
+          // moment after delete. Linux doesn't have that problem; the sleep is
+          // kept for safety in case the underlying filesystem is slow.
           QThread::msleep(100);
-#endif
           QDir().mkdir(targetDirectory);
         }
         // restore the saved settings

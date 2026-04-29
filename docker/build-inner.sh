@@ -39,7 +39,7 @@ cmake -S . -B build -G Ninja \
     -DFLUORINE_BUILD_COMMIT="${FLUORINE_BUILD_COMMIT}" \
     "${CMAKE_EXTRA_ARGS[@]}"
 
-cmake --build build --parallel
+cmake --build build --parallel "${BUILD_JOBS:-}"
 
 MODORG_BIN="build/src/src/ModOrganizer"
 if [ ! -f "${MODORG_BIN}" ]; then

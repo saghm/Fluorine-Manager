@@ -6,10 +6,8 @@
 #include <log.h>
 #include <utility.h>
 
-#ifndef _WIN32
 #include <QMimeDatabase>
 #include <QMimeType>
-#endif
 
 using namespace MOBase;
 using namespace MOShared;
@@ -19,61 +17,17 @@ constexpr bool AlwaysSortDirectoriesFirst = true;
 
 const QString& directoryFileType()
 {
-  static const QString name = [] {
-#ifdef _WIN32
-    const DWORD flags = SHGFI_TYPENAME;
-    SHFILEINFOW sfi   = {};
-
-    // "." for the current directory, which should always exist
-    const auto r = SHGetFileInfoW(L".", 0, &sfi, sizeof(sfi), flags);
-
-    if (!r) {
-      const auto e = GetLastError();
-
-      log::error("SHGetFileInfoW failed for folder file type, {}",
-                 formatSystemMessage(e));
-
-      return QString("File folder");
-    } else {
-      return QString::fromWCharArray(sfi.szTypeName);
-    }
-#else
-    return QString("File folder");
-#endif
-  }();
-
+  static const QString name = QStringLiteral("File folder");
   return name;
 }
 
 const QString& cachedFileTypeNoExtension()
 {
-  static const QString name = [] {
-#ifdef _WIN32
-    const DWORD flags = SHGFI_TYPENAME | SHGFI_USEFILEATTRIBUTES;
-    SHFILEINFOW sfi   = {};
-
-    // dummy filename with no extension
-    const auto r = SHGetFileInfoW(L"file", 0, &sfi, sizeof(sfi), flags);
-
-    if (!r) {
-      const auto e = GetLastError();
-
-      log::error("SHGetFileInfoW failed for file without extension, {}",
-                 formatSystemMessage(e));
-
-      return QString("File");
-    } else {
-      return QString::fromWCharArray(sfi.szTypeName);
-    }
-#else
-    return QString("File");
-#endif
-  }();
-
+  static const QString name = QStringLiteral("File");
   return name;
 }
 
-const QString& cachedFileType(const std::wstring& file, bool isOnFilesystem)
+const QString& cachedFileType(const std::wstring& file, bool /*isOnFilesystem*/)
 {
   static std::map<std::wstring, QString, std::less<>> map;
   static std::mutex mutex;
@@ -91,39 +45,13 @@ const QString& cachedFileType(const std::wstring& file, bool isOnFilesystem)
     return itor->second;
   }
 
-#ifdef _WIN32
-  DWORD flags = SHGFI_TYPENAME;
-
-  if (!isOnFilesystem) {
-    // files from archives are not on the filesystem; this flag forces
-    // SHGetFileInfoW() to only work with the filename
-    flags |= SHGFI_USEFILEATTRIBUTES;
-  }
-
-  SHFILEINFOW sfi = {};
-  const auto r    = SHGetFileInfoW(file.c_str(), 0, &sfi, sizeof(sfi), flags);
-
-  QString s;
-
-  if (!r) {
-    const auto e = GetLastError();
-
-    log::error("SHGetFileInfoW failed for '{}', {}", file, formatSystemMessage(e));
-
-    s = cachedFileTypeNoExtension();
-  } else {
-    s = QString::fromWCharArray(sfi.szTypeName);
-  }
-#else
-  // On Linux, use QMimeDatabase to get the file type description
   static QMimeDatabase mimeDb;
-  QString filename = QString::fromStdWString(file);
+  QString filename   = QString::fromStdWString(file);
   QMimeType mimeType = mimeDb.mimeTypeForFile(filename, QMimeDatabase::MatchExtension);
-  QString s = mimeType.comment();
+  QString s          = mimeType.comment();
   if (s.isEmpty()) {
     s = cachedFileTypeNoExtension();
   }
-#endif
 
   return map.emplace(sv, s).first->second;
 }

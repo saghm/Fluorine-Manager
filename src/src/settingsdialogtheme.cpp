@@ -5,11 +5,10 @@
 #include "modlist.h"
 #include "shared/appconfig.h"
 #include "ui_settingsdialog.h"
+#include "fluorinepaths.h"
+
 #include <questionboxmemory.h>
 #include <utility.h>
-#ifndef _WIN32
-#include "fluorinepaths.h"
-#endif
 
 using namespace MOBase;
 
@@ -61,7 +60,6 @@ void ThemeSettingsTab::addStyles()
   const QString ssSubdir = QString::fromStdWString(AppConfig::stylesheetsPath());
   QStringList searchDirs;
   searchDirs << QCoreApplication::applicationDirPath() + "/" + ssSubdir;
-#ifndef _WIN32
   if (auto ci = InstanceManager::singleton().currentInstance()) {
     // currentInstance() returns a bare Instance (readFromIni() not called),
     // so baseDirectory() is empty. Use directory() which is always set.
@@ -72,7 +70,6 @@ void ThemeSettingsTab::addStyles()
   const QString userDir = fluorineDataDir() + "/stylesheets";
   if (!searchDirs.contains(userDir))
     searchDirs << userDir;
-#endif
 
   QSet<QString> seen;
   for (const auto& dir : searchDirs) {
@@ -100,21 +97,15 @@ void ThemeSettingsTab::selectStyle()
 
 void ThemeSettingsTab::onExploreStyles()
 {
-  // On Linux, open the instance's stylesheets directory (where custom themes
-  // from modlists live).  Falls back to the user data dir if no instance, or
-  // to the app dir on Windows.
-#ifndef _WIN32
+  // Open the instance's stylesheets directory (where custom themes from
+  // modlists live), or the user data dir as fallback.
   QString ssPath;
   if (auto ci = InstanceManager::singleton().currentInstance()) {
-    ssPath = ci->directory() + "/" +
-             QString::fromStdWString(AppConfig::stylesheetsPath());
+    ssPath =
+        ci->directory() + "/" + QString::fromStdWString(AppConfig::stylesheetsPath());
   } else {
     ssPath = fluorineDataDir() + "/stylesheets";
   }
   QDir().mkpath(ssPath);
-#else
-  QString ssPath = QCoreApplication::applicationDirPath() + "/" +
-                   ToQString(AppConfig::stylesheetsPath());
-#endif
   shell::Explore(ssPath);
 }

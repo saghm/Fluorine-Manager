@@ -2045,31 +2045,9 @@ void NexusSettings::setCategoryMappings(bool b) const
 
 void NexusSettings::registerAsNXMHandler(bool force)
 {
-#ifndef _WIN32
   Q_UNUSED(force);
   NxmHandlerLinux handler;
   handler.registerHandler();
-#else
-  const auto nxmPath = QCoreApplication::applicationDirPath() + "/" +
-                       QString::fromStdWString(AppConfig::nxmHandlerExe());
-
-  const auto executable = QCoreApplication::applicationFilePath();
-
-  QString mode       = force ? "forcereg" : "reg";
-  QString parameters = mode + " " + m_Parent.game().plugin()->gameShortName();
-  for (const QString& altGame : m_Parent.game().plugin()->validShortNames()) {
-    parameters += "," + altGame;
-  }
-  parameters += " \"" + executable + "\"";
-
-  const auto r = shell::Execute(nxmPath, parameters);
-
-  if (!r.success()) {
-    QMessageBox::critical(
-        nullptr, QObject::tr("Failed"),
-        QObject::tr("Failed to start the helper application: %1").arg(r.toString()));
-  }
-#endif
 }
 
 std::vector<std::chrono::seconds> NexusSettings::validationTimeouts() const

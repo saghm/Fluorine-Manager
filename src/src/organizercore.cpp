@@ -65,13 +65,6 @@
 #include <QtDebug>
 #include <QtGlobal>  // for qUtf8Printable, etc
 
-#ifdef _WIN32
-#include <Psapi.h>
-#include <Shlobj.h>
-#include <tchar.h>  // for _tcsicmp
-#include <tlhelp32.h>
-#endif
-
 #include <limits.h>
 #include <stddef.h>
 #include <string.h>  // for memset, wcsrchr
@@ -105,7 +98,6 @@ QStringList toStringList(InputIterator current, InputIterator end)
   return result;
 }
 
-#ifndef _WIN32
 QString resolveWinePrefixPath(const Settings& settings,
                               const IPluginGame* managedGame)
 {
@@ -241,7 +233,6 @@ QString resolveAbsoluteSaveDir(const WinePrefix& prefix,
   log::debug("resolveAbsoluteSaveDir: fallback -> '{}'", fallback);
   return fallback;
 }
-#endif
 
 OrganizerCore::OrganizerCore(Settings& settings)
     : m_UserInterface(nullptr), m_PluginContainer(nullptr), m_GamePlugin(nullptr),
@@ -669,9 +660,8 @@ void OrganizerCore::createOverwriteDirectories()
 
 void OrganizerCore::prepareVFS()
 {
-#ifndef _WIN32
   // Read the load order and pass it to the FUSE VFS so plugin files get
-  // incrementing timestamps matching their position.  This prevents LOOT
+  // incrementing timestamps matching their position. This prevents LOOT
   // from reporting "ambiguous load order".
   {
     std::vector<std::string> loadOrder;
@@ -718,7 +708,6 @@ void OrganizerCore::prepareVFS()
     m_USVFS.setRootBuilderEnabled(vfsRootBuilder, storageDir.toStdString());
   }
 
-#endif
   m_USVFS.updateMapping(fileMapping(m_CurrentProfile->name(), QString()));
 }
 
@@ -730,19 +719,15 @@ void OrganizerCore::unmountVFS()
 void OrganizerCore::trackOverwriteMove(const QString& relativePath,
                                        const QString& modFolderPath)
 {
-#ifndef _WIN32
   auto tw = m_USVFS.trackedWrites();
   if (tw) {
     tw->track(relativePath.toStdString(), modFolderPath.toStdString());
   }
-#endif
 }
 
 void OrganizerCore::discardVFSStagingOnUnmount()
 {
-#ifndef _WIN32
   m_USVFS.discardStagingOnUnmount();
-#endif
 }
 
 void OrganizerCore::updateVFSParams(log::Levels logLevel,
@@ -1019,14 +1004,10 @@ void OrganizerCore::setPersistent(const QString& pluginName, const QString& key,
 
 QString OrganizerCore::pluginDataPath()
 {
-#ifndef _WIN32
-  // On Linux, the plugins/ directory may contain symlinks into a read-only
-  // bundled directory (e.g. /app/ in Flatpak).  Place plugin data in a
-  // separate writable directory so mkdir() never hits a read-only FS.
+  // The plugins/ directory may contain symlinks into a read-only bundled
+  // directory (e.g. /app/ in Flatpak). Place plugin data in a separate
+  // writable directory so mkdir() never hits a read-only filesystem.
   return AppConfig::basePath() + "/plugin_data";
-#else
-  return AppConfig::pluginsPath() + "/data";
-#endif
 }
 
 MOBase::IModInterface* OrganizerCore::installMod(const QString& archivePath,
@@ -2186,8 +2167,7 @@ void OrganizerCore::syncOverwrite()
 {
   ModInfo::Ptr modInfo = ModInfo::getOverwrite();
 
-#ifndef _WIN32
-  // Snapshot overwrite before sync so we can detect what was moved
+  // Snapshot overwrite before sync so we can detect what was moved.
   QStringList beforeFiles;
   {
     QDirIterator it(modInfo->absolutePath(), QDir::Files | QDir::NoDotAndDotDot,
@@ -2197,18 +2177,16 @@ void OrganizerCore::syncOverwrite()
       beforeFiles << QDir(modInfo->absolutePath()).relativeFilePath(it.filePath());
     }
   }
-#endif
 
   SyncOverwriteDialog syncDialog(modInfo->absolutePath(), m_DirectoryStructure,
                                  qApp->activeWindow());
   if (syncDialog.exec() == QDialog::Accepted) {
     syncDialog.apply(QDir::fromNativeSeparators(m_Settings.paths().mods()));
 
-#ifndef _WIN32
-    // Track files that were moved out of overwrite to mods.
-    // Files that existed before but are gone now were synced to a mod.
-    // Use profile priority order (highest-priority mod wins) so writes
-    // go to the correct mod when multiple mods contain the same path.
+    // Track files that were moved out of overwrite to mods. Files that existed
+    // before but are gone now were synced to a mod. Use profile priority order
+    // (highest-priority mod wins) so writes go to the correct mod when
+    // multiple mods contain the same path.
     const QString modsDir = QDir::fromNativeSeparators(m_Settings.paths().mods());
 
     // Mod names in ascending priority order (last = highest priority).
@@ -2218,7 +2196,6 @@ void OrganizerCore::syncOverwrite()
     for (const auto& relPath : beforeFiles) {
       const QString owFile = modInfo->absolutePath() + "/" + relPath;
       if (!QFile::exists(owFile)) {
-        // Find highest-priority mod that has this file.
         QString bestModPath;
         for (const auto& modName : modsByPriority) {
           const QString modPath = modsDir + "/" + modName;
@@ -2232,7 +2209,6 @@ void OrganizerCore::syncOverwrite()
         }
       }
     }
-#endif
 
     modInfo->diskContentModified();
     refreshDirectoryStructure();
@@ -2353,7 +2329,6 @@ ProcessRunner OrganizerCore::processRunner()
   return ProcessRunner(*this, m_UserInterface);
 }
 
-#ifndef _WIN32
 bool OrganizerCore::checkGameRegistryKey()
 {
   // Map of game short names to their registry key info.
@@ -2459,7 +2434,6 @@ bool OrganizerCore::checkGameRegistryKey()
 
   return true;
 }
-#endif
 
 bool OrganizerCore::beforeRun(
     const QFileInfo& binary, const QDir& cwd, const QString& arguments,
@@ -2489,14 +2463,11 @@ bool OrganizerCore::beforeRun(
     return false;
   }
 
-#ifndef _WIN32
   // Check the game's registry key in the Wine prefix and fix if needed.
   if (!checkGameRegistryKey()) {
     return false;  // user cancelled
   }
-#endif
 
-#ifndef _WIN32
   // VFS Root Builder: read per-instance setting and configure.
   {
     bool vfsRootBuilder = false;
@@ -2508,20 +2479,13 @@ bool OrganizerCore::beforeRun(
         QDir(QDir::fromNativeSeparators(basePath())).filePath("rootbuilder");
     m_USVFS.setRootBuilderEnabled(vfsRootBuilder, storageDir.toStdString());
   }
-#endif
 
   try {
     m_USVFS.updateMapping(fileMapping(profileName, customOverwrite));
     m_USVFS.updateForcedLibraries(forcedLibraries);
-#ifdef _WIN32
-  } catch (const UsvfsConnectorException& e) {
-    log::debug("{}", e.what());
-    return false;
-#else
   } catch (const FuseConnectorException& e) {
     log::error("VFS mount failed: {}", e.what());
     return false;
-#endif
   } catch (const std::exception& e) {
     QWidget* w = nullptr;
     if (m_UserInterface) {
@@ -2531,15 +2495,14 @@ bool OrganizerCore::beforeRun(
     return false;
   }
 
-#ifndef _WIN32
-  // Deploy plugins.txt and loadorder.txt to Wine prefix before launch
+  // Deploy plugins.txt and loadorder.txt to the Wine prefix before launch.
   if (m_CurrentProfile != nullptr) {
     const QString prefixPathStr = resolveWinePrefixPath(m_Settings, managedGame());
 
     if (!prefixPathStr.isEmpty()) {
       WinePrefix prefix(prefixPathStr);
       if (prefix.isValid()) {
-        const QString dataDirName = resolveWineDataDirName(managedGame());
+        const QString dataDirName  = resolveWineDataDirName(managedGame());
         const QString appDataLocal = prefix.appdataLocal();
         const QString pluginsTargetDir =
             QDir(appDataLocal).filePath(dataDirName);
@@ -2744,7 +2707,6 @@ bool OrganizerCore::beforeRun(
       log::debug("No Wine prefix configured, skipping plugin deployment");
     }
   }
-#endif
 
   return true;
 }
@@ -2755,10 +2717,9 @@ void OrganizerCore::afterRun(const QFileInfo& binary, DWORD exitCode)
       managedGame()->loadOrderMechanism() ==
       IPluginGame::LoadOrderMechanism::FileTime;
 
-#ifndef _WIN32
-  // Unmount the FUSE VFS now that the application has exited.  unmount()
+  // Unmount the FUSE VFS now that the application has exited. unmount()
   // flushes the staging directory (moves new/changed files to overwrite)
-  // and tears down the FUSE session.  This mirrors Windows behaviour where
+  // and tears down the FUSE session. This mirrors Windows behaviour where
   // USVFS is only active while a hooked process is running.
   m_USVFS.unmount();
 
@@ -2877,7 +2838,6 @@ void OrganizerCore::afterRun(const QFileInfo& binary, DWORD exitCode)
       }
     }
   }
-#endif
 
   // FileTime-based games (Skyrim LE, FO3, FNV) derive the load order from
   // plugin file mtimes rather than loadorder.txt.  Drop the profile copy so
@@ -2903,12 +2863,12 @@ void OrganizerCore::afterRun(const QFileInfo& binary, DWORD exitCode)
 
 ProcessRunner::Results OrganizerCore::waitForAllUSVFSProcesses(UILocker::Reasons reason)
 {
-#ifdef _WIN32
-  return processRunner().waitForAllUSVFSProcessesWithLock(reason);
-#else
+  // The Win32 path called waitForAllUSVFSProcessesWithLock(), which iterated
+  // every USVFS-hooked process via the job-handle bookkeeping. The Linux
+  // FUSE-based VFS doesn't have a process job so there's nothing to wait
+  // for here — ProcessRunner::run() already handles the per-launch wait.
   Q_UNUSED(reason);
   return ProcessRunner::Completed;
-#endif
 }
 
 std::vector<Mapping> OrganizerCore::fileMapping(const QString& profileName,

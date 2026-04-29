@@ -45,10 +45,6 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <QStringList>  // for QStringList
 #include <QtGlobal>     // for qUtf8Printable
 
-#ifdef _WIN32
-#include <Windows.h>
-#endif
-
 #include <assert.h>  // for assert
 #include <limits.h>  // for UINT_MAX, INT_MAX, etc
 #include <stddef.h>  // for size_t
@@ -305,18 +301,11 @@ void Profile::createTweakedIniFile()
   mergeTweak(getProfileTweaks(), tweakedIni);
 
   bool error = false;
-#ifdef _WIN32
-  if (!MOBase::WriteRegistryValue(L"Archive", L"bInvalidateOlderFiles", L"1",
-                                  ToWString(tweakedIni).c_str())) {
-    error = true;
-  }
-#else
   if (!MOBase::WriteRegistryValue(
           QStringLiteral("Archive"), QStringLiteral("bInvalidateOlderFiles"),
           QStringLiteral("1"), tweakedIni)) {
     error = true;
   }
-#endif
 
   if (error) {
     const auto e = ::GetLastError();
@@ -779,64 +768,16 @@ std::vector<std::wstring> Profile::splitDZString(const wchar_t* buffer) const
 
 void Profile::mergeTweak(const QString& tweakName, const QString& tweakedIni) const
 {
-#ifdef _WIN32
-  static const int bufferSize = 32768;
-
-  std::wstring tweakNameW  = ToWString(tweakName);
-  std::wstring tweakedIniW = ToWString(tweakedIni);
-  QScopedArrayPointer<wchar_t> buffer(new wchar_t[bufferSize]);
-
-  // retrieve a list of sections
-  DWORD size =
-      ::GetPrivateProfileSectionNamesW(buffer.data(), bufferSize, tweakNameW.c_str());
-
-  if (size == bufferSize - 2) {
-    // unfortunately there is no good way to find the required size
-    // of the buffer
-    throw MyException(QString("Buffer too small. Please report this as a bug. "
-                              "For now you might want to split up %1")
-                          .arg(tweakName));
-  }
-
-  std::vector<std::wstring> sections = splitDZString(buffer.data());
-
-  // now iterate over all sections and retrieve a list of keys in each
-  for (std::vector<std::wstring>::iterator iter = sections.begin();
-       iter != sections.end(); ++iter) {
-    // retrieve the names of all keys
-    size = ::GetPrivateProfileStringW(iter->c_str(), nullptr, nullptr, buffer.data(),
-                                      bufferSize, tweakNameW.c_str());
-    if (size == bufferSize - 2) {
-      throw MyException(QString("Buffer too small. Please report this as a bug. "
-                                "For now you might want to split up %1")
-                            .arg(tweakName));
-    }
-
-    std::vector<std::wstring> keys = splitDZString(buffer.data());
-
-    for (std::vector<std::wstring>::iterator keyIter = keys.begin();
-         keyIter != keys.end(); ++keyIter) {
-      // TODO this treats everything as strings but how could I differentiate the type?
-      ::GetPrivateProfileStringW(iter->c_str(), keyIter->c_str(), nullptr,
-                                 buffer.data(), bufferSize,
-                                 ToWString(tweakName).c_str());
-      MOBase::WriteRegistryValue(iter->c_str(), keyIter->c_str(), buffer.data(),
-                                 tweakedIniW.c_str());
-    }
-  }
-#else
-  // On Linux, parse the tweak INI file line-by-line and merge each
-  // key=value into the destination using WriteRegistryValue (which uses
-  // the safe line-by-line writer that does NOT interpret backslashes as
-  // line continuations or URL-encode spaces in keys).
+  // Parse the tweak INI file line-by-line and merge each key=value into the
+  // destination using WriteRegistryValue (which uses the safe line-by-line
+  // writer that does NOT interpret backslashes as line continuations or
+  // URL-encode spaces in keys).
   QFile sourceFile(tweakName);
   if (!sourceFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
     if (QFileInfo::exists(tweakName)) {
-      log::warn("mergeTweak: tweak file '{}' exists but could not be opened",
-                tweakName);
+      log::warn("mergeTweak: tweak file '{}' exists but could not be opened", tweakName);
     } else {
-      log::debug("mergeTweak: tweak file '{}' does not exist, skipping",
-                 tweakName);
+      log::debug("mergeTweak: tweak file '{}' does not exist, skipping", tweakName);
     }
     return;
   }
@@ -859,7 +800,6 @@ void Profile::mergeTweak(const QString& tweakName, const QString& tweakedIni) co
       MOBase::WriteRegistryValue(currentSection, key, value, tweakedIni);
     }
   }
-#endif
 }
 
 void Profile::mergeTweaks(ModInfo::Ptr modInfo, const QString& tweakedIni) const

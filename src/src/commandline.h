@@ -169,13 +169,6 @@ public:
 protected:
   Meta meta() const override;
   std::optional<int> runEarly() override;
-
-#ifdef _WIN32
-  int SpawnWaitProcess(LPCWSTR workingDirectory, LPCWSTR commandLine);
-
-  LPCWSTR UntouchedCommandLineArguments(int parseArgCount,
-                                        std::vector<std::wstring>& parsedArgs);
-#endif
 };
 
 // runs a program or an executable

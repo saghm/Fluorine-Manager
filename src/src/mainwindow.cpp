@@ -173,10 +173,6 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <boost/thread.hpp>
 #endif
 
-#ifdef _WIN32
-#include <shlobj.h>
-#endif
-
 #include <exception>
 #include <functional>
 #include <limits.h>
@@ -370,14 +366,9 @@ MainWindow::MainWindow(Settings& settings, OrganizerCore& organizerCore,
                                         this, SLOT(linkToolbar()));
   m_LinkDesktop   = linkMenu->addAction(QIcon(":/MO/gui/link"), tr("Desktop"), this,
                                         SLOT(linkDesktop()));
-#ifdef _WIN32
-  m_LinkStartMenu = linkMenu->addAction(QIcon(":/MO/gui/link"), tr("Start Menu"), this,
-                                        SLOT(linkMenu()));
-#else
   m_LinkStartMenu = linkMenu->addAction(QIcon(":/MO/gui/link"),
                                         tr("Application Launcher"), this,
                                         SLOT(linkMenu()));
-#endif
   ui->linkButton->setMenu(linkMenu);
 
   ui->listOptionsBtn->setMenu(
@@ -2676,25 +2667,17 @@ void MainWindow::fileMoved(const QString& filePath, const QString& oldOriginName
             ToWString(newOriginName));
 
         QString fullNewPath = ToQString(newOrigin.getPath()) + "/" + filePath;
-#ifdef _WIN32
-        WIN32_FIND_DATAW findData;
-        HANDLE hFind;
-        hFind = ::FindFirstFileW(ToWString(fullNewPath).c_str(), &findData);
-        filePtr->addOrigin(newOrigin.getID(), findData.ftCreationTime, L"", -1);
-        FindClose(hFind);
-#else
-        // On Linux, use a default FILETIME for the origin
         FILETIME ft = {};
         QFileInfo fi(fullNewPath);
         if (fi.exists()) {
-          // Convert QDateTime to Windows FILETIME (100-ns intervals since 1601)
-          qint64 msecs = fi.birthTime().toMSecsSinceEpoch();
-          uint64_t ticks = (static_cast<uint64_t>(msecs) * 10000ULL) + 116444736000000000ULL;
-          ft.dwLowDateTime = static_cast<DWORD>(ticks & 0xFFFFFFFF);
+          // Win32 FILETIME = 100-ns intervals since 1601-01-01.
+          qint64 msecs   = fi.birthTime().toMSecsSinceEpoch();
+          uint64_t ticks = (static_cast<uint64_t>(msecs) * 10000ULL) +
+                           116444736000000000ULL;
+          ft.dwLowDateTime  = static_cast<DWORD>(ticks & 0xFFFFFFFF);
           ft.dwHighDateTime = static_cast<DWORD>(ticks >> 32);
         }
         filePtr->addOrigin(newOrigin.getID(), ft, L"", -1);
-#endif
       }
       if (m_OrganizerCore.directoryStructure()->originExists(
               ToWString(oldOriginName))) {
@@ -2710,8 +2693,7 @@ void MainWindow::fileMoved(const QString& filePath, const QString& oldOriginName
                       .arg(e.what()));
     }
 
-#ifndef _WIN32
-    // Track files moved from Overwrite to a mod for in-place write-back
+    // Track files moved from Overwrite to a mod for in-place write-back.
     ModInfo::Ptr owInfo = ModInfo::getOverwrite();
     if (owInfo && oldOriginName == owInfo->name()) {
       if (m_OrganizerCore.directoryStructure()->originExists(
@@ -2719,11 +2701,9 @@ void MainWindow::fileMoved(const QString& filePath, const QString& oldOriginName
         FilesOrigin& newOrigin =
             m_OrganizerCore.directoryStructure()->getOriginByName(
                 ToWString(newOriginName));
-        m_OrganizerCore.trackOverwriteMove(
-            filePath, ToQString(newOrigin.getPath()));
+        m_OrganizerCore.trackOverwriteMove(filePath, ToQString(newOrigin.getPath()));
       }
     }
-#endif
   } else {
     // this is probably not an error, the specified path is likely a directory
   }
@@ -2799,21 +2779,16 @@ void MainWindow::openPluginsFolder()
 
 void MainWindow::openStylesheetsFolder()
 {
-#ifndef _WIN32
-  // On Linux, open the instance's stylesheets directory (where custom themes
-  // from modlists live), or the user data dir as fallback.
+  // Open the instance's stylesheets directory (where custom themes from
+  // modlists live), or the user data dir as fallback.
   QString ssPath;
   if (auto ci = InstanceManager::singleton().currentInstance()) {
-    ssPath = ci->directory() + "/" +
-             QString::fromStdWString(AppConfig::stylesheetsPath());
+    ssPath =
+        ci->directory() + "/" + QString::fromStdWString(AppConfig::stylesheetsPath());
   } else {
     ssPath = fluorineDataDir() + "/stylesheets";
   }
   QDir().mkpath(ssPath);
-#else
-  QString ssPath = AppConfig::basePath() + "/" +
-                   ToQString(AppConfig::stylesheetsPath());
-#endif
   shell::Explore(ssPath);
 }
 
@@ -2904,11 +2879,7 @@ void MainWindow::linkDesktop()
 void MainWindow::linkMenu()
 {
   if (auto* exe = getSelectedExecutable()) {
-#ifdef _WIN32
-    env::Shortcut(*exe).toggle(env::Shortcut::StartMenu);
-#else
     env::Shortcut(*exe).toggle(env::Shortcut::ApplicationMenu);
-#endif
   }
 }
 
@@ -2930,14 +2901,8 @@ void MainWindow::on_linkButton_pressed()
                                                                  : addIcon);
 
   if (m_LinkStartMenu) {
-#ifdef _WIN32
-    m_LinkStartMenu->setIcon(shortcut.exists(env::Shortcut::StartMenu) ? removeIcon
-                                                                       : addIcon);
-#else
-    m_LinkStartMenu->setIcon(shortcut.exists(env::Shortcut::ApplicationMenu)
-                                 ? removeIcon
-                                 : addIcon);
-#endif
+    m_LinkStartMenu->setIcon(
+        shortcut.exists(env::Shortcut::ApplicationMenu) ? removeIcon : addIcon);
   }
 }
 

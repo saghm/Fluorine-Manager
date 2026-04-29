@@ -325,9 +325,9 @@ bool ModInfoWithConflictInfo::doIsValid() const
     }
   }
 
-#ifndef _WIN32
-  // If VFS Root Builder is enabled, a mod with only a Root/ folder is still valid
-  // (e.g. SKSE, ENB — files get deployed to the game directory at launch).
+  // If VFS Root Builder is enabled, a mod with only a Root/ folder is still
+  // valid (e.g. SKSE, ENB — files get deployed to the game directory at
+  // launch).
   if (const auto* s = Settings::maybeInstance()) {
     const QSettings instanceIni(s->filename(), QSettings::IniFormat);
     if (instanceIni.value("fluorine/vfs_root_builder", true).toBool()) {
@@ -345,7 +345,6 @@ bool ModInfoWithConflictInfo::doIsValid() const
       }
     }
   }
-#endif
 
   return mdc == nullptr;
 }

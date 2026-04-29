@@ -10,10 +10,8 @@
 #include <log.h>
 #include <uibase/filesystemutilities.h>
 
-#ifndef _WIN32
 #include <sys/stat.h>
 #include <utime.h>
-#endif
 
 namespace
 {
@@ -36,8 +34,7 @@ bool copyFileWithParents(const QString& source, const QString& destination)
     return false;
   }
 
-#ifndef _WIN32
-  // QFile::copy() does not preserve timestamps.  Restore the source file's
+  // QFile::copy() does not preserve timestamps. Restore the source file's
   // mtime so that games display the correct save date.
   struct stat srcStat;
   if (stat(source.toUtf8().constData(), &srcStat) == 0) {
@@ -46,7 +43,6 @@ bool copyFileWithParents(const QString& source, const QString& destination)
     times.modtime = srcStat.st_mtime;
     utime(destination.toUtf8().constData(), &times);
   }
-#endif
 
   return true;
 }

@@ -58,10 +58,6 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <boost/bind/bind.hpp>
 
-#ifdef _WIN32
-#include <Windows.h>  //for VS_FIXEDFILEINFO, GetLastError
-#endif
-
 #include <exception>
 #include <map>
 #include <stddef.h>  //for size_t

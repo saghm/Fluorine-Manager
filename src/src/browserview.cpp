@@ -26,9 +26,6 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <QNetworkDiskCache>
 #include <QWebEngineContextMenuRequest>
 #include <QWebEngineSettings>
-#ifdef _WIN32
-#include <Shlwapi.h>
-#endif
 
 BrowserView::BrowserView(QWidget* parent) : QWebEngineView(parent)
 {

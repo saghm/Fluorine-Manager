@@ -15,13 +15,8 @@ enum class CoreDumpTypes
 CoreDumpTypes coreDumpTypeFromString(const std::string& s);
 std::string toString(CoreDumpTypes type);
 
-// creates a minidump file for this process
-//
-#ifdef _WIN32
-bool coredump(const wchar_t* dir, CoreDumpTypes type);
-#else
+// creates a core dump file for this process (calls abort() on Linux)
 bool coredump(const char* dir, CoreDumpTypes type);
-#endif
 
 // finds another process with the same name as this one and creates a minidump
 // file for it

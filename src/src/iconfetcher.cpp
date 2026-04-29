@@ -21,11 +21,7 @@ void IconFetcher::Waiter::wakeUp()
   m_wakeUp.notify_one();
 }
 
-#ifdef _WIN32
-IconFetcher::IconFetcher() : m_iconSize(GetSystemMetrics(SM_CXSMICON)), m_stop(false)
-#else
 IconFetcher::IconFetcher() : m_iconSize(16), m_stop(false)
-#endif
 {
   m_quickCache.file      = getPixmapIcon(QFileIconProvider::File);
   m_quickCache.directory = getPixmapIcon(QFileIconProvider::Folder);

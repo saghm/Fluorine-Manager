@@ -255,14 +255,11 @@ HANDLE OrganizerProxy::startApplication(const QString& exe, const QStringList& a
 bool OrganizerProxy::waitForApplication(HANDLE handle, bool refresh,
                                         LPDWORD exitCode) const
 {
-#ifdef _WIN32
-  const auto pid = ::GetProcessId(handle);
-#else
-  const DWORD pid = 0;  // No GetProcessId on Linux
-#endif
+  // The plugin API hands us an opaque HANDLE — on Linux the underlying value
+  // is a pid_t we packed via reinterpret_cast<intptr_t>(pid).
+  const pid_t pid = static_cast<pid_t>(reinterpret_cast<intptr_t>(handle));
 
-  log::debug("a plugin wants to wait for an application to complete, pid {}{}", pid,
-             (pid == 0 ? "unknown (probably already completed)" : ""));
+  log::debug("a plugin wants to wait for an application to complete, pid {}", pid);
 
   auto runner = m_Proxied->processRunner();
 
@@ -272,13 +269,8 @@ bool OrganizerProxy::waitForApplication(HANDLE handle, bool refresh,
     waitFlags |= ProcessRunner::TriggerRefresh | ProcessRunner::WaitForRefresh;
   }
 
-#ifdef _WIN32
   const auto r = runner.setWaitForCompletion(waitFlags, UILocker::OutputRequired)
-                     .attachToProcess(handle);
-#else
-  const auto r = runner.setWaitForCompletion(waitFlags, UILocker::OutputRequired)
-                     .attachToProcess(static_cast<pid_t>(reinterpret_cast<intptr_t>(handle)));
-#endif
+                     .attachToProcess(pid);
 
   if (exitCode) {
     *exitCode = runner.exitCode();

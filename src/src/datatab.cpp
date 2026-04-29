@@ -48,10 +48,6 @@ DataTab::DataTab(OrganizerCore& core, PluginContainer& pc, QWidget* parent,
     ensureFullyLoaded();
   });
 
-#ifdef _WIN32
-  ui.browseVFS->setVisible(false);
-  ui.browseRootBuilder->setVisible(false);
-#else
   connect(ui.browseVFS, &QPushButton::clicked, [&] {
     onBrowseVFS();
   });
@@ -68,7 +64,6 @@ DataTab::DataTab(OrganizerCore& core, PluginContainer& pc, QWidget* parent,
     }
     ui.browseRootBuilder->setVisible(rbEnabled);
   }
-#endif
 
   connect(ui.refresh, &QPushButton::clicked, [&] {
     onRefresh();
@@ -153,7 +148,6 @@ void DataTab::onRefresh()
 
 void DataTab::onBrowseVFS()
 {
-#ifndef _WIN32
   QString dataPath = m_core.managedGame()->dataDirectory().absolutePath();
 
   // Mount the FUSE VFS so the file manager sees the merged mod files.
@@ -178,12 +172,10 @@ void DataTab::onBrowseVFS()
 
   log::info("Unmounting VFS after Browse...");
   m_core.unmountVFS();
-#endif
 }
 
 void DataTab::onBrowseRootBuilder()
 {
-#ifndef _WIN32
   QString gameRoot = m_core.managedGame()->gameDirectory().absolutePath();
 
   // Mount the FUSE VFS which also triggers Root Builder deployment to the
@@ -208,7 +200,6 @@ void DataTab::onBrowseRootBuilder()
 
   log::info("Unmounting VFS after Root Builder browse...");
   m_core.unmountVFS();
-#endif
 }
 
 void DataTab::updateTree()

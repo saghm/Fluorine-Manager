@@ -4,45 +4,23 @@
 #include <QDateTime>
 #include <QString>
 
-#ifdef _WIN32
-#include <windows.h>
-#else
 #include <sys/types.h>
 #include <signal.h>
-#endif
 
 namespace env
 {
 
-#ifdef _WIN32
-// used by HandlePtr, calls CloseHandle() as the deleter
-//
+// HandlePtr exists for compatibility with the rest of the codebase that
+// expects a Win32 HANDLE-shaped type. On Linux there's nothing to close,
+// so the deleter is a no-op.
 struct HandleCloser
 {
   using pointer = HANDLE;
 
-  void operator()(HANDLE h)
-  {
-    if (h != INVALID_HANDLE_VALUE) {
-      ::CloseHandle(h);
-    }
-  }
+  void operator()(HANDLE) {}
 };
 
 using HandlePtr = std::unique_ptr<HANDLE, HandleCloser>;
-#else
-// On Linux, HandlePtr uses HANDLE (void*) from windows_compat.h for
-// compatibility with the rest of the codebase.  Handles don't need
-// closing on Linux since they are just compatibility shims.
-struct HandleCloser
-{
-  using pointer = HANDLE;
-
-  void operator()(HANDLE) { /* no-op on Linux */ }
-};
-
-using HandlePtr = std::unique_ptr<HANDLE, HandleCloser>;
-#endif
 
 // represents one module
 //
@@ -95,20 +73,10 @@ public:
   QString toString() const;
 
 private:
-#ifdef _WIN32
-  // contains the information from the version resource
-  //
-  struct FileInfo
-  {
-    VS_FIXEDFILEINFO ffi;
-    QString fileDescription;
-  };
-#else
   struct FileInfo
   {
     QString fileDescription;
   };
-#endif
 
   QString m_path;
   std::size_t m_fileSize;
@@ -117,39 +85,8 @@ private:
   QString m_versionString;
   QString m_md5;
 
-#ifdef _WIN32
-  // returns information from the version resource
-  //
   FileInfo getFileInfo() const;
-
-  // uses VS_FIXEDFILEINFO to build the version string
-  //
-  QString getVersion(const VS_FIXEDFILEINFO& fi) const;
-
-  // uses the file date from VS_FIXEDFILEINFO if available, or gets the
-  // creation date on the file
-  //
-  QDateTime getTimestamp(const VS_FIXEDFILEINFO& fi) const;
-
-  // gets VS_FIXEDFILEINFO from the file version info buffer
-  //
-  VS_FIXEDFILEINFO getFixedFileInfo(std::byte* buffer) const;
-
-  // gets FileVersion from the file version info buffer
-  //
-  QString getFileDescription(std::byte* buffer) const;
-#else
-  // returns information about the file (Linux: uses QFileInfo)
-  //
-  FileInfo getFileInfo() const;
-
-  // gets the file timestamp from the filesystem
-  //
   QDateTime getTimestamp() const;
-#endif
-
-  // returns the md5 hash unless the path is in a system directory
-  //
   QString getMD5() const;
 };
 
@@ -159,22 +96,12 @@ class Process
 {
 public:
   Process();
-#ifdef _WIN32
-  explicit Process(HANDLE h);
-  Process(DWORD pid, DWORD ppid, QString name);
-#else
   Process(pid_t pid, pid_t ppid, QString name);
-#endif
 
   bool isValid() const;
 
-#ifdef _WIN32
-  DWORD pid() const;
-  DWORD ppid() const;
-#else
   pid_t pid() const;
   pid_t ppid() const;
-#endif
 
   const QString& name() const;
 
@@ -190,13 +117,8 @@ public:
   const std::vector<Process>& children() const;
 
 private:
-#ifdef _WIN32
-  DWORD m_pid;
-  mutable std::optional<DWORD> m_ppid;
-#else
   pid_t m_pid;
   mutable std::optional<pid_t> m_ppid;
-#endif
   mutable std::optional<QString> m_name;
   std::vector<Process> m_children;
 };
@@ -204,24 +126,12 @@ private:
 std::vector<Process> getRunningProcesses();
 std::vector<Module> getLoadedModules();
 
-#ifdef _WIN32
-// works for both jobs and processes
-//
-Process getProcessTree(HANDLE h);
-
-QString getProcessName(DWORD pid);
-QString getProcessName(HANDLE process);
-
-DWORD getProcessParentID(DWORD pid);
-DWORD getProcessParentID(HANDLE handle);
-#else
 // builds a process tree from a given pid
 //
 Process getProcessTree(pid_t pid);
 
 QString getProcessName(pid_t pid);
 pid_t getProcessParentID(pid_t pid);
-#endif
 
 }  // namespace env
 

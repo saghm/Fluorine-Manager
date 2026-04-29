@@ -52,39 +52,15 @@ void elapsedImpl(std::chrono::nanoseconds& out, F&& f)
 #define elapsed(OUT, F) (F)();
 // #define elapsed(OUT, F) elapsedImpl(OUT, F);
 
-#ifdef _WIN32
 static bool SupportOptimizedFind()
 {
-  // large fetch and basic info for FindFirstFileEx is supported on win server 2008 r2,
-  // win 7 and newer
-
-  OSVERSIONINFOEX versionInfo;
-  versionInfo.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
-  versionInfo.dwMajorVersion      = 6;
-  versionInfo.dwMinorVersion      = 1;
-
-  ULONGLONG mask = ::VerSetConditionMask(
-      ::VerSetConditionMask(0, VER_MAJORVERSION, VER_GREATER_EQUAL), VER_MINORVERSION,
-      VER_GREATER_EQUAL);
-
-  return (::VerifyVersionInfo(&versionInfo, VER_MAJORVERSION | VER_MINORVERSION,
-                              mask) == TRUE);
+  return true;
 }
-#else
-static bool SupportOptimizedFind()
-{
-  return true;  // Always true on Linux
-}
-#endif
 
 bool DirCompareByName::operator()(const DirectoryEntry* lhs,
                                   const DirectoryEntry* rhs) const
 {
-#ifdef _WIN32
-  return _wcsicmp(lhs->getName().c_str(), rhs->getName().c_str()) < 0;
-#else
   return wcscasecmp(lhs->getName().c_str(), rhs->getName().c_str()) < 0;
-#endif
 }
 
 DirectoryEntry::DirectoryEntry(std::wstring name, DirectoryEntry* parent, int originID)
@@ -642,14 +618,10 @@ void DirectoryEntry::addFiles(env::DirectoryWalker& walker, FilesOrigin& origin,
   Context cx = {origin, stats};
   cx.current.push(this);
 
-#ifdef _WIN32
-  const bool pathExists = std::filesystem::exists(path);
-#else
-  // On Linux, convert wstring to narrow string for std::filesystem
-  // to avoid locale-dependent wchar_t conversion issues
+  // Convert wstring to narrow string for std::filesystem to avoid
+  // locale-dependent wchar_t conversion issues on glibc.
   const bool pathExists =
       std::filesystem::exists(QString::fromStdWString(path).toStdString());
-#endif
 
   if (pathExists) {
     walker.forEachEntry(
@@ -925,21 +897,12 @@ struct DumpFailed : public std::runtime_error
 void DirectoryEntry::dump(const std::wstring& file) const
 {
   try {
-#ifdef _WIN32
-    std::FILE* f = nullptr;
-    auto e       = _wfopen_s(&f, file.c_str(), L"wb");
-
-    if (e != 0 || !f) {
-      throw DumpFailed(std::format("failed to open, {} ({})", std::strerror(e), e));
-    }
-#else
     std::string narrowFile(file.begin(), file.end());
     std::FILE* f = std::fopen(narrowFile.c_str(), "wb");
     if (!f) {
       auto e = errno;
       throw DumpFailed(std::format("failed to open, {} ({})", std::strerror(e), e));
     }
-#endif
 
     Guard g([&] {
       std::fclose(f);

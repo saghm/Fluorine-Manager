@@ -213,15 +213,10 @@ void WorkaroundsSettingsTab::on_skipDirectoriesBtn_clicked()
 void WorkaroundsSettingsTab::on_bsaDateBtn_clicked()
 {
   const auto* game = qApp->property("managed_game").value<MOBase::IPluginGame*>();
-  QDir dir         = game->dataDirectory();
-
-#ifdef _WIN32
-  helper::backdateBSAs(parentWidget(), qApp->applicationDirPath().toStdWString(),
-                       dir.absolutePath().toStdWString());
-#else
-  // backdateBSAs is Windows-only (uses helper.exe for admin rights)
+  // BSA backdating used the Win32 helper.exe for admin rights — the equivalent
+  // on Linux would just touch the files but it's never been wired up.
+  QDir dir = game->dataDirectory();
   Q_UNUSED(dir);
-#endif
 }
 
 void WorkaroundsSettingsTab::on_resetGeometryBtn_clicked()

@@ -22,9 +22,6 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "organizercore.h"
 #include "ui_motddialog.h"
 #include "utility.h"
-#ifdef _WIN32
-#include <Shlwapi.h>
-#endif
 #include <utility.h>
 
 using namespace MOBase;

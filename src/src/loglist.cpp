@@ -239,12 +239,7 @@ void LogList::clear()
 
 void LogList::openLogsFolder()
 {
-#ifndef _WIN32
   const QString logsPath = qApp->property("dataPath").toString() + "/logs";
-#else
-  const QString logsPath = qApp->property("dataPath").toString() + "/" +
-                           QString::fromStdWString(AppConfig::logPath());
-#endif
   shell::Explore(logsPath);
 }
 
@@ -404,7 +399,6 @@ bool createAndMakeWritable(const std::wstring& subPath)
 
 bool setLogDirectory(const QString& dir)
 {
-#ifndef _WIN32
   // Place logs in the instance directory so each instance has its own logs.
   const QString logDir = dir + "/logs";
   QDir().mkpath(logDir);
@@ -419,19 +413,11 @@ bool setLogDirectory(const QString& dir)
   {
     QDir d(logDir);
     QStringList existing = d.entryList({"mo_interface_*.log"}, QDir::Files, QDir::Name);
-    const int keep = std::max(0, AppConfig::numLogFiles() - 1);
+    const int keep       = std::max(0, AppConfig::numLogFiles() - 1);
     while (existing.size() > keep) {
       d.remove(existing.takeFirst());
     }
   }
-#else
-  const auto logFile = dir + "/" + QString::fromStdWString(AppConfig::logPath()) + "/" +
-                       QString::fromStdWString(AppConfig::logFileName());
-
-  if (!createAndMakeWritable(AppConfig::logPath())) {
-    return false;
-  }
-#endif
 
   log::getDefault().setFile(MOBase::log::File::single(logFile.toStdWString()));
 

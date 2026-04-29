@@ -1,9 +1,8 @@
 #include "multiprocess.h"
 #include "utility.h"
+
 #include <QLocalSocket>
-#ifndef _WIN32
 #include <QThread>
-#endif
 #include <log.h>
 #include <report.h>
 
@@ -78,11 +77,7 @@ void MOMultiProcess::sendMessage(const QString& message)
   bool connected = false;
   for (int i = 0; i < 2 && !connected; ++i) {
     if (i > 0) {
-#ifdef _WIN32
-      Sleep(250);
-#else
       QThread::msleep(250);
-#endif
     }
 
     // other process may be just starting up

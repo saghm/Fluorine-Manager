@@ -31,11 +31,7 @@ class Executable;
 namespace MOShared
 {
 
-#ifdef _WIN32
-inline constexpr wchar_t NativeWPathSep = L'\\';
-#else
 inline constexpr wchar_t NativeWPathSep = L'/';
-#endif
 
 /// Test if a file (or directory) by the specified name exists
 bool FileExists(const std::string& filename);

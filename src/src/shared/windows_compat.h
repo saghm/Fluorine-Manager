@@ -1,13 +1,10 @@
 #ifndef WINDOWS_COMPAT_H
 #define WINDOWS_COMPAT_H
 
-// Compatibility typedefs for Windows types used throughout the organizer codebase.
-// On Windows these come from <Windows.h>; on Linux we provide minimal stubs.
-//
-// This header is included by the organizer PCH and also by uibase/utility.h
-// to provide a single source of truth for Windows type compatibility on Linux.
-
-#ifndef _WIN32
+// Compatibility typedefs for Windows types used throughout the organizer
+// codebase. The original MO2 source uses Win32 types (DWORD, HANDLE, FILETIME,
+// etc.) extensively; rather than rewrite every reference, this header maps
+// them onto Linux equivalents so the upstream signatures keep compiling.
 
 #include <cstdint>
 #include <cerrno>
@@ -84,5 +81,4 @@ constexpr int SE_ERR_SHARE = 26;
 #define INVALID_FILE_ATTRIBUTES ((DWORD)-1)
 #endif
 
-#endif // !_WIN32
 #endif // WINDOWS_COMPAT_H

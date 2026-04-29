@@ -105,12 +105,6 @@ class QWidget;
 #include <boost/signals2.hpp>
 #endif
 
-#ifdef _WIN32
-// Sigh - just for HANDLE
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-#endif
-
 #include <functional>
 #include <set>
 #include <string>

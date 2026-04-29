@@ -588,11 +588,7 @@ void ModInfoDialog::feedFiles(std::vector<TabInfo*>& interestedTabs)
         continue;
       }
 
-#ifdef _WIN32
-      const auto filePath = QString::fromStdWString(entry.path().native());
-#else
       const auto filePath = QString::fromStdString(entry.path().native());
-#endif
 
       // for each tab
       for (auto* tabInfo : interestedTabs) {

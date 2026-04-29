@@ -29,13 +29,12 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "organizercore.h"
 #include "sanitychecks.h"
 #include "settings.h"
-#ifndef _WIN32
 #include "fluorineconfig.h"
 #include "fluorinepaths.h"
 #include "fuseconnector.h"
 #include "wineprefix.h"
+
 #include <cerrno>
-#endif
 #include <filesystem>
 #include "shared/appconfig.h"
 #include "shared/util.h"
@@ -55,15 +54,6 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <scopeguard.h>
 #include <utility.h>
 #include <cstdio>
-
-#ifdef _WIN32
-// see addDllsToPath() below
-#pragma comment(linker, "/manifestDependency:\""                                       \
-                        "name='dlls' "                                                 \
-                        "processorArchitecture='x86' "                                 \
-                        "version='1.0.0.0' "                                           \
-                        "type='win32' \"")
-#endif
 
 using namespace MOBase;
 using namespace MOShared;
@@ -239,15 +229,15 @@ MOApplication::MOApplication(int& argc, char** argv) : QApplication(argc, argv)
     updateStyle(file);
   });
 
-  m_defaultStyle = "windowsvista";
-#ifndef _WIN32
+  // Pick a Qt style available on this system. "Fusion" is bundled with Qt and
+  // looks identical across distros, so prefer it; fall back to whatever the
+  // QStyleFactory advertises first.
   const auto availableStyles = QStyleFactory::keys();
   if (availableStyles.contains("Fusion")) {
     m_defaultStyle = "Fusion";
   } else if (!availableStyles.isEmpty()) {
     m_defaultStyle = availableStyles.first();
   }
-#endif
   // Start with "None" style setting and only apply custom styles from settings
   // later during setup().
   setStyleFile("");
@@ -310,11 +300,7 @@ int MOApplication::setup(MOMultiProcess& multiProcess, bool forceSelect)
   std::fprintf(stderr, "[setup-diag] setLogDirectory() ok\n");
   std::fflush(stderr);
 
-#ifdef _WIN32
-  log::debug("command line: '{}'", QString::fromWCharArray(GetCommandLineW()));
-#else
   log::debug("command line: '{}'", QCoreApplication::arguments().join(' '));
-#endif
 
 #ifndef GITID
 #define GITID "unknown"
@@ -420,7 +406,6 @@ int MOApplication::setup(MOMultiProcess& multiProcess, bool forceSelect)
   // setting up organizer core
   m_core->setManagedGame(m_instance->gamePlugin());
 
-#ifndef _WIN32
   // Clean up stale FUSE mounts from a previous crash BEFORE any game
   // directory access (profile init, BSA invalidation, etc.).
   {
@@ -429,14 +414,14 @@ int MOApplication::setup(MOMultiProcess& multiProcess, bool forceSelect)
     FuseConnector::tryCleanupStaleMount(dataDir);
   }
 
-  // Restore any stale INI/save backups left by a previous crash.
-  // This ensures the documents directory is clean before we do anything else.
+  // Restore any stale INI/save backups left by a previous crash. This ensures
+  // the documents directory is clean before we do anything else.
   {
     auto prefixPath = FluorineConfig::prefixPath();
     if (!prefixPath || prefixPath->isEmpty()) {
       QSettings instanceSettings(m_settings->filename(), QSettings::IniFormat);
       for (const auto& key : {"Settings/proton_prefix_path", "Settings/prefix_path",
-                               "Proton/prefix_path", "fluorine/prefix_path"}) {
+                              "Proton/prefix_path", "fluorine/prefix_path"}) {
         const QString value = instanceSettings.value(key).toString().trimmed();
         if (!value.isEmpty()) {
           prefixPath = value;
@@ -452,7 +437,6 @@ int MOApplication::setup(MOMultiProcess& multiProcess, bool forceSelect)
       }
     }
   }
-#endif
 
   m_core->createDefaultProfile();
   m_core->createOverwriteDirectories();
@@ -712,7 +696,6 @@ bool MOApplication::setStyleFile(const QString& styleName)
     const QString ssSubdir = MOBase::ToQString(AppConfig::stylesheetsPath());
     QStringList searchDirs;
     searchDirs << applicationDirPath() + "/" + ssSubdir;
-#ifndef _WIN32
     if (m_instance) {
       // Prefer baseDirectory() (populated after readFromIni), fall back to
       // directory() which is always set by the constructor.
@@ -726,7 +709,6 @@ bool MOApplication::setStyleFile(const QString& styleName)
     const QString userDir = fluorineDataDir() + "/stylesheets";
     if (!searchDirs.contains(userDir))
       searchDirs << userDir;
-#endif
 
     QString resolved;
     for (const auto& dir : searchDirs) {
@@ -759,8 +741,7 @@ bool MOApplication::notify(QObject* receiver, QEvent* event)
     log::error("uncaught filesystem exception in handler (object {}, eventtype {}): {}",
                receiver->objectName(), event->type(), fe.what());
 
-#ifndef _WIN32
-    // ENOTCONN = stale FUSE mount.  Attempt recovery so MO2 can continue.
+    // ENOTCONN = stale FUSE mount. Attempt recovery so MO2 can continue.
     if (fe.code().value() == ENOTCONN) {
       const auto& p1 = fe.path1();
       if (!p1.empty()) {
@@ -773,7 +754,6 @@ bool MOApplication::notify(QObject* receiver, QEvent* event)
         FuseConnector::tryCleanupStaleMount(QString::fromStdString(p2.string()));
       }
     }
-#endif
 
     reportError(tr("an error occurred: %1").arg(fe.what()));
     return false;
@@ -868,13 +848,12 @@ QString extractBaseStyleFromStyleSheet(QFile& stylesheet, const QString& default
 
 }  // namespace
 
-#ifndef _WIN32
 // Walk a directory and create lowercase symlinks for any file whose name
 // contains uppercase letters, if the lowercase name doesn't already exist.
 // QSS files authored on Windows often reference asset files with lowercase
 // names but the actual files on disk use mixed case — on a case-sensitive
-// filesystem Qt's url() resolver fails.  Shimming lowercase symlinks lets
-// the existing paths resolve without touching the original files.
+// filesystem Qt's url() resolver fails. Shimming lowercase symlinks lets the
+// existing paths resolve without touching the original files.
 static void createLowercaseStylesheetShims(const QString& dirPath)
 {
   namespace fs = std::filesystem;
@@ -908,7 +887,6 @@ static void createLowercaseStylesheetShims(const QString& dirPath)
     }
   }
 }
-#endif
 
 void MOApplication::updateStyle(const QString& fileName)
 {
@@ -918,11 +896,9 @@ void MOApplication::updateStyle(const QString& fileName)
   } else {
     QFile stylesheet(fileName);
     if (stylesheet.exists()) {
-#ifndef _WIN32
       // Pre-create lowercase shims so url(foo.svg) in the QSS resolves even
       // when the on-disk file is Foo.svg.
       createLowercaseStylesheetShims(QFileInfo(fileName).absolutePath());
-#endif
       setStyle(new ProxyStyle(QStyleFactory::create(
           extractBaseStyleFromStyleSheet(stylesheet, m_defaultStyle))));
       setStyleSheet(QString("file:///%1").arg(fileName));

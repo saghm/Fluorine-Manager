@@ -6,10 +6,8 @@
 #include "uilocker.h"
 #include <executableinfo.h>
 
-#ifndef _WIN32
 #include <sys/types.h>
 #include <sys/wait.h>
-#endif
 
 class OrganizerCore;
 class IUserInterface;
@@ -129,13 +127,9 @@ public:
   //
   Results run();
 
-  // takes ownership of the given handle and waits for it if required
+  // takes ownership of the given pid and waits for it if required
   //
-#ifdef _WIN32
-  Results attachToProcess(HANDLE h);
-#else
   Results attachToProcess(pid_t pid);
-#endif
 
   // exit code of the process, will return -1 if the process wasn't waited for
   //
@@ -151,27 +145,12 @@ public:
   // note that the handle is still owned by this ProcessRunner and will be
   // closed when destroyed; see stealProcessHandle()
   //
-#ifdef _WIN32
-  HANDLE getProcessHandle() const;
-#else
   pid_t getProcessHandle() const;
-#endif
 
   // releases ownership of the process handle; if this is called after the
   // process is completed, exitCode() will still return the correct value
   //
   env::HandlePtr stealProcessHandle();
-
-#ifdef _WIN32
-  // waits for all usvfs processes spawned by this instance of MO; returns
-  // immediately with ForceUnlocked if locking is disabled
-  //
-  // strictly speaking, this shouldn't be here, as it has nothing to do with
-  // running a process, but it uses the same internal stuff as when running a
-  // process
-  //
-  Results waitForAllUSVFSProcessesWithLock(UILocker::Reasons reason);
-#endif
 
 private:
   OrganizerCore& m_core;

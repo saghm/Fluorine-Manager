@@ -19,10 +19,6 @@ QString fluorineDataDir()
 
 void fluorineMigrateDataDir()
 {
-#ifdef _WIN32
-  return;
-#endif
-
   const QString oldRoot = OldFlatpakRoot;
   const QString newRoot = fluorineDataDir();
 

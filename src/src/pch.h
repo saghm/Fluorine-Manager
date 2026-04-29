@@ -31,24 +31,6 @@
 #include <vector>
 #include <wchar.h>
 
-#ifdef _WIN32
-// keep this header separated to avoid ordering issue since this must be
-// included before DbgHelp.h
-#include <Windows.h>
-
-// windows
-#include <DbgHelp.h>
-#include <LMCons.h>
-#include <Psapi.h>
-#include <Shellapi.h>
-#include <Shlwapi.h>
-#include <eh.h>
-#include <shlobj.h>
-#include <tchar.h>
-#include <wincred.h>
-#include <windowsx.h>
-#include <tlhelp32.h>
-#else
 // linux
 #include <unistd.h>
 #include <sys/stat.h>
@@ -59,7 +41,6 @@
 #include <signal.h>
 #include <pwd.h>
 #include "shared/windows_compat.h"
-#endif
 
 // boost
 #include <boost/algorithm/string.hpp>

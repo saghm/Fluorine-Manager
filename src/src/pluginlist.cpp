@@ -55,10 +55,8 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "shared/windows_error.h"
 #include "viewmarkingscrollbar.h"
 
-#ifndef _WIN32
 #include <sys/stat.h>
 #include <fcntl.h>
-#endif
 
 using namespace MOBase;
 using namespace MOShared;
@@ -780,41 +778,9 @@ bool PluginList::saveLoadOrder(DirectoryEntry& directoryStructure)
                          directoryStructure.getOriginByID(originid).getPath()))
                      .filePath(esp.name);
 
-#ifdef _WIN32
-      HANDLE file =
-          ::CreateFile(ToWString(fileName).c_str(), GENERIC_READ | GENERIC_WRITE, 0,
-                       nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-      if (file == INVALID_HANDLE_VALUE) {
-        if (::GetLastError() == ERROR_SHARING_VIOLATION) {
-          // file is locked, probably the game is running
-          return false;
-        } else {
-          throw windows_error(
-              QObject::tr("failed to access %1").arg(fileName).toUtf8().constData());
-        }
-      }
-
-      ULONGLONG temp = 0;
-      temp           = (145731ULL + esp.priority) * 24 * 60 * 60 * 10000000ULL;
-
-      FILETIME newWriteTime;
-
-      newWriteTime.dwLowDateTime  = (DWORD)(temp & 0xFFFFFFFF);
-      newWriteTime.dwHighDateTime = (DWORD)(temp >> 32);
-      esp.time                    = newWriteTime;
-      fileEntry->setFileTime(newWriteTime);
-      if (!::SetFileTime(file, nullptr, nullptr, &newWriteTime)) {
-        throw windows_error(QObject::tr("failed to set file time %1")
-                                .arg(fileName)
-                                .toUtf8()
-                                .constData());
-      }
-
-      CloseHandle(file);
-#else
-      // On Linux, use utimensat to set file modification time
-      ULONGLONG temp = 0;
-      temp           = (145731ULL + esp.priority) * 24 * 60 * 60 * 10000000ULL;
+      // Use utimensat to set the file modification time. The values track the
+      // Windows-epoch FILETIME so they round-trip with the in-memory state.
+      ULONGLONG temp = (145731ULL + esp.priority) * 24 * 60 * 60 * 10000000ULL;
 
       FILETIME newWriteTime;
       newWriteTime.dwLowDateTime  = (DWORD)(temp & 0xFFFFFFFF);
@@ -822,24 +788,21 @@ bool PluginList::saveLoadOrder(DirectoryEntry& directoryStructure)
       esp.time                    = newWriteTime;
       fileEntry->setFileTime(newWriteTime);
 
-      // Convert FILETIME to timespec and set the file modification time
-      {
-        uint64_t ticks = (static_cast<uint64_t>(newWriteTime.dwHighDateTime) << 32) |
-                         newWriteTime.dwLowDateTime;
-        // Convert from Windows epoch (1601) to Unix epoch (1970)
-        ticks -= 116444736000000000ULL;
-        time_t secs = static_cast<time_t>(ticks / 10000000ULL);
-        struct timespec times[2];
-        times[0].tv_sec = 0;
-        times[0].tv_nsec = UTIME_OMIT;
-        times[1].tv_sec = secs;
-        times[1].tv_nsec = 0;
-        std::string path = fileName.toStdString();
-        if (utimensat(AT_FDCWD, path.c_str(), times, 0) != 0) {
-          log::warn("failed to set file time for {}", fileName);
-        }
+      uint64_t ticks =
+          (static_cast<uint64_t>(newWriteTime.dwHighDateTime) << 32) |
+          newWriteTime.dwLowDateTime;
+      // Convert from Windows epoch (1601) to Unix epoch (1970).
+      ticks -= 116444736000000000ULL;
+      time_t secs = static_cast<time_t>(ticks / 10000000ULL);
+      struct timespec times[2];
+      times[0].tv_sec  = 0;
+      times[0].tv_nsec = UTIME_OMIT;
+      times[1].tv_sec  = secs;
+      times[1].tv_nsec = 0;
+      std::string path = fileName.toStdString();
+      if (utimensat(AT_FDCWD, path.c_str(), times, 0) != 0) {
+        log::warn("failed to set file time for {}", fileName);
       }
-#endif
     }
   }
   return true;
@@ -1950,7 +1913,9 @@ PluginList::ESPInfo::ESPInfo(const QString& name, bool forceLoaded, bool forceEn
       isMasterOfSelectedPlugin(false)
 {
   QString parsePath = fullPath;
-#ifndef _WIN32
+  // Linux is case-sensitive while Windows-authored paths sometimes mismatch
+  // the actual filename casing. Resolve to the on-disk casing so the plugin
+  // parser doesn't fail when only the case differs.
   if (!QFileInfo::exists(parsePath)) {
     const QFileInfo fi(parsePath);
     const QDir dir(fi.path());
@@ -1963,13 +1928,13 @@ PluginList::ESPInfo::ESPInfo(const QString& name, bool forceLoaded, bool forceEn
                                                               Qt::CaseInsensitive) == 0;
                                    });
       if (it != candidates.end()) {
-        parsePath     = dir.filePath(*it);
+        parsePath      = dir.filePath(*it);
         this->fullPath = parsePath;
-        log::warn("plugin path case mismatch, resolved '{}' -> '{}'", fullPath, parsePath);
+        log::warn("plugin path case mismatch, resolved '{}' -> '{}'", fullPath,
+                  parsePath);
       }
     }
   }
-#endif
 
   try {
     // Linux filesystem is UTF-8. ToWString → wstring → naive wchar_t->char

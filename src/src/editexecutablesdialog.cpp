@@ -26,9 +26,6 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "ui_editexecutablesdialog.h"
 
 #include <QMessageBox>
-#ifdef _WIN32
-#include <Shellapi.h>
-#endif
 #include <algorithm>
 #include <utility.h>
 

@@ -18,6 +18,9 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "windows_error.h"
+
+#include <cerrno>
+#include <cstring>
 #include <sstream>
 
 namespace MOShared
@@ -28,34 +31,13 @@ std::string windows_error::constructMessage(const std::string& input, int inErro
   std::ostringstream finalMessage;
   finalMessage << input;
 
-#ifdef _WIN32
-  LPSTR buffer = nullptr;
-
-  DWORD errorCode = inErrorCode != -1 ? inErrorCode : ::GetLastError();
-
-  // TODO: the message is not english?
-  if (FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
-                     nullptr, errorCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                     (LPSTR)&buffer, 0, nullptr) == 0) {
-    finalMessage << " (errorcode " << errorCode << ")";
-  } else {
-    LPSTR lastChar = buffer + strlen(buffer) - 2;
-    *lastChar      = '\0';
-    finalMessage << " (" << buffer << " [" << errorCode << "])";
-    LocalFree(buffer);  // allocated by FormatMessage
-  }
-
-  ::SetLastError(
-      errorCode);  // restore error code because FormatMessage might have modified it
-#else
-  int errorCode = inErrorCode != -1 ? inErrorCode : errno;
+  int errorCode      = inErrorCode != -1 ? inErrorCode : errno;
   const char* errStr = std::strerror(errorCode);
   if (errStr) {
     finalMessage << " (" << errStr << " [" << errorCode << "])";
   } else {
     finalMessage << " (errorcode " << errorCode << ")";
   }
-#endif
 
   return finalMessage.str();
 }

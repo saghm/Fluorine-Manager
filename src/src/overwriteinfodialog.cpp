@@ -24,9 +24,6 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <QMenu>
 #include <QMessageBox>
 #include <QShortcut>
-#ifdef _WIN32
-#include <Shlwapi.h>
-#endif
 
 using namespace MOBase;
 

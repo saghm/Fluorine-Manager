@@ -9,13 +9,12 @@
 #include "organizercore.h"
 #include "shared/util.h"
 #include "thread_utils.h"
+
 #include <log.h>
 #include <report.h>
+
 #include <QString>
 
-#ifdef _WIN32
-#include <windows.h>
-#else
 #include <atomic>
 #include <csignal>
 #include <cstdlib>
@@ -25,14 +24,8 @@
 #include <sys/mount.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#endif
 
 using namespace MOBase;
-
-#ifdef _WIN32
-thread_local LPTOP_LEVEL_EXCEPTION_FILTER g_prevExceptionFilter = nullptr;
-thread_local std::terminate_handler g_prevTerminateHandler      = nullptr;
-#endif
 
 int run(int argc, char* argv[]);
 
@@ -45,7 +38,6 @@ int main(int argc, char* argv[])
 
 int run(int argc, char* argv[])
 {
-#ifndef _WIN32
   if (argc >= 3 && QString(argv[1]) == "nxm-handle") {
     QString nxmUrl = QString::fromLocal8Bit(argv[2]);
     if (nxmUrl == "nxm-handle" && argc >= 4) {
@@ -53,23 +45,19 @@ int run(int argc, char* argv[])
     }
     return NxmHandlerLinux::sendToSocket(nxmUrl) ? 0 : 1;
   }
-#endif
 
   MOShared::SetThisThreadName("main");
   setExceptionHandlers();
 
   cl::CommandLine cl;
-#ifdef _WIN32
-  if (auto r = cl.process(GetCommandLineW())) {
-    return *r;
-  }
-#else
-  // Build a wstring from argv for the CommandLine parser.
-  // Each argument must be quoted so that po::split_unix() round-trips
-  // correctly when paths contain spaces.
+
+  // Build a wstring from argv for the CommandLine parser. Each argument must
+  // be quoted so that po::split_unix() round-trips correctly when paths
+  // contain spaces.
   std::wstring cmdLine;
   for (int i = 0; i < argc; ++i) {
-    if (i > 0) cmdLine += L' ';
+    if (i > 0)
+      cmdLine += L' ';
     std::string arg(argv[i]);
     std::wstring warg(arg.begin(), arg.end());
     if (warg.find(L' ') != std::wstring::npos) {
@@ -83,7 +71,6 @@ int run(int argc, char* argv[])
   if (auto r = cl.process(cmdLine)) {
     return *r;
   }
-#endif
 
   fluorineMigrateDataDir();
 
@@ -94,20 +81,17 @@ int run(int argc, char* argv[])
 
   MOApplication app(argc, argv);
 
-  // check if the command line wants to run something right now
   if (auto r = cl.runPostApplication(app)) {
     return *r;
   }
 
-  // check if there's another process running
   MOMultiProcess multiProcess(cl.multiple());
 
   if (multiProcess.ephemeral()) {
-    // this is not the primary process
+    // not the primary process
 
     if (cl.forwardToPrimary(multiProcess)) {
-      // but there's something on the command line that could be forwarded to
-      // it, so just exit
+      // there's something on the command line that could be forwarded — exit
       return 0;
     }
 
@@ -118,7 +102,6 @@ int run(int argc, char* argv[])
     return 1;
   }
 
-  // check if the command line wants to run something right now
   if (auto r = cl.runPostMultiProcess(multiProcess)) {
     return *r;
   }
@@ -152,10 +135,7 @@ int run(int argc, char* argv[])
         pick         = false;
 
         if (r == RestartExitCode || r == ReselectExitCode) {
-          // resets things when MO is "restarted"
           app.resetForRestart();
-
-          // don't reprocess command line
           cl.clear();
 
           if (r == ReselectExitCode) {
@@ -164,52 +144,48 @@ int run(int argc, char* argv[])
 
           continue;
         } else if (r != 0) {
-          // something failed, quit
           return r;
         }
       }
 
-      // check if the command line wants to run something right now
       if (auto r = cl.runPostOrganizer(app.core())) {
         return *r;
       }
 
-#ifndef _WIN32
       NxmHandlerLinux nxmHandler;
       if (!nxmHandler.startListener()) {
         log::warn("nxm listener could not be started");
       } else {
-        QObject::connect(&nxmHandler, &NxmHandlerLinux::nxmReceived, &app.core(),
-                         [&](const NxmLink& link) {
-                           app.core().downloadRequestedNXM(
-                               QString("nxm://%1/mods/%2/files/%3?key=%4&expires=%5&user_id=%6")
-                                   .arg(link.game_domain)
-                                   .arg(link.mod_id)
-                                   .arg(link.file_id)
-                                   .arg(link.key)
-                                   .arg(link.expires)
-                                   .arg(link.user_id));
-                         });
+        QObject::connect(
+            &nxmHandler, &NxmHandlerLinux::nxmReceived, &app.core(),
+            [&](const NxmLink& link) {
+              app.core().downloadRequestedNXM(
+                  QString("nxm://%1/mods/%2/files/%3?key=%4&expires=%5&user_id=%6")
+                      .arg(link.game_domain)
+                      .arg(link.mod_id)
+                      .arg(link.file_id)
+                      .arg(link.key)
+                      .arg(link.expires)
+                      .arg(link.user_id));
+            });
 
         QObject::connect(&nxmHandler, &NxmHandlerLinux::directDownloadReceived,
                          &app.core(), [&](const QString& url, const QString&) {
-                           QMetaObject::invokeMethod(&app.core(), [&app, url] {
-                             app.core().downloadManager()->startDownloadURLs(QStringList{url});
-                           }, Qt::QueuedConnection);
+                           QMetaObject::invokeMethod(
+                               &app.core(),
+                               [&app, url] {
+                                 app.core().downloadManager()->startDownloadURLs(
+                                     QStringList{url});
+                               },
+                               Qt::QueuedConnection);
                          });
       }
-#endif
 
-      // run the main window
       const auto r = app.run(multiProcess);
 
       if (r == RestartExitCode) {
-        // resets things when MO is "restarted"
         app.resetForRestart();
-
-        // don't reprocess command line
         cl.clear();
-
         continue;
       }
 
@@ -221,66 +197,15 @@ int run(int argc, char* argv[])
   }
 }
 
-#ifdef _WIN32
-LONG WINAPI onUnhandledException(_EXCEPTION_POINTERS* ptrs)
-{
-  const auto path = OrganizerCore::getGlobalCoreDumpPath();
-  const auto type = OrganizerCore::getGlobalCoreDumpType();
-
-  const auto r = env::coredump(path.empty() ? nullptr : path.c_str(), type);
-
-  if (r) {
-    log::error("ModOrganizer has crashed, core dump created.");
-  } else {
-    log::error("ModOrganizer has crashed, core dump failed");
-  }
-
-  // g_prevExceptionFilter somehow sometimes point to this function, making this
-  // recurse and create hundreds of core dump, not sure why
-  if (g_prevExceptionFilter && ptrs && g_prevExceptionFilter != onUnhandledException)
-    return g_prevExceptionFilter(ptrs);
-  else
-    return EXCEPTION_CONTINUE_SEARCH;
-}
-
-void onTerminate() noexcept
-{
-  __try {
-    // force an exception to get a valid stack trace for this thread
-    *(int*)0 = 42;
-  } __except (onUnhandledException(GetExceptionInformation()),
-              EXCEPTION_EXECUTE_HANDLER) {
-  }
-
-  if (g_prevTerminateHandler) {
-    g_prevTerminateHandler();
-  } else {
-    std::abort();
-  }
-}
-
-void setExceptionHandlers()
-{
-  if (g_prevExceptionFilter) {
-    // already called
-    return;
-  }
-
-  g_prevExceptionFilter  = SetUnhandledExceptionFilter(onUnhandledException);
-  g_prevTerminateHandler = std::set_terminate(onTerminate);
-}
-
-#else  // Linux
-
-// Defined in fuseconnector.cpp — returns the current FUSE mount point
-// (or nullptr if nothing is mounted).  The backing buffer is a plain
-// char[] so reading it in a signal handler is async-signal-safe.
+// Defined in fuseconnector.cpp — returns the current FUSE mount point (or
+// nullptr if nothing is mounted). The backing buffer is a plain char[] so
+// reading it in a signal handler is async-signal-safe.
 extern const char* getFuseMountPointForCrashCleanup();
 
-// Async-signal-safe-ish: try direct umount2(MNT_DETACH) first (single syscall,
-// no fork/malloc), then fall back to fusermount3 -uz.  Lazy detach is what
-// actually keeps us out of D-state — a normal unmount blocks indefinitely if
-// the mount is busy, which is exactly when we crash.
+// Async-signal-safe-ish: try direct umount2(MNT_DETACH) first (single
+// syscall, no fork/malloc), then fall back to fusermount3 -uz. Lazy detach
+// is what actually keeps us out of D-state — a normal unmount blocks
+// indefinitely if the mount is busy, which is exactly when we crash.
 static void emergencyFuseUnmount() noexcept
 {
   const char* mp = getFuseMountPointForCrashCleanup();
@@ -288,17 +213,17 @@ static void emergencyFuseUnmount() noexcept
     return;
   }
 
-  // Step 1: direct lazy unmount.  Works without fusermount3 setuid helper if
-  // we own the mount (we do — it's our session).  Single syscall, no heap.
+  // Step 1: direct lazy unmount. Works without the fusermount3 setuid helper
+  // if we own the mount (we do — it's our session). Single syscall, no heap.
   if (umount2(mp, MNT_DETACH) == 0) {
     return;
   }
 
-  // Step 2: fall back to fusermount3 -uz.  Don't waitpid() — a hung child
-  // would wedge the crash handler.  Detach with double-fork so PID 1 reaps it.
+  // Step 2: fall back to fusermount3 -uz. Don't waitpid() on the grandchild —
+  // a hung child would wedge the crash handler. Detach with double-fork so
+  // PID 1 reaps it.
   const pid_t child = fork();
   if (child == 0) {
-    // Intermediate child: fork again then exit so the grandchild is reparented.
     const pid_t grand = fork();
     if (grand == 0) {
       execlp("fusermount3", "fusermount3", "-uz", mp, nullptr);
@@ -307,7 +232,6 @@ static void emergencyFuseUnmount() noexcept
     }
     _exit(0);
   } else if (child > 0) {
-    // Reap the intermediate child only — it exits immediately.
     int status = 0;
     waitpid(child, &status, 0);
   }
@@ -322,23 +246,22 @@ static void linuxCrashHandler(int sig)
   emergencyFuseUnmount();
 
   const char* sigName = (sig == SIGSEGV) ? "SIGSEGV"
-                      : (sig == SIGABRT) ? "SIGABRT"
-                      : (sig == SIGFPE)  ? "SIGFPE"
-                                         : "UNKNOWN";
+                        : (sig == SIGABRT) ? "SIGABRT"
+                        : (sig == SIGFPE)  ? "SIGFPE"
+                                           : "UNKNOWN";
 
   fprintf(stderr, "\n=== MO2 CRASH: signal %s (%d) ===\n", sigName, sig);
 
-  // Print backtrace
   void* frames[64];
   int count = backtrace(frames, 64);
   fprintf(stderr, "Backtrace (%d frames):\n", count);
   backtrace_symbols_fd(frames, count, STDERR_FILENO);
   fprintf(stderr, "=== END BACKTRACE ===\n");
 
-  // Force-terminate the whole process group.  raise(sig) only delivers to the
+  // Force-terminate the whole process group. raise(sig) only delivers to the
   // current thread and depends on the signal not being masked process-wide;
-  // libfuse blocks signals on its workers, so raise() can hang.  _exit() always
-  // terminates immediately and reaps every thread.
+  // libfuse blocks signals on its workers, so raise() can hang. _exit()
+  // always terminates immediately and reaps every thread.
   _exit(128 + sig);
 }
 
@@ -350,10 +273,10 @@ static void linuxTermHandler(int sig)
   _exit(128 + sig);
 }
 
-// std::terminate fires for uncaught C++ exceptions (including bad_alloc thrown
-// out of a noexcept boundary).  The default handler aborts via SIGABRT, but if
-// SIGABRT is masked on the throwing thread the process can hang.  Run our FUSE
-// cleanup first, then call abort() ourselves.
+// std::terminate fires for uncaught C++ exceptions (including bad_alloc
+// thrown out of a noexcept boundary). The default handler aborts via
+// SIGABRT, but if SIGABRT is masked on the throwing thread the process can
+// hang. Run our FUSE cleanup first, then call abort() ourselves.
 static void linuxTerminateHandler() noexcept
 {
   static std::atomic<bool> entered{false};
@@ -376,26 +299,25 @@ static void linuxTerminateHandler() noexcept
 
 void setExceptionHandlers()
 {
-  // sigaction with SA_RESETHAND + no SA_RESTART; preferred over signal() since
-  // signal() semantics vary.  Don't block other fatal signals while handling
-  // one — we want a second crash to terminate immediately rather than recurse.
+  // sigaction with SA_RESETHAND + no SA_RESTART; preferred over signal()
+  // since signal() semantics vary. Don't block other fatal signals while
+  // handling one — we want a second crash to terminate immediately rather
+  // than recurse.
   struct sigaction sa{};
   sa.sa_handler = linuxCrashHandler;
   sa.sa_flags   = SA_RESETHAND;
   sigemptyset(&sa.sa_mask);
   sigaction(SIGSEGV, &sa, nullptr);
   sigaction(SIGABRT, &sa, nullptr);
-  sigaction(SIGFPE,  &sa, nullptr);
-  sigaction(SIGBUS,  &sa, nullptr);
+  sigaction(SIGFPE, &sa, nullptr);
+  sigaction(SIGBUS, &sa, nullptr);
 
   struct sigaction term{};
   term.sa_handler = linuxTermHandler;
   term.sa_flags   = SA_RESETHAND;
   sigemptyset(&term.sa_mask);
   sigaction(SIGTERM, &term, nullptr);
-  sigaction(SIGINT,  &term, nullptr);
+  sigaction(SIGINT, &term, nullptr);
 
   std::set_terminate(linuxTerminateHandler);
 }
-
-#endif

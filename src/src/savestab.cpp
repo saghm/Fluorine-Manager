@@ -246,16 +246,6 @@ QDir SavesTab::currentSavesDir() const
 
     QString iniPath = m_core.currentProfile()->absoluteIniFilePath(iniFiles[0]);
 
-#ifdef _WIN32
-    wchar_t path[MAX_PATH];
-    if (::GetPrivateProfileStringW(L"General", L"SLocalSavePath", L"", path, MAX_PATH,
-                                   iniPath.toStdWString().c_str())) {
-      savesDir.setPath(m_core.managedGame()->documentsDirectory().absoluteFilePath(
-          QString::fromWCharArray(path)));
-    } else {
-      savesDir = m_core.managedGame()->savesDirectory();
-    }
-#else
     // Read directly without QSettings — QSettings::IniFormat interprets
     // trailing backslashes as line continuations, corrupting values like
     // "sLocalSavePath=__MO_Saves\".
@@ -265,12 +255,13 @@ QDir SavesTab::currentSavesDir() const
     while (savePath.endsWith('\\') || savePath.endsWith('/')) {
       savePath.chop(1);
     }
-    if (!savePath.isEmpty() && savePath.compare("__MO_Saves", Qt::CaseInsensitive) != 0) {
-      savesDir.setPath(m_core.managedGame()->documentsDirectory().absoluteFilePath(savePath));
+    if (!savePath.isEmpty() &&
+        savePath.compare("__MO_Saves", Qt::CaseInsensitive) != 0) {
+      savesDir.setPath(
+          m_core.managedGame()->documentsDirectory().absoluteFilePath(savePath));
     } else {
       savesDir = m_core.managedGame()->savesDirectory();
     }
-#endif
   }
 
   return savesDir;
