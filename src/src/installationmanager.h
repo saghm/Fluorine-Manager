@@ -259,7 +259,7 @@ public:
    */
   InstallationResult testOverwrite(MOBase::GuessedValue<QString>& modName);
 
-  QString generateBackupName(const QString& directoryName) const;
+  static QString generateBackupName(const QString& directoryName) ;
 
 private:
   // actually perform the installation (write files to the disk, etc.), returns the

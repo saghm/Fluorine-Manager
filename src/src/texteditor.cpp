@@ -393,7 +393,7 @@ TextEditorLineNumbers::TextEditorLineNumbers(TextEditor& editor)
 
 QSize TextEditorLineNumbers::sizeHint() const
 {
-  return QSize(areaWidth(), 0);
+  return {areaWidth(), 0};
 }
 
 int TextEditorLineNumbers::areaWidth() const

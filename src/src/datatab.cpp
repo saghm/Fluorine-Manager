@@ -109,7 +109,7 @@ void DataTab::saveState(Settings& s) const
   s.widgets().saveChecked(ui.hiddenFiles);
 }
 
-void DataTab::restoreState(const Settings& s)
+void DataTab::restoreState(const Settings& s) const
 {
   s.geometry().restoreState(ui.tree->header());
 

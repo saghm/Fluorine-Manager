@@ -222,7 +222,7 @@ void DownloadManager::DownloadInfo::setName(QString newName, bool renameFile)
   }
   if (renameFile) {
     if ((newName != m_Output.fileName()) && !m_Output.rename(newName)) {
-      reportError(tr("failed to rename \"%1\" to \"%2\"")
+      reportError(tr(R"(failed to rename "%1" to "%2")")
                       .arg(m_Output.fileName())
                       .arg(newName));
       return;
@@ -238,7 +238,7 @@ void DownloadManager::DownloadInfo::setName(QString newName, bool renameFile)
   }
 }
 
-bool DownloadManager::DownloadInfo::isPausedState()
+bool DownloadManager::DownloadInfo::isPausedState() const
 {
   return m_State == STATE_PAUSED || m_State == STATE_ERROR;
 }
@@ -1662,7 +1662,7 @@ QString DownloadManager::getFileNameFromNetworkReply(QNetworkReply* reply)
     }
   }
 
-  return QString();
+  return {};
 }
 
 void DownloadManager::setState(DownloadManager::DownloadInfo* info,
@@ -2061,7 +2061,7 @@ int DownloadManager::startDownloadNexusFile(const QString& gameName, int modID,
   return newID;
 }
 
-QString DownloadManager::downloadPath(int id)
+QString DownloadManager::downloadPath(int id) const
 {
   return getFilePath(id);
 }

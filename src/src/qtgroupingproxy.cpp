@@ -42,7 +42,7 @@ QtGroupingProxy::QtGroupingProxy(QModelIndex rootNode, int groupedColumn,
   }
 }
 
-QtGroupingProxy::~QtGroupingProxy() {}
+QtGroupingProxy::~QtGroupingProxy() = default;
 
 void QtGroupingProxy::setSourceModel(QAbstractItemModel* model)
 {
@@ -294,11 +294,11 @@ int QtGroupingProxy::indexOfParentCreate(const QModelIndex& parent) const
 QModelIndex QtGroupingProxy::index(int row, int column, const QModelIndex& parent) const
 {
   if (!hasIndex(row, column, parent)) {
-    return QModelIndex();
+    return {};
   }
 
   if (parent.column() > 0) {
-    return QModelIndex();
+    return {};
   }
 
   /* We save the instructions to make the parent of the index in a struct.
@@ -312,11 +312,11 @@ QModelIndex QtGroupingProxy::index(int row, int column, const QModelIndex& paren
 QModelIndex QtGroupingProxy::parent(const QModelIndex& index) const
 {
   if (!index.isValid())
-    return QModelIndex();
+    return {};
 
   int parentCreateIndex = index.internalId();
   if (parentCreateIndex == -1 || parentCreateIndex >= m_parentCreateList.count())
-    return QModelIndex();
+    return {};
 
   struct ParentCreate pc = m_parentCreateList[parentCreateIndex];
 
@@ -393,7 +393,7 @@ static QVariant variantMin(const QVariantList& variants)
 QVariant QtGroupingProxy::data(const QModelIndex& index, int role) const
 {
   if (!index.isValid())
-    return QVariant();
+    return {};
 
   int row    = index.row();
   int column = index.column();
@@ -416,7 +416,7 @@ QVariant QtGroupingProxy::data(const QModelIndex& index, int role) const
       } break;
       case Qt::CheckStateRole: {
         if (column != 0)
-          return QVariant();
+          return {};
         int childCount          = m_groupMap.value(row).count();
         int checked             = 0;
         QModelIndex parentIndex = this->index(row, 0, index.parent());
@@ -438,7 +438,7 @@ QVariant QtGroupingProxy::data(const QModelIndex& index, int role) const
         if (m_groupMap.value(row).count() > 0) {
           return this->index(0, column, parentIndex).data(role);
         } else {
-          return QVariant();
+          return {};
         }
         //                return m_groupMaps[row][column].value( role );
       } break;
@@ -464,7 +464,7 @@ QVariant QtGroupingProxy::data(const QModelIndex& index, int role) const
     QVariantList variantsOfChildren;
     int childCount = m_groupMap.value(row).count();
     if (childCount == 0)
-      return QVariant();
+      return {};
 
     int function = AGGR_NONE;
     if (m_aggregateRole >= Qt::UserRole) {
@@ -492,12 +492,12 @@ QVariant QtGroupingProxy::data(const QModelIndex& index, int role) const
     }
 
     if (variantsOfChildren.count() == 0)
-      return QVariant();
+      return {};
 
     // only one unique variant? No need to return a list
     switch (function) {
     case AGGR_EMPTY:
-      return QVariant();
+      return {};
     case AGGR_FIRST:
       return variantsOfChildren.first();
     case AGGR_MAX:
@@ -581,7 +581,7 @@ QModelIndex QtGroupingProxy::mapToSource(const QModelIndex& index) const
 
     QList<int> childRows = m_groupMap.value(proxyParent.row());
     if (childRows.isEmpty() || indexInGroup >= childRows.count() || indexInGroup < 0)
-      return QModelIndex();
+      return {};
 
     originalRow = childRows.at(indexInGroup);
   }
@@ -602,7 +602,7 @@ QModelIndexList QtGroupingProxy::mapToSource(const QModelIndexList& list) const
 QModelIndex QtGroupingProxy::mapFromSource(const QModelIndex& idx) const
 {
   if (!idx.isValid())
-    return QModelIndex();
+    return {};
 
   QModelIndex proxyParent;
   QModelIndex sourceParent = idx.parent();
@@ -647,9 +647,9 @@ Qt::ItemFlags QtGroupingProxy::flags(const QModelIndex& idx) const
   if (!idx.isValid()) {
     Qt::ItemFlags rootFlags = sourceModel()->flags(m_rootNode);
     if (rootFlags.testFlag(Qt::ItemIsDropEnabled))
-      return Qt::ItemFlags(Qt::ItemIsDropEnabled);
+      return {Qt::ItemIsDropEnabled};
 
-    return Qt::ItemFlags(0);
+    return {0};
   }
 
   // only if the grouped column has the editable flag set allow the

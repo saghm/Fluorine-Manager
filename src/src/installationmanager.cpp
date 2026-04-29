@@ -123,7 +123,7 @@ InstallationManager::InstallationManager()
           &InstallationManager::queryPassword, Qt::BlockingQueuedConnection);
 }
 
-InstallationManager::~InstallationManager() {}
+InstallationManager::~InstallationManager() = default;
 
 void InstallationManager::setParentWidget(QWidget* widget)
 {
@@ -300,7 +300,7 @@ QStringList InstallationManager::extractFiles(
   }
 
   if (!extractFiles(QDir::tempPath(), tr("Extracting files"), false, silent)) {
-    return QStringList();
+    return {};
   }
 
   return result;
@@ -318,7 +318,7 @@ InstallationManager::createFile(std::shared_ptr<const MOBase::FileTreeEntry> ent
 
   // Open/Close the file so that installer can use it properly:
   if (!tempFile.open()) {
-    return QString();
+    return {};
   }
   tempFile.close();
 
@@ -372,7 +372,7 @@ InstallationManager::installArchive(GuessedValue<QString>& modName,
   return install(archiveName, modName, modId).result();
 }
 
-QString InstallationManager::generateBackupName(const QString& directoryName) const
+QString InstallationManager::generateBackupName(const QString& directoryName) 
 {
   QString backupName = directoryName + "_backup";
   if (QDir(backupName).exists()) {
@@ -649,7 +649,7 @@ InstallationResult InstallationManager::install(const QString& fileName,
   QFileInfo fileInfo(fileName);
   if (!getSupportedExtensions().contains(fileInfo.suffix(), Qt::CaseInsensitive)) {
     reportError(tr("File format \"%1\" not supported").arg(fileInfo.suffix()));
-    return InstallationResult(IPluginInstaller::RESULT_FAILED);
+    return {IPluginInstaller::RESULT_FAILED};
   }
 
   modName.setFilter(&fixDirectoryName);
@@ -933,7 +933,7 @@ QStringList InstallationManager::getSupportedExtensions() const
       }
     }
   }
-  return QStringList(supportedExtensions.begin(), supportedExtensions.end());
+  return {supportedExtensions.begin(), supportedExtensions.end()};
 }
 
 void InstallationManager::notifyInstallationStart(QString const& archive,

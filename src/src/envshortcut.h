@@ -95,7 +95,7 @@ private:
 
   // returns the directory where the shortcut file should be saved
   //
-  QString shortcutDirectory(Locations loc) const;
+  static QString shortcutDirectory(Locations loc) ;
 
   // returns the filename of the shortcut file that should be used when saving
   //

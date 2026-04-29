@@ -88,9 +88,9 @@ private:
   std::unique_ptr<OrganizerCore> m_core;
 
   void externalMessage(const QString& message);
-  std::unique_ptr<Instance> getCurrentInstance(bool forceSelect);
-  std::optional<int> setupInstanceLoop(Instance& currentInstance, PluginContainer& pc);
-  void purgeOldFiles();
+  static std::unique_ptr<Instance> getCurrentInstance(bool forceSelect);
+  static std::optional<int> setupInstanceLoop(Instance& currentInstance, PluginContainer& pc);
+  static void purgeOldFiles();
 };
 
 class MOSplash
@@ -104,8 +104,8 @@ public:
 private:
   std::unique_ptr<QSplashScreen> ss_;
 
-  QString getSplashPath(const Settings& settings, const QString& dataPath,
-                        const MOBase::IPluginGame* game) const;
+  static QString getSplashPath(const Settings& settings, const QString& dataPath,
+                        const MOBase::IPluginGame* game) ;
 };
 
 #endif  // MOAPPLICATION_H

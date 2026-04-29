@@ -41,14 +41,14 @@ public:
     // some sub-build number, may be empty
     uint32_t UBR{0};
 
-    Release()  {}
+    Release()  = default;
   };
 
   WindowsInfo();
 
   // tries to guess whether this process is running in compatibility mode
   //
-  bool compatibilityMode() const;
+  static bool compatibilityMode() ;
 
   // returns the OS version
   //
@@ -76,15 +76,15 @@ private:
   std::optional<bool> m_elevated;
 
   // uses uname() to get the kernel version
-  Version getKernelVersion() const;
+  static Version getKernelVersion() ;
 
   // gets various information from the registry (Windows) or /etc/os-release (Linux)
   //
-  Release getRelease() const;
+  static Release getRelease() ;
 
   // gets whether the process is elevated
   //
-  std::optional<bool> getElevated() const;
+  static std::optional<bool> getElevated() ;
 };
 
 }  // namespace env

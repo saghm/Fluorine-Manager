@@ -72,7 +72,7 @@ private:
   bool m_active{false};
   QTimer m_timeout;
 
-  void setState(States s, const QString& error = {});
+  void setState(States s, const QString& error = {}) const;
 
   void close();
   void abort();
@@ -171,7 +171,7 @@ private:
   void onAttemptFailure(const ValidationAttempt& a);
 
   void setFinished(ValidationAttempt::Result r, const QString& message,
-                   std::optional<APIUserAccount> user);
+                   std::optional<APIUserAccount> user) const;
 };
 
 class ValidationProgressDialog : public QDialog

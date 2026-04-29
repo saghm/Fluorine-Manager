@@ -367,8 +367,8 @@ private:
 
   void paintThumbnail(const PaintContext& cx);
   void paintThumbnailBackground(const PaintContext& cx);
-  void paintThumbnailBorder(const PaintContext& cx);
-  void paintThumbnailImage(const PaintContext& cx);
+  void paintThumbnailBorder(const PaintContext& cx) const;
+  void paintThumbnailImage(const PaintContext& cx) const;
   void paintThumbnailText(const PaintContext& cx);
 
   void checkFiltering();

@@ -102,7 +102,7 @@ private:
   SaveCollection m_LocalSaves;
 
   void refreshSaves(SaveCollection& saveCollection, const QString& savedir);
-  void refreshCharacters(SaveCollection const& saveCollection, QListWidget* charList,
+  static void refreshCharacters(SaveCollection const& saveCollection, QListWidget* charList,
                          QPushButton* copy, QPushButton* move);
 
   bool

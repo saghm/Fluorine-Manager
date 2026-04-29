@@ -32,7 +32,7 @@ public:
           Ui::MainWindow* ui);
 
   void saveState(Settings& s) const;
-  void restoreState(const Settings& s);
+  void restoreState(const Settings& s) const;
   void activated();
 
   // if the data tab is currently visible, trigger an update of the

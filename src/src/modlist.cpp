@@ -104,7 +104,7 @@ int ModList::columnCount(const QModelIndex&) const
   return COL_LASTCOLUMN + 1;
 }
 
-QString ModList::getDisplayName(ModInfo::Ptr info) const
+QString ModList::getDisplayName(ModInfo::Ptr info) 
 {
   QString name = info->name();
   if (info->isSeparator()) {
@@ -113,7 +113,7 @@ QString ModList::getDisplayName(ModInfo::Ptr info) const
   return name;
 }
 
-QString ModList::makeInternalName(ModInfo::Ptr info, QString name) const
+QString ModList::makeInternalName(ModInfo::Ptr info, QString name) 
 {
   if (info->isSeparator()) {
     name += "_separator";
@@ -121,7 +121,7 @@ QString ModList::makeInternalName(ModInfo::Ptr info, QString name) const
   return name;
 }
 
-QString ModList::getFlagText(ModInfo::EFlag flag, ModInfo::Ptr modInfo) const
+QString ModList::getFlagText(ModInfo::EFlag flag, ModInfo::Ptr modInfo) 
 {
   switch (flag) {
   case ModInfo::FLAG_BACKUP:
@@ -153,7 +153,7 @@ QString ModList::getFlagText(ModInfo::EFlag flag, ModInfo::Ptr modInfo) const
 }
 
 QString ModList::getConflictFlagText(ModInfo::EConflictFlag flag,
-                                     ModInfo::Ptr modInfo) const
+                                     ModInfo::Ptr modInfo) 
 {
   switch (flag) {
   case ModInfo::FLAG_CONFLICT_OVERWRITE:
@@ -182,9 +182,9 @@ QString ModList::getConflictFlagText(ModInfo::EConflictFlag flag,
 QVariant ModList::data(const QModelIndex& modelIndex, int role) const
 {
   if (m_Profile == nullptr)
-    return QVariant();
+    return {};
   if (!modelIndex.isValid())
-    return QVariant();
+    return {};
   unsigned int modIndex = modelIndex.row();
   int column            = modelIndex.column();
 
@@ -192,7 +192,7 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
   if ((role == Qt::DisplayRole) || (role == Qt::EditRole)) {
     if ((column == COL_FLAGS) || (column == COL_CONTENT) ||
         (column == COL_CONFLICTFLAGS)) {
-      return QVariant();
+      return {};
     } else if (column == COL_NAME) {
       return getDisplayName(modInfo);
     } else if (column == COL_VERSION) {
@@ -206,7 +206,7 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
       return version;
     } else if (column == COL_PRIORITY) {
       if (modInfo->hasAutomaticPriority()) {
-        return QVariant();  // hide priority for mods where it's fixed
+        return {};  // hide priority for mods where it's fixed
       } else {
         return QString::number(m_Profile->getModPriority(modIndex));
       }
@@ -215,7 +215,7 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
       if (modID > 0) {
         return modID;
       } else {
-        return QVariant();
+        return {};
       }
     } else if (column == COL_GAME) {
       if (m_PluginContainer != nullptr) {
@@ -247,7 +247,7 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
             return QString();
           }
         } else {
-          return QVariant();
+          return {};
         }
       }
     } else if (column == COL_AUTHOR) {
@@ -259,7 +259,7 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
       if (modInfo->creationTime().isValid()) {
         return modInfo->creationTime();
       } else {
-        return QVariant();
+        return {};
       }
     } else if (column == COL_NOTES) {
       return modInfo->comments();
@@ -270,21 +270,21 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
     if (modInfo->canBeEnabled()) {
       return m_Profile->modEnabled(modIndex) ? Qt::Checked : Qt::Unchecked;
     } else {
-      return QVariant();
+      return {};
     }
   } else if (role == Qt::TextAlignmentRole) {
     if (column == COL_NAME) {
       if (modInfo->getHighlight() & ModInfo::HIGHLIGHT_CENTER) {
-        return QVariant(Qt::AlignCenter | Qt::AlignVCenter);
+        return {Qt::AlignCenter | Qt::AlignVCenter};
       } else {
-        return QVariant(Qt::AlignLeft | Qt::AlignVCenter);
+        return {Qt::AlignLeft | Qt::AlignVCenter};
       }
     } else if (column == COL_VERSION) {
-      return QVariant(Qt::AlignRight | Qt::AlignVCenter);
+      return {Qt::AlignRight | Qt::AlignVCenter};
     } else if (column == COL_NOTES) {
-      return QVariant(Qt::AlignLeft | Qt::AlignVCenter);
+      return {Qt::AlignLeft | Qt::AlignVCenter};
     } else {
-      return QVariant(Qt::AlignCenter | Qt::AlignVCenter);
+      return {Qt::AlignCenter | Qt::AlignVCenter};
     }
   } else if (role == GroupingRole) {
     if (column == COL_CATEGORY) {
@@ -298,7 +298,7 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
       if (categoryNames.count() != 0) {
         return categoryNames;
       } else {
-        return QVariant();
+        return {};
       }
     } else {
       return modInfo->nexusId();
@@ -352,7 +352,7 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
         return QIcon(":/MO/gui/version_date");
       }
     }
-    return QVariant();
+    return {};
   } else if (role == Qt::ForegroundRole) {
     if (column == COL_NAME) {
       int highlight = modInfo->getHighlight();
@@ -363,14 +363,14 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
       }
     } else if (column == COL_VERSION) {
       if (!modInfo->newestVersion().isValid()) {
-        return QVariant();
+        return {};
       } else if (modInfo->updateAvailable() || modInfo->downgradeAvailable()) {
         return QBrush(Qt::red);
       } else {
         return QBrush(Qt::darkGreen);
       }
     }
-    return QVariant();
+    return {};
   } else if (role == Qt::BackgroundRole || role == ScrollMarkRole) {
     if (column == COL_NOTES && modInfo->color().isValid()) {
       return modInfo->color();
@@ -379,7 +379,7 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
                 Settings::instance().colors().colorSeparatorScrollbar())) {
       return modInfo->color();
     } else {
-      return QVariant();
+      return {};
     }
   } else if (role == Qt::ToolTipRole) {
     if (column == COL_FLAGS) {
@@ -410,7 +410,7 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
         return QString();
       }
     } else if (column == COL_VERSION) {
-      QString text = tr("installed version: \"%1\", newest version: \"%2\"")
+      QString text = tr(R"(installed version: "%1", newest version: "%2")")
                          .arg(modInfo->version().displayString(3))
                          .arg(modInfo->newestVersion().displayString(3));
       if (modInfo->downgradeAvailable()) {
@@ -475,10 +475,10 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
     } else if (column == COL_NOTES) {
       return getFlagText(ModInfo::FLAG_NOTES, modInfo);
     } else {
-      return QVariant();
+      return {};
     }
   } else {
-    return QVariant();
+    return {};
   }
 }
 
@@ -606,7 +606,7 @@ QVariant ModList::headerData(int section, Qt::Orientation orientation, int role)
     } else if (role == Qt::ToolTipRole) {
       return getColumnToolTip(section);
     } else if (role == Qt::TextAlignmentRole) {
-      return QVariant(Qt::AlignCenter);
+      return {Qt::AlignCenter};
     } else if (role == MOBase::EnabledColumnRole) {
       if (section == COL_CONTENT) {
         return !m_Organizer->modDataContents().empty();
@@ -830,7 +830,7 @@ IModList::ModStates ModList::state(unsigned int modIndex) const
   return result;
 }
 
-QString ModList::displayName(const QString& internalName) const
+QString ModList::displayName(const QString& internalName) 
 {
   unsigned int modIndex = ModInfo::getIndex(internalName);
   if (modIndex == UINT_MAX) {
@@ -841,7 +841,7 @@ QString ModList::displayName(const QString& internalName) const
   }
 }
 
-QStringList ModList::allMods() const
+QStringList ModList::allMods() 
 {
   QStringList result;
   for (unsigned int i = 0; i < ModInfo::getNumMods(); ++i) {
@@ -865,13 +865,13 @@ QStringList ModList::allModsByProfilePriority(MOBase::IProfile* profile) const
   return res;
 }
 
-MOBase::IModInterface* ModList::getMod(const QString& name) const
+MOBase::IModInterface* ModList::getMod(const QString& name) 
 {
   unsigned int index = ModInfo::getIndex(name);
   return index == UINT_MAX ? nullptr : ModInfo::getByIndex(index).data();
 }
 
-bool ModList::removeMod(MOBase::IModInterface* mod)
+bool ModList::removeMod(MOBase::IModInterface* mod) const
 {
   bool result = ModInfo::removeMod(ModInfo::getIndex(mod->name()));
   if (result) {
@@ -1319,7 +1319,7 @@ void ModList::notifyChange(int rowStart, int rowEnd)
 QModelIndex ModList::index(int row, int column, const QModelIndex&) const
 {
   if ((row < 0) || (row >= rowCount()) || (column < 0) || (column >= columnCount())) {
-    return QModelIndex();
+    return {};
   }
   QModelIndex res = createIndex(row, column, row);
   return res;
@@ -1327,7 +1327,7 @@ QModelIndex ModList::index(int row, int column, const QModelIndex&) const
 
 QModelIndex ModList::parent(const QModelIndex&) const
 {
-  return QModelIndex();
+  return {};
 }
 
 QMap<int, QVariant> ModList::itemData(const QModelIndex& index) const
@@ -1401,7 +1401,7 @@ QString ModList::getColumnToolTip(int column) const
   case COL_CONTENT: {
     auto& contents = m_Organizer->modDataContents();
     if (m_Organizer->modDataContents().empty()) {
-      return QString();
+      return {};
     }
     QString result =
         tr("Depicts the content of the mod:") + "<br>" + "<table cellspacing=7>";

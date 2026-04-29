@@ -63,7 +63,7 @@ void ModuleNotification::fire(QString path, std::size_t fileSize)
   }
 }
 
-Environment::Environment() {}
+Environment::Environment() = default;
 
 // anchor
 Environment::~Environment() = default;
@@ -77,7 +77,7 @@ const std::vector<Module>& Environment::loadedModules() const
   return m_modules;
 }
 
-std::vector<Process> Environment::runningProcesses() const
+std::vector<Process> Environment::runningProcesses() 
 {
   return getRunningProcesses();
 }
@@ -109,7 +109,7 @@ const Metrics& Environment::metrics() const
   return *m_metrics;
 }
 
-QString Environment::timezone() const
+QString Environment::timezone() 
 {
   QTimeZone tz = QTimeZone::systemTimeZone();
   if (!tz.isValid()) {
@@ -164,7 +164,7 @@ void Environment::dump(const Settings& s) const
   dumpDisks(s);
 }
 
-void Environment::dumpDisks(const Settings& s) const
+void Environment::dumpDisks(const Settings& s) 
 {
   std::set<QString> rootPaths;
 

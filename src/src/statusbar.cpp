@@ -219,7 +219,7 @@ void StatusBarAction::mouseDoubleClickEvent(QMouseEvent* e)
   }
 }
 
-QString StatusBarAction::cleanupActionText(const QString& original) const
+QString StatusBarAction::cleanupActionText(const QString& original) 
 {
   QString s = original;
 

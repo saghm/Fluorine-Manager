@@ -129,9 +129,9 @@ protected:
 
 private:
   void refreshFilter();
-  unsigned long flagsId(const std::vector<ModInfo::EFlag>& flags) const;
-  unsigned long conflictFlagsId(const std::vector<ModInfo::EConflictFlag>& flags) const;
-  bool hasConflictFlag(const std::vector<ModInfo::EConflictFlag>& flags) const;
+  static unsigned long flagsId(const std::vector<ModInfo::EFlag>& flags) ;
+  static unsigned long conflictFlagsId(const std::vector<ModInfo::EConflictFlag>& flags) ;
+  static bool hasConflictFlag(const std::vector<ModInfo::EConflictFlag>& flags) ;
   void updateFilterActive();
   bool filterMatchesModAnd(ModInfo::Ptr info, bool enabled) const;
   bool filterMatchesModOr(ModInfo::Ptr info, bool enabled) const;
@@ -159,10 +159,10 @@ private:
 
   std::vector<Criteria> m_PreChangeCriteria;
 
-  bool optionsMatchMod(ModInfo::Ptr info, bool enabled) const;
+  static bool optionsMatchMod(ModInfo::Ptr info, bool enabled) ;
   bool criteriaMatchMod(ModInfo::Ptr info, bool enabled, const Criteria& c) const;
   bool categoryMatchesMod(ModInfo::Ptr info, bool enabled, int category) const;
-  bool contentMatchesMod(ModInfo::Ptr info, bool enabled, int content) const;
+  static bool contentMatchesMod(ModInfo::Ptr info, bool enabled, int content) ;
 };
 
 #endif  // MODLISTSORTPROXY_H

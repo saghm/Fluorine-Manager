@@ -24,7 +24,7 @@ const QString& Display::monitorDevice() const
   return m_monitorDevice;
 }
 
-bool Display::primary()
+bool Display::primary() const
 {
   return m_primary;
 }
@@ -39,7 +39,7 @@ int Display::resY() const
   return m_resY;
 }
 
-int Display::dpi()
+int Display::dpi() const
 {
   return m_dpi;
 }
@@ -93,12 +93,12 @@ const std::vector<Display>& Metrics::displays() const
   return m_displays;
 }
 
-QRect Metrics::desktopGeometry() const
+QRect Metrics::desktopGeometry() 
 {
   if (auto* primary = QGuiApplication::primaryScreen()) {
     return primary->virtualGeometry();
   }
-  return QRect();
+  return {};
 }
 
 void Metrics::getDisplays()

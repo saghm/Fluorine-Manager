@@ -101,6 +101,8 @@ printf '%s\n' "${CONTAINER_PATHS[@]}" | \
             trap "rm -rf $TIDY_DIR" EXIT
             sed "s| -mno-direct-extern-access||g" /src/build/compile_commands.json \
                 > "$TIDY_DIR/compile_commands.json"
-            xargs -P '"${JOBS}"' -I{} clang-tidy '"${FIX_FLAG[*]:-}"' \
+            # stdbuf -oL forces line-buffered stdout so output flushes through
+            # the podman pipe instead of being held until container exit.
+            xargs -P '"${JOBS}"' -I{} stdbuf -oL clang-tidy '"${FIX_FLAG[*]:-}"' \
                 -p "$TIDY_DIR" --quiet {}
         '

@@ -278,7 +278,7 @@ void SavesTab::startMonitorSaves()
 
 void SavesTab::stopMonitorSaves()
 {
-  if (m_SavesWatcher.directories().length() > 0) {
+  if (!m_SavesWatcher.directories().empty()) {
     m_SavesWatcher.removePaths(m_SavesWatcher.directories());
   }
 }
@@ -370,7 +370,7 @@ void SavesTab::onContextMenu(const QPoint& pos)
     if (selection->selectedRows().count() == 1) {
       auto& save = m_SaveGames[selection->selectedRows()[0].row()];
       SaveGameInfo::MissingAssets missing = info->getMissingAssets(*save);
-      if (missing.size() != 0) {
+      if (!missing.empty()) {
         connect(action, &QAction::triggered, this, [this, missing] {
           fixMods(missing);
         });

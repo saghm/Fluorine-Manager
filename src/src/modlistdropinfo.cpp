@@ -64,7 +64,7 @@ ModListDropInfo::ModListDropInfo(const QMimeData* mimeData, OrganizerCore& core)
 }
 
 std::optional<ModListDropInfo::RelativeUrl>
-ModListDropInfo::relativeUrl(const QUrl& url) const
+ModListDropInfo::relativeUrl(const QUrl& url) 
 {
   if (!url.isLocalFile()) {
     return {};

@@ -22,7 +22,7 @@ public:
       :  m_Message(text.toLocal8Bit())
   {}
 
-  const char* what() const throw() override { return m_Message.constData(); }
+  const char* what() const noexcept override { return m_Message.constData(); }
 
 private:
   QByteArray m_Message;

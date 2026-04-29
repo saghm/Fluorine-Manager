@@ -123,11 +123,11 @@ private:
   QString findWineBinary() const;
   QString findWineserverBinary() const;
   QString findProtonScript() const;
-  QString detectSteamPath() const;
+  static QString detectSteamPath() ;
   QString detectSLRRunScript() const;
-  QString fluorineBinDir() const;
-  QString fluorineCacheDir() const;
-  QString fluorineTmpDir() const;
+  static QString fluorineBinDir() ;
+  static QString fluorineCacheDir() ;
+  static QString fluorineTmpDir() ;
   QMap<QString, QString> baseWineEnv() const;
 
   /// Kill any wineboot/wineserver/pv-adverb processes still bound to

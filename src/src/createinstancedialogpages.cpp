@@ -1327,7 +1327,7 @@ QString ConfirmationPage::makeReview() const
   return lines.join("\n");
 }
 
-QString ConfirmationPage::dirLine(const QString& caption, const QString& path) const
+QString ConfirmationPage::dirLine(const QString& caption, const QString& path) 
 {
   return QString("  - %1: %2").arg(caption).arg(path);
 }

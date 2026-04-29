@@ -783,7 +783,7 @@ bool GeometrySettings::restoreWindowGeometry(QWidget* w) const
   return false;
 }
 
-void GeometrySettings::ensureWindowOnScreen(QWidget* w) const
+void GeometrySettings::ensureWindowOnScreen(QWidget* w) 
 {
   // users report that the main window and/or dialogs are displayed off-screen;
   // the usual workaround is keyboard navigation to move it
@@ -1388,13 +1388,13 @@ void ColorSettings::setColorSeparatorScrollbar(bool b)
 QColor ColorSettings::idealTextColor(const QColor& rBackgroundColor)
 {
   if (rBackgroundColor.alpha() < 50)
-    return QColor(Qt::black);
+    return {Qt::black};
 
   // "inverse' of luminance of the background
   int iLuminance = (rBackgroundColor.red() * 0.299) +
                    (rBackgroundColor.green() * 0.587) +
                    (rBackgroundColor.blue() * 0.114);
-  return QColor(iLuminance >= 128 ? Qt::black : Qt::white);
+  return {iLuminance >= 128 ? Qt::black : Qt::white};
 }
 
 PluginSettings::PluginSettings(QSettings& settings) : m_Settings(settings) {}
@@ -1474,12 +1474,12 @@ QVariant PluginSettings::setting(const QString& pluginName, const QString& key) 
 {
   auto iterPlugin = m_PluginSettings.find(pluginName);
   if (iterPlugin == m_PluginSettings.end()) {
-    return QVariant();
+    return {};
   }
 
   auto iterSetting = iterPlugin->find(key);
   if (iterSetting == iterPlugin->end()) {
-    return QVariant();
+    return {};
   }
 
   return *iterSetting;
@@ -1797,7 +1797,7 @@ NetworkSettings::NetworkSettings(QSettings& settings, bool globalInstance)
   }
 }
 
-void NetworkSettings::updateCustomBrowser()
+void NetworkSettings::updateCustomBrowser() const
 {
   if (useCustomBrowser()) {
     MOBase::shell::SetUrlHandler(customBrowserCommand());
@@ -2081,7 +2081,7 @@ std::vector<std::chrono::seconds> NexusSettings::validationTimeouts() const
   return v;
 }
 
-void NexusSettings::dump() const
+void NexusSettings::dump() 
 {
   const auto iniPath = InstanceManager::singleton().globalInstancesRootPath() + "/" +
                        QString::fromStdWString(AppConfig::nxmHandlerIni());
@@ -2099,7 +2099,7 @@ void NexusSettings::dump() const
 
   log::debug("nxmhandler settings:");
 
-  QSettings handler("HKEY_CURRENT_USER\\Software\\Classes\\nxm\\",
+  QSettings handler(R"(HKEY_CURRENT_USER\Software\Classes\nxm\)",
                     QSettings::NativeFormat);
   log::debug(" . primary: {}", handler.value("shell/open/command/Default").toString());
 

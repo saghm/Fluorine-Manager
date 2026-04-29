@@ -112,10 +112,10 @@ QString ModConflictIconDelegate::getFlagIcon(ModInfo::EConflictFlag flag)
   case ModInfo::FLAG_ARCHIVE_CONFLICT_OVERWRITTEN:
     return QStringLiteral(":/MO/gui/archive_conflict_loser");
   case ModInfo::FLAG_OVERWRITE_CONFLICT:
-    return QString();
+    return {};
   default:
     log::warn("ModInfo flag {} has no defined icon", flag);
-    return QString();
+    return {};
   }
 }
 

@@ -24,7 +24,7 @@ public:
 
   // whether this monitor is the primary
   //
-  bool primary();
+  bool primary() const;
 
   // resolution
   //
@@ -33,7 +33,7 @@ public:
 
   // dpi
   //
-  int dpi();
+  int dpi() const;
 
   // refresh rate in hz
   //
@@ -67,7 +67,7 @@ public:
 
   // full resolution
   //
-  QRect desktopGeometry() const;
+  static QRect desktopGeometry() ;
 
 private:
   std::vector<Display> m_displays;

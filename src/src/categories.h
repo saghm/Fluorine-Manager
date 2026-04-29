@@ -192,7 +192,7 @@ public:
    * @return QString name of the category
    **/
   QString getCategoryName(unsigned int index) const;
-  QString getSpecialCategoryName(SpecialCategories type) const;
+  static QString getSpecialCategoryName(SpecialCategories type) ;
   QString getCategoryNameByID(int id) const;
 
   /**

@@ -25,8 +25,8 @@ public:
     FirstState = 0,
 
     Inactive = FirstState,
-    Active,
-    Inverted,
+    Active = 1,
+    Inverted = 2,
 
     LastState = Inverted
   };

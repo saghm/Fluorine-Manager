@@ -190,7 +190,7 @@ public:
    * returns a title that starts with the given prefix and does not clash with
    * an existing executable, may fail
    */
-  std::optional<QString> makeNonConflictingTitle(const QString& prefix);
+  std::optional<QString> makeNonConflictingTitle(const QString& prefix) const;
 
 private:
   enum SetFlags
@@ -221,7 +221,7 @@ private:
   /**
    * returns the executables provided by the game plugin
    **/
-  std::vector<Executable> getPluginExecutables(MOBase::IPluginGame const* game) const;
+  static std::vector<Executable> getPluginExecutables(MOBase::IPluginGame const* game) ;
 
   /**
    * called when MO is still using the old custom executables from 2.2.0

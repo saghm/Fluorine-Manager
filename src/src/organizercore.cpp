@@ -1194,14 +1194,14 @@ ModInfo::Ptr OrganizerCore::installArchive(const QString& archivePath, int prior
 QString OrganizerCore::resolvePath(const QString& fileName) const
 {
   if (m_DirectoryStructure == nullptr) {
-    return QString();
+    return {};
   }
   const FileEntryPtr file =
       m_DirectoryStructure->searchFile(ToWString(fileName), nullptr);
   if (file.get() != nullptr) {
     return ToQString(file->getFullPath());
   } else {
-    return QString();
+    return {};
   }
 }
 
@@ -1811,7 +1811,7 @@ void OrganizerCore::requestDownload(const QUrl& url, QNetworkReply* reply)
     QString gameName = "";
     int modID        = 0;
     int fileID       = 0;
-    QRegularExpression nameExp("www\\.nexusmods\\.com/(\\a+)/");
+    QRegularExpression nameExp(R"(www\.nexusmods\.com/(\a+)/)");
     auto match = nameExp.match(url.toString());
     if (match.hasMatch()) {
       gameName = match.captured(1);
@@ -2224,7 +2224,7 @@ QString OrganizerCore::oldMO1HookDll() const
     if (QFile(hookdll).exists())
       return hookdll;
   }
-  return QString();
+  return {};
 }
 
 std::vector<unsigned int> OrganizerCore::activeProblems() const

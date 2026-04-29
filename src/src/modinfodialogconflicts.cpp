@@ -727,16 +727,16 @@ ConflictItem GeneralConflictsTab::createOverwriteItem(
 
   auto origin = ToQString(ds.getOriginByID(alternatives.back().originID()).getName());
 
-  return ConflictItem(ToQString(altString), std::move(relativeName), QString(), index,
-                      std::move(fileName), true, std::move(origin), archive);
+  return {ToQString(altString), std::move(relativeName), QString(), index,
+                      std::move(fileName), true, std::move(origin), archive};
 }
 
 ConflictItem GeneralConflictsTab::createNoConflictItem(FileIndex index, bool archive,
                                                        QString fileName,
                                                        QString relativeName)
 {
-  return ConflictItem(QString(), std::move(relativeName), QString(), index,
-                      std::move(fileName), false, QString(), archive);
+  return {QString(), std::move(relativeName), QString(), index,
+                      std::move(fileName), false, QString(), archive};
 }
 
 ConflictItem GeneralConflictsTab::createOverwrittenItem(FileIndex index, int fileOrigin,
@@ -749,8 +749,8 @@ ConflictItem GeneralConflictsTab::createOverwrittenItem(FileIndex index, int fil
   QString after     = ToQString(realOrigin.getName());
   QString altOrigin = after;
 
-  return ConflictItem(QString(), std::move(relativeName), std::move(after), index,
-                      std::move(fileName), true, std::move(altOrigin), archive);
+  return {QString(), std::move(relativeName), std::move(after), index,
+                      std::move(fileName), true, std::move(altOrigin), archive};
 }
 
 QString percent(int a, int b)

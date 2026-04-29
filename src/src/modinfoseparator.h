@@ -24,11 +24,11 @@ public:
   void endorse(bool /*doEndorse*/) override {}
   void ignoreUpdate(bool /*ignore*/) override {}
   bool canBeUpdated() const override { return false; }
-  QDateTime getExpires() const override { return QDateTime(); }
+  QDateTime getExpires() const override { return {}; }
   bool canBeEnabled() const override { return false; }
   std::vector<QString> getIniTweaks() const override
   {
-    return std::vector<QString>();
+    return {};
   }
   std::vector<EFlag> getFlags() const override;
   int getHighlight() const override;
@@ -39,21 +39,21 @@ public:
   QString repository() const override { return ""; }
   int getNexusFileStatus() const override { return 0; }
   void setNexusFileStatus(int) override {}
-  QDateTime getLastNexusUpdate() const override { return QDateTime(); }
+  QDateTime getLastNexusUpdate() const override { return {}; }
   void setLastNexusUpdate(QDateTime) override {}
-  QDateTime getLastNexusQuery() const override { return QDateTime(); }
+  QDateTime getLastNexusQuery() const override { return {}; }
   void setLastNexusQuery(QDateTime) override {}
-  QDateTime getNexusLastModified() const override { return QDateTime(); }
+  QDateTime getNexusLastModified() const override { return {}; }
   void setNexusLastModified(QDateTime) override {}
   int getNexusCategory() const override { return 0; }
   void setNexusCategory(int) override {}
-  QDateTime creationTime() const override { return QDateTime(); }
-  QString getNexusDescription() const override { return QString(); }
-  QString author() const override { return QString(); }
+  QDateTime creationTime() const override { return {}; }
+  QString getNexusDescription() const override { return {}; }
+  QString author() const override { return {}; }
   void setAuthor(const QString&) override {}
-  QString uploader() const override { return QString(); }
+  QString uploader() const override { return {}; }
   void setUploader(const QString&) override {}
-  QString uploaderUrl() const override { return QString(); }
+  QString uploaderUrl() const override { return {}; }
   void setUploaderUrl(const QString&) override {}
   void addInstalledFile(int /*modId*/, int /*fileId*/) override {}
   bool isSeparator() const override { return true; }

@@ -88,14 +88,14 @@ class PluginList : public QAbstractItemModel
 public:
   enum EColumn
   {
-    COL_NAME,
-    COL_FLAGS,
-    COL_PRIORITY,
-    COL_MODINDEX,
-    COL_FORMVERSION,
-    COL_HEADERVERSION,
-    COL_AUTHOR,
-    COL_DESCRIPTION,
+    COL_NAME = 0,
+    COL_FLAGS = 1,
+    COL_PRIORITY = 2,
+    COL_MODINDEX = 3,
+    COL_FORMVERSION = 4,
+    COL_HEADERVERSION = 5,
+    COL_AUTHOR = 6,
+    COL_DESCRIPTION = 7,
 
     COL_LASTCOLUMN = COL_DESCRIPTION,
   };
@@ -424,12 +424,12 @@ private:
   QVariant foregroundData(const QModelIndex& modelIndex) const;
   QVariant backgroundData(const QModelIndex& modelIndex) const;
   QVariant fontData(const QModelIndex& modelIndex) const;
-  QVariant alignmentData(const QModelIndex& modelIndex) const;
+  static QVariant alignmentData(const QModelIndex& modelIndex) ;
   QVariant tooltipData(const QModelIndex& modelIndex) const;
   QVariant iconData(const QModelIndex& modelIndex) const;
 
-  bool isProblematic(const ESPInfo& esp, const AdditionalInfo* info) const;
-  bool hasInfo(const ESPInfo& esp, const AdditionalInfo* info) const;
+  static bool isProblematic(const ESPInfo& esp, const AdditionalInfo* info) ;
+  static bool hasInfo(const ESPInfo& esp, const AdditionalInfo* info) ;
 };
 
 #pragma warning(pop)

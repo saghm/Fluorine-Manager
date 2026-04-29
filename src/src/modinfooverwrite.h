@@ -40,7 +40,7 @@ public:
   QString name() const override { return "Overwrite"; }
   QString comments() const override { return ""; }
   QString notes() const override { return ""; }
-  QDateTime creationTime() const override { return QDateTime(); }
+  QDateTime creationTime() const override { return {}; }
   QString absolutePath() const override;
   MOBase::VersionInfo newestVersion() const override { return QString(); }
   MOBase::VersionInfo ignoredVersion() const override { return QString(); }
@@ -50,10 +50,10 @@ public:
   QString gameName() const override { return ""; }
   int nexusId() const override { return -1; }
   bool isOverwrite() const override { return true; }
-  QDateTime getExpires() const override { return QDateTime(); }
+  QDateTime getExpires() const override { return {}; }
   std::vector<QString> getIniTweaks() const override
   {
-    return std::vector<QString>();
+    return {};
   }
   std::vector<ModInfo::EFlag> getFlags() const override;
   std::vector<ModInfo::EConflictFlag> getConflictFlags() const override;
@@ -61,20 +61,20 @@ public:
   QString getDescription() const override;
   int getNexusFileStatus() const override { return 0; }
   void setNexusFileStatus(int) override {}
-  QDateTime getLastNexusUpdate() const override { return QDateTime(); }
+  QDateTime getLastNexusUpdate() const override { return {}; }
   void setLastNexusUpdate(QDateTime) override {}
-  QDateTime getLastNexusQuery() const override { return QDateTime(); }
+  QDateTime getLastNexusQuery() const override { return {}; }
   void setLastNexusQuery(QDateTime) override {}
-  QDateTime getNexusLastModified() const override { return QDateTime(); }
+  QDateTime getNexusLastModified() const override { return {}; }
   void setNexusLastModified(QDateTime) override {}
-  QString getNexusDescription() const override { return QString(); }
+  QString getNexusDescription() const override { return {}; }
   void setNexusCategory(int) override {}
   int getNexusCategory() const override { return 0; }
-  QString author() const override { return QString(); }
+  QString author() const override { return {}; }
   void setAuthor(const QString&) override {}
-  QString uploader() const override { return QString(); }
+  QString uploader() const override { return {}; }
   void setUploader(const QString&) override {}
-  QString uploaderUrl() const override { return QString(); }
+  QString uploaderUrl() const override { return {}; }
   void setUploaderUrl(const QString&) override {}
   QStringList archives(bool checkOnDisk = false) override;
   void addInstalledFile(int, int) override {}

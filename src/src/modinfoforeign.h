@@ -48,30 +48,30 @@ public:
   QString gameName() const override { return ""; }
   int nexusId() const override { return -1; }
   bool isForeign() const override { return true; }
-  QDateTime getExpires() const override { return QDateTime(); }
+  QDateTime getExpires() const override { return {}; }
   std::vector<QString> getIniTweaks() const override
   {
-    return std::vector<QString>();
+    return {};
   }
   std::vector<ModInfo::EFlag> getFlags() const override;
   int getHighlight() const override;
   QString getDescription() const override;
   int getNexusFileStatus() const override { return 0; }
   void setNexusFileStatus(int) override {}
-  QDateTime getLastNexusUpdate() const override { return QDateTime(); }
+  QDateTime getLastNexusUpdate() const override { return {}; }
   void setLastNexusUpdate(QDateTime) override {}
   int getNexusCategory() const override { return 0; }
   void setNexusCategory(int) override {}
-  QDateTime getLastNexusQuery() const override { return QDateTime(); }
+  QDateTime getLastNexusQuery() const override { return {}; }
   void setLastNexusQuery(QDateTime) override {}
-  QDateTime getNexusLastModified() const override { return QDateTime(); }
+  QDateTime getNexusLastModified() const override { return {}; }
   void setNexusLastModified(QDateTime) override {}
-  QString getNexusDescription() const override { return QString(); }
-  QString author() const override { return QString(); }
+  QString getNexusDescription() const override { return {}; }
+  QString author() const override { return {}; }
   void setAuthor(const QString&) override {}
-  QString uploader() const override { return QString(); }
+  QString uploader() const override { return {}; }
   void setUploader(const QString&) override {}
-  QString uploaderUrl() const override { return QString(); }
+  QString uploaderUrl() const override { return {}; }
   void setUploaderUrl(const QString&) override {}
   QStringList archives(bool = false) override { return m_Archives; }
   QStringList stealFiles() const override

@@ -181,7 +181,7 @@ private:
     return m_mainUI;
   }
 
-  QWidget* createTransparentWidget(QWidget* parent = nullptr)
+  static QWidget* createTransparentWidget(QWidget* parent = nullptr)
   {
     auto* w = new QWidget(parent);
 
@@ -395,7 +395,7 @@ const QString& UILocker::Session::name() const
   return m_name;
 }
 
-UILocker::Results UILocker::Session::result() const
+UILocker::Results UILocker::Session::result() 
 {
   return UILocker::instance().result();
 }

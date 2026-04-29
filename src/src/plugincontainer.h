@@ -413,7 +413,7 @@ private:
   //
   // extra DLLs are ignored by Qt so can be present in the folder
   //
-  std::optional<QString> isQtPluginFolder(const QString& filepath) const;
+  static std::optional<QString> isQtPluginFolder(const QString& filepath) ;
 
   // See startPlugins for more details. This is simply an intermediate function
   // that can be used when loading plugins after initialization. This uses the
@@ -442,7 +442,7 @@ private:
    * @note This function can be used to get implemented interfaces before registering
    *     a plugin.
    */
-  QStringList implementedInterfaces(QObject* plugin) const;
+  static QStringList implementedInterfaces(QObject* plugin) ;
 
   /**
    * @brief Check if a plugin implements a "better" interface than another
@@ -453,7 +453,7 @@ private:
    * @return true if the left plugin implements a better interface than the right
    *     one, false otherwise (or if both implements the same interface).
    */
-  bool isBetterInterface(QObject* lhs, QObject* rhs) const;
+  static bool isBetterInterface(QObject* lhs, QObject* rhs) ;
 
   /**
    * @brief Find the QObject* corresponding to the given plugin.

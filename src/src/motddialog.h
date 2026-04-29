@@ -38,7 +38,7 @@ public:
 
 private slots:
   void on_okButton_clicked();
-  void linkClicked(const QUrl& url);
+  static void linkClicked(const QUrl& url);
 
 private:
   Ui::MotDDialog* ui;

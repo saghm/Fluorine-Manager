@@ -11,14 +11,14 @@ enum class ModInfoTabIDs
 {
   None      = -1,
   TextFiles = 0,
-  IniFiles,
-  Images,
-  Esps,
-  Conflicts,
-  Categories,
-  Nexus,
-  Notes,
-  Filetree
+  IniFiles = 1,
+  Images = 2,
+  Esps = 3,
+  Conflicts = 4,
+  Categories = 5,
+  Nexus = 6,
+  Notes = 7,
+  Filetree = 8
 };
 
 class PluginContainer;

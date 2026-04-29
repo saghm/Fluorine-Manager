@@ -63,7 +63,7 @@ class ModInfo : public QObject, public MOBase::IModInterface
   Q_OBJECT
 
 public:  // Type definitions:
-  typedef QSharedPointer<ModInfo> Ptr;
+  using Ptr = QSharedPointer<ModInfo>;
 
   static QString s_HiddenExt;
 
@@ -333,7 +333,7 @@ public:  // IModInterface implementations / Re-declaration
   /**
    * @return the color of the 'Notes' column chosen by the user.
    */
-  QColor color() const override { return QColor(); }
+  QColor color() const override { return {}; }
 
   /**
    * @return the URL of this mod, or an empty QString() if no URL is associated
@@ -748,7 +748,7 @@ public:  // Methods after this do not come from IModInterface:
    * @return the list of files that, if they exist in the data directory are treated as
    * files in THIS mod.
    */
-  virtual QStringList stealFiles() const { return QStringList(); }
+  virtual QStringList stealFiles() const { return {}; }
 
   /**
    * @return the list of archives belonging to this mod (as absolute file paths).

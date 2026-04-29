@@ -144,7 +144,7 @@ void ExecutablesList::store(Settings& s)
 }
 
 std::vector<Executable>
-ExecutablesList::getPluginExecutables(MOBase::IPluginGame const* game) const
+ExecutablesList::getPluginExecutables(MOBase::IPluginGame const* game) 
 {
   Q_ASSERT(game != nullptr);
 
@@ -308,7 +308,7 @@ void ExecutablesList::remove(const QString& title)
   }
 }
 
-std::optional<QString> ExecutablesList::makeNonConflictingTitle(const QString& prefix)
+std::optional<QString> ExecutablesList::makeNonConflictingTitle(const QString& prefix) const
 {
   const int max = 100;
 

@@ -112,14 +112,14 @@ SettingsDialog::~SettingsDialog()
   delete ui;
 }
 
-QString SettingsDialog::getColoredButtonStyleSheet() const
+QString SettingsDialog::getColoredButtonStyleSheet() 
 {
-  return QString("QPushButton {"
+  return {"QPushButton {"
                  "background-color: %1;"
                  "color: %2;"
                  "border: 1px solid;"
                  "padding: 3px;"
-                 "}");
+                 "}"};
 }
 
 void SettingsDialog::accept()

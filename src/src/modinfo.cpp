@@ -152,7 +152,7 @@ std::vector<ModInfo::Ptr> ModInfo::getByModID(QString game, int modID)
     }
   }
   if (match.empty()) {
-    return std::vector<ModInfo::Ptr>();
+    return {};
   }
 
   std::vector<ModInfo::Ptr> result;

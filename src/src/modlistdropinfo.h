@@ -72,7 +72,7 @@ private:
   // retrieve the relative path of file and its origin given a URL from Mime data
   // returns an empty optional if the URL is not a valid file for dropping
   //
-  std::optional<RelativeUrl> relativeUrl(const QUrl&) const;
+  static std::optional<RelativeUrl> relativeUrl(const QUrl&) ;
 
 private:
   // rows for drag&drop between views

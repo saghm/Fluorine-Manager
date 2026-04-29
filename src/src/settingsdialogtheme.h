@@ -16,7 +16,7 @@ public:
 private:
   void addStyles();
   void selectStyle();
-  void onExploreStyles();
+  static void onExploreStyles();
 };
 
 #endif  // SETTINGSDIALOGGENERAL_H

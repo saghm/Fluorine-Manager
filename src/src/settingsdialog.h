@@ -72,7 +72,7 @@ public:
    * @brief get stylesheet of settings buttons with colored background
    * @return string of stylesheet
    */
-  QString getColoredButtonStyleSheet() const;
+  static QString getColoredButtonStyleSheet() ;
 
   PluginContainer* pluginContainer();
   QWidget* parentWidgetForDialogs();

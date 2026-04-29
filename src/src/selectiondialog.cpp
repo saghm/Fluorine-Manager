@@ -79,7 +79,7 @@ QString SelectionDialog::getChoiceString()
 {
   if ((m_Choice == nullptr) ||
       (m_ValidateByData && !m_Choice->property("data").isValid())) {
-    return QString();
+    return {};
   } else {
     return m_Choice->text();
   }
@@ -88,7 +88,7 @@ QString SelectionDialog::getChoiceString()
 QString SelectionDialog::getChoiceDescription()
 {
   if (m_Choice == nullptr)
-    return QString();
+    return {};
   else
     return m_Choice->accessibleDescription();
 }

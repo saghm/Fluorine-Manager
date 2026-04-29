@@ -57,18 +57,18 @@ QString ModFlagIconDelegate::getFlagIcon(ModInfo::EFlag flag)
   case ModInfo::FLAG_ALTERNATE_GAME:
     return QStringLiteral(":/MO/gui/alternate_game");
   case ModInfo::FLAG_FOREIGN:
-    return QString();
+    return {};
   case ModInfo::FLAG_SEPARATOR:
-    return QString();
+    return {};
   case ModInfo::FLAG_OVERWRITE:
-    return QString();
+    return {};
   case ModInfo::FLAG_PLUGIN_SELECTED:
-    return QString();
+    return {};
   case ModInfo::FLAG_TRACKED:
     return QStringLiteral(":/MO/gui/tracked");
   default:
     log::warn("ModInfo flag {} has no defined icon", flag);
-    return QString();
+    return {};
   }
 }
 

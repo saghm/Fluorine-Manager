@@ -343,7 +343,7 @@ bool parseEnvAssignment(const QString& token, QString& keyOut, QString& valueOut
 
 ProtonLauncher::ProtonLauncher()
      
-{}
+= default;
 
 ProtonLauncher& ProtonLauncher::setBinary(const QString& path)
 {
@@ -775,7 +775,7 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
     QStringList newArgs;
     newArgs << "--user" << "--mount" << "-r" << "--"
             << "/bin/sh" << "-c"
-            << "mount --bind \"$1\" \"$2\" && shift 2 && exec \"$@\""
+            << R"(mount --bind "$1" "$2" && shift 2 && exec "$@")"
             << "_mo2bind"
             << m_bindMountSource
             << m_bindMountTarget

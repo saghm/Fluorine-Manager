@@ -95,7 +95,7 @@ public:
 
   // list of running processes; not cached
   //
-  std::vector<Process> runningProcesses() const;
+  static std::vector<Process> runningProcesses() ;
 
   // information about the operating system
   //
@@ -111,12 +111,12 @@ public:
 
   // timezone
   //
-  QString timezone() const;
+  static QString timezone() ;
 
   // will call `f` on the same thread `o` is running on every time a module
   // is loaded in the process
   //
-  std::unique_ptr<ModuleNotification> onModuleLoaded(QObject* o,
+  static std::unique_ptr<ModuleNotification> onModuleLoaded(QObject* o,
                                                      std::function<void(Module)> f);
 
   // logs the environment
@@ -131,7 +131,7 @@ private:
 
   // dumps all the disks involved in the settings
   //
-  void dumpDisks(const Settings& s) const;
+  static void dumpDisks(const Settings& s) ;
 };
 
 // environment variables

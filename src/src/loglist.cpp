@@ -32,7 +32,7 @@ static std::unique_ptr<env::Console> m_console;
 static bool m_stdout = false;
 static std::mutex m_stdoutMutex;
 
-LogModel::LogModel() {}
+LogModel::LogModel() = default;
 
 void LogModel::create()
 {
@@ -104,7 +104,7 @@ QModelIndex LogModel::index(int row, int column, const QModelIndex&) const
 
 QModelIndex LogModel::parent(const QModelIndex&) const
 {
-  return QModelIndex();
+  return {};
 }
 
 int LogModel::rowCount(const QModelIndex& parent) const
@@ -165,7 +165,7 @@ QVariant LogModel::data(const QModelIndex& index, int role) const
     }
   }
 
-  return QVariant();
+  return {};
 }
 
 QVariant LogModel::headerData(int, Qt::Orientation, int) const

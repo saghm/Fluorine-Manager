@@ -23,7 +23,7 @@ public:
   ShellMenu& operator=(ShellMenu&&)      = default;
 
   void addFile(QFileInfo) {}
-  int fileCount() const { return 0; }
+  static int fileCount() { return 0; }
   void exec(const QPoint&) {}
 };
 

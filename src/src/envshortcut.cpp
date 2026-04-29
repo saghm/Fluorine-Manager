@@ -516,7 +516,7 @@ QString Shortcut::shortcutPath(Locations loc) const
   return dir + "/" + shortcutFilename();
 }
 
-QString Shortcut::shortcutDirectory(Locations loc) const
+QString Shortcut::shortcutDirectory(Locations loc) 
 {
   if (loc == Desktop) {
     // XDG desktop directory

@@ -81,7 +81,7 @@ void ModListSortProxy::setCriteria(const std::vector<Criteria>& criteria)
   }
 }
 
-unsigned long ModListSortProxy::flagsId(const std::vector<ModInfo::EFlag>& flags) const
+unsigned long ModListSortProxy::flagsId(const std::vector<ModInfo::EFlag>& flags) 
 {
   unsigned long result = 0;
   for (ModInfo::EFlag flag : flags) {
@@ -93,7 +93,7 @@ unsigned long ModListSortProxy::flagsId(const std::vector<ModInfo::EFlag>& flags
 }
 
 unsigned long ModListSortProxy::conflictFlagsId(
-    const std::vector<ModInfo::EConflictFlag>& flags) const
+    const std::vector<ModInfo::EConflictFlag>& flags) 
 {
   unsigned long result = 0;
   for (ModInfo::EConflictFlag flag : flags) {
@@ -272,7 +272,7 @@ void ModListSortProxy::updateFilter(const QString& filter)
 }
 
 bool ModListSortProxy::hasConflictFlag(
-    const std::vector<ModInfo::EConflictFlag>& flags) const
+    const std::vector<ModInfo::EConflictFlag>& flags) 
 {
   for (ModInfo::EConflictFlag flag : flags) {
     if ((flag == ModInfo::FLAG_CONFLICT_MIXED) ||
@@ -318,7 +318,7 @@ bool ModListSortProxy::filterMatchesModOr(ModInfo::Ptr info, bool enabled) const
   return true;
 }
 
-bool ModListSortProxy::optionsMatchMod(ModInfo::Ptr info, bool) const
+bool ModListSortProxy::optionsMatchMod(ModInfo::Ptr info, bool) 
 {
   return true;
 }
@@ -430,7 +430,7 @@ bool ModListSortProxy::categoryMatchesMod(ModInfo::Ptr info, bool enabled,
 }
 
 bool ModListSortProxy::contentMatchesMod(ModInfo::Ptr info, bool enabled,
-                                         int content) const
+                                         int content) 
 {
   return info->hasContent(content);
 }

@@ -176,7 +176,7 @@ void PluginsSettingsTab::filterPluginList()
   }
 }
 
-IPlugin* PluginsSettingsTab::plugin(QTreeWidgetItem* pluginItem) const
+IPlugin* PluginsSettingsTab::plugin(QTreeWidgetItem* pluginItem) 
 {
   return static_cast<IPlugin*>(qvariant_cast<void*>(pluginItem->data(0, PluginRole)));
 }

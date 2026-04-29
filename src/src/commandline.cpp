@@ -441,7 +441,7 @@ const QStringList& CommandLine::untouched() const
   return m_untouched;
 }
 
-std::string CommandLine::more() const
+std::string CommandLine::more() 
 {
   return "Multiple processes\n"
          "  A note on terminology: 'instance' can either mean an MO process\n"

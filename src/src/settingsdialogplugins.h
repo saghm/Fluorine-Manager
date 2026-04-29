@@ -39,7 +39,7 @@ private slots:
    * @brief Retrieve the plugin associated to the given item in the list.
    *
    */
-  MOBase::IPlugin* plugin(QTreeWidgetItem* pluginItem) const;
+  static MOBase::IPlugin* plugin(QTreeWidgetItem* pluginItem) ;
 
   enum
   {

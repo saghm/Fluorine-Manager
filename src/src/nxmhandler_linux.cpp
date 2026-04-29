@@ -172,7 +172,7 @@ QString NxmHandlerLinux::socketPath()
   return QDir::homePath() + "/.local/share/fluorine/tmp/mo2-nxm.sock";
 }
 
-void NxmHandlerLinux::registerHandler() const
+void NxmHandlerLinux::registerHandler() 
 {
   const QString home = QDir::homePath();
   if (home.isEmpty()) {

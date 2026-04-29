@@ -228,7 +228,7 @@ private:
 
   void setCategoryListVisible(bool visible);
 
-  bool errorReported(QString& logFile);
+  static bool errorReported(QString& logFile);
 
   static void setupNetworkProxy(bool activate);
   void activateProxy(bool activate);
@@ -326,14 +326,14 @@ private:
 private slots:
   void updateWindowTitle(const APIUserAccount& user);
   void showMessage(const QString& message);
-  void showError(const QString& message);
+  static void showError(const QString& message);
 
   // main window actions
-  void helpTriggered();
-  void issueTriggered();
-  void wikiTriggered();
+  static void helpTriggered();
+  static void issueTriggered();
+  static void wikiTriggered();
   void gameSupportTriggered();
-  void discordTriggered();
+  static void discordTriggered();
   void tutorialTriggered();
   void extractBSATriggered(QTreeWidgetItem* item);
 
@@ -381,7 +381,7 @@ private slots:
   void nxmTrackedModsAvailable(QVariant userData, QVariant resultData, int);
   void nxmDownloadURLs(QString, int modID, int fileID, QVariant userData,
                        QVariant resultData, int requestID);
-  void nxmGameInfoAvailable(QString gameName, QVariant, QVariant resultData, int);
+  static void nxmGameInfoAvailable(QString gameName, QVariant, QVariant resultData, int);
   void nxmRequestFailed(QString gameName, int modID, int fileID, QVariant userData,
                         int requestID, int errorCode, const QString& errorString);
 
@@ -389,12 +389,12 @@ private slots:
   void modRemoved(const QString& fileName);
 
   void hookUpWindowTutorials();
-  bool shouldStartTutorial() const;
+  static bool shouldStartTutorial() ;
 
-  void openInstanceFolder();
-  void openInstallFolder();
-  void openPluginsFolder();
-  void openStylesheetsFolder();
+  static void openInstanceFolder();
+  static void openInstallFolder();
+  static void openPluginsFolder();
+  static void openStylesheetsFolder();
   void openDownloadsFolder();
   void openModsFolder();
   void openProfileFolder();
@@ -447,7 +447,7 @@ private slots:  // ui slots
   void on_actionNotifications_triggered();
   void on_actionSettings_triggered();
   void on_actionUpdate_triggered();
-  void on_actionExit_triggered();
+  static void on_actionExit_triggered();
   void on_actionMainMenuToggle_triggered();
   void on_actionToolBarMainToggle_triggered();
   void on_actionStatusBarToggle_triggered();

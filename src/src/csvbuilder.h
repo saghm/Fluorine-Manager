@@ -12,7 +12,7 @@ class CSVException : public std::exception
 public:
   CSVException(const QString& text) :  m_Message(text.toLocal8Bit()) {}
 
-  const char* what() const throw() override { return m_Message.constData(); }
+  const char* what() const noexcept override { return m_Message.constData(); }
 
 private:
   QByteArray m_Message;
@@ -62,10 +62,10 @@ public:
 
 private:
   const char* lineBreak();
-  const char separator();
+  const char separator() const;
 
   void fieldValid();
-  void checkFields(const std::vector<QString>& fields);
+  void checkFields(const std::vector<QString>& fields) const;
   void checkValue(const QString& field, const QVariant& value);
   void writeData(const std::map<QString, QVariant>& data, bool check);
 

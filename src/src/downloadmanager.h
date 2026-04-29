@@ -132,9 +132,9 @@ private:
      **/
     void setName(QString newName, bool renameFile);
 
-    unsigned int downloadID() { return m_DownloadID; }
+    unsigned int downloadID() const { return m_DownloadID; }
 
-    bool isPausedState();
+    bool isPausedState() const;
 
     QString currentURL();
 
@@ -410,7 +410,7 @@ public:
 public:  // IDownloadManager interface:
   int startDownloadURLs(const QStringList& urls);
   int startDownloadNexusFile(const QString& gameName, int modID, int fileID);
-  QString downloadPath(int id);
+  QString downloadPath(int id) const;
 
   boost::signals2::connection
   onDownloadComplete(const std::function<void(int)>& callback);
@@ -581,7 +581,7 @@ private:
 
   bool ByName(int LHS, int RHS);
 
-  QString getFileNameFromNetworkReply(QNetworkReply* reply);
+  static QString getFileNameFromNetworkReply(QNetworkReply* reply);
 
   void setState(DownloadInfo* info, DownloadManager::DownloadState state);
 

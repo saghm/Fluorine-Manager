@@ -31,7 +31,7 @@ private:
 
 private slots:
   void selectionChanged();
-  void urlClicked(const QUrl& url);
+  static void urlClicked(const QUrl& url);
 
   void startFix();
 

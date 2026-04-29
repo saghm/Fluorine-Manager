@@ -939,7 +939,7 @@ void MOSplash::close()
 }
 
 QString MOSplash::getSplashPath(const Settings& settings, const QString& dataPath,
-                                const MOBase::IPluginGame* game) const
+                                const MOBase::IPluginGame* game) 
 {
   if (!settings.useSplash()) {
     return {};

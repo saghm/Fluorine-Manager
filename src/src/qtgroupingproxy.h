@@ -26,8 +26,8 @@
 #include <QSet>
 #include <QStringList>
 
-typedef QMap<int, QVariant> ItemData;
-typedef QMap<int, ItemData> RowData;
+using ItemData = QMap<int, QVariant>;
+using RowData = QMap<int, ItemData>;
 
 class QtGroupingProxy : public QAbstractProxyModel
 {

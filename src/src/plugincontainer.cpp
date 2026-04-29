@@ -355,7 +355,7 @@ QStringList PluginContainer::implementedInterfaces(IPlugin* plugin) const
   return implementedInterfaces(oPlugin);
 }
 
-QStringList PluginContainer::implementedInterfaces(QObject* oPlugin) const
+QStringList PluginContainer::implementedInterfaces(QObject* oPlugin) 
 {
   // Find all the names:
   QStringList names;
@@ -383,7 +383,7 @@ QString PluginContainer::topImplementedInterface(IPlugin* plugin) const
   return interfaces.isEmpty() ? "" : interfaces[0];
 }
 
-bool PluginContainer::isBetterInterface(QObject* lhs, QObject* rhs) const
+bool PluginContainer::isBetterInterface(QObject* lhs, QObject* rhs) 
 {
   int count = 0, lhsIdx = -1, rhsIdx = -1;
   boost::mp11::mp_for_each<PluginTypeOrder>([&](const auto* p) {
@@ -960,7 +960,7 @@ QObject* PluginContainer::loadQtPlugin(const QString& filepath)
   return nullptr;
 }
 
-std::optional<QString> PluginContainer::isQtPluginFolder(const QString& filepath) const
+std::optional<QString> PluginContainer::isQtPluginFolder(const QString& filepath) 
 {
 
   if (!QFileInfo(filepath).isDir()) {

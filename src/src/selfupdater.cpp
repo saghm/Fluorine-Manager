@@ -71,7 +71,7 @@ SelfUpdater::SelfUpdater(NexusInterface* nexusInterface)
       m_Reply(nullptr), m_Attempts(3)
 {}
 
-SelfUpdater::~SelfUpdater() {}
+SelfUpdater::~SelfUpdater() = default;
 
 void SelfUpdater::setUserInterface(QWidget* widget)
 {

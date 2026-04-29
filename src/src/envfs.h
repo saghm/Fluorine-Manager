@@ -174,7 +174,7 @@ void setHandleCloserThreadCount(std::size_t n);
 class DirectoryWalker
 {
 public:
-  void forEachEntry(const std::wstring& path, void* cx, DirStartF* dirStartF,
+  static void forEachEntry(const std::wstring& path, void* cx, DirStartF* dirStartF,
                     DirEndF* dirEndF, FileF* fileF);
 
 private:

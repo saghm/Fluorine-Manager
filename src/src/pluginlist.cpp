@@ -1019,7 +1019,7 @@ QStringList PluginList::masters(const QString& name) const
 {
   auto iter = m_ESPsByName.find(name);
   if (iter == m_ESPsByName.end()) {
-    return QStringList();
+    return {};
   } else {
     QStringList result;
     for (const QString& master : m_ESPs[iter->second].masters) {
@@ -1033,7 +1033,7 @@ QString PluginList::origin(const QString& name) const
 {
   auto iter = m_ESPsByName.find(name);
   if (iter == m_ESPsByName.end()) {
-    return QString();
+    return {};
   } else {
     return m_ESPs[iter->second].originName;
   }
@@ -1133,7 +1133,7 @@ QString PluginList::author(const QString& name) const
 {
   auto iter = m_ESPsByName.find(name);
   if (iter == m_ESPsByName.end()) {
-    return QString();
+    return {};
   } else {
     return m_ESPs[iter->second].author;
   }
@@ -1143,7 +1143,7 @@ QString PluginList::description(const QString& name) const
 {
   auto iter = m_ESPsByName.find(name);
   if (iter == m_ESPsByName.end()) {
-    return QString();
+    return {};
   } else {
     return m_ESPs[iter->second].description;
   }
@@ -1303,7 +1303,7 @@ QVariant PluginList::data(const QModelIndex& modelIndex, int role) const
   } else if (role == Qt::UserRole + 1) {
     return iconData(modelIndex);
   }
-  return QVariant();
+  return {};
 }
 
 QVariant PluginList::displayData(const QModelIndex& modelIndex) const
@@ -1399,14 +1399,14 @@ QVariant PluginList::fontData(const QModelIndex& modelIndex) const
   return result;
 }
 
-QVariant PluginList::alignmentData(const QModelIndex& modelIndex) const
+QVariant PluginList::alignmentData(const QModelIndex& modelIndex) 
 {
   const int index = modelIndex.row();
 
   if (modelIndex.column() == 0) {
-    return QVariant(Qt::AlignLeft | Qt::AlignVCenter);
+    return {Qt::AlignLeft | Qt::AlignVCenter};
   } else {
-    return QVariant(Qt::AlignHCenter | Qt::AlignVCenter);
+    return {Qt::AlignHCenter | Qt::AlignVCenter};
   }
 }
 
@@ -1609,12 +1609,12 @@ QVariant PluginList::iconData(const QModelIndex& modelIndex) const
   return result;
 }
 
-bool PluginList::isProblematic(const ESPInfo& esp, const AdditionalInfo*) const
+bool PluginList::isProblematic(const ESPInfo& esp, const AdditionalInfo*) 
 {
   return !esp.masterUnset.empty();
 }
 
-bool PluginList::hasInfo(const ESPInfo&, const AdditionalInfo* info) const
+bool PluginList::hasInfo(const ESPInfo&, const AdditionalInfo* info) 
 {
   return info && !info->messages.empty();
 }
@@ -1891,14 +1891,14 @@ bool PluginList::dropMimeData(const QMimeData* mimeData, Qt::DropAction action, 
 QModelIndex PluginList::index(int row, int column, const QModelIndex&) const
 {
   if ((row < 0) || (row >= rowCount()) || (column < 0) || (column >= columnCount())) {
-    return QModelIndex();
+    return {};
   }
   return createIndex(row, column, row);
 }
 
 QModelIndex PluginList::parent(const QModelIndex&) const
 {
-  return QModelIndex();
+  return {};
 }
 
 PluginList::ESPInfo::ESPInfo(const QString& name, bool forceLoaded, bool forceEnabled,

@@ -80,19 +80,19 @@ public:
 
   enum EColumn
   {
-    COL_NAME,
-    COL_CONFLICTFLAGS,
-    COL_FLAGS,
-    COL_CONTENT,
-    COL_CATEGORY,
-    COL_AUTHOR,
-    COL_UPLOADER,
-    COL_MODID,
-    COL_GAME,
-    COL_VERSION,
-    COL_INSTALLTIME,
-    COL_PRIORITY,
-    COL_NOTES,
+    COL_NAME = 0,
+    COL_CONFLICTFLAGS = 1,
+    COL_FLAGS = 2,
+    COL_CONTENT = 3,
+    COL_CATEGORY = 4,
+    COL_AUTHOR = 5,
+    COL_UPLOADER = 6,
+    COL_MODID = 7,
+    COL_GAME = 8,
+    COL_VERSION = 9,
+    COL_INSTALLTIME = 10,
+    COL_PRIORITY = 11,
+    COL_NOTES = 12,
     COL_LASTCOLUMN = COL_NOTES,
   };
 
@@ -174,17 +174,17 @@ public:
 
 public:
   /// \copydoc MOBase::IModList::displayName
-  QString displayName(const QString& internalName) const;
+  static QString displayName(const QString& internalName) ;
 
   /// \copydoc MOBase::IModList::allMods
-  QStringList allMods() const;
+  static QStringList allMods() ;
   QStringList allModsByProfilePriority(MOBase::IProfile* profile = nullptr) const;
 
   // \copydoc MOBase::IModList::getMod
-  MOBase::IModInterface* getMod(const QString& name) const;
+  static MOBase::IModInterface* getMod(const QString& name) ;
 
   // \copydoc MOBase::IModList::remove
-  bool removeMod(MOBase::IModInterface* mod);
+  bool removeMod(MOBase::IModInterface* mod) const;
 
   // \copydoc MOBase::IModList::renameMod
   MOBase::IModInterface* renameMod(MOBase::IModInterface* mod, const QString& name);
@@ -352,12 +352,12 @@ private:
   // retrieve the display name of a mod or convert from a user-provided
   // name to internal name
   //
-  QString getDisplayName(ModInfo::Ptr info) const;
-  QString makeInternalName(ModInfo::Ptr info, QString name) const;
+  static QString getDisplayName(ModInfo::Ptr info) ;
+  static QString makeInternalName(ModInfo::Ptr info, QString name) ;
 
-  QString getFlagText(ModInfo::EFlag flag, ModInfo::Ptr modInfo) const;
+  static QString getFlagText(ModInfo::EFlag flag, ModInfo::Ptr modInfo) ;
 
-  QString getConflictFlagText(ModInfo::EConflictFlag flag, ModInfo::Ptr modInfo) const;
+  static QString getConflictFlagText(ModInfo::EConflictFlag flag, ModInfo::Ptr modInfo) ;
 
   QString getColumnToolTip(int column) const;
 

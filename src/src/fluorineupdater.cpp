@@ -206,7 +206,7 @@ void FluorineUpdater::onReplyFinished()
 }
 
 bool FluorineUpdater::parseStableRelease(const QJsonObject& obj,
-                                         ReleaseInfo& out) const
+                                         ReleaseInfo& out) 
 {
   out.tagName = obj.value(QStringLiteral("tag_name")).toString();
   out.name    = obj.value(QStringLiteral("name")).toString();
@@ -246,7 +246,7 @@ bool FluorineUpdater::parseStableRelease(const QJsonObject& obj,
 }
 
 bool FluorineUpdater::parseBetaRelease(const QJsonObject& obj,
-                                       ReleaseInfo& out) const
+                                       ReleaseInfo& out) 
 {
   out.tagName = obj.value(QStringLiteral("tag_name")).toString();
   out.name    = obj.value(QStringLiteral("name")).toString();

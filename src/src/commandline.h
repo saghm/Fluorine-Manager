@@ -393,7 +393,7 @@ private:
   std::wstring m_originalLine;
 
   void createOptions();
-  std::string more() const;
+  static std::string more() ;
 
   template <class... Ts>
   void add()

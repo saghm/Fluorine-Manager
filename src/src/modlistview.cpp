@@ -297,19 +297,19 @@ std::optional<unsigned int> ModListView::prevMod(unsigned int modIndex) const
   return {};
 }
 
-void ModListView::invalidateFilter()
+void ModListView::invalidateFilter() const
 {
   m_sortProxy->invalidate();
 }
 
 void ModListView::setFilterCriteria(
-    const std::vector<ModListSortProxy::Criteria>& criteria)
+    const std::vector<ModListSortProxy::Criteria>& criteria) const
 {
   m_sortProxy->setCriteria(criteria);
 }
 
 void ModListView::setFilterOptions(ModListSortProxy::FilterMode mode,
-                                   ModListSortProxy::SeparatorsMode sep)
+                                   ModListSortProxy::SeparatorsMode sep) const
 {
   m_sortProxy->setOptions(mode, sep);
 }
@@ -346,7 +346,7 @@ QModelIndexList ModListView::indexViewToModel(const QModelIndexList& index) cons
   return ::indexViewToModel(index, m_core->modList());
 }
 
-QModelIndex ModListView::nextIndex(const QModelIndex& index) const
+QModelIndex ModListView::nextIndex(const QModelIndex& index) 
 {
   auto* model = index.model();
   if (!model) {
@@ -372,7 +372,7 @@ QModelIndex ModListView::nextIndex(const QModelIndex& index) const
   }
 }
 
-QModelIndex ModListView::prevIndex(const QModelIndex& index) const
+QModelIndex ModListView::prevIndex(const QModelIndex& index) 
 {
   if (index.row() == 0 && index.parent().isValid()) {
     return index.parent();
@@ -1180,7 +1180,7 @@ QColor ModListView::markerColor(const QModelIndex& index) const
     }
 
     if (colors.empty()) {
-      return QColor();
+      return {};
     }
 
     int r = 0, g = 0, b = 0, a = 0;
@@ -1191,11 +1191,11 @@ QColor ModListView::markerColor(const QModelIndex& index) const
       a += color.alpha();
     }
 
-    return QColor(r / colors.size(), g / colors.size(), b / colors.size(),
-                  a / colors.size());
+    return {r / colors.size(), g / colors.size(), b / colors.size(),
+                  a / colors.size()};
   }
 
-  return QColor();
+  return {};
 }
 
 std::vector<ModInfo::EFlag> ModListView::modFlags(const QModelIndex& index,

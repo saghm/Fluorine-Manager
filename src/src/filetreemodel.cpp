@@ -1060,7 +1060,7 @@ bool FileTreeModel::shouldShowFolder(const DirectoryEntry& dir,
   return false;
 }
 
-QVariant FileTreeModel::displayData(const FileTreeItem* item, int column) const
+QVariant FileTreeModel::displayData(const FileTreeItem* item, int column) 
 {
   switch (column) {
   case FileName: {

@@ -36,7 +36,7 @@ public:
   int getErrorCode() const { return m_ErrorCode; }
 
 private:
-  std::string constructMessage(const std::string& input, int errorcode);
+  static std::string constructMessage(const std::string& input, int errorcode);
 
 private:
   int m_ErrorCode;

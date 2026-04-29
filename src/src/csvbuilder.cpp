@@ -10,7 +10,7 @@ CSVBuilder::CSVBuilder(QIODevice* target)
   m_QuoteMode[TYPE_STRING]  = QUOTE_ONDEMAND;
 }
 
-CSVBuilder::~CSVBuilder() {}
+CSVBuilder::~CSVBuilder() = default;
 
 void CSVBuilder::setFieldSeparator(char sep)
 {
@@ -209,7 +209,7 @@ void CSVBuilder::addRow(const std::map<QString, QVariant>& data)
   writeData(data, true);
 }
 
-void CSVBuilder::checkFields(const std::vector<QString>& fields)
+void CSVBuilder::checkFields(const std::vector<QString>& fields) const
 {
   for (auto iter = fields.begin(); iter != fields.end(); ++iter) {
     if (iter->contains(m_Separator) || iter->contains('\r') || iter->contains('\n') ||
@@ -248,7 +248,7 @@ const char* CSVBuilder::lineBreak()
   }
 }
 
-const char CSVBuilder::separator()
+const char CSVBuilder::separator() const
 {
   return m_Separator;
 }

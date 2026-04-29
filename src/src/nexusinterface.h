@@ -678,8 +678,8 @@ private:
   // When the game name has no matching plugin (e.g. "site"), getGame() returns the
   // managed game as a fallback but sets the wrong m_GameName in the request. This
   // overrides it back to the raw requested name so API URLs use the correct domain.
-  void applyGameNameOverride(NXMRequestInfo& info, const QString& gameName,
-                             const MOBase::IPluginGame* game) const;
+  static void applyGameNameOverride(NXMRequestInfo& info, const QString& gameName,
+                             const MOBase::IPluginGame* game) ;
 
 private:
   QNetworkDiskCache* m_DiskCache;

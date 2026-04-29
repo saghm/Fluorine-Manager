@@ -258,7 +258,7 @@ bool NexusSSOLogin::isActive() const
   return m_active;
 }
 
-void NexusSSOLogin::setState(States s, const QString& error)
+void NexusSSOLogin::setState(States s, const QString& error) const
 {
   if (stateChanged) {
     stateChanged(s, error);
@@ -755,7 +755,7 @@ void NexusKeyValidator::onAttemptFailure(const ValidationAttempt& a)
 }
 
 void NexusKeyValidator::setFinished(ValidationAttempt::Result r, const QString& message,
-                                    std::optional<APIUserAccount> user)
+                                    std::optional<APIUserAccount> user) const
 {
   if (finished) {
     finished(r, message, user);

@@ -144,7 +144,7 @@ DownloadListView::DownloadListView(QWidget* parent) : QTreeView(parent)
           SLOT(onCustomContextMenu(QPoint)));
 }
 
-DownloadListView::~DownloadListView() {}
+DownloadListView::~DownloadListView() = default;
 
 void DownloadListView::setManager(DownloadManager* manager)
 {

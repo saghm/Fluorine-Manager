@@ -45,7 +45,7 @@ std::string OverwriteManager::overwritePath(const std::string& relative_path) co
 }
 
 std::string OverwriteManager::copyOnWrite(const std::string& source_path,
-                                          const std::string& relative_path)
+                                          const std::string& relative_path) const
 {
   const fs::path dest = stagingPath(relative_path);
 
@@ -78,7 +78,7 @@ std::string OverwriteManager::copyOnWrite(const std::string& source_path,
 }
 
 std::string OverwriteManager::copyOnWriteFromFd(int dir_fd,
-                                                const std::string& relative_path)
+                                                const std::string& relative_path) const
 {
   const fs::path dest = stagingPath(relative_path);
 
@@ -116,7 +116,7 @@ std::string OverwriteManager::copyOnWriteFromFd(int dir_fd,
 }
 
 std::string OverwriteManager::writeFile(const std::string& relative_path,
-                                        const std::vector<uint8_t>& data)
+                                        const std::vector<uint8_t>& data) const
 {
   const fs::path path = stagingPath(relative_path);
   std::error_code ec;
@@ -135,7 +135,7 @@ std::string OverwriteManager::writeFile(const std::string& relative_path,
 }
 
 bool OverwriteManager::rename(const std::string& old_relative,
-                              const std::string& new_relative)
+                              const std::string& new_relative) const
 {
   std::error_code ec;
 
@@ -155,7 +155,7 @@ bool OverwriteManager::rename(const std::string& old_relative,
   return !ec;
 }
 
-bool OverwriteManager::removeFile(const std::string& relative_path)
+bool OverwriteManager::removeFile(const std::string& relative_path) const
 {
   std::error_code ec;
   fs::path staged = stagingPath(relative_path);
@@ -172,7 +172,7 @@ bool OverwriteManager::removeFile(const std::string& relative_path)
 }
 
 bool OverwriteManager::removeDirectory(const std::string& relative_path,
-                                       bool* out_not_empty)
+                                       bool* out_not_empty) const
 {
   if (out_not_empty)
     *out_not_empty = false;
@@ -200,7 +200,7 @@ bool OverwriteManager::removeDirectory(const std::string& relative_path,
   return removedAny;
 }
 
-bool OverwriteManager::createDirectory(const std::string& relative_path)
+bool OverwriteManager::createDirectory(const std::string& relative_path) const
 {
   std::error_code ec;
   fs::create_directories(stagingPath(relative_path), ec);

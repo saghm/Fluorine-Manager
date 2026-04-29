@@ -12,7 +12,7 @@ ModListByPriorityProxy::ModListByPriorityProxy(Profile* profile, OrganizerCore& 
     : QAbstractProxyModel(parent), m_core(core), m_profile(profile)
 {}
 
-ModListByPriorityProxy::~ModListByPriorityProxy() {}
+ModListByPriorityProxy::~ModListByPriorityProxy() = default;
 
 void ModListByPriorityProxy::setSourceModel(QAbstractItemModel* model)
 {
@@ -167,7 +167,7 @@ void ModListByPriorityProxy::onModelDataChanged(const QModelIndex& topLeft,
 QModelIndex ModListByPriorityProxy::mapFromSource(const QModelIndex& sourceIndex) const
 {
   if (!sourceIndex.isValid()) {
-    return QModelIndex();
+    return {};
   }
 
   auto* item = m_IndexToItem.at(sourceIndex.row()).get();
@@ -177,7 +177,7 @@ QModelIndex ModListByPriorityProxy::mapFromSource(const QModelIndex& sourceIndex
 QModelIndex ModListByPriorityProxy::mapToSource(const QModelIndex& proxyIndex) const
 {
   if (!proxyIndex.isValid()) {
-    return QModelIndex();
+    return {};
   }
   auto* item = static_cast<TreeItem*>(proxyIndex.internalPointer());
 
@@ -207,13 +207,13 @@ int ModListByPriorityProxy::columnCount(const QModelIndex& index) const
 QModelIndex ModListByPriorityProxy::parent(const QModelIndex& child) const
 {
   if (!child.isValid()) {
-    return QModelIndex();
+    return {};
   }
 
   auto* item = static_cast<TreeItem*>(child.internalPointer());
 
   if (!item->parent || item->parent == &m_Root) {
-    return QModelIndex();
+    return {};
   }
 
   return createIndex(item->parent->parent->childIndex(item->parent), 0, item->parent);
@@ -395,7 +395,7 @@ QModelIndex ModListByPriorityProxy::index(int row, int column,
                                           const QModelIndex& parent) const
 {
   if (!hasIndex(row, column, parent)) {
-    return QModelIndex();
+    return {};
   }
 
   const TreeItem* parentItem;

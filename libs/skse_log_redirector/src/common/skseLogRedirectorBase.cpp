@@ -22,7 +22,7 @@ QString SkseLogRedirectorBase::author() const
 
 VersionInfo SkseLogRedirectorBase::version() const
 {
-  return VersionInfo(0, 0, 1);
+  return {0, 0, 1};
 }
 
 QList<PluginSetting> SkseLogRedirectorBase::settings() const

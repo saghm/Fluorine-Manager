@@ -211,7 +211,7 @@ private:
   Executable* selectedExe();
 
   void fillList();
-  QListWidgetItem* createListItem(const Executable& exe);
+  static QListWidgetItem* createListItem(const Executable& exe);
   void updateUI(const QListWidgetItem* item, const Executable* e);
   void clearEdits();
   void setEdits(const Executable& e);

@@ -137,8 +137,8 @@ Version createVersionInfo()
   return Version(FLUORINE_VERSION_MAJOR, FLUORINE_VERSION_MINOR,
                  FLUORINE_VERSION_PATCH, 0, {Version::Development});
 #else
-  return Version(FLUORINE_VERSION_MAJOR, FLUORINE_VERSION_MINOR,
-                 FLUORINE_VERSION_PATCH, 0);
+  return {FLUORINE_VERSION_MAJOR, FLUORINE_VERSION_MINOR,
+                 FLUORINE_VERSION_PATCH, 0};
 #endif
 }
 

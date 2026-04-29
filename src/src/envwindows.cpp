@@ -22,7 +22,7 @@ WindowsInfo::WindowsInfo()
   m_elevated = getElevated();
 }
 
-WindowsInfo::Version WindowsInfo::getKernelVersion() const
+WindowsInfo::Version WindowsInfo::getKernelVersion() 
 {
   struct utsname uts;
   if (uname(&uts) != 0) {
@@ -52,7 +52,7 @@ WindowsInfo::Version WindowsInfo::getKernelVersion() const
   return v;
 }
 
-WindowsInfo::Release WindowsInfo::getRelease() const
+WindowsInfo::Release WindowsInfo::getRelease() 
 {
   Release r;
 
@@ -82,12 +82,12 @@ WindowsInfo::Release WindowsInfo::getRelease() const
   return r;
 }
 
-std::optional<bool> WindowsInfo::getElevated() const
+std::optional<bool> WindowsInfo::getElevated() 
 {
   return (geteuid() == 0);
 }
 
-bool WindowsInfo::compatibilityMode() const
+bool WindowsInfo::compatibilityMode() 
 {
   return false;
 }

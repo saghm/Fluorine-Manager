@@ -617,14 +617,14 @@ QString InstanceManager::instancePath(const QString& instanceName) const
   return QDir::fromNativeSeparators(globalInstancesRootPath() + "/" + instanceName);
 }
 
-QString InstanceManager::globalInstancesRootPath() const
+QString InstanceManager::globalInstancesRootPath() 
 {
   // Use the shared Fluorine data dir so the path is the same in native and
   // Flatpak builds (QStandardPaths is remapped inside a Flatpak sandbox).
   return QDir::fromNativeSeparators(fluorineDataDir());
 }
 
-QString InstanceManager::iniPath(const QString& instanceDir) const
+QString InstanceManager::iniPath(const QString& instanceDir) 
 {
   return QDir(instanceDir).filePath(QString::fromStdWString(AppConfig::iniFileName()));
 }
@@ -654,18 +654,18 @@ bool InstanceManager::hasAnyInstances() const
   return portableInstanceExists() || !globalInstancePaths().empty();
 }
 
-QString InstanceManager::portablePath() const
+QString InstanceManager::portablePath() 
 {
   return AppConfig::basePath();
 }
 
-bool InstanceManager::portableInstanceExists() const
+bool InstanceManager::portableInstanceExists() 
 {
   return QFile::exists(AppConfig::basePath() + "/" +
                        QString::fromStdWString(AppConfig::iniFileName()));
 }
 
-bool InstanceManager::allowedToChangeInstance() const
+bool InstanceManager::allowedToChangeInstance() 
 {
   const auto lockFile = qApp->applicationDirPath() + "/" +
                         QString::fromStdWString(AppConfig::portableLockFileName());
@@ -762,7 +762,7 @@ bool InstanceManager::instanceExists(const QString& instanceName) const
   return root.exists(instanceName);
 }
 
-QStringList InstanceManager::registeredPortablePaths() const
+QStringList InstanceManager::registeredPortablePaths() 
 {
   return GlobalSettings::portableInstances();
 }

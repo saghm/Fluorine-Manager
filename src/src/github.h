@@ -17,9 +17,9 @@ public:
     initMessage(errorObj);
   }
 
-  ~GitHubException() throw() override {}
+  ~GitHubException() noexcept override = default;
 
-  const char* what() const throw() override { return m_Message.constData(); }
+  const char* what() const noexcept override { return m_Message.constData(); }
 
 private:
   void initMessage(const QJsonObject& obj)
@@ -81,7 +81,7 @@ private:
                const std::function<void(const QJsonDocument&)>& callback,
                bool relative);
 
-  QJsonDocument handleReply(QNetworkReply* reply);
+  static QJsonDocument handleReply(QNetworkReply* reply);
   QNetworkReply* genReply(Method method, const QString& path, const QByteArray& data,
                           bool relative);
 
@@ -102,7 +102,7 @@ private:
 
   void onFinished(const Request& req);
   void onError(const Request& req, QNetworkReply::NetworkError error);
-  void onTimeout(const Request& req);
+  static void onTimeout(const Request& req);
 
   void deleteReply(QNetworkReply* reply);
 };

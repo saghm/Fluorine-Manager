@@ -171,7 +171,7 @@ VersionInfo OrganizerProxy::appVersion() const
     // there is no way to differentiate two pre-releases?
   }
 
-  return VersionInfo(major, minor, subminor, subsubminor, infoReleaseType);
+  return {major, minor, subminor, subsubminor, infoReleaseType};
 }
 
 IPluginGame* OrganizerProxy::getGame(const QString& gameName) const

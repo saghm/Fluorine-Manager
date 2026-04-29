@@ -413,7 +413,7 @@ QString CategoryFactory::getCategoryName(unsigned int index) const
   return m_Categories[index].name();
 }
 
-QString CategoryFactory::getSpecialCategoryName(SpecialCategories type) const
+QString CategoryFactory::getSpecialCategoryName(SpecialCategories type) 
 {
   QString label;
   switch (type) {

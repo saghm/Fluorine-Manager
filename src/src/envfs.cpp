@@ -18,7 +18,7 @@ File::File(std::wstring_view n, FILETIME ft, uint64_t s)
       size(s)
 {}
 
-Directory::Directory() {}
+Directory::Directory() = default;
 
 Directory::Directory(std::wstring_view n)
     : name(n.begin(), n.end()), lcname(MOShared::ToLowerCopy(name))

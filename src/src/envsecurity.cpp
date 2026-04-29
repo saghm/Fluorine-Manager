@@ -67,7 +67,7 @@ QString SecurityProduct::toString() const
   return s;
 }
 
-QString SecurityProduct::providerToString() const
+QString SecurityProduct::providerToString() 
 {
   return "n/a";
 }

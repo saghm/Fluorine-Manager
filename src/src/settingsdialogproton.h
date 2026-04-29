@@ -34,8 +34,8 @@ private:
   void onBrowsePrefixLocation();
   void onDownloadSLR();
 
-  QString ensureWinetricks();
-  QString findProtonWine(const QString& protonPath);
+  static QString ensureWinetricks();
+  static QString findProtonWine(const QString& protonPath);
 
   void runPrefixSetupDialog(uint32_t appId, const QString& prefixPath,
                             const QString& protonName, const QString& protonPath);

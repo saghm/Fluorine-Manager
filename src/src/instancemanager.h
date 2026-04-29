@@ -264,17 +264,17 @@ public:
   // sets the instance name in the registry so the same instance is opened next
   // time MO runs
   //
-  void setCurrentInstance(const QString& name);
+  static void setCurrentInstance(const QString& name);
 
   // whether MO should allow the user to change the current instance from the
   // user interface
   //
-  bool allowedToChangeInstance() const;
+  static bool allowedToChangeInstance() ;
 
   // whether a portable instance exists; this basically checks for an INI in
   // the application directory
   //
-  bool portableInstanceExists() const;
+  static bool portableInstanceExists() ;
 
   // whether any instance exists, whether global or portable
   //
@@ -283,12 +283,12 @@ public:
   // returns the absolute path to the portable instance, regardless of whether
   // one exists
   //
-  QString portablePath() const;
+  static QString portablePath() ;
 
   // returns the absolute path to the directory that contains global instances
   // (typically AppData/Local/ModOrganizer)
   //
-  QString globalInstancesRootPath() const;
+  static QString globalInstancesRootPath() ;
 
   // returns the list of absolute path to all existing global instances; this
   // does not include the portable instance
@@ -315,13 +315,13 @@ public:
   // returns the absolute path to the INI file for the given instance directory;
   // the file may not exist
   //
-  QString iniPath(const QString& instanceDir) const;
+  static QString iniPath(const QString& instanceDir) ;
 
   // persistent registry of portable instance paths (stored in GlobalSettings)
   //
-  QStringList registeredPortablePaths() const;
-  void registerPortableInstance(const QString& path);
-  void unregisterPortableInstance(const QString& path);
+  static QStringList registeredPortablePaths() ;
+  static void registerPortableInstance(const QString& path);
+  static void unregisterPortableInstance(const QString& path);
 
 private:
   InstanceManager();

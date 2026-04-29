@@ -22,7 +22,7 @@ bool ForcedLoadDialogWidget::getEnabled()
   return ui->enabledBox->isChecked();
 }
 
-bool ForcedLoadDialogWidget::getForced()
+bool ForcedLoadDialogWidget::getForced() const
 {
   return m_Forced;
 }

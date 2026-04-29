@@ -25,7 +25,7 @@ private:
 
   void onActivate();
   void onDeactivate();
-  void selectRow(QListView* list, int row);
+  static void selectRow(QListView* list, int row);
 };
 
 #endif  // MODINFODIALOGESPS_H

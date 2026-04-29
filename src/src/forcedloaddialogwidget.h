@@ -19,7 +19,7 @@ public:
   ~ForcedLoadDialogWidget() override;
 
   bool getEnabled();
-  bool getForced();
+  bool getForced() const;
   QString getLibraryPath();
   QString getProcess();
 

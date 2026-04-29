@@ -98,7 +98,7 @@ public:
   void restoreHiddenFiles(const QModelIndexList& indices) const;
   void setTracked(const QModelIndexList& indices, bool tracked) const;
   void setEndorsed(const QModelIndexList& indices, bool endorsed) const;
-  void willNotEndorsed(const QModelIndexList& indices) const;
+  static void willNotEndorsed(const QModelIndexList& indices) ;
   void remapCategory(const QModelIndexList& indices) const;
 
   // set/reset color of the given selection, using the given reference index (index
@@ -124,7 +124,7 @@ public:
 
   // open the Windows explorer for the specified mods
   //
-  void openExplorer(const QModelIndexList& index) const;
+  static void openExplorer(const QModelIndexList& index) ;
 
   // backup-specific actions
   //
@@ -162,14 +162,14 @@ private:
 
   // set the category of the given mod based on the given array
   //
-  void setCategories(ModInfo::Ptr mod,
-                     const std::vector<std::pair<int, bool>>& categories) const;
+  static void setCategories(ModInfo::Ptr mod,
+                     const std::vector<std::pair<int, bool>>& categories) ;
 
   // set the category of the given mod if the category from the reference mod does not
   // match the one in the array of categories
   //
-  void setCategoriesIf(ModInfo::Ptr mod, ModInfo::Ptr ref,
-                       const std::vector<std::pair<int, bool>>& categories) const;
+  static void setCategoriesIf(ModInfo::Ptr mod, ModInfo::Ptr ref,
+                       const std::vector<std::pair<int, bool>>& categories) ;
 
   // check the given mods from update, the map should map game names to nexus ID
   //

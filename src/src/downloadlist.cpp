@@ -62,7 +62,7 @@ QModelIndex DownloadList::index(int row, int column, const QModelIndex&) const
 
 QModelIndex DownloadList::parent(const QModelIndex&) const
 {
-  return QModelIndex();
+  return {};
 }
 
 QVariant DownloadList::headerData(int section, Qt::Orientation orientation,
@@ -87,7 +87,7 @@ QVariant DownloadList::headerData(int section, Qt::Orientation orientation,
     case COL_SOURCEGAME:
       return tr("Source Game");
     default:
-      return QVariant();
+      return {};
     }
   } else {
     return QAbstractItemModel::headerData(section, orientation, role);
@@ -109,7 +109,7 @@ QMimeData* DownloadList::mimeData(const QModelIndexList& indexes) const
 QVariant DownloadList::data(const QModelIndex& index, int role) const
 {
   if (!index.isValid() || index.row() < 0 || index.row() >= rowCount())
-    return QVariant();
+    return {};
 
   bool pendingDownload = index.row() >= m_manager.numTotalDownloads();
   if (role == Qt::DisplayRole) {
@@ -236,11 +236,11 @@ QVariant DownloadList::data(const QModelIndex& index, int role) const
       return QIcon(":/MO/gui/warning_16");
   } else if (role == Qt::TextAlignmentRole) {
     if (index.column() == COL_SIZE)
-      return QVariant(Qt::AlignVCenter | Qt::AlignRight);
+      return {Qt::AlignVCenter | Qt::AlignRight};
     else
-      return QVariant(Qt::AlignVCenter | Qt::AlignLeft);
+      return {Qt::AlignVCenter | Qt::AlignLeft};
   }
-  return QVariant();
+  return {};
 }
 
 void DownloadList::aboutToUpdate()

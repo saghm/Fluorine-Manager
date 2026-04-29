@@ -74,7 +74,7 @@ private:
                                    QString fileName, QString relativeName,
                                    const MOShared::AlternativesVector& alternatives);
 
-  ConflictItem createNoConflictItem(MOShared::FileIndex index, bool archive,
+  static ConflictItem createNoConflictItem(MOShared::FileIndex index, bool archive,
                                     QString fileName, QString relativeName);
 
   ConflictItem createOverwrittenItem(MOShared::FileIndex index, int fileOrigin,
@@ -131,7 +131,7 @@ public:
   void activateItems(QTreeView* tree);
   void openItems(QTreeView* tree, bool hooked);
   void previewItems(QTreeView* tree);
-  void exploreItems(QTreeView* tree);
+  static void exploreItems(QTreeView* tree);
 
   void openItem(const ConflictItem* item, bool hooked);
   void previewItem(const ConflictItem* item);

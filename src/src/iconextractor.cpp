@@ -72,7 +72,7 @@ QByteArray getResourceData(const char* resBase, uint32_t dataEntryOffset,
   int64_t off = rvaToOffset(dataRva, sections, numSections);
   if (off < 0 || off + dataSize > fileSize)
     return {};
-  return QByteArray(fileData + off, static_cast<int>(dataSize));
+  return {fileData + off, static_cast<int>(dataSize)};
 }
 
 /// Build an ICO file from a GRPICONDIR and RT_ICON resources.

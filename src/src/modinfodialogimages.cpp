@@ -21,9 +21,9 @@ QSize resizeWithAspectRatio(const QSize& original, const QSize& available)
 
 QRect centeredRect(const QRect& rect, const QSize& size)
 {
-  return QRect((rect.left() + rect.width() / 2) - size.width() / 2,
+  return {(rect.left() + rect.width() / 2) - size.width() / 2,
                (rect.top() + rect.height() / 2) - size.height() / 2, size.width(),
-               size.height());
+               size.height()};
 }
 
 QString dimensionString(const QSize& s)
@@ -392,7 +392,7 @@ const File* ImagesTab::fileAtPos(const QPoint& p) const
 
 Geometry ImagesTab::makeGeometry() const
 {
-  return Geometry(ui->imagesThumbnails->size(), m_metrics);
+  return {ui->imagesThumbnails->size(), m_metrics};
 }
 
 void ImagesTab::paintThumbnailsArea(QPaintEvent* e)
@@ -436,7 +436,7 @@ void ImagesTab::paintThumbnailBackground(const PaintContext& cx)
   }
 }
 
-void ImagesTab::paintThumbnailBorder(const PaintContext& cx)
+void ImagesTab::paintThumbnailBorder(const PaintContext& cx) const
 {
   auto borderRect = cx.geo.borderRect(cx.thumbIndex);
 
@@ -449,7 +449,7 @@ void ImagesTab::paintThumbnailBorder(const PaintContext& cx)
   cx.painter.drawRect(borderRect);
 }
 
-void ImagesTab::paintThumbnailImage(const PaintContext& cx)
+void ImagesTab::paintThumbnailImage(const PaintContext& cx) const
 {
   if (cx.file->failed()) {
     return;
@@ -780,7 +780,7 @@ void ScalableImage::paintEvent(QPaintEvent* e)
 
 Metrics::Metrics()
      
-{}
+= default;
 
 Geometry::Geometry(QSize widgetSize, Metrics metrics)
     : m_widgetSize(widgetSize), m_metrics(metrics), m_topRect(calcTopRect())
@@ -851,8 +851,8 @@ QRect Geometry::textRect(std::size_t i) const
 {
   const auto r = borderRect(i);
 
-  return QRect(r.left(), r.bottom() + m_metrics.textSpacing, r.width(),
-               m_metrics.textHeight);
+  return {r.left(), r.bottom() + m_metrics.textSpacing, r.width(),
+               m_metrics.textHeight};
 }
 
 QRect Geometry::selectionRect(std::size_t i) const
@@ -860,7 +860,7 @@ QRect Geometry::selectionRect(std::size_t i) const
   const auto br = borderRect(i);
   const auto tr = textRect(i);
 
-  return QRect(br.left(), br.top(), br.width(), tr.bottom() - br.top());
+  return {br.left(), br.top(), br.width(), tr.bottom() - br.top()};
 }
 
 std::size_t Geometry::indexAt(const QPoint& p) const

@@ -69,7 +69,7 @@ QPixmap IconFetcher::genericDirectoryIcon() const
   return m_quickCache.directory;
 }
 
-bool IconFetcher::hasOwnIcon(const QString& path) const
+bool IconFetcher::hasOwnIcon(const QString& path) 
 {
   static const QString exe = ".exe";
   static const QString lnk = ".lnk";

@@ -27,9 +27,9 @@ public:
 
   bool isEmpty() const override;
 
-  bool isAlternate() { return m_IsAlternate; }
-  bool isConverted() { return m_Converted; }
-  bool isValidated() { return m_Validated; }
+  bool isAlternate() const { return m_IsAlternate; }
+  bool isConverted() const { return m_Converted; }
+  bool isValidated() const { return m_Validated; }
 
   /**
    * @brief test if there is a newer version of the mod

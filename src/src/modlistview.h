@@ -120,13 +120,13 @@ public slots:
 
   // invalidate (refresh) the filter (similar to a layout changed event)
   //
-  void invalidateFilter();
+  void invalidateFilter() const;
 
   // set the filter criteria/options for mods
   //
-  void setFilterCriteria(const std::vector<ModListSortProxy::Criteria>& criteria);
+  void setFilterCriteria(const std::vector<ModListSortProxy::Criteria>& criteria) const;
   void setFilterOptions(ModListSortProxy::FilterMode mode,
-                        ModListSortProxy::SeparatorsMode sep);
+                        ModListSortProxy::SeparatorsMode sep) const;
 
   // update the mod counter
   //
@@ -150,8 +150,8 @@ protected:
 
   // returns the next/previous index of the given index
   //
-  QModelIndex nextIndex(const QModelIndex& index) const;
-  QModelIndex prevIndex(const QModelIndex& index) const;
+  static QModelIndex nextIndex(const QModelIndex& index) ;
+  static QModelIndex prevIndex(const QModelIndex& index) ;
 
   // re-implemented to fake the return value to allow drag-and-drop on
   // itself for separators

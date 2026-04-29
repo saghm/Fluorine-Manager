@@ -157,7 +157,7 @@ private:
   std::size_t m_threadCount;
   std::size_t m_lastFileCount{0};
 
-  void stealModFilesIntoStructure(MOShared::DirectoryEntry* directoryStructure,
+  static void stealModFilesIntoStructure(MOShared::DirectoryEntry* directoryStructure,
                                   const QString& modName, int priority,
                                   const QString& directory,
                                   const QStringList& stealFiles);

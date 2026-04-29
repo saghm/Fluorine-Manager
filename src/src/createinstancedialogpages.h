@@ -294,7 +294,7 @@ private:
 
   // updates the given button on the ui, sets the text, icon, etc.
   //
-  void updateButton(Game* g);
+  static void updateButton(Game* g);
 
   // game buttons are toggles, this creates the button for the given game if
   // it doesn't exist and toggles it on
@@ -351,7 +351,7 @@ private:
 
   // detects if the given path likely contains a Microsoft Store game
   //
-  bool detectMicrosoftStore(const QString& path);
+  static bool detectMicrosoftStore(const QString& path);
 
   // tells the user that the path probably contains a Microsoft Store game that
   // is not supported, returns true if the user decides to accept anyway.
@@ -558,7 +558,7 @@ private:
 
   // sets the given textbox to the path if it's empty or if `force` is true
   //
-  void setIfEmpty(QLineEdit* e, const QString& path, bool force);
+  static void setIfEmpty(QLineEdit* e, const QString& path, bool force);
 };
 
 // default settings for profiles page; allow the user to set their preferred
@@ -623,7 +623,7 @@ private:
   // returns a log line with the given caption and path, something like
   // " - caption: path"
   //
-  QString dirLine(const QString& caption, const QString& path) const;
+  static QString dirLine(const QString& caption, const QString& path) ;
 };
 
 }  // namespace cid

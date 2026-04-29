@@ -50,7 +50,7 @@ public:
 
     void unlock();
     void setInfo(DWORD pid, const QString& name);
-    Results result() const;
+    static Results result() ;
 
     DWORD pid() const;
     const QString& name() const;

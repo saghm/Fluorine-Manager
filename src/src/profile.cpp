@@ -384,7 +384,7 @@ void Profile::renameModInList(QFile& modList, const QString& oldName,
   }
 
   if (renamed)
-    log::debug("Renamed {} \"{}\" mod to \"{}\" in {}", renamed, oldName, newName,
+    log::debug(R"(Renamed {} "{}" mod to "{}" in {})", renamed, oldName, newName,
                modList.fileName());
 }
 
@@ -480,7 +480,7 @@ void Profile::refreshModStatus()
     unsigned int modIndex = ModInfo::getIndex(modName);
     if (modIndex == UINT_MAX) {
       if (modsNotFound < 5) {
-        log::warn("mod not found: \"{}\" (profile \"{}\")", modName, m_Directory.path());
+        log::warn(R"(mod not found: "{}" (profile "{}"))", modName, m_Directory.path());
       }
       ++modsNotFound;
       // need to rewrite the modlist to fix this
@@ -499,7 +499,7 @@ void Profile::refreshModStatus()
         m_ModStatus[modIndex].m_Priority = index++;
       }
     } else {
-      log::warn("no mod state for \"{}\" (profile \"{}\")", modName,
+      log::warn(R"(no mod state for "{}" (profile "{}"))", modName,
                 m_Directory.path());
       // need to rewrite the modlist to fix this
       modStatusModified = true;
@@ -753,7 +753,7 @@ void Profile::copyFilesTo(QString& target) const
   copyDir(m_Directory.absolutePath(), target, false);
 }
 
-std::vector<std::wstring> Profile::splitDZString(const wchar_t* buffer) const
+std::vector<std::wstring> Profile::splitDZString(const wchar_t* buffer) 
 {
   std::vector<std::wstring> result;
   const wchar_t* pos = buffer;
@@ -766,7 +766,7 @@ std::vector<std::wstring> Profile::splitDZString(const wchar_t* buffer) const
   return result;
 }
 
-void Profile::mergeTweak(const QString& tweakName, const QString& tweakedIni) const
+void Profile::mergeTweak(const QString& tweakName, const QString& tweakedIni) 
 {
   // Parse the tweak INI file line-by-line and merge each key=value into the
   // destination using WriteRegistryValue (which uses the safe line-by-line

@@ -56,7 +56,7 @@ QJsonDocument GitHub::handleReply(QNetworkReply* reply)
 
   QByteArray data = reply->readAll();
   if (data.isNull() || data.isEmpty() || (strcmp(data.constData(), "null") == 0)) {
-    return QJsonDocument();
+    return {};
   }
 
   QJsonParseError parseError;

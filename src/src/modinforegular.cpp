@@ -745,7 +745,7 @@ std::set<int> ModInfoRegular::doGetContents() const
 
   if (contentFeature) {
     auto result = contentFeature->getContentsFor(fileTree());
-    return std::set<int>(std::begin(result), std::end(result));
+    return {std::begin(result), std::end(result)};
   }
 
   return {};
@@ -771,7 +771,7 @@ QString ModInfoRegular::getDescription() const
   } else {
     const std::set<int>& categories = getCategories();
     if (categories.empty()) {
-      return QString();
+      return {};
     }
     std::wostringstream categoryString;
     categoryString << ToWString(tr("Categories: <br>"));

@@ -52,7 +52,7 @@ public:
       if (role == Qt::DisplayRole) {
         return tr("Overwrites");
       } else {
-        return QVariant();
+        return {};
       }
     } else {
       return QFileSystemModel::headerData(section, orientation, role);
@@ -65,7 +65,7 @@ public:
       if (role == Qt::DisplayRole) {
         return tr("not implemented");
       } else {
-        return QVariant();
+        return {};
       }
     } else {
       return QFileSystemModel::data(index, role);

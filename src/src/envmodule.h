@@ -85,7 +85,7 @@ private:
   QString m_versionString;
   QString m_md5;
 
-  FileInfo getFileInfo() const;
+  static FileInfo getFileInfo() ;
   QDateTime getTimestamp() const;
   QString getMD5() const;
 };

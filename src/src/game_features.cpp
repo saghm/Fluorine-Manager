@@ -172,7 +172,7 @@ GameFeatures::GameFeatures(OrganizerCore* core, PluginContainer* plugins)
           });
 }
 
-GameFeatures::~GameFeatures() {}
+GameFeatures::~GameFeatures() = default;
 
 GameFeatures::CombinedModDataChecker& GameFeatures::modDataChecker() const
 {

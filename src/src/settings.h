@@ -160,7 +160,7 @@ private:
   void saveWindowGeometry(const QWidget* w);
   bool restoreWindowGeometry(QWidget* w) const;
 
-  void ensureWindowOnScreen(QWidget* w) const;
+  static void ensureWindowOnScreen(QWidget* w) ;
   static void centerOnMonitor(QWidget* w, int monitor);
   static void centerOnParent(QWidget* w, QWidget* parent = nullptr);
 };
@@ -482,7 +482,7 @@ private:
 
   // sets the custom command in uibase, called when the settings change
   //
-  void updateCustomBrowser();
+  void updateCustomBrowser() const;
 };
 
 enum class EndorsementState
@@ -525,13 +525,13 @@ public:
   // if 'force' is true, the registration dialog will be shown even if the user
   // said earlier not to
   //
-  void registerAsNXMHandler(bool force);
+  static void registerAsNXMHandler(bool force);
 
   std::vector<std::chrono::seconds> validationTimeouts() const;
 
   // dumps nxmhandler stuff
   //
-  void dump() const;
+  static void dump() ;
 
 private:
   Settings& m_Parent;

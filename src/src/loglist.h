@@ -69,9 +69,9 @@ public:
 
   void setCore(OrganizerCore& core);
 
-  void copyToClipboard();
+  static void copyToClipboard();
   void clear();
-  void openLogsFolder();
+  static void openLogsFolder();
 
   QMenu* createMenu(QWidget* parent = nullptr);
 

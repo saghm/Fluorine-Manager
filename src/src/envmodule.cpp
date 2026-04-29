@@ -112,7 +112,7 @@ QString Module::toString() const
   return sl.join(", ");
 }
 
-Module::FileInfo Module::getFileInfo() const
+Module::FileInfo Module::getFileInfo() 
 {
   // ELF .so files don't carry the equivalent of a Win32 PE version resource.
   return {};

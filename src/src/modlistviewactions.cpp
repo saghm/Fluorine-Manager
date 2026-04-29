@@ -1158,7 +1158,7 @@ void ModListViewActions::setEndorsed(const QModelIndexList& indices,
   });
 }
 
-void ModListViewActions::willNotEndorsed(const QModelIndexList& indices) const
+void ModListViewActions::willNotEndorsed(const QModelIndexList& indices) 
 {
   for (auto& idx : indices) {
     ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt())->setNeverEndorse();
@@ -1229,7 +1229,7 @@ void ModListViewActions::resetColor(const QModelIndexList& indices) const
 }
 
 void ModListViewActions::setCategories(
-    ModInfo::Ptr mod, const std::vector<std::pair<int, bool>>& categories) const
+    ModInfo::Ptr mod, const std::vector<std::pair<int, bool>>& categories) 
 {
   for (auto& [id, enabled] : categories) {
     mod->setCategory(id, enabled);
@@ -1238,7 +1238,7 @@ void ModListViewActions::setCategories(
 
 void ModListViewActions::setCategoriesIf(
     ModInfo::Ptr mod, ModInfo::Ptr ref,
-    const std::vector<std::pair<int, bool>>& categories) const
+    const std::vector<std::pair<int, bool>>& categories) 
 {
   for (auto& [id, enabled] : categories) {
     if (ref->categorySet(id) != enabled) {
@@ -1296,7 +1296,7 @@ void ModListViewActions::setPrimaryCategory(const QModelIndexList& selected,
   }
 }
 
-void ModListViewActions::openExplorer(const QModelIndexList& index) const
+void ModListViewActions::openExplorer(const QModelIndexList& index) 
 {
   for (auto& idx : index) {
     ModInfo::Ptr info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
@@ -1327,7 +1327,7 @@ void ModListViewActions::restoreBackup(const QModelIndex& index) const
             QDir::fromNativeSeparators(m_core.settings().paths().mods()) + "/" +
             regName;
         if (!modDir.rename(modInfo->absolutePath(), destinationPath)) {
-          reportError(tr("failed to rename \"%1\" to \"%2\"")
+          reportError(tr(R"(failed to rename "%1" to "%2")")
                           .arg(modInfo->absolutePath())
                           .arg(destinationPath));
         }

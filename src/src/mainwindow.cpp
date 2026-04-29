@@ -1164,7 +1164,7 @@ void MainWindow::createHelpMenu()
 
   QMenu* tutorialMenu = new QMenu(tr("Tutorials"), menu);
 
-  typedef std::vector<std::pair<int, QAction*>> ActionList;
+  using ActionList = std::vector<std::pair<int, QAction*>>;
 
   ActionList tutorials;
 
@@ -1252,7 +1252,7 @@ void MainWindow::hookUpWindowTutorials()
   }
 }
 
-bool MainWindow::shouldStartTutorial() const
+bool MainWindow::shouldStartTutorial() 
 {
   if (GlobalSettings::hideTutorialQuestion()) {
     return false;
@@ -2684,7 +2684,7 @@ void MainWindow::fileMoved(const QString& filePath, const QString& oldOriginName
         filePtr->removeOrigin(oldOrigin.getID());
       }
     } catch (const std::exception& e) {
-      reportError(tr("failed to move \"%1\" from mod \"%2\" to \"%3\": %4")
+      reportError(tr(R"(failed to move "%1" from mod "%2" to "%3": %4)")
                       .arg(filePath)
                       .arg(oldOriginName)
                       .arg(newOriginName)
@@ -3930,7 +3930,7 @@ void MainWindow::on_showHiddenBox_toggled(bool checked)
 
 const char* MainWindow::PATTERN_BACKUP_GLOB = ".????_??_??_??_??_??";
 const char* MainWindow::PATTERN_BACKUP_REGEX =
-    "\\.(\\d\\d\\d\\d_\\d\\d_\\d\\d_\\d\\d_\\d\\d_\\d\\d)";
+    R"(\.(\d\d\d\d_\d\d_\d\d_\d\d_\d\d_\d\d))";
 const char* MainWindow::PATTERN_BACKUP_DATE = "yyyy_MM_dd_hh_mm_ss";
 
 bool MainWindow::createBackup(const QString& filePath, const QDateTime& time)
@@ -3992,13 +3992,13 @@ QString MainWindow::queryRestore(const QString& filePath)
   if (dialog.numChoices() == 0) {
     QMessageBox::information(this, tr("No Backups"),
                              tr("There are no backups to restore"));
-    return QString();
+    return {};
   }
 
   if (dialog.exec() == QDialog::Accepted) {
     return dialog.getChoiceData().toString();
   } else {
-    return QString();
+    return {};
   }
 }
 

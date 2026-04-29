@@ -1726,7 +1726,7 @@ QString PrefixSetupRunner::findProtonScript() const
   return QFileInfo::exists(script) ? script : QString();
 }
 
-QString PrefixSetupRunner::detectSteamPath() const
+QString PrefixSetupRunner::detectSteamPath() 
 {
   // Use native Steam detection first.
   const QString steamPath = findSteamPath();
@@ -1776,7 +1776,7 @@ QString PrefixSetupRunner::detectSLRRunScript() const
   return {};
 }
 
-QString PrefixSetupRunner::fluorineBinDir() const
+QString PrefixSetupRunner::fluorineBinDir() 
 {
   return fluorineDataDir() + "/bin";
 }
@@ -1861,12 +1861,12 @@ void PrefixSetupRunner::killStalePrefixProcesses() const
   QThread::msleep(100);
 }
 
-QString PrefixSetupRunner::fluorineCacheDir() const
+QString PrefixSetupRunner::fluorineCacheDir() 
 {
   return fluorineDataDir() + "/cache";
 }
 
-QString PrefixSetupRunner::fluorineTmpDir() const
+QString PrefixSetupRunner::fluorineTmpDir() 
 {
   return fluorineDataDir() + "/tmp";
 }

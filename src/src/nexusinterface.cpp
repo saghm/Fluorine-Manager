@@ -1232,7 +1232,7 @@ APIStats NexusInterface::getAPIStats() const
 }
 
 void NexusInterface::applyGameNameOverride(NXMRequestInfo& info, const QString& gameName,
-                                           const MOBase::IPluginGame* game) const
+                                           const MOBase::IPluginGame* game) 
 {
   // When gameName has no matching plugin (e.g. "site" for Nexus tools), getGame()
   // returns the managed game as a fallback, causing NXMRequestInfo to store the wrong

@@ -45,7 +45,7 @@ private:
   bool m_active;
   bool m_upToDate;
 
-  QString providerToString() const;
+  static QString providerToString() ;
 };
 
 std::vector<SecurityProduct> getSecurityProducts();

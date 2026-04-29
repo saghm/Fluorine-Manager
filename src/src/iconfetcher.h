@@ -55,7 +55,7 @@ private:
   mutable Cache m_fileCache;
   mutable Waiter m_waiter;
 
-  bool hasOwnIcon(const QString& path) const;
+  static bool hasOwnIcon(const QString& path) ;
 
   template <class T>
   QPixmap getPixmapIcon(T&& t) const

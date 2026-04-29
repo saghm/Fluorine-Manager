@@ -376,7 +376,7 @@ private:
     friend class Profile;
 
   public:
-    ModStatus()  {}
+    ModStatus()  = default;
 
   private:
     bool m_Enabled{false};
@@ -388,8 +388,8 @@ private:
 
   void copyFilesTo(QString& target) const;
 
-  std::vector<std::wstring> splitDZString(const wchar_t* buffer) const;
-  void mergeTweak(const QString& tweakName, const QString& tweakedIni) const;
+  static std::vector<std::wstring> splitDZString(const wchar_t* buffer) ;
+  static void mergeTweak(const QString& tweakName, const QString& tweakedIni) ;
   void mergeTweaks(ModInfo::Ptr modInfo, const QString& tweakedIni) const;
   void touchFile(QString fileName);
 

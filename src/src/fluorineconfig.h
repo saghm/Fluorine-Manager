@@ -17,7 +17,7 @@ public:
   static std::optional<FluorineConfig> load();
 
   bool save() const;
-  void deleteConfig() const;
+  static void deleteConfig() ;
   bool prefixExists() const;
   QString compatDataPath() const;
   void destroyPrefix() const;

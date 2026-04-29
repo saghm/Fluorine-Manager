@@ -29,7 +29,7 @@ private:
   QLabel* m_icon;
   QLabel* m_text;
 
-  QString cleanupActionText(const QString& s) const;
+  static QString cleanupActionText(const QString& s) ;
 };
 
 class StatusBar : public QStatusBar

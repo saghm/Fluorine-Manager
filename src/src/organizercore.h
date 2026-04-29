@@ -206,7 +206,7 @@ public:
      * @brief Construct a ModDataContentHolder without any contents (e.g., if the
      * feature is missing).
      */
-    ModDataContentHolder() {}
+    ModDataContentHolder() = default;
 
     /**
      * @brief Construct a ModDataContentHold holding the given list of contents.
@@ -319,7 +319,7 @@ public:
 
   void afterRun(const QFileInfo& binary, DWORD exitCode);
 
-  ProcessRunner::Results
+  static ProcessRunner::Results
   waitForAllUSVFSProcesses(UILocker::Reasons reason = UILocker::PreventExit);
 
   void refreshESPList(bool force = false);
@@ -342,7 +342,7 @@ public:
                        const QByteArray& fileData);
 
   void loginSuccessfulUpdate(bool necessary);
-  void loginFailedUpdate(const QString& message);
+  static void loginFailedUpdate(const QString& message);
 
   static bool createAndMakeWritable(const QString& path);
   bool checkPathSymlinks();
@@ -473,7 +473,7 @@ public slots:
                       QString const& newName);
   void profileRemoved(QString const& profileName);
 
-  bool nexusApi(bool retry = false);
+  static bool nexusApi(bool retry = false);
 
 signals:
 
@@ -516,7 +516,7 @@ private:
   //
   void clearCaches(std::vector<unsigned int> const& indices) const;
 
-  bool createDirectory(const QString& path);
+  static bool createDirectory(const QString& path);
 
   QString oldMO1HookDll() const;
 

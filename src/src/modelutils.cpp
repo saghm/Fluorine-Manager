@@ -50,7 +50,7 @@ QModelIndex indexModelToView(const QModelIndex& index, const QAbstractItemView* 
   }
 
   if (proxies.empty() || proxies.back()->sourceModel() != index.model()) {
-    return QModelIndex();
+    return {};
   }
 
   auto qindex = index;
@@ -78,7 +78,7 @@ QModelIndex indexViewToModel(const QModelIndex& index, const QAbstractItemModel*
   } else if (auto* proxy = qobject_cast<const QAbstractProxyModel*>(index.model())) {
     return indexViewToModel(proxy->mapToSource(index), model);
   } else {
-    return QModelIndex();
+    return {};
   }
 }
 

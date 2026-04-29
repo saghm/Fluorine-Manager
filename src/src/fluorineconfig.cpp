@@ -89,7 +89,7 @@ bool FluorineConfig::save() const
   return written >= 0;
 }
 
-void FluorineConfig::deleteConfig() const
+void FluorineConfig::deleteConfig() 
 {
   const QString path = configFilePath();
   if (QFile::exists(path)) {
@@ -112,7 +112,7 @@ bool FluorineConfig::prefixExists() const
 QString FluorineConfig::compatDataPath() const
 {
   if (prefix_path.isEmpty()) {
-    return QString();
+    return {};
   }
 
   QDir prefixDir(prefix_path);

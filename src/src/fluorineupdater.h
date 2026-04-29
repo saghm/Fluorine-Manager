@@ -64,8 +64,8 @@ private slots:
   void onReplyFinished();
 
 private:
-  bool parseBetaRelease(const QJsonObject& obj, ReleaseInfo& out) const;
-  bool parseStableRelease(const QJsonObject& obj, ReleaseInfo& out) const;
+  static bool parseBetaRelease(const QJsonObject& obj, ReleaseInfo& out) ;
+  static bool parseStableRelease(const QJsonObject& obj, ReleaseInfo& out) ;
 
   QNetworkAccessManager* m_net;
   QNetworkReply* m_reply = nullptr;

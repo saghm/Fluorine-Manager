@@ -39,7 +39,7 @@ private:
   QStringList m_SkipFileSuffixes;
   QStringList m_SkipDirectories;
 
-  void on_bsaDateBtn_clicked();
+  static void on_bsaDateBtn_clicked();
   void on_execBlacklistBtn_clicked();
   void on_skipFileSuffixBtn_clicked();
   void on_skipDirectoriesBtn_clicked();

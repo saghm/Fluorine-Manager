@@ -528,7 +528,7 @@ void InstanceManagerDialog::rename()
 
   if (!r) {
     QMessageBox::critical(this, tr("Error"),
-                          tr("Failed to rename \"%1\" to \"%2\": %3")
+                          tr(R"(Failed to rename "%1" to "%2": %3)")
                               .arg(src)
                               .arg(dest)
                               .arg(r.toString()));

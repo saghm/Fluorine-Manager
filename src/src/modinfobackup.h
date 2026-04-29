@@ -21,30 +21,30 @@ public:
   void ignoreUpdate(bool) override {}
   bool alwaysDisabled() const override { return true; }
   bool canBeUpdated() const override { return false; }
-  QDateTime getExpires() const override { return QDateTime(); }
+  QDateTime getExpires() const override { return {}; }
   bool canBeEnabled() const override { return false; }
   std::vector<QString> getIniTweaks() const override
   {
-    return std::vector<QString>();
+    return {};
   }
   std::vector<EFlag> getFlags() const override;
   QString getDescription() const override;
   int getNexusFileStatus() const override { return 0; }
   void setNexusFileStatus(int) override {}
-  QDateTime getLastNexusQuery() const override { return QDateTime(); }
+  QDateTime getLastNexusQuery() const override { return {}; }
   void setLastNexusQuery(QDateTime) override {}
-  QDateTime getLastNexusUpdate() const override { return QDateTime(); }
+  QDateTime getLastNexusUpdate() const override { return {}; }
   void setLastNexusUpdate(QDateTime) override {}
-  QDateTime getNexusLastModified() const override { return QDateTime(); }
+  QDateTime getNexusLastModified() const override { return {}; }
   void setNexusLastModified(QDateTime) override {}
-  QString getNexusDescription() const override { return QString(); }
+  QString getNexusDescription() const override { return {}; }
   void setNexusCategory(int) override {}
   int getNexusCategory() const override { return 0; }
-  QString author() const override { return QString(); }
+  QString author() const override { return {}; }
   void setAuthor(const QString&) override {}
-  QString uploader() const override { return QString(); }
+  QString uploader() const override { return {}; }
   void setUploader(const QString&) override {}
-  QString uploaderUrl() const override { return QString(); }
+  QString uploaderUrl() const override { return {}; }
   void setUploaderUrl(const QString&) override {}
   bool isBackup() const override { return true; }
 
