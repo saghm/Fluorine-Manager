@@ -68,6 +68,7 @@ find build/libs -type f \( \
     -name "libpreview_*.so" -o \
     -name "libdiagnose_*.so" -o \
     -name "libcheck_*.so" -o \
+    -name "libskse_*.so" -o \
     -name "libtool_*.so" -o \
     -name "libinieditor.so" -o \
     -name "libinibakery.so" -o \
