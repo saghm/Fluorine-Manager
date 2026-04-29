@@ -96,19 +96,17 @@ if(NOT WIN32)
   # Build-tree runtime layout expected by proxypython.cpp.
   add_custom_command(TARGET proxy POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/src/src/plugins"
-      COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/src/src/plugins/dlls"
       COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/src/src/plugins/libs"
-      COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/src/src/plugins/plugin_python/dlls"
       COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/src/src/plugins/plugin_python/libs"
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
           "$<TARGET_FILE:proxy>"
           "${CMAKE_BINARY_DIR}/src/src/plugins/$<TARGET_FILE_NAME:proxy>"
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
           "$<TARGET_FILE:runner>"
-          "${CMAKE_BINARY_DIR}/src/src/plugins/dlls/$<TARGET_FILE_NAME:runner>"
+          "${CMAKE_BINARY_DIR}/src/src/plugins/libs/$<TARGET_FILE_NAME:runner>"
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
           "$<TARGET_FILE:runner>"
-          "${CMAKE_BINARY_DIR}/src/src/plugins/plugin_python/dlls/$<TARGET_FILE_NAME:runner>"
+          "${CMAKE_BINARY_DIR}/src/src/plugins/plugin_python/libs/$<TARGET_FILE_NAME:runner>"
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
           "$<TARGET_FILE:mobase>"
           "${CMAKE_BINARY_DIR}/src/src/plugins/libs/$<TARGET_FILE_NAME:mobase>"

@@ -139,12 +139,11 @@ bool ProxyPython::init(IOrganizer* moInfo)
 
     // load the pythonrunner library, this is done in multiple steps:
     //
-    // 1. we set the dlls/ subfolder (from the plugin) as the DLL directory so Windows
-    // will look for DLLs in it, this is required to find the Python and libffi DLL, but
-    // also the runner DLL
+    // 1. On Windows, set the dlls/ subfolder as the DLL directory so Windows
+    // can find the Python, libffi, and runner DLLs.
     //
-    const auto dllPaths = pluginDataRoot / "dlls";
 #ifdef _WIN32
+    const auto dllPaths = pluginDataRoot / "dlls";
     if (SetDllDirectoryW(dllPaths.c_str()) == 0) {
         DWORD error   = ::GetLastError();
         m_LoadFailure = FailureType::DLL_NOT_FOUND;
@@ -229,7 +228,11 @@ bool ProxyPython::init(IOrganizer* moInfo)
         return true;  // return true so the plugin stays loaded (shows diagnostic)
     }
     else {
+#ifdef _WIN32
         m_Runner->addDllSearchPath(pluginDataRoot / "dlls");
+#else
+        m_Runner->addDllSearchPath(pluginDataRoot / "libs");
+#endif
     }
 
     return true;

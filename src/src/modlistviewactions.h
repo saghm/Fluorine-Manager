@@ -122,7 +122,7 @@ public:
   void setPrimaryCategory(const QModelIndexList& selected, int category,
                           bool force = true);
 
-  // open the Windows explorer for the specified mods
+  // open the system file manager for the specified mods
   //
   static void openExplorer(const QModelIndexList& index) ;
 

@@ -300,8 +300,8 @@ namespace mo2::python {
 #ifdef _WIN32
         py::module_::import("os").attr("add_dll_directory")(absolute(dllPath));
 #else
-        // On Linux, there is no add_dll_directory equivalent; prepend the folder to
-        // sys.path so Python extension modules can be found.
+        // On Linux, prepend the folder to sys.path so Python extension modules
+        // can be found.
         ensureFolderInPath(QString::fromStdString(absolute(dllPath).string()));
 #endif
     }

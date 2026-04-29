@@ -286,7 +286,7 @@ QString InstallerFomod::fullDescription(unsigned int key) const
 {
   switch (key) {
   case PROBLEM_IMAGETYPE_UNSUPPORTED:
-    return tr("This indicates that files from dlls/imageformats are missing from your "
+    return tr("This indicates that Qt image format plugins are missing from your "
               "MO installation or outdated. "
               "Images in installers may not be displayed. Please re-install MO");
   default:

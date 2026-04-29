@@ -71,9 +71,8 @@ sync_dir_overwrite_files "python"
 if [ -d "${APPIMAGE_DIR}/plugins/plugin_python" ]; then
     if find "${APPIMAGE_DIR}/plugins/plugin_python" -type f \( -name '*.pyd' -o -name 'python*.dll' \) | grep -q .; then
         echo "[Fluorine] Detected Windows plugin_python payload, overlaying Linux runtime files..."
-        mkdir -p "${APPIMAGE_DIR}/plugins/plugin_python/libs" "${APPIMAGE_DIR}/plugins/plugin_python/dlls"
+        mkdir -p "${APPIMAGE_DIR}/plugins/plugin_python/libs"
         [ -d "${APPIMAGE_DIR}/plugins/libs" ] && cp -a "${APPIMAGE_DIR}/plugins/libs/." "${APPIMAGE_DIR}/plugins/plugin_python/libs/"
-        [ -d "${APPIMAGE_DIR}/plugins/dlls" ] && cp -a "${APPIMAGE_DIR}/plugins/dlls/." "${APPIMAGE_DIR}/plugins/plugin_python/dlls/"
         PYTHON_ROOT_CANDIDATE="${HERE}/usr/share/fluorine/python"
         [ -d "${PYTHON_ROOT_CANDIDATE}/lib" ] || PYTHON_ROOT_CANDIDATE="${APPIMAGE_DIR}/python"
         if [ -d "${PYTHON_ROOT_CANDIDATE}/lib" ]; then

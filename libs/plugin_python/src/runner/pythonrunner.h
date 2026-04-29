@@ -33,7 +33,7 @@ namespace mo2::python {
         virtual bool
         initialize(std::vector<std::filesystem::path> const& pythonPaths = {}) = 0;
 
-        // add a DLL search path
+        // add a native extension/library search path
         //
         virtual void addDllSearchPath(std::filesystem::path const& dllPath) = 0;
 

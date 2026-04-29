@@ -267,7 +267,7 @@
     </message>
     <message>
         <location filename="installerfomod.cpp" line="286"/>
-        <source>This indicates that files from dlls/imageformats are missing from your MO installation or outdated. Images in installers may not be displayed. Please re-install MO</source>
+        <source>This indicates that Qt image format plugins are missing from your MO installation or outdated. Images in installers may not be displayed. Please re-install MO</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
