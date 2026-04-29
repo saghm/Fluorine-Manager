@@ -53,8 +53,8 @@ class TransferSavesDialog : public MOBase::TutorableDialog
 public:
   explicit TransferSavesDialog(const Profile& profile,
                                MOBase::IPluginGame const* gamePlugin,
-                               QWidget* parent = 0);
-  ~TransferSavesDialog();
+                               QWidget* parent = nullptr);
+  ~TransferSavesDialog() override;
 
 private slots:
 

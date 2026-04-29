@@ -159,11 +159,11 @@ private:
   QString m_customOverwrite;
   ForcedLibraries m_forcedLibraries;
   QString m_profileName;
-  UILocker::Reasons m_lockReason;
+  UILocker::Reasons m_lockReason{UILocker::NoReason};
   WaitFlags m_waitFlags;
   QFileInfo m_shellOpen;
   env::HandlePtr m_handle;
-  DWORD m_exitCode;
+  DWORD m_exitCode{static_cast<DWORD>(-1)};
 
   bool shouldRunShell() const;
   bool shouldRefresh(Results r) const;

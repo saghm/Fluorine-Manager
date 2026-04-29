@@ -787,8 +787,8 @@ ProcessRunner::Results waitForProcesses(const std::vector<HANDLE>& initialProces
 }
 
 ProcessRunner::ProcessRunner(OrganizerCore& core, IUserInterface* ui)
-    : m_core(core), m_ui(ui), m_lockReason(UILocker::NoReason),
-      m_waitFlags(NoFlags), m_handle(INVALID_HANDLE_VALUE), m_exitCode(-1)
+    : m_core(core), m_ui(ui), 
+      m_waitFlags(NoFlags), m_handle(INVALID_HANDLE_VALUE) 
 {
   // all processes started in ProcessRunner are hooked by default
   setHooked(true);

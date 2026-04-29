@@ -6,8 +6,7 @@
 using namespace MOBase;
 
 TextEditor::TextEditor(QWidget* parent)
-    : QPlainTextEdit(parent), m_toolbar(nullptr), m_lineNumbers(nullptr),
-      m_highlighter(nullptr), m_dirty(false), m_loading(false)
+    : QPlainTextEdit(parent) 
 {
   m_toolbar     = new TextEditorToolbar(*this);
   m_lineNumbers = new TextEditorLineNumbers(*this);
@@ -464,8 +463,8 @@ void TextEditorLineNumbers::updateArea(const QRect& rect, int dy)
 }
 
 TextEditorToolbar::TextEditorToolbar(TextEditor& editor)
-    : m_editor(editor), m_save(nullptr), m_wordWrap(nullptr), m_explore(nullptr),
-      m_path(nullptr)
+    : m_editor(editor)
+      
 {
   m_save = new QAction(QIcon(":/MO/gui/save"), QObject::tr("&Save"), &editor);
 

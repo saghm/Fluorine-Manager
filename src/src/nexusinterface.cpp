@@ -271,7 +271,7 @@ NexusInterface::parseLimits(const QList<QNetworkReply::RawHeaderPair>& headers)
 
 static NexusInterface* g_instance = nullptr;
 
-NexusInterface::NexusInterface(Settings* s) : m_PluginContainer(nullptr)
+NexusInterface::NexusInterface(Settings* s)  
 {
   MO_ASSERT(!g_instance);
   g_instance = this;
@@ -1259,7 +1259,7 @@ NexusInterface::NXMRequestInfo::NXMRequestInfo(
       m_Reroute(false), m_ID(s_NextID.fetchAndAddAcquire(1)),
       m_URL(get_management_url()), m_SubModule(subModule),
       m_NexusGameID(game->nexusGameID()), m_GameName(game->gameNexusName()),
-      m_Endorse(false), m_Track(false), m_Hash(QByteArray())
+      m_Endorse(false), m_Track(false) 
 {}
 
 NexusInterface::NXMRequestInfo::NXMRequestInfo(
@@ -1270,7 +1270,7 @@ NexusInterface::NXMRequestInfo::NXMRequestInfo(
       m_Timeout(nullptr), m_Reroute(false), m_ID(s_NextID.fetchAndAddAcquire(1)),
       m_URL(get_management_url()), m_SubModule(subModule),
       m_NexusGameID(game->nexusGameID()), m_GameName(game->gameNexusName()),
-      m_Endorse(false), m_Track(false), m_Hash(QByteArray())
+      m_Endorse(false), m_Track(false) 
 {}
 
 NexusInterface::NXMRequestInfo::NXMRequestInfo(Type type, QVariant userData,
@@ -1281,7 +1281,7 @@ NexusInterface::NXMRequestInfo::NXMRequestInfo(Type type, QVariant userData,
       m_Reroute(false), m_ID(s_NextID.fetchAndAddAcquire(1)),
       m_URL(get_management_url()), m_SubModule(subModule),
       m_NexusGameID(game->nexusGameID()), m_GameName(game->gameNexusName()),
-      m_Endorse(false), m_Track(false), m_Hash(QByteArray())
+      m_Endorse(false), m_Track(false) 
 {}
 
 NexusInterface::NXMRequestInfo::NXMRequestInfo(
@@ -1292,7 +1292,7 @@ NexusInterface::NXMRequestInfo::NXMRequestInfo(
       m_Timeout(nullptr), m_Reroute(false), m_ID(s_NextID.fetchAndAddAcquire(1)),
       m_URL(get_management_url()), m_SubModule(subModule),
       m_NexusGameID(game->nexusGameID()), m_GameName(game->gameNexusName()),
-      m_Endorse(false), m_Track(false), m_Hash(QByteArray())
+      m_Endorse(false), m_Track(false) 
 {}
 
 NexusInterface::NXMRequestInfo::NXMRequestInfo(Type type, QVariant userData,
@@ -1301,7 +1301,7 @@ NexusInterface::NXMRequestInfo::NXMRequestInfo(Type type, QVariant userData,
       m_UpdatePeriod(UpdatePeriod::NONE), m_UserData(userData), m_Timeout(nullptr),
       m_Reroute(false), m_ID(s_NextID.fetchAndAddAcquire(1)),
       m_URL(get_management_url()), m_SubModule(subModule), m_NexusGameID(0),
-      m_GameName(""), m_Endorse(false), m_Track(false), m_Hash(QByteArray())
+      m_GameName(""), m_Endorse(false), m_Track(false) 
 {}
 
 NexusInterface::NXMRequestInfo::NXMRequestInfo(
@@ -1312,7 +1312,7 @@ NexusInterface::NXMRequestInfo::NXMRequestInfo(
       m_Reroute(false), m_ID(s_NextID.fetchAndAddAcquire(1)),
       m_URL(get_management_url()), m_SubModule(subModule),
       m_NexusGameID(game->nexusGameID()), m_GameName(game->gameNexusName()),
-      m_Endorse(false), m_Track(false), m_Hash(QByteArray())
+      m_Endorse(false), m_Track(false) 
 {}
 
 NexusInterface::NXMRequestInfo::NXMRequestInfo(

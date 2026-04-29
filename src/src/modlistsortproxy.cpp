@@ -38,9 +38,8 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 using namespace MOBase;
 
 ModListSortProxy::ModListSortProxy(Profile* profile, OrganizerCore* organizer)
-    : QSortFilterProxyModel(organizer), m_Organizer(organizer), m_Profile(profile),
-      m_FilterActive(false), m_FilterMode(FilterAnd),
-      m_FilterSeparators(SeparatorFilter)
+    : QSortFilterProxyModel(organizer), m_Organizer(organizer), m_Profile(profile)
+      
 {
   setDynamicSortFilter(true);  // this seems to work without dynamicsortfilter
                                // but I don't know why. This should be necessary

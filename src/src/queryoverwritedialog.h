@@ -58,7 +58,7 @@ private slots:
 
 private:
   Ui::QueryOverwriteDialog* ui;
-  Action m_Action;
+  Action m_Action{ACT_NONE};
 };
 
 #endif  // QUERYOVERWRITEDIALOG_H

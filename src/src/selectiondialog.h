@@ -69,8 +69,8 @@ private slots:
 
 private:
   Ui::SelectionDialog* ui;
-  QAbstractButton* m_Choice;
-  bool m_ValidateByData;
+  QAbstractButton* m_Choice{nullptr};
+  bool m_ValidateByData{false};
   QSize m_IconSize;
 };
 

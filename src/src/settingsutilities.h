@@ -206,7 +206,7 @@ public:
 
 private:
   QSettings& m_settings;
-  int m_count;
+  int m_count{0};
 };
 
 class ScopedWriteArray
@@ -233,7 +233,7 @@ public:
 private:
   QSettings& m_settings;
   QString m_section;
-  int m_i;
+  int m_i{0};
 };
 
 QString widgetNameWithTopLevel(const QWidget* widget);

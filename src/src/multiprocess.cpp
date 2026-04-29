@@ -12,7 +12,7 @@ static const int s_Timeout = 5000;
 using MOBase::reportError;
 
 MOMultiProcess::MOMultiProcess(bool allowMultiple, QObject* parent)
-    : QObject(parent), m_Ephemeral(false), m_OwnsSM(false)
+    : QObject(parent) 
 {
   m_SharedMem.setKey(s_Key);
 

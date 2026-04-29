@@ -5,13 +5,13 @@ namespace {
 class VdfParser
 {
 public:
-  explicit VdfParser(const QString& text) : m_text(text), m_pos(0) {}
+  explicit VdfParser(const QString& text) : m_text(text) {}
 
   VdfValue parse() { return parseObject(); }
 
 private:
   const QString& m_text;
-  int m_pos;
+  int m_pos{0};
 
   QChar peek() const
   {

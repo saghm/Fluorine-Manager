@@ -328,7 +328,7 @@ void TrackedWrites::detectManualMoves(
   for (const auto& relPath : missing) {
     const std::string key = toLower(relPath);
     // Skip if already tracked
-    if (m_tracked.count(key))
+    if (m_tracked.contains(key))
       continue;
 
     std::string matchedMod;
@@ -392,7 +392,7 @@ void TrackedWrites::initialScan(
     const std::string relStr = rel.string();
     const std::string key    = toLower(relStr);
 
-    if (m_tracked.count(key))
+    if (m_tracked.contains(key))
       continue;
 
     // Check if any mod also has this file — use the LAST match (highest

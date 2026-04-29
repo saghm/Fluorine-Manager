@@ -7,7 +7,7 @@ namespace MOShared
 {
 
 FileEntry::FileEntry()
-    : m_Index(InvalidFileIndex), m_Name(), m_Origin(-1), m_Parent(nullptr),
+    : m_Index(InvalidFileIndex),  m_Origin(-1), m_Parent(nullptr),
       m_FileSize(NoFileSize), m_CompressedFileSize(NoFileSize)
 {}
 
@@ -34,7 +34,7 @@ void FileEntry::addOrigin(OriginID origin, FILETIME fileTime, std::wstring_view 
   } else if ((m_Parent != nullptr) &&
              ((m_Parent->getOriginByID(origin).getPriority() >
                m_Parent->getOriginByID(m_Origin).getPriority()) ||
-              (archive.size() == 0 && m_Archive.isValid()))) {
+              (archive.empty() && m_Archive.isValid()))) {
     // If this mod has a higher priority than the origin mod OR
     // this mod has a loose file and the origin mod has an archived file,
     // this mod is now the origin and the previous origin is the first alternative
@@ -189,7 +189,7 @@ bool FileEntry::isFromArchive(std::wstring archiveName) const
 {
   std::scoped_lock lock(m_OriginsMutex);
 
-  if (archiveName.length() == 0) {
+  if (archiveName.empty()) {
     return m_Archive.isValid();
   }
 

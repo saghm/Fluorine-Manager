@@ -13,8 +13,8 @@ class SaveTextAsDialog : public QDialog
   Q_OBJECT
 
 public:
-  explicit SaveTextAsDialog(QWidget* parent = 0);
-  ~SaveTextAsDialog();
+  explicit SaveTextAsDialog(QWidget* parent = nullptr);
+  ~SaveTextAsDialog() override;
 
   void setText(const QString& text);
 

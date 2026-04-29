@@ -472,7 +472,7 @@ void Profile::refreshModStatus()
     }
 
     // check if the name was already read
-    if (namesRead.find(modName) != namesRead.end()) {
+    if (namesRead.contains(modName)) {
       continue;
     }
     namesRead.insert(modName);

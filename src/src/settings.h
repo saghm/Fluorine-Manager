@@ -81,7 +81,7 @@ public:
 
 private:
   QSettings& m_Settings;
-  const MOBase::IPluginGame* m_GamePlugin;
+  const MOBase::IPluginGame* m_GamePlugin{nullptr};
 };
 
 // geometry settings for various widgets; this should contain any setting that
@@ -155,7 +155,7 @@ public:
 
 private:
   QSettings& m_Settings;
-  bool m_Reset;
+  bool m_Reset{false};
 
   void saveWindowGeometry(const QWidget* w);
   bool restoreWindowGeometry(QWidget* w) const;

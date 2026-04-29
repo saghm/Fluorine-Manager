@@ -153,9 +153,9 @@ private:
   QString m_Filter;
   std::bitset<ModList::COL_LASTCOLUMN + 1> m_EnabledColumns;
 
-  bool m_FilterActive;
-  FilterMode m_FilterMode;
-  SeparatorsMode m_FilterSeparators;
+  bool m_FilterActive{false};
+  FilterMode m_FilterMode{FilterAnd};
+  SeparatorsMode m_FilterSeparators{SeparatorFilter};
 
   std::vector<Criteria> m_PreChangeCriteria;
 

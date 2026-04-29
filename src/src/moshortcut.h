@@ -45,8 +45,8 @@ private:
   QString m_instance;
   QString m_executable;
   bool m_valid;
-  bool m_hasInstance;
-  bool m_hasExecutable;
+  bool m_hasInstance{false};
+  bool m_hasExecutable{false};
 };
 
 #endif  // MODORGANIZER_MOSHORTCUT_INCLUDED

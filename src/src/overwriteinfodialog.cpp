@@ -29,9 +29,8 @@ using namespace MOBase;
 
 OverwriteInfoDialog::OverwriteInfoDialog(ModInfo::Ptr modInfo, OrganizerCore& organizer,
                                          QWidget* parent)
-    : QDialog(parent), m_Organizer(organizer), ui(new Ui::OverwriteInfoDialog),
-      m_FileSystemModel(nullptr), m_DeleteAction(nullptr), m_RenameAction(nullptr),
-      m_OpenAction(nullptr)
+    : QDialog(parent), m_Organizer(organizer), ui(new Ui::OverwriteInfoDialog)
+      
 {
   ui->setupUi(this);
 

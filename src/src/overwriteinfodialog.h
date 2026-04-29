@@ -136,11 +136,11 @@ private slots:
 
 private:
   Ui::OverwriteInfoDialog* ui;
-  QFileSystemModel* m_FileSystemModel;
+  QFileSystemModel* m_FileSystemModel{nullptr};
   QModelIndexList m_FileSelection;
-  QAction* m_DeleteAction;
-  QAction* m_RenameAction;
-  QAction* m_OpenAction;
+  QAction* m_DeleteAction{nullptr};
+  QAction* m_RenameAction{nullptr};
+  QAction* m_OpenAction{nullptr};
   QAction* m_NewFolderAction;
 
   ModInfo::Ptr m_ModInfo;

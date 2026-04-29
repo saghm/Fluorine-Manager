@@ -53,8 +53,8 @@ private slots:
   void receiveMessage();
 
 private:
-  bool m_Ephemeral;
-  bool m_OwnsSM;
+  bool m_Ephemeral{false};
+  bool m_OwnsSM{false};
   QSharedMemory m_SharedMem;
   QLocalServer m_Server;
 };

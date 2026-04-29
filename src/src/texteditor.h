@@ -14,10 +14,10 @@ public:
 
 private:
   TextEditor& m_editor;
-  QAction* m_save;
-  QAction* m_wordWrap;
-  QAction* m_explore;
-  QLineEdit* m_path;
+  QAction* m_save{nullptr};
+  QAction* m_wordWrap{nullptr};
+  QAction* m_explore{nullptr};
+  QLineEdit* m_path{nullptr};
 
   void onTextModified(bool b);
   void onWordWrap(bool b);
@@ -124,15 +124,15 @@ protected:
   void resizeEvent(QResizeEvent* e) override;
 
 private:
-  TextEditorToolbar* m_toolbar;
-  TextEditorLineNumbers* m_lineNumbers;
-  TextEditorHighlighter* m_highlighter;
+  TextEditorToolbar* m_toolbar{nullptr};
+  TextEditorLineNumbers* m_lineNumbers{nullptr};
+  TextEditorHighlighter* m_highlighter{nullptr};
   QColor m_highlightBackground;
   QString m_filename;
   QString m_encoding;
   bool m_needsBOM;
-  bool m_dirty;
-  bool m_loading;
+  bool m_dirty{false};
+  bool m_loading{false};
 
   void setDefaultStyle();
   void onModified(bool b);

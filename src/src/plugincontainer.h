@@ -111,7 +111,7 @@ private:
   PluginContainer* m_PluginContainer;
   MOBase::IPlugin* m_Plugin;
   MOBase::IPluginProxy* m_PluginProxy;
-  MOBase::IPlugin* m_Master;
+  MOBase::IPlugin* m_Master{nullptr};
   std::vector<std::shared_ptr<const MOBase::IPluginRequirement>> m_Requirements;
   OrganizerProxy* m_Organizer;
   std::vector<MOBase::IPlugin*> m_RequiredFor;
@@ -486,7 +486,7 @@ private:
   OrganizerCore* m_Organizer;
 
   // Main user interface, can be null until MW has been initialized.
-  IUserInterface* m_UserInterface;
+  IUserInterface* m_UserInterface{nullptr};
 
   // Game features
   std::unique_ptr<GameFeatures> m_GameFeatures;

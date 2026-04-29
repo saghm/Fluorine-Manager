@@ -26,7 +26,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <QWidgetAction>
 
 PluginListSortProxy::PluginListSortProxy(QObject* parent)
-    : QSortFilterProxyModel(parent), m_SortIndex(0), m_SortOrder(Qt::AscendingOrder)
+    : QSortFilterProxyModel(parent) 
 {
   m_EnabledColumns.set(PluginList::COL_NAME);
   m_EnabledColumns.set(PluginList::COL_PRIORITY);

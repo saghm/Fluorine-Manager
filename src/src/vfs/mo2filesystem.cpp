@@ -273,7 +273,7 @@ struct NodeSnapshot
   bool is_directory = false;
   bool is_backing   = false;
   uint64_t size     = 0;
-  std::chrono::system_clock::time_point mtime{};
+  std::chrono::system_clock::time_point mtime;
   std::string real_path;
 };
 
@@ -470,7 +470,7 @@ struct ChildSnapshot
   std::string name;
   bool is_dir = false;
   uint64_t size = 0;
-  std::chrono::system_clock::time_point mtime{};
+  std::chrono::system_clock::time_point mtime;
   std::string real_path;
   mode_t cached_mode = 0;  // permission bits from stat() or VfsNode cache
 };

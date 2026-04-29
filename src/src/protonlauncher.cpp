@@ -342,7 +342,7 @@ bool parseEnvAssignment(const QString& token, QString& keyOut, QString& valueOut
 }  // namespace
 
 ProtonLauncher::ProtonLauncher()
-    : m_steamAppId(0), m_useSteamDrm(true)
+     
 {}
 
 ProtonLauncher& ProtonLauncher::setBinary(const QString& path)

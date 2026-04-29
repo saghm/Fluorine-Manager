@@ -518,8 +518,8 @@ private:
   MOBase::VersionInfo m_NewestVersion;
   MOBase::VersionInfo m_IgnoredVersion;
 
-  MOBase::EndorsedState m_EndorsedState{EndorsedState::ENDORSED_UNKNOWN};
-  MOBase::TrackedState m_TrackedState{TrackedState::TRACKED_UNKNOWN};
+  MOBase::EndorsedState m_EndorsedState{MOBase::EndorsedState::ENDORSED_UNKNOWN};
+  MOBase::TrackedState m_TrackedState{MOBase::TrackedState::TRACKED_UNKNOWN};
 
   NexusBridge m_NexusBridge;
 

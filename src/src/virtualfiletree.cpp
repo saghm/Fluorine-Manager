@@ -63,7 +63,7 @@ protected:
     return true;
   }
 
-  std::shared_ptr<IFileTree> doClone() const
+  std::shared_ptr<IFileTree> doClone() const override
   {
     return std::make_shared<VirtualFileTreeImpl>(nullptr, m_dirEntry);
   }

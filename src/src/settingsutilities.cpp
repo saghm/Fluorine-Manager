@@ -97,7 +97,7 @@ QStringList ScopedGroup::keys() const
 }
 
 ScopedReadArray::ScopedReadArray(QSettings& s, const QString& section)
-    : m_settings(s), m_count(0)
+    : m_settings(s) 
 {
   m_count = m_settings.beginReadArray(section);
 }
@@ -119,7 +119,7 @@ QStringList ScopedReadArray::keys() const
 
 ScopedWriteArray::ScopedWriteArray(QSettings& s, const QString& section,
                                    std::size_t size)
-    : m_settings(s), m_section(section), m_i(0)
+    : m_settings(s), m_section(section) 
 {
   m_settings.beginWriteArray(section, size == NoSize ? -1 : static_cast<int>(size));
 }

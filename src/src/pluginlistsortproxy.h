@@ -35,12 +35,12 @@ public:
   };
 
 public:
-  explicit PluginListSortProxy(QObject* parent = 0);
+  explicit PluginListSortProxy(QObject* parent = nullptr);
 
   void setEnabledColumns(unsigned int columns);
 
-  virtual bool dropMimeData(const QMimeData* data, Qt::DropAction action, int row,
-                            int column, const QModelIndex& parent);
+  bool dropMimeData(const QMimeData* data, Qt::DropAction action, int row,
+                            int column, const QModelIndex& parent) override;
 
   bool filterMatchesPlugin(const QString& plugin) const;
 
@@ -49,13 +49,13 @@ public slots:
   void updateFilter(const QString& filter);
 
 protected:
-  virtual bool filterAcceptsRow(int row, const QModelIndex& parent) const;
-  virtual bool lessThan(const QModelIndex& left, const QModelIndex& right) const;
+  bool filterAcceptsRow(int row, const QModelIndex& parent) const override;
+  bool lessThan(const QModelIndex& left, const QModelIndex& right) const override;
 
 private:
   void refreshFilter();
-  int m_SortIndex;
-  Qt::SortOrder m_SortOrder;
+  int m_SortIndex{0};
+  Qt::SortOrder m_SortOrder{Qt::AscendingOrder};
 
   std::bitset<PluginList::COL_LASTCOLUMN + 1> m_EnabledColumns;
   QString m_CurrentFilter;

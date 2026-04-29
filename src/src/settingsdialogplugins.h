@@ -12,7 +12,7 @@ public:
   PluginsSettingsTab(Settings& settings, PluginContainer* pluginContainer,
                      SettingsDialog& dialog);
 
-  void update();
+  void update() override;
   void closing() override;
 
 private:

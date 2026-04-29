@@ -654,7 +654,7 @@ void Settings::managedGameChanged(IPluginGame const* gamePlugin)
 }
 
 GameSettings::GameSettings(QSettings& settings)
-    : m_Settings(settings), m_GamePlugin(nullptr)
+    : m_Settings(settings) 
 {}
 
 const MOBase::IPluginGame* GameSettings::plugin()
@@ -725,7 +725,7 @@ void GameSettings::setSelectedProfileName(const QString& name)
   set(m_Settings, "General", "selected_profile", name.toUtf8());
 }
 
-GeometrySettings::GeometrySettings(QSettings& s) : m_Settings(s), m_Reset(false) {}
+GeometrySettings::GeometrySettings(QSettings& s) : m_Settings(s) {}
 
 void GeometrySettings::requestReset()
 {
@@ -2333,7 +2333,7 @@ QString InterfaceSettings::language()
   if (result.isEmpty()) {
     QStringList languagePreferences = QLocale::system().uiLanguages();
 
-    if (languagePreferences.length() > 0) {
+    if (!languagePreferences.empty()) {
       // the users most favoritest language
       result = languagePreferences.at(0);
     } else {

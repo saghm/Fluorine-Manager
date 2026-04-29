@@ -163,7 +163,7 @@ void PluginList::highlightPlugins(const std::vector<unsigned int>& modIndices,
       }
       const MOShared::FilesOrigin& origin =
           directoryEntry.getOriginByName(selectedMod->internalName().toStdWString());
-      if (plugins.size() > 0) {
+      if (!plugins.empty()) {
         for (auto plugin : plugins) {
           MOShared::FileEntryPtr file = directoryEntry.findFile(plugin.toStdWString());
           if (file && file->getOrigin() != origin.getID()) {
@@ -552,7 +552,7 @@ void PluginList::sendToPriority(const QModelIndexList& indices, int newPriority)
       pluginsToMove.push_back(idx.row());
     }
   }
-  if (pluginsToMove.size()) {
+  if (!pluginsToMove.empty()) {
     changePluginPriority(pluginsToMove, newPriority);
   }
 }
@@ -826,7 +826,7 @@ QString PluginList::getIndexPriority(int index) const
 
 bool PluginList::isESPLocked(int index) const
 {
-  return m_LockedOrder.find(m_ESPs.at(index).name) != m_LockedOrder.end();
+  return m_LockedOrder.contains(m_ESPs.at(index).name);
 }
 
 void PluginList::lockESPIndex(int index, bool lock)
@@ -1274,7 +1274,7 @@ void PluginList::testMasters()
     iter.masterUnset.clear();
     if (iter.enabled) {
       for (const auto& master : iter.masters) {
-        if (enabledMasters.find(master) == enabledMasters.end()) {
+        if (!enabledMasters.contains(master)) {
           iter.masterUnset.insert(master);
         }
       }
@@ -1448,7 +1448,7 @@ QVariant PluginList::tooltipData(const QModelIndex& modelIndex) const
         "<br><b>" + tr("Description") + "</b>: " + TruncateString(esp.description);
   }
 
-  if (esp.masterUnset.size() > 0) {
+  if (!esp.masterUnset.empty()) {
     toolTip +=
         "<br><b>" + tr("Missing Masters") + "</b>: " + "<b>" +
         TruncateString(
@@ -1571,7 +1571,7 @@ QVariant PluginList::iconData(const QModelIndex& modelIndex) const
     result.append(":/MO/gui/warning");
   }
 
-  if (m_LockedOrder.find(esp.name) != m_LockedOrder.end()) {
+  if (m_LockedOrder.contains(esp.name)) {
     result.append(":/MO/gui/locked");
   }
 
@@ -1611,7 +1611,7 @@ QVariant PluginList::iconData(const QModelIndex& modelIndex) const
 
 bool PluginList::isProblematic(const ESPInfo& esp, const AdditionalInfo*) const
 {
-  return esp.masterUnset.size() > 0;
+  return !esp.masterUnset.empty();
 }
 
 bool PluginList::hasInfo(const ESPInfo&, const AdditionalInfo* info) const
@@ -1907,10 +1907,9 @@ PluginList::ESPInfo::ESPInfo(const QString& name, bool forceLoaded, bool forceEn
                              std::set<QString> archives, bool lightSupported,
                              bool mediumSupported, bool blueprintSupported)
     : name(name), fullPath(fullPath), enabled(forceLoaded), forceLoaded(forceLoaded),
-      forceEnabled(forceEnabled), forceDisabled(forceDisabled), priority(0),
-      loadOrder(-1), originName(originName), hasIni(hasIni),
-      archives(archives.begin(), archives.end()), modSelected(false),
-      isMasterOfSelectedPlugin(false)
+      forceEnabled(forceEnabled), forceDisabled(forceDisabled),  originName(originName), hasIni(hasIni),
+      archives(archives.begin(), archives.end())
+      
 {
   QString parsePath = fullPath;
   // Linux is case-sensitive while Windows-authored paths sometimes mismatch

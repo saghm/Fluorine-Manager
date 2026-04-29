@@ -320,16 +320,16 @@ private:  // private functions
   void updateGroupByProxy();
 
 public:  // member variables
-  OrganizerCore* m_core;
+  OrganizerCore* m_core{nullptr};
   std::unique_ptr<FilterList> m_filters;
   CategoryFactory* m_categories;
   ModListViewUi ui;
   ModListViewActions* m_actions;
 
-  ModListSortProxy* m_sortProxy;
-  ModListByPriorityProxy* m_byPriorityProxy;
-  QtGroupingProxy* m_byCategoryProxy;
-  QtGroupingProxy* m_byNexusIdProxy;
+  ModListSortProxy* m_sortProxy{nullptr};
+  ModListByPriorityProxy* m_byPriorityProxy{nullptr};
+  QtGroupingProxy* m_byCategoryProxy{nullptr};
+  QtGroupingProxy* m_byNexusIdProxy{nullptr};
 
   // marker used to avoid calling refreshing markers to many
   // time in a row

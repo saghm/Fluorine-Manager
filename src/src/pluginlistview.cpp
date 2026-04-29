@@ -24,7 +24,7 @@
 using namespace MOBase;
 
 PluginListView::PluginListView(QWidget* parent)
-    : QTreeView(parent), m_sortProxy(nullptr),
+    : QTreeView(parent), 
       m_Scrollbar(new ViewMarkingScrollBar(this, Qt::BackgroundRole))
 {
   setVerticalScrollBar(m_Scrollbar);

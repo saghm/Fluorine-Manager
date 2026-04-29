@@ -74,7 +74,7 @@ public:
   Results result() const;
 
 private:
-  QWidget* m_parent;
+  QWidget* m_parent{nullptr};
   std::unique_ptr<UILockerInterface> m_ui;
   std::vector<std::weak_ptr<Session>> m_sessions;
   std::atomic<Results> m_result;

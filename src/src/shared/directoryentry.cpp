@@ -373,7 +373,7 @@ const FileEntryPtr DirectoryEntry::searchFile(const std::wstring& path,
     *directory = nullptr;
   }
 
-  if ((path.length() == 0) || (path == L"*")) {
+  if ((path.empty()) || (path == L"*")) {
     // no file name -> the path ended on a (back-)slash
     if (directory != nullptr) {
       *directory = this;
@@ -492,7 +492,7 @@ bool DirectoryEntry::remove(const std::wstring& fileName, int* origin)
 
 bool DirectoryEntry::hasContentsFromOrigin(int originID) const
 {
-  return m_Origins.find(originID) != m_Origins.end();
+  return m_Origins.contains(originID);
 }
 
 FilesOrigin& DirectoryEntry::createOrigin(const std::wstring& originName,
@@ -771,7 +771,7 @@ DirectoryEntry* DirectoryEntry::getSubDirectoryRecursive(const std::wstring& pat
                                                          DirectoryStats& stats,
                                                          int originID)
 {
-  if (path.length() == 0) {
+  if (path.empty()) {
     // path ended with a backslash?
     return this;
   }
@@ -866,7 +866,7 @@ void DirectoryEntry::removeFileFromList(FileIndex index)
 void DirectoryEntry::removeFilesFromList(const std::set<FileIndex>& indices)
 {
   for (auto iter = m_Files.begin(); iter != m_Files.end();) {
-    if (indices.find(iter->second) != indices.end()) {
+    if (indices.contains(iter->second)) {
       iter = m_Files.erase(iter);
     } else {
       ++iter;
@@ -874,7 +874,7 @@ void DirectoryEntry::removeFilesFromList(const std::set<FileIndex>& indices)
   }
 
   for (auto iter = m_FilesLookup.begin(); iter != m_FilesLookup.end();) {
-    if (indices.find(iter->second) != indices.end()) {
+    if (indices.contains(iter->second)) {
       iter = m_FilesLookup.erase(iter);
     } else {
       ++iter;

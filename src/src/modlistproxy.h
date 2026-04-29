@@ -11,7 +11,7 @@ class ModListProxy : public MOBase::IModList
 
 public:
   ModListProxy(OrganizerProxy* oproxy, ModList* modlist);
-  virtual ~ModListProxy();
+  ~ModListProxy() override;
 
   QString displayName(const QString& internalName) const override;
   QStringList allMods() const override;

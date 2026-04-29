@@ -133,8 +133,7 @@ public:
 };
 
 ModListView::ModListView(QWidget* parent)
-    : QTreeView(parent), m_core(nullptr), m_sortProxy(nullptr),
-      m_byPriorityProxy(nullptr), m_byCategoryProxy(nullptr), m_byNexusIdProxy(nullptr),
+    : QTreeView(parent), 
       m_markers{{}, {}, {}, {}, {}, {}},
       m_scrollbar(new ModListViewMarkingScrollBar(this))
 {
@@ -1143,18 +1142,16 @@ void ModListView::setHighlightedMods(const std::set<QString>& modNames)
 QColor ModListView::markerColor(const QModelIndex& index) const
 {
   unsigned int modIndex = index.data(ModList::IndexRole).toInt();
-  bool highlight = m_markers.highlight.find(modIndex) != m_markers.highlight.end();
-  bool overwrite = m_markers.overwrite.find(modIndex) != m_markers.overwrite.end();
+  bool highlight = m_markers.highlight.contains(modIndex);
+  bool overwrite = m_markers.overwrite.contains(modIndex);
   bool archiveOverwrite =
-      m_markers.archiveOverwrite.find(modIndex) != m_markers.archiveOverwrite.end();
-  bool archiveLooseOverwrite = m_markers.archiveLooseOverwrite.find(modIndex) !=
-                               m_markers.archiveLooseOverwrite.end();
+      m_markers.archiveOverwrite.contains(modIndex);
+  bool archiveLooseOverwrite = m_markers.archiveLooseOverwrite.contains(modIndex);
   bool overwritten =
-      m_markers.overwritten.find(modIndex) != m_markers.overwritten.end();
+      m_markers.overwritten.contains(modIndex);
   bool archiveOverwritten =
-      m_markers.archiveOverwritten.find(modIndex) != m_markers.archiveOverwritten.end();
-  bool archiveLooseOverwritten = m_markers.archiveLooseOverwritten.find(modIndex) !=
-                                 m_markers.archiveLooseOverwritten.end();
+      m_markers.archiveOverwritten.contains(modIndex);
+  bool archiveLooseOverwritten = m_markers.archiveLooseOverwritten.contains(modIndex);
 
   if (highlight) {
     return Settings::instance().colors().modlistContainsFile();

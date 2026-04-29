@@ -235,7 +235,7 @@ QString resolveAbsoluteSaveDir(const WinePrefix& prefix,
 }
 
 OrganizerCore::OrganizerCore(Settings& settings)
-    : m_UserInterface(nullptr), m_PluginContainer(nullptr), m_GamePlugin(nullptr),
+    : 
       m_CurrentProfile(nullptr), m_Settings(settings),
       m_Updater(&NexusInterface::instance()), m_ModList(m_PluginContainer, this),
       m_PluginList(*this),
@@ -245,7 +245,7 @@ OrganizerCore::OrganizerCore(Settings& settings)
         return VirtualFileTree::makeTree(m_DirectoryStructure);
       }),
       m_DownloadManager(&NexusInterface::instance(), this), m_DirectoryUpdate(false),
-      m_ArchivesInit(false),
+      
       m_PluginListsWriter(std::bind(&OrganizerCore::savePluginList, this))
 {
   env::setHandleCloserThreadCount(settings.refreshThreadCount());
@@ -640,7 +640,7 @@ bool OrganizerCore::bootstrap()
 void OrganizerCore::createDefaultProfile()
 {
   QString profilesPath = settings().paths().profiles();
-  if (QDir(profilesPath).entryList(QDir::AllDirs | QDir::NoDotAndDotDot).size() == 0) {
+  if (QDir(profilesPath).entryList(QDir::AllDirs | QDir::NoDotAndDotDot).empty()) {
     Profile newProf(QString::fromStdWString(AppConfig::defaultProfileName()),
                     managedGame(), gameFeatures(), false);
 
@@ -1358,7 +1358,7 @@ bool OrganizerCore::previewFileWithAlternatives(QWidget* parent, QString fileNam
       } else {
         preview->addVariant(ToQString(origin.getName()), wid);
       }
-    } else if (archiveName != L"") {
+    } else if (!archiveName.empty()) {
       auto archiveFile = directoryStructure()->searchFile(archiveName);
       if (archiveFile.get() != nullptr) {
         try {
@@ -1619,7 +1619,7 @@ void OrganizerCore::refreshBSAList()
     // happen if ini files are missing) use hard-coded defaults (preferrably the
     // same the game would use)
     m_DefaultArchives = archives->archives(m_CurrentProfile.get());
-    if (m_DefaultArchives.length() == 0) {
+    if (m_DefaultArchives.empty()) {
       m_DefaultArchives = archives->vanillaArchives();
     }
 

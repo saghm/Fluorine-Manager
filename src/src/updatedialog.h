@@ -17,7 +17,7 @@ class UpdateDialog : public QDialog
 
 public:
   UpdateDialog(QWidget* parent);
-  ~UpdateDialog();
+  ~UpdateDialog() override;
 
   void setChangeLogs(const QString& text);
   void setVersions(const QString& oldVersion, const QString& newVersion);

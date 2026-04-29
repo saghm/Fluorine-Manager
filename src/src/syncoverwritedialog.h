@@ -36,9 +36,9 @@ class SyncOverwriteDialog : public MOBase::TutorableDialog
 public:
   explicit SyncOverwriteDialog(const QString& path,
                                MOShared::DirectoryEntry* directoryStructure,
-                               QWidget* parent = 0);
+                               QWidget* parent = nullptr);
 
-  ~SyncOverwriteDialog();
+  ~SyncOverwriteDialog() override;
 
   void apply(const QString& modDirectory);
 

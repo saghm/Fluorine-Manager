@@ -53,13 +53,13 @@ protected:
   void hideEvent(QHideEvent* e) override;
 
 private:
-  Ui::MainWindow* ui;
+  Ui::MainWindow* ui{nullptr};
   QLabel* m_normal;
   QProgressBar* m_progress;
   QWidget* m_progressSpacer1;
   QWidget* m_progressSpacer2;
-  StatusBarAction* m_notifications;
-  StatusBarAction* m_update;
+  StatusBarAction* m_notifications{nullptr};
+  StatusBarAction* m_update{nullptr};
   QLabel* m_api;
 
   void visibilityChanged(bool visible);

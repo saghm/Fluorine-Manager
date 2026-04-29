@@ -8,7 +8,7 @@ class PathsSettingsTab : public SettingsTab
 {
 public:
   PathsSettingsTab(Settings& settings, SettingsDialog& dialog);
-  void update();
+  void update() override;
 
 private:
   void on_browseBaseDirBtn_clicked();

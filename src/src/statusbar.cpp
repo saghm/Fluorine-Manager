@@ -6,9 +6,9 @@
 #include "ui_mainwindow.h"
 
 StatusBar::StatusBar(QWidget* parent)
-    : QStatusBar(parent), ui(nullptr), m_normal(new QLabel),
+    : QStatusBar(parent),  m_normal(new QLabel),
       m_progress(new QProgressBar), m_progressSpacer1(new QWidget),
-      m_progressSpacer2(new QWidget), m_notifications(nullptr), m_update(nullptr),
+      m_progressSpacer2(new QWidget), 
       m_api(new QLabel)
 {}
 

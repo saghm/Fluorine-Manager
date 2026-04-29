@@ -32,7 +32,7 @@ public:
   static std::optional<QStringList> changeSkipDirectories(QWidget* parent,
                                                           const QStringList& current);
 
-  void update();
+  void update() override;
 
 private:
   QString m_ExecutableBlacklist;

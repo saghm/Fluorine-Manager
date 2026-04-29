@@ -158,7 +158,7 @@ PluginRequirements::PluginRequirements(PluginContainer* pluginContainer,
                                        MOBase::IPlugin* plugin, OrganizerProxy* proxy,
                                        MOBase::IPluginProxy* pluginProxy)
     : m_PluginContainer(pluginContainer), m_Plugin(plugin), m_PluginProxy(pluginProxy),
-      m_Master(nullptr), m_Organizer(proxy)
+       m_Organizer(proxy)
 {
   // There are a lots of things we cannot set here (e.g. m_Master) because we do not
   // know the order plugins are loaded.
@@ -326,7 +326,7 @@ void PluginRequirements::requiredFor(std::vector<MOBase::IPlugin*>& required,
 // PluginContainer
 
 PluginContainer::PluginContainer(OrganizerCore* organizer)
-    : m_Organizer(organizer), m_UserInterface(nullptr),
+    : m_Organizer(organizer), 
       m_GameFeatures(std::make_unique<GameFeatures>(organizer, this)),
       m_PreviewGenerator(*this)
 {}
@@ -1370,7 +1370,7 @@ void PluginContainer::loadPlugins()
 std::vector<unsigned int> PluginContainer::activeProblems() const
 {
   std::vector<unsigned int> problems;
-  if (m_FailedPlugins.size()) {
+  if (!m_FailedPlugins.empty()) {
     problems.push_back(PROBLEM_PLUGINSNOTLOADED);
   }
   return problems;

@@ -48,7 +48,7 @@ OriginConnection::createOrigin(const std::wstring& originName,
 bool OriginConnection::exists(const std::wstring& name)
 {
   std::scoped_lock lock(m_Mutex);
-  return m_OriginsNameMap.find(name) != m_OriginsNameMap.end();
+  return m_OriginsNameMap.contains(name);
 }
 
 FilesOrigin& OriginConnection::getByID(OriginID ID)

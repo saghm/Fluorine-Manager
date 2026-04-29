@@ -75,7 +75,7 @@ private:
   OrganizerCore* m_core;
   PluginListViewUi ui;
 
-  PluginListSortProxy* m_sortProxy;
+  PluginListSortProxy* m_sortProxy{nullptr};
   ModListViewActions* m_modActions;
   ViewMarkingScrollBar* m_Scrollbar;
 };

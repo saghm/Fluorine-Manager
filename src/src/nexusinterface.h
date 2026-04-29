@@ -686,7 +686,7 @@ private:
   NXMAccessManager* m_AccessManager;
   std::list<NXMRequestInfo> m_ActiveRequest;
   QQueue<NXMRequestInfo> m_RequestQueue;
-  PluginContainer* m_PluginContainer;
+  PluginContainer* m_PluginContainer{nullptr};
   APIUserAccount m_User;
 };
 

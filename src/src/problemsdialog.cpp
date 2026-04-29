@@ -11,8 +11,8 @@
 using namespace MOBase;
 
 ProblemsDialog::ProblemsDialog(const PluginContainer& pluginContainer, QWidget* parent)
-    : QDialog(parent), ui(new Ui::ProblemsDialog), m_PluginContainer(pluginContainer),
-      m_hasProblems(false)
+    : QDialog(parent), ui(new Ui::ProblemsDialog), m_PluginContainer(pluginContainer)
+      
 {
   ui->setupUi(this);
   ui->problemsWidget->header()->setSectionResizeMode(QHeaderView::ResizeToContents);
@@ -99,7 +99,7 @@ void ProblemsDialog::selectionChanged()
 void ProblemsDialog::startFix()
 {
   QObject* fixButton = QObject::sender();
-  if (fixButton == NULL) {
+  if (fixButton == nullptr) {
     log::warn("no button");
     return;
   }

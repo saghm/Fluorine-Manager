@@ -9,7 +9,7 @@ class DiagnosticsSettingsTab : public SettingsTab
 public:
   DiagnosticsSettingsTab(Settings& settings, SettingsDialog& dialog);
 
-  void update();
+  void update() override;
 
 private:
   void setLogLevel();

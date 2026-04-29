@@ -52,9 +52,9 @@ private:
   QString m_workingDir;
   QString m_protonPath;
   QString m_prefixPath;
-  uint32_t m_steamAppId;
+  uint32_t m_steamAppId{0};
   QStringList m_wrapperCommands;
-  bool m_useSteamDrm;
+  bool m_useSteamDrm{true};
   bool m_useSteamOverlay = false;
   bool m_useSLR = true;
   QString m_storeVariant; // "GOG", "Epic", or empty for Steam

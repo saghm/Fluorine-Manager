@@ -38,7 +38,7 @@ private slots:
 private:
   Ui::ProblemsDialog* ui;
   const PluginContainer& m_PluginContainer;
-  bool m_hasProblems;
+  bool m_hasProblems{false};
 };
 
 #endif  // PROBLEMSDIALOG_H

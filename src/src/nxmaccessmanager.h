@@ -68,8 +68,8 @@ public:
 private:
   QWebSocket m_socket;
   QString m_guid;
-  bool m_keyReceived;
-  bool m_active;
+  bool m_keyReceived{false};
+  bool m_active{false};
   QTimer m_timeout;
 
   void setState(States s, const QString& error = {});
@@ -114,8 +114,8 @@ public:
   QElapsedTimer elapsed() const;
 
 private:
-  QNetworkReply* m_reply;
-  Result m_result;
+  QNetworkReply* m_reply{nullptr};
+  Result m_result{None};
   QString m_message;
   QTimer m_timeout;
   QElapsedTimer m_elapsed;
@@ -194,8 +194,8 @@ private:
   std::unique_ptr<Ui::ValidationProgressDialog> ui;
   Settings* m_settings;
   NexusKeyValidator& m_validator;
-  QTimer* m_updateTimer;
-  bool m_first;
+  QTimer* m_updateTimer{nullptr};
+  bool m_first{true};
 
   void onHide();
   void onCancel();
@@ -269,7 +269,7 @@ private:
   mutable std::unique_ptr<ValidationProgressDialog> m_ProgressDialog;
   QString m_MOVersion;
   NexusKeyValidator m_validator;
-  States m_validationState;
+  States m_validationState{NotChecked};
 
   void startValidationCheck(const QString& key);
 

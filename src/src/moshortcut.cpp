@@ -3,8 +3,8 @@
 #include <QDir>
 
 MOShortcut::MOShortcut(const QString& link)
-    : m_valid(link.startsWith("moshortcut://")), m_hasInstance(false),
-      m_hasExecutable(false)
+    : m_valid(link.startsWith("moshortcut://"))
+      
 {
   if (m_valid) {
     int start = (int)strlen("moshortcut://");

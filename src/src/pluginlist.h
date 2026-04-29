@@ -333,9 +333,9 @@ private:
     bool forceLoaded;
     bool forceEnabled;
     bool forceDisabled;
-    int priority;
+    int priority{0};
     QString index;
-    int loadOrder;
+    int loadOrder{-1};
     FILETIME time;
     QString originName;
     bool hasMasterExtension;
@@ -345,8 +345,8 @@ private:
     bool isLightFlagged;
     bool isBlueprintFlagged;
     bool hasNoRecords;
-    bool modSelected;
-    bool isMasterOfSelectedPlugin;
+    bool modSelected{false};
+    bool isMasterOfSelectedPlugin{false};
     int formVersion;
     float headerVersion;
     QString author;

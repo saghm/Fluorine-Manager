@@ -545,10 +545,10 @@ private:
   static constexpr unsigned int PROBLEM_MO1SCRIPTEXTENDERWORKAROUND = 1;
 
 private:
-  IUserInterface* m_UserInterface;
-  PluginContainer* m_PluginContainer;
+  IUserInterface* m_UserInterface{nullptr};
+  PluginContainer* m_PluginContainer{nullptr};
   QString m_GameName;
-  MOBase::IPluginGame* m_GamePlugin;
+  MOBase::IPluginGame* m_GamePlugin{nullptr};
   ModDataContentHolder m_Contents;
 
   std::shared_ptr<Profile> m_CurrentProfile;
@@ -593,7 +593,7 @@ private:
   std::thread m_StructureDeleter;
 
   std::atomic<bool> m_DirectoryUpdate;
-  bool m_ArchivesInit;
+  bool m_ArchivesInit{false};
 
   MOBase::DelayedFileWriter m_PluginListsWriter;
   FuseConnector m_USVFS;

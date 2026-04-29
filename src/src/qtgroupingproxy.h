@@ -138,7 +138,7 @@ protected:
   QModelIndexList m_selectedGroups;
 
   QModelIndex m_rootNode;
-  int m_groupedColumn;
+  int m_groupedColumn{0};
 
   /* debug function */
   void dumpGroups() const;

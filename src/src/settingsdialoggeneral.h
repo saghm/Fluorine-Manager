@@ -10,7 +10,7 @@ class GeneralSettingsTab : public SettingsTab
 public:
   GeneralSettingsTab(Settings& settings, SettingsDialog& dialog);
 
-  void update();
+  void update() override;
 
 private:
   void addLanguages();

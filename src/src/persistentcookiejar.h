@@ -9,8 +9,8 @@ class PersistentCookieJar : public QNetworkCookieJar
   Q_OBJECT
 
 public:
-  PersistentCookieJar(const QString& fileName, QObject* parent = 0);
-  virtual ~PersistentCookieJar();
+  PersistentCookieJar(const QString& fileName, QObject* parent = nullptr);
+  ~PersistentCookieJar() override;
 
   void clear();
 

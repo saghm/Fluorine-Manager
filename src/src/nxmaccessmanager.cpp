@@ -48,7 +48,7 @@ const QString
     NexusSSOPage("https://www.nexusmods.com/sso?id=%1&application=modorganizer2");
 
 ValidationProgressDialog::ValidationProgressDialog(Settings* s, NexusKeyValidator& v)
-    : m_settings(s), m_validator(v), m_updateTimer(nullptr), m_first(true)
+    : m_settings(s), m_validator(v) 
 {
   ui.reset(new Ui::ValidationProgressDialog);
   ui->setupUi(this);
@@ -153,7 +153,7 @@ void ValidationProgressDialog::updateProgress()
   }
 }
 
-NexusSSOLogin::NexusSSOLogin() : m_keyReceived(false), m_active(false)
+NexusSSOLogin::NexusSSOLogin()  
 {
   m_timeout.setInterval(10s);
   m_timeout.setSingleShot(true);
@@ -357,7 +357,7 @@ void NexusSSOLogin::onTimeout()
 }
 
 ValidationAttempt::ValidationAttempt(std::chrono::seconds timeout)
-    : m_reply(nullptr), m_result(None)
+     
 {
   m_timeout.setSingleShot(true);
   m_timeout.setInterval(timeout);
@@ -765,7 +765,7 @@ void NexusKeyValidator::setFinished(ValidationAttempt::Result r, const QString& 
 NXMAccessManager::NXMAccessManager(QObject* parent, Settings* s,
                                    const QString& moVersion)
     : QNetworkAccessManager(parent), m_Settings(s), m_MOVersion(moVersion),
-      m_validator(s, *this), m_validationState(NotChecked)
+      m_validator(s, *this) 
 {
   m_validator.finished = [&](auto&& r, auto&& m, auto&& u) {
     onValidatorFinished(r, m, u);

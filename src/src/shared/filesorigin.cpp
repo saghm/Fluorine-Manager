@@ -16,7 +16,7 @@ std::wstring tail(const std::wstring& source, const size_t count)
 }
 
 FilesOrigin::FilesOrigin()
-    : m_ID(0), m_Disabled(false), m_Name(), m_Path(), m_Priority(0)
+    : m_ID(0), m_Disabled(false),  m_Priority(0)
 {}
 
 FilesOrigin::FilesOrigin(OriginID ID, const std::wstring& name,

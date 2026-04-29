@@ -32,8 +32,8 @@ class ProfileInputDialog : public QDialog
   Q_OBJECT
 
 public:
-  explicit ProfileInputDialog(QWidget* parent = 0);
-  ~ProfileInputDialog();
+  explicit ProfileInputDialog(QWidget* parent = nullptr);
+  ~ProfileInputDialog() override;
 
   QString getName() const;
   bool getPreferDefaultSettings() const;

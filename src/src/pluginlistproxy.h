@@ -10,7 +10,7 @@ class PluginListProxy : public MOBase::IPluginList
 {
 public:
   PluginListProxy(OrganizerProxy* oproxy, PluginList* pluginlist);
-  virtual ~PluginListProxy();
+  ~PluginListProxy() override;
 
   QStringList pluginNames() const override;
   PluginStates state(const QString& name) const override;

@@ -8,8 +8,7 @@ class UILockerInterface
 {
 public:
   UILockerInterface(QWidget* mainUI)
-      : m_mainUI(mainUI), m_target(nullptr), m_message(nullptr), m_info(nullptr),
-        m_buttons(nullptr), m_reason(UILocker::NoReason)
+      : m_mainUI(mainUI) 
   {
     m_timer.reset(new QTimer);
     QObject::connect(m_timer.get(), &QTimer::timeout, [&] {
@@ -123,14 +122,14 @@ private:
 
   std::unique_ptr<QTimer> m_timer;
   QWidget* m_mainUI;
-  QWidget* m_target;
+  QWidget* m_target{nullptr};
   QPointer<QWidget> m_topLevel;
-  QLabel* m_message;
-  QLabel* m_info;
+  QLabel* m_message{nullptr};
+  QLabel* m_info{nullptr};
   QStringList m_labels;
-  QWidget* m_buttons;
+  QWidget* m_buttons{nullptr};
   std::unique_ptr<Filter> m_filter;
-  UILocker::Reasons m_reason;
+  UILocker::Reasons m_reason{UILocker::NoReason};
 
   bool hasMainUI() const { return (m_target != nullptr); }
 
@@ -403,7 +402,7 @@ UILocker::Results UILocker::Session::result() const
 
 static UILocker* g_instance = nullptr;
 
-UILocker::UILocker() : m_parent(nullptr), m_result(NoResult)
+UILocker::UILocker() :  m_result(NoResult)
 {
   Q_ASSERT(!g_instance);
   g_instance = this;
