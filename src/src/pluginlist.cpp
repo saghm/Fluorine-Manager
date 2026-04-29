@@ -36,6 +36,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <QSortFilterProxyModel>
 #include <QString>
 #include <QtDebug>
+#include <utility>
 
 #include <esptk/espfile.h>
 #include <uibase/iplugingame.h>
@@ -146,7 +147,7 @@ void PluginList::highlightPlugins(const std::vector<unsigned int>& modIndices,
     esp.modSelected = false;
   }
 
-  for (auto& modIndex : modIndices) {
+  for (const auto& modIndex : modIndices) {
     ModInfo::Ptr selectedMod = ModInfo::getByIndex(modIndex);
     if (!selectedMod.isNull() && profile->modEnabled(modIndex)) {
       QString modDataPath = selectedMod->absolutePath();
@@ -464,7 +465,7 @@ void PluginList::fixPriorities()
     if (prio == -1) {
       prio = INT_MAX;
     }
-    espPrios.push_back(std::make_pair(prio, i));
+    espPrios.emplace_back(prio, i);
   }
 
   std::sort(espPrios.begin(), espPrios.end(),
@@ -510,7 +511,7 @@ int PluginList::findPluginByPriority(int priority)
 void PluginList::setEnabled(const QModelIndexList& indices, bool enabled)
 {
   QStringList dirty;
-  for (auto& idx : indices) {
+  for (const auto& idx : indices) {
     if (m_ESPs[idx.row()].forceLoaded || m_ESPs[idx.row()].forceEnabled ||
         m_ESPs[idx.row()].forceDisabled)
       continue;
@@ -547,7 +548,7 @@ void PluginList::setEnabledAll(bool enabled)
 void PluginList::sendToPriority(const QModelIndexList& indices, int newPriority)
 {
   std::vector<int> pluginsToMove;
-  for (auto& idx : indices) {
+  for (const auto& idx : indices) {
     if (!m_ESPs[idx.row()].forceLoaded) {
       pluginsToMove.push_back(idx.row());
     }
@@ -562,7 +563,7 @@ void PluginList::shiftPluginsPriority(const QModelIndexList& indices, int offset
   // retrieve the plugin index and sort them by priority to avoid issue
   // when moving them
   std::vector<int> allIndex;
-  for (auto& idx : indices) {
+  for (const auto& idx : indices) {
     allIndex.push_back(idx.row());
   }
   std::sort(allIndex.begin(), allIndex.end(), [=, this](int lhs, int rhs) {
@@ -582,8 +583,9 @@ void PluginList::shiftPluginsPriority(const QModelIndexList& indices, int offset
 
 void PluginList::toggleState(const QModelIndexList& indices)
 {
-  QModelIndex minRow, maxRow;
-  for (auto& idx : indices) {
+  QModelIndex minRow;
+  QModelIndex maxRow;
+  for (const auto& idx : indices) {
     if (!minRow.isValid() || (idx.row() < minRow.row())) {
       minRow = idx;
     }
@@ -879,7 +881,7 @@ void PluginList::refreshLoadOrder()
       // locked esp exists
 
       // find the location to insert at
-      while ((targetPrio < static_cast<int>(m_ESPs.size() - 1)) &&
+      while ((std::cmp_less(targetPrio, m_ESPs.size() - 1)) &&
              (m_ESPs[m_ESPsByPriority[targetPrio]].loadOrder < iter->first)) {
         ++targetPrio;
       }
@@ -984,7 +986,7 @@ int PluginList::priority(const QString& name) const
 bool PluginList::setPriority(const QString& name, int newPriority)
 {
 
-  if (newPriority < 0 || newPriority >= static_cast<int>(m_ESPsByPriority.size())) {
+  if (newPriority < 0 || std::cmp_greater_equal(newPriority, m_ESPsByPriority.size())) {
     return false;
   }
 
@@ -1162,7 +1164,7 @@ void PluginList::pluginStatesChanged(QStringList const& pluginNames,
     return;
   }
   std::map<QString, IPluginList::PluginStates> infos;
-  for (auto& name : pluginNames) {
+  for (const auto& name : pluginNames) {
     infos[name] = state;
   }
   m_PluginStateChanged(infos);
@@ -1189,7 +1191,7 @@ void PluginList::updateIndices()
     if (m_ESPs[i].priority < 0) {
       continue;
     }
-    if (m_ESPs[i].priority >= static_cast<int>(m_ESPs.size())) {
+    if (std::cmp_greater_equal(m_ESPs[i].priority, m_ESPs.size())) {
       log::error("invalid plugin priority: {}", m_ESPs[i].priority);
       continue;
     }
@@ -1284,8 +1286,6 @@ void PluginList::testMasters()
 
 QVariant PluginList::data(const QModelIndex& modelIndex, int role) const
 {
-  int index = modelIndex.row();
-
   if ((role == Qt::DisplayRole) || (role == Qt::EditRole)) {
     return displayData(modelIndex);
   } else if ((role == Qt::CheckStateRole) && (modelIndex.column() == 0)) {
@@ -1399,10 +1399,8 @@ QVariant PluginList::fontData(const QModelIndex& modelIndex) const
   return result;
 }
 
-QVariant PluginList::alignmentData(const QModelIndex& modelIndex) 
+QVariant PluginList::alignmentData(const QModelIndex& modelIndex)
 {
-  const int index = modelIndex.row();
-
   if (modelIndex.column() == 0) {
     return {Qt::AlignLeft | Qt::AlignVCenter};
   } else {
@@ -1609,12 +1607,12 @@ QVariant PluginList::iconData(const QModelIndex& modelIndex) const
   return result;
 }
 
-bool PluginList::isProblematic(const ESPInfo& esp, const AdditionalInfo*) 
+bool PluginList::isProblematic(const ESPInfo& esp, const AdditionalInfo*)
 {
   return !esp.masterUnset.empty();
 }
 
-bool PluginList::hasInfo(const ESPInfo&, const AdditionalInfo* info) 
+bool PluginList::hasInfo(const ESPInfo&, const AdditionalInfo* info)
 {
   return info && !info->messages.empty();
 }
@@ -1708,7 +1706,7 @@ void PluginList::setPluginPriority(int row, int& newPriority, bool isForced)
   // enforce valid range
   if (newPriorityTemp < 0)
     newPriorityTemp = 0;
-  else if (newPriorityTemp >= static_cast<int>(m_ESPsByPriority.size()))
+  else if (std::cmp_greater_equal(newPriorityTemp, m_ESPsByPriority.size()))
     newPriorityTemp = static_cast<int>(m_ESPsByPriority.size()) - 1;
 
   int blueprintStartPos = 0;
@@ -1864,7 +1862,8 @@ bool PluginList::dropMimeData(const QMimeData* mimeData, Qt::DropAction action, 
   std::vector<int> sourceRows;
 
   while (!stream.atEnd()) {
-    int sourceRow, col;
+    int sourceRow;
+    int col;
     QMap<int, QVariant> roleDataMap;
     stream >> sourceRow >> col >> roleDataMap;
     if (col == 0) {  // only add each row once
@@ -1878,7 +1877,7 @@ bool PluginList::dropMimeData(const QMimeData* mimeData, Qt::DropAction action, 
 
   int newPriority;
 
-  if ((row < 0) || (row >= static_cast<int>(m_ESPs.size()))) {
+  if ((row < 0) || (std::cmp_greater_equal(row, m_ESPs.size()))) {
     newPriority = static_cast<int>(m_ESPs.size());
   } else {
     newPriority = m_ESPs[row].priority;
@@ -1909,7 +1908,7 @@ PluginList::ESPInfo::ESPInfo(const QString& name, bool forceLoaded, bool forceEn
     : name(name), fullPath(fullPath), enabled(forceLoaded), forceLoaded(forceLoaded),
       forceEnabled(forceEnabled), forceDisabled(forceDisabled),  originName(originName), hasIni(hasIni),
       archives(archives.begin(), archives.end())
-      
+
 {
   QString parsePath = fullPath;
   // Linux is case-sensitive while Windows-authored paths sometimes mismatch

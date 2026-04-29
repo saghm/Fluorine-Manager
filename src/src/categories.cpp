@@ -40,7 +40,7 @@ QString CategoryFactory::categoriesFilePath()
   return qApp->property("dataPath").toString() + "/categories.dat";
 }
 
-CategoryFactory::CategoryFactory()  
+CategoryFactory::CategoryFactory()
 {
   atexit(&cleanup);
 }
@@ -76,7 +76,7 @@ void CategoryFactory::loadCategories()
             if (!ok) {
               log::error(tr("invalid category id {0}"), iter->constData());
             }
-            nexusCats.push_back(NexusCategory("Unknown", temp));
+            nexusCats.emplace_back("Unknown", temp);
           }
         }
         bool cell0Ok = true;
@@ -253,8 +253,7 @@ int CategoryFactory::addCategory(const QString& name,
 void CategoryFactory::addCategory(int id, const QString& name, int parentID)
 {
   int const index = static_cast<int>(m_Categories.size());
-  m_Categories.push_back(
-      Category(index, id, name, parentID, std::vector<NexusCategory>()));
+  m_Categories.emplace_back(index, id, name, parentID, std::vector<NexusCategory>());
   m_IDMap[id] = index;
 }
 
@@ -267,7 +266,7 @@ void CategoryFactory::addCategory(int id, const QString& name,
     m_NexusMap.at(nexusCat.ID()).setCategoryID(id);
   }
   int const index = static_cast<int>(m_Categories.size());
-  m_Categories.push_back(Category(index, id, name, parentID, nexusCats));
+  m_Categories.emplace_back(index, id, name, parentID, nexusCats);
   m_IDMap[id] = index;
 }
 
@@ -413,7 +412,7 @@ QString CategoryFactory::getCategoryName(unsigned int index) const
   return m_Categories[index].name();
 }
 
-QString CategoryFactory::getSpecialCategoryName(SpecialCategories type) 
+QString CategoryFactory::getSpecialCategoryName(SpecialCategories type)
 {
   QString label;
   switch (type) {

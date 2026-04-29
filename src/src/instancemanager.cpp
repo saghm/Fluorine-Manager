@@ -47,7 +47,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 using namespace MOBase;
 
 Instance::Instance(QString dir, bool portable, QString profileName)
-    : m_dir(std::move(dir)), m_portable(portable), 
+    : m_dir(std::move(dir)), m_portable(portable),
       m_profile(std::move(profileName))
 {
   // Ensure portable instances have a ModOrganizer.sh launcher script.
@@ -435,7 +435,7 @@ std::vector<Instance::Object> Instance::objectsForDeletion() const
   // don't delete that
   if (!isPortable()) {
     if (QDir(loc).exists()) {
-      roots.push_back({loc, true});
+      roots.emplace_back(loc, true);
     }
   }
 
@@ -443,7 +443,7 @@ std::vector<Instance::Object> Instance::objectsForDeletion() const
   // if it's the same
   if (canonicalDir(base) != canonicalDir(loc)) {
     if (QDir(base).exists()) {
-      roots.push_back({base, false});
+      roots.emplace_back(base, false);
     }
   }
 
@@ -482,7 +482,7 @@ std::vector<Instance::Object> Instance::objectsForDeletion() const
       // not in roots, this is a path that was changed by the user; make
       // sure it exists
       if (QDir(f.path).exists()) {
-        cleanDirs.push_back({prettyDir(f.path), f.mandatoryDelete});
+        cleanDirs.emplace_back(prettyDir(f.path), f.mandatoryDelete);
       }
     }
   }
@@ -511,7 +511,7 @@ std::vector<Instance::Object> Instance::objectsForDeletion() const
       // not in roots, this is a path that was changed by the user; make
       // sure it exists
       if (QFileInfo(f.path).exists()) {
-        cleanFiles.push_back({prettyFile(f.path), f.mandatoryDelete});
+        cleanFiles.emplace_back(prettyFile(f.path), f.mandatoryDelete);
       }
     }
   }
@@ -617,14 +617,14 @@ QString InstanceManager::instancePath(const QString& instanceName) const
   return QDir::fromNativeSeparators(globalInstancesRootPath() + "/" + instanceName);
 }
 
-QString InstanceManager::globalInstancesRootPath() 
+QString InstanceManager::globalInstancesRootPath()
 {
   // Use the shared Fluorine data dir so the path is the same in native and
   // Flatpak builds (QStandardPaths is remapped inside a Flatpak sandbox).
   return QDir::fromNativeSeparators(fluorineDataDir());
 }
 
-QString InstanceManager::iniPath(const QString& instanceDir) 
+QString InstanceManager::iniPath(const QString& instanceDir)
 {
   return QDir(instanceDir).filePath(QString::fromStdWString(AppConfig::iniFileName()));
 }
@@ -654,18 +654,18 @@ bool InstanceManager::hasAnyInstances() const
   return portableInstanceExists() || !globalInstancePaths().empty();
 }
 
-QString InstanceManager::portablePath() 
+QString InstanceManager::portablePath()
 {
   return AppConfig::basePath();
 }
 
-bool InstanceManager::portableInstanceExists() 
+bool InstanceManager::portableInstanceExists()
 {
   return QFile::exists(AppConfig::basePath() + "/" +
                        QString::fromStdWString(AppConfig::iniFileName()));
 }
 
-bool InstanceManager::allowedToChangeInstance() 
+bool InstanceManager::allowedToChangeInstance()
 {
   const auto lockFile = qApp->applicationDirPath() + "/" +
                         QString::fromStdWString(AppConfig::portableLockFileName());
@@ -762,7 +762,7 @@ bool InstanceManager::instanceExists(const QString& instanceName) const
   return root.exists(instanceName);
 }
 
-QStringList InstanceManager::registeredPortablePaths() 
+QStringList InstanceManager::registeredPortablePaths()
 {
   return GlobalSettings::portableInstances();
 }

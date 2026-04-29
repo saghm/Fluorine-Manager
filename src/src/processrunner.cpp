@@ -23,7 +23,7 @@
 #include <deque>
 #include <dirent.h>
 #include <fstream>
-#include <signal.h>
+#include <csignal>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unordered_map>
@@ -728,7 +728,7 @@ ProcessRunner::Results waitForPid(pid_t pid, LPDWORD exitCode,
     }
 
     if (ls != nullptr) {
-      switch (ls->result()) {
+      switch (UILocker::Session::result()) {
       case UILocker::StillLocked:
         break;
 
@@ -787,8 +787,8 @@ ProcessRunner::Results waitForProcesses(const std::vector<HANDLE>& initialProces
 }
 
 ProcessRunner::ProcessRunner(OrganizerCore& core, IUserInterface* ui)
-    : m_core(core), m_ui(ui), 
-      m_waitFlags(NoFlags), m_handle(INVALID_HANDLE_VALUE) 
+    : m_core(core), m_ui(ui),
+      m_waitFlags(NoFlags), m_handle(INVALID_HANDLE_VALUE)
 {
   // all processes started in ProcessRunner are hooked by default
   setHooked(true);
@@ -1321,7 +1321,7 @@ pid_t ProcessRunner::getProcessHandle() const
 
 env::HandlePtr ProcessRunner::stealProcessHandle()
 {
-  auto h = m_handle.release();
+  auto *h = m_handle.release();
   m_handle.reset(INVALID_HANDLE_VALUE);
   return env::HandlePtr(h);
 }

@@ -4,6 +4,8 @@
 #include "utility.h"
 #include <log.h>
 
+#include <utility>
+
 using namespace MOBase;
 using namespace ImagesTabHelpers;
 
@@ -32,7 +34,7 @@ QString dimensionString(const QSize& s)
 }
 
 ImagesTab::ImagesTab(ModInfoDialogTabContext cx)
-    : ModInfoDialogTab(std::move(cx)), m_image(new ScalableImage) 
+    : ModInfoDialogTab(std::move(cx)), m_image(new ScalableImage)
 {
   getSupportedFormats();
 
@@ -345,7 +347,7 @@ void ImagesTab::ensureVisible(std::size_t i, Visibility v)
   const auto last =
       (v == Visibility::Full ? first + fullyVisible : first + partiallyVisible);
 
-  if (i < first) {
+  if (std::cmp_less(i , first)) {
     // go up
     ui->imagesScrollerVBar->setValue(static_cast<int>(i));
   } else if (i >= last) {
@@ -692,7 +694,7 @@ bool ThumbnailsWidget::event(QEvent* e)
   return QWidget::event(e);
 }
 
-ScalableImage::ScalableImage(QString path) : m_path(std::move(path)) 
+ScalableImage::ScalableImage(QString path) : m_path(std::move(path))
 {
   auto sp = sizePolicy();
   sp.setHeightForWidth(true);
@@ -779,7 +781,7 @@ void ScalableImage::paintEvent(QPaintEvent* e)
 }
 
 Metrics::Metrics()
-     
+
 = default;
 
 Geometry::Geometry(QSize widgetSize, Metrics metrics)
@@ -1089,7 +1091,7 @@ bool Files::isFiltered() const
 }
 
 PaintContext::PaintContext(QWidget* w, Geometry geo)
-    : painter(w), geo(geo) 
+    : painter(w), geo(geo)
 {}
 
 }  // namespace ImagesTabHelpers

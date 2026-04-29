@@ -120,11 +120,11 @@ void GeneralSettingsTab::addLanguages()
       }
     }
 
-    languages.push_back({languageString, match.captured(1)});
+    languages.emplace_back(languageString, match.captured(1));
   }
 
   if (!ui->languageBox->findText("English")) {
-    languages.push_back({QString("English"), QString("en_US")});
+    languages.emplace_back(QString("English"), QString("en_US"));
   }
 
   std::sort(languages.begin(), languages.end());

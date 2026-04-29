@@ -138,7 +138,7 @@ std::optional<NxmLink> NxmLink::parse(const QString& url)
   const uint64_t expires = query.queryItemValue("expires").toULongLong();
   const int userId       = query.queryItemValue("user_id").toInt();
 
-  return NxmLink{gameDomain, modId, fileId, key, expires, userId};
+  return NxmLink{.game_domain=gameDomain, .mod_id=modId, .file_id=fileId, .key=key, .expires=expires, .user_id=userId};
 }
 
 QString NxmLink::lookupKey() const
@@ -172,7 +172,7 @@ QString NxmHandlerLinux::socketPath()
   return QDir::homePath() + "/.local/share/fluorine/tmp/mo2-nxm.sock";
 }
 
-void NxmHandlerLinux::registerHandler() 
+void NxmHandlerLinux::registerHandler()
 {
   const QString home = QDir::homePath();
   if (home.isEmpty()) {

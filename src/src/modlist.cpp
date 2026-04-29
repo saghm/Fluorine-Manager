@@ -104,7 +104,7 @@ int ModList::columnCount(const QModelIndex&) const
   return COL_LASTCOLUMN + 1;
 }
 
-QString ModList::getDisplayName(ModInfo::Ptr info) 
+QString ModList::getDisplayName(ModInfo::Ptr info)
 {
   QString name = info->name();
   if (info->isSeparator()) {
@@ -113,7 +113,7 @@ QString ModList::getDisplayName(ModInfo::Ptr info)
   return name;
 }
 
-QString ModList::makeInternalName(ModInfo::Ptr info, QString name) 
+QString ModList::makeInternalName(ModInfo::Ptr info, QString name)
 {
   if (info->isSeparator()) {
     name += "_separator";
@@ -121,7 +121,7 @@ QString ModList::makeInternalName(ModInfo::Ptr info, QString name)
   return name;
 }
 
-QString ModList::getFlagText(ModInfo::EFlag flag, ModInfo::Ptr modInfo) 
+QString ModList::getFlagText(ModInfo::EFlag flag, ModInfo::Ptr modInfo)
 {
   switch (flag) {
   case ModInfo::FLAG_BACKUP:
@@ -153,7 +153,7 @@ QString ModList::getFlagText(ModInfo::EFlag flag, ModInfo::Ptr modInfo)
 }
 
 QString ModList::getConflictFlagText(ModInfo::EConflictFlag flag,
-                                     ModInfo::Ptr modInfo) 
+                                     ModInfo::Ptr modInfo)
 {
   switch (flag) {
   case ModInfo::FLAG_CONFLICT_OVERWRITE:
@@ -219,7 +219,7 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
       }
     } else if (column == COL_GAME) {
       if (m_PluginContainer != nullptr) {
-        for (auto game : m_PluginContainer->plugins<IPluginGame>()) {
+        for (auto *game : m_PluginContainer->plugins<IPluginGame>()) {
           if (game->gameShortName().compare(modInfo->gameName(), Qt::CaseInsensitive) ==
               0)
             return game->gameName();
@@ -480,6 +480,8 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
   } else {
     return {};
   }
+
+  return {};
 }
 
 bool ModList::renameMod(int index, const QString& newName)
@@ -526,8 +528,7 @@ bool ModList::setData(const QModelIndex& index, const QVariant& value, int role)
 
   int const modID = index.row();
 
-  ModInfo::Ptr const info            = ModInfo::getByIndex(modID);
-  IModList::ModStates const oldState = state(modID);
+  ModInfo::Ptr const info = ModInfo::getByIndex(modID);
 
   bool result = false;
 
@@ -830,7 +831,7 @@ IModList::ModStates ModList::state(unsigned int modIndex) const
   return result;
 }
 
-QString ModList::displayName(const QString& internalName) 
+QString ModList::displayName(const QString& internalName)
 {
   unsigned int const modIndex = ModInfo::getIndex(internalName);
   if (modIndex == UINT_MAX) {
@@ -841,7 +842,7 @@ QString ModList::displayName(const QString& internalName)
   }
 }
 
-QStringList ModList::allMods() 
+QStringList ModList::allMods()
 {
   QStringList result;
   for (unsigned int i = 0; i < ModInfo::getNumMods(); ++i) {
@@ -856,7 +857,7 @@ QStringList ModList::allModsByProfilePriority(MOBase::IProfile* profile) const
                                            : static_cast<Profile*>(profile);
 
   QStringList res;
-  for (auto& [priority, index] : mo2Profile->getAllIndexesByPriority()) {
+  for (const auto& [priority, index] : mo2Profile->getAllIndexesByPriority()) {
     auto modInfo = ModInfo::getByIndex(index);
     if (!modInfo->isBackup() && !modInfo->isOverwrite()) {
       res.push_back(modInfo->internalName());
@@ -865,7 +866,7 @@ QStringList ModList::allModsByProfilePriority(MOBase::IProfile* profile) const
   return res;
 }
 
-MOBase::IModInterface* ModList::getMod(const QString& name) 
+MOBase::IModInterface* ModList::getMod(const QString& name)
 {
   unsigned int const index = ModInfo::getIndex(name);
   return index == UINT_MAX ? nullptr : ModInfo::getByIndex(index).data();
@@ -1399,7 +1400,7 @@ QString ModList::getColumnToolTip(int column) const
   case COL_FLAGS:
     return tr("Emblems to highlight things that might require attention.");
   case COL_CONTENT: {
-    auto& contents = m_Organizer->modDataContents();
+    const auto& contents = m_Organizer->modDataContents();
     if (m_Organizer->modDataContents().empty()) {
       return {};
     }
@@ -1426,7 +1427,7 @@ void ModList::shiftModsPriority(const QModelIndexList& indices, int offset)
   // retrieve the mod index and sort them by priority to avoid issue
   // when moving them
   std::vector<int> allIndex;
-  for (auto& idx : indices) {
+  for (const auto& idx : indices) {
     auto index = idx.data(IndexRole).toInt();
     allIndex.push_back(index);
   }
@@ -1461,7 +1462,7 @@ void ModList::changeModsPriority(const QModelIndexList& indices, int priority)
   }
 
   std::vector<int> allIndex;
-  for (auto& idx : indices) {
+  for (const auto& idx : indices) {
     auto index = idx.data(IndexRole).toInt();
     allIndex.push_back(index);
   }
@@ -1505,7 +1506,7 @@ bool ModList::toggleState(const QModelIndexList& indices)
 void ModList::setActive(const QModelIndexList& indices, bool active)
 {
   QList<unsigned int> mods;
-  for (auto& index : indices) {
+  for (const auto& index : indices) {
     mods.append(index.data(IndexRole).toInt());
   }
 

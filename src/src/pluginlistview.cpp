@@ -24,7 +24,7 @@
 using namespace MOBase;
 
 PluginListView::PluginListView(QWidget* parent)
-    : QTreeView(parent), 
+    : QTreeView(parent),
       m_Scrollbar(new ViewMarkingScrollBar(this, Qt::BackgroundRole))
 {
   setVerticalScrollBar(m_Scrollbar);
@@ -195,7 +195,7 @@ void PluginListView::setSelected(const QModelIndex& current,
 void PluginListView::setup(OrganizerCore& core, MainWindow* mw, Ui::MainWindow* mwui)
 {
   m_core       = &core;
-  ui           = {mwui->activePluginsCounter, mwui->espFilterEdit};
+  ui           = {.counter=mwui->activePluginsCounter, .filter=mwui->espFilterEdit};
   m_modActions = &mwui->modList->actions();
 
   m_sortProxy = new PluginListSortProxy(&core);
@@ -294,7 +294,7 @@ void PluginListView::onDoubleClicked(const QModelIndex& index)
 
         Qt::KeyboardModifiers modifiers = QApplication::queryKeyboardModifiers();
         if (modifiers.testFlag(Qt::ControlModifier)) {
-          m_modActions->openExplorer({m_core->modList()->index(modIndex, 0)});
+          ModListViewActions::openExplorer({m_core->modList()->index(modIndex, 0)});
         } else {
           m_modActions->displayModInformation(
               ModInfo::getIndex(m_core->pluginList()->origin(fileName)));
@@ -353,7 +353,7 @@ bool PluginListView::event(QEvent* event)
         }
 
         auto modIndex = ModInfo::getIndex(m_core->pluginList()->origin(fileName));
-        m_modActions->openExplorer({m_core->modList()->index(modIndex, 0)});
+        ModListViewActions::openExplorer({m_core->modList()->index(modIndex, 0)});
         return true;
       }
     } else if (keyEvent->modifiers() == Qt::ControlModifier &&

@@ -271,7 +271,7 @@ NexusInterface::parseLimits(const QList<QNetworkReply::RawHeaderPair>& headers)
 
 static NexusInterface* g_instance = nullptr;
 
-NexusInterface::NexusInterface(Settings* s)  
+NexusInterface::NexusInterface(Settings* s)
 {
   MO_ASSERT(!g_instance);
   g_instance = this;
@@ -435,13 +435,12 @@ std::vector<std::pair<QString, QString>>
 NexusInterface::getGameChoices(const MOBase::IPluginGame* game)
 {
   std::vector<std::pair<QString, QString>> choices;
-  choices.push_back(
-      std::pair<QString, QString>(game->gameShortName(), game->gameName()));
+  choices.emplace_back(game->gameShortName(), game->gameName());
   for (const QString& gameName : game->validShortNames()) {
-    for (auto gamePlugin : m_PluginContainer->plugins<IPluginGame>()) {
+    for (auto *gamePlugin : m_PluginContainer->plugins<IPluginGame>()) {
       if (gamePlugin->gameShortName().compare(gameName, Qt::CaseInsensitive) == 0) {
-        choices.push_back(std::pair<QString, QString>(gamePlugin->gameShortName(),
-                                                      gamePlugin->gameName()));
+        choices.emplace_back(gamePlugin->gameShortName(),
+                                                      gamePlugin->gameName());
         break;
       }
     }
@@ -818,7 +817,7 @@ IPluginGame* NexusInterface::getGame(QString gameName) const
 {
   auto gamePlugins        = m_PluginContainer->plugins<IPluginGame>();
   IPluginGame* gamePlugin = qApp->property("managed_game").value<IPluginGame*>();
-  for (auto plugin : gamePlugins) {
+  for (auto *plugin : gamePlugins) {
     if (plugin != nullptr &&
         plugin->gameShortName().compare(gameName, Qt::CaseInsensitive) == 0) {
       gamePlugin = plugin;
@@ -1232,7 +1231,7 @@ APIStats NexusInterface::getAPIStats() const
 }
 
 void NexusInterface::applyGameNameOverride(NXMRequestInfo& info, const QString& gameName,
-                                           const MOBase::IPluginGame* game) 
+                                           const MOBase::IPluginGame* game)
 {
   // When gameName has no matching plugin (e.g. "site" for Nexus tools), getGame()
   // returns the managed game as a fallback, causing NXMRequestInfo to store the wrong
@@ -1259,7 +1258,7 @@ NexusInterface::NXMRequestInfo::NXMRequestInfo(
       m_Reroute(false), m_ID(s_NextID.fetchAndAddAcquire(1)),
       m_URL(get_management_url()), m_SubModule(subModule),
       m_NexusGameID(game->nexusGameID()), m_GameName(game->gameNexusName()),
-      m_Endorse(false), m_Track(false) 
+      m_Endorse(false), m_Track(false)
 {}
 
 NexusInterface::NXMRequestInfo::NXMRequestInfo(
@@ -1270,7 +1269,7 @@ NexusInterface::NXMRequestInfo::NXMRequestInfo(
       m_Timeout(nullptr), m_Reroute(false), m_ID(s_NextID.fetchAndAddAcquire(1)),
       m_URL(get_management_url()), m_SubModule(subModule),
       m_NexusGameID(game->nexusGameID()), m_GameName(game->gameNexusName()),
-      m_Endorse(false), m_Track(false) 
+      m_Endorse(false), m_Track(false)
 {}
 
 NexusInterface::NXMRequestInfo::NXMRequestInfo(Type type, QVariant userData,
@@ -1281,7 +1280,7 @@ NexusInterface::NXMRequestInfo::NXMRequestInfo(Type type, QVariant userData,
       m_Reroute(false), m_ID(s_NextID.fetchAndAddAcquire(1)),
       m_URL(get_management_url()), m_SubModule(subModule),
       m_NexusGameID(game->nexusGameID()), m_GameName(game->gameNexusName()),
-      m_Endorse(false), m_Track(false) 
+      m_Endorse(false), m_Track(false)
 {}
 
 NexusInterface::NXMRequestInfo::NXMRequestInfo(
@@ -1292,7 +1291,7 @@ NexusInterface::NXMRequestInfo::NXMRequestInfo(
       m_Timeout(nullptr), m_Reroute(false), m_ID(s_NextID.fetchAndAddAcquire(1)),
       m_URL(get_management_url()), m_SubModule(subModule),
       m_NexusGameID(game->nexusGameID()), m_GameName(game->gameNexusName()),
-      m_Endorse(false), m_Track(false) 
+      m_Endorse(false), m_Track(false)
 {}
 
 NexusInterface::NXMRequestInfo::NXMRequestInfo(Type type, QVariant userData,
@@ -1301,7 +1300,7 @@ NexusInterface::NXMRequestInfo::NXMRequestInfo(Type type, QVariant userData,
       m_UpdatePeriod(UpdatePeriod::NONE), m_UserData(userData), m_Timeout(nullptr),
       m_Reroute(false), m_ID(s_NextID.fetchAndAddAcquire(1)),
       m_URL(get_management_url()), m_SubModule(subModule), m_NexusGameID(0),
-      m_GameName(""), m_Endorse(false), m_Track(false) 
+      m_GameName(""), m_Endorse(false), m_Track(false)
 {}
 
 NexusInterface::NXMRequestInfo::NXMRequestInfo(
@@ -1312,7 +1311,7 @@ NexusInterface::NXMRequestInfo::NXMRequestInfo(
       m_Reroute(false), m_ID(s_NextID.fetchAndAddAcquire(1)),
       m_URL(get_management_url()), m_SubModule(subModule),
       m_NexusGameID(game->nexusGameID()), m_GameName(game->gameNexusName()),
-      m_Endorse(false), m_Track(false) 
+      m_Endorse(false), m_Track(false)
 {}
 
 NexusInterface::NXMRequestInfo::NXMRequestInfo(

@@ -175,7 +175,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <exception>
 #include <functional>
-#include <limits.h>
+#include <climits>
 #include <map>
 #include <regex>
 #include <sstream>
@@ -238,7 +238,7 @@ void setFilterShortcuts(QWidget* widget, QLineEdit* edit)
 MainWindow::MainWindow(Settings& settings, OrganizerCore& organizerCore,
                        PluginContainer& pluginContainer, QWidget* parent)
     : QMainWindow(parent), ui(new Ui::MainWindow),  m_Tutorial(this, "MainWindow"),
-      
+
       m_CategoryFactory(CategoryFactory::instance()), m_OrganizerCore(organizerCore),
       m_PluginContainer(pluginContainer),
       m_ArchiveListWriter(std::bind(&MainWindow::saveArchiveList, this)),
@@ -1189,7 +1189,7 @@ void MainWindow::createHelpMenu()
       }
       QAction* tutAction = new QAction(tr(translate[params.at(0)]), tutorialMenu);
       tutAction->setData(fileName);
-      tutorials.push_back(std::make_pair(params.at(1).toInt(), tutAction));
+      tutorials.emplace_back(params.at(1).toInt(), tutAction);
     }
   }
 
@@ -1252,7 +1252,7 @@ void MainWindow::hookUpWindowTutorials()
   }
 }
 
-bool MainWindow::shouldStartTutorial() 
+bool MainWindow::shouldStartTutorial()
 {
   if (GlobalSettings::hideTutorialQuestion()) {
     return false;
@@ -1516,7 +1516,7 @@ bool MainWindow::canExit()
     }
   }
 
-  const auto r = m_OrganizerCore.waitForAllUSVFSProcesses();
+  const auto r = OrganizerCore::waitForAllUSVFSProcesses();
   if (r == ProcessRunner::Cancelled) {
     return false;
   }
@@ -1603,7 +1603,7 @@ void MainWindow::updateToolMenu()
 
   // Group the plugins into submenus
   QMap<QString, QList<QPair<QString, IPluginTool*>>> submenuMap;
-  for (auto toolPlugin : toolPlugins) {
+  for (auto *toolPlugin : toolPlugins) {
     QStringList toolName = toolPlugin->displayName().split("/");
     QString const submenu      = toolName[0];
     toolName.pop_front();
@@ -1953,13 +1953,9 @@ void MainWindow::refreshExecutablesList()
   auto shouldSkipInLaunchDropdown = [](const Executable& exe) {
     const QString title = exe.title().trimmed();
     const QString lower = title.toLower();
-    if (lower == QStringLiteral("proton") || lower == QStringLiteral("prefix") ||
+    return lower == QStringLiteral("proton") || lower == QStringLiteral("prefix") ||
         lower.startsWith(QStringLiteral("proton ")) ||
-        lower.startsWith(QStringLiteral("prefix "))) {
-      return true;
-    }
-
-    return false;
+        lower.startsWith(QStringLiteral("prefix "));
   };
 
   for (const auto& exe : *m_OrganizerCore.executablesList()) {
@@ -2040,7 +2036,7 @@ void MainWindow::updateBSAList(const QStringList& defaultArchives,
   };
 
   for (const FileEntryPtr& current : files) {
-    QFileInfo const fileInfo(ToQString(current->getName().c_str()));
+    QFileInfo const fileInfo(ToQString(current->getName()));
 
     if (fileInfo.suffix().toLower() == "bsa" || fileInfo.suffix().toLower() == "ba2") {
       int index = activeArchives.indexOf(fileInfo.fileName());
@@ -2086,7 +2082,7 @@ void MainWindow::updateBSAList(const QStringList& defaultArchives,
         index = 0;
 
       UINT32 const sortValue = ((origin.getPriority() & 0xFFFF) << 16) | (index & 0xFFFF);
-      items.push_back(std::make_pair(sortValue, newItem));
+      items.emplace_back(sortValue, newItem);
     }
   }
   std::sort(items.begin(), items.end(), BySortValue);
@@ -2850,7 +2846,7 @@ QMenu* MainWindow::openFolderMenu()
   FolderMenu->addAction(tr("Open MO2 Stylesheets folder"), this,
                         SLOT(openStylesheetsFolder()));
   FolderMenu->addAction(tr("Open MO2 Logs folder"), [=, this] {
-    ui->logList->openLogsFolder();
+    LogList::openLogsFolder();
   });
 
   return FolderMenu;
@@ -3286,7 +3282,7 @@ void MainWindow::nxmEndorsementsAvailable(QVariant userData, QVariant resultData
   }
 
   if (!searchedMO2NexusGame && Settings::instance().nexus().endorsementIntegration()) {
-    auto gamePlugin = m_OrganizerCore.getGame("SkyrimSE");
+    auto *gamePlugin = m_OrganizerCore.getGame("SkyrimSE");
     if (gamePlugin) {
       auto iter = sorted.equal_range(gamePlugin->gameNexusName());
       for (auto result = iter.first; result != iter.second; ++result) {
@@ -3322,8 +3318,8 @@ void MainWindow::nxmUpdateInfoAvailable(QString gameName, QVariant userData,
                    });
   auto future = QtConcurrent::run([=]() {
     return NxmUpdateInfoData{
-        gameNameReal,
-        ModInfo::filteredMods(gameNameReal, resultList, userData.toBool(), true)};
+        .game=gameNameReal,
+        .finalMods=ModInfo::filteredMods(gameNameReal, resultList, userData.toBool(), true)};
   });
   watcher->setFuture(future);
   ui->modList->invalidateFilter();
@@ -3337,7 +3333,7 @@ void MainWindow::finishUpdateInfo(const NxmUpdateInfoData& data)
   }
 
   std::set<std::pair<QString, int>> organizedGames;
-  for (auto& mod : data.finalMods) {
+  for (const auto& mod : data.finalMods) {
     if (mod->canBeUpdated()) {
       organizedGames.insert(
           std::make_pair<QString, int>(mod->gameName().toLower(), mod->nexusId()));
@@ -3382,7 +3378,7 @@ void MainWindow::nxmUpdatesAvailable(QString gameName, int modID, QVariant userD
       QVariantMap foundFileData;
 
       // update the file status
-      for (auto& file : files) {
+      for (const auto& file : files) {
         QVariantMap fileData = file.toMap();
 
         if (fileData["file_name"].toString().compare(installedFile,
@@ -3413,7 +3409,7 @@ void MainWindow::nxmUpdatesAvailable(QString gameName, int modID, QVariant userD
 
       // find installed file ID from the updates list since old filenames are not
       // guaranteed to be unique
-      for (auto& updateEntry : fileUpdates) {
+      for (const auto& updateEntry : fileUpdates) {
         const QVariantMap& updateData = updateEntry.toMap();
 
         if (installedFile.compare(updateData["old_file_name"].toString(),
@@ -3433,14 +3429,14 @@ void MainWindow::nxmUpdatesAvailable(QString gameName, int modID, QVariant userD
         while (lookForMoreUpdates) {
           lookForMoreUpdates = false;
 
-          for (auto& updateEntry : fileUpdates) {
+          for (const auto& updateEntry : fileUpdates) {
             const QVariantMap& updateData = updateEntry.toMap();
 
             if (currentUpdateId == updateData["old_file_id"].toInt()) {
               currentUpdateId = updateData["new_file_id"].toInt();
 
               // check if the new file is still active
-              for (auto& file : files) {
+              for (const auto& file : files) {
                 const QVariantMap& fileData = file.toMap();
 
                 if (currentUpdateId == fileData["file_id"].toInt()) {
@@ -3613,7 +3609,7 @@ void MainWindow::nxmEndorsementToggled(QString, int, QVariant, QVariant resultDa
 void MainWindow::nxmTrackedModsAvailable(QVariant userData, QVariant resultData, int)
 {
   QMap<QString, QString> gameNames;
-  for (auto game : m_PluginContainer.plugins<IPluginGame>()) {
+  for (auto *game : m_PluginContainer.plugins<IPluginGame>()) {
     gameNames[game->gameNexusName()] = game->gameShortName();
   }
 
@@ -3684,8 +3680,8 @@ void MainWindow::nxmGameInfoAvailable(QString gameName, QVariant, QVariant resul
   for (const auto& category : categories) {
     auto catMap = category.toMap();
     std::vector<CategoryFactory::NexusCategory> nexusCat;
-    nexusCat.push_back(CategoryFactory::NexusCategory(catMap["name"].toString(),
-                                                      catMap["category_id"].toInt()));
+    nexusCat.emplace_back(catMap["name"].toString(),
+                                                      catMap["category_id"].toInt());
     catFactory.addCategory(catMap["name"].toString(), nexusCat, 0);
   }
 }

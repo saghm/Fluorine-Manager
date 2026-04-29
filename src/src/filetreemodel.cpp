@@ -7,6 +7,8 @@
 #include <log.h>
 #include <moassert.h>
 
+#include <utility>
+
 using namespace MOBase;
 using namespace MOShared;
 namespace fs = std::filesystem;
@@ -182,9 +184,9 @@ void* makeInternalPointer(FileTreeItem* item)
 }
 
 FileTreeModel::FileTreeModel(OrganizerCore& core, QObject* parent)
-    : QAbstractItemModel(parent), m_core(core), 
+    : QAbstractItemModel(parent), m_core(core),
       m_root(FileTreeItem::createDirectory(this, nullptr, L"", L"")),
-      m_flags(HiddenFiles) 
+      m_flags(HiddenFiles)
 {
   m_root->setExpanded(true);
   m_sortTimer.setSingleShot(true);
@@ -436,7 +438,7 @@ QVariant FileTreeModel::headerData(int i, Qt::Orientation ori, int role) const
       tr("Name"), tr("Mod"), tr("Type"), tr("Size"), tr("Date modified")};
 
   if (role == Qt::DisplayRole) {
-    if (i >= 0 && i < static_cast<int>(names.size())) {
+    if (i >= 0 && std::cmp_less(i, names.size())) {
       return names[static_cast<std::size_t>(i)];
     }
   }
@@ -469,7 +471,7 @@ void FileTreeModel::sortItem(FileTreeItem& item, bool force)
 
   for (int i = 0; i < itemCount; ++i) {
     const QModelIndex& index = oldList[i];
-    oldItems.push_back({itemFromIndex(index), index.column()});
+    oldItems.emplace_back(itemFromIndex(index), index.column());
   }
 
   item.sort(m_sort.column, m_sort.order, force);
@@ -594,7 +596,7 @@ void FileTreeModel::removeDisappearingDirectories(
     const std::wstring& parentPath, std::unordered_set<std::wstring_view>& seen,
     bool forFetching)
 {
-  auto& children = parentItem.children();
+  const auto& children = parentItem.children();
   auto itor      = children.begin();
 
   // keeps track of the contiguous directories that need to be removed to
@@ -611,7 +613,7 @@ void FileTreeModel::removeDisappearingDirectories(
       break;
     }
 
-    auto d = parentEntry.findSubDirectory(item->filenameWsLowerCase(), true);
+    auto *d = parentEntry.findSubDirectory(item->filenameWsLowerCase(), true);
 
     if (d) {
       trace(log::debug("dir {} still there", item->filename()));
@@ -748,7 +750,7 @@ void FileTreeModel::removeDisappearingFiles(FileTreeItem& parentItem,
                                             int& firstFileRow,
                                             std::unordered_set<FileIndex>& seen)
 {
-  auto& children = parentItem.children();
+  const auto& children = parentItem.children();
   auto itor      = children.begin();
 
   firstFileRow = -1;
@@ -1051,7 +1053,7 @@ bool FileTreeModel::shouldShowFolder(const DirectoryEntry& dir,
   }
 
   // recurse into subdirectories
-  for (auto subdir : dir.getSubDirectories()) {
+  for (auto *subdir : dir.getSubDirectories()) {
     if (shouldShowFolder(*subdir, nullptr)) {
       return true;
     }
@@ -1060,7 +1062,7 @@ bool FileTreeModel::shouldShowFolder(const DirectoryEntry& dir,
   return false;
 }
 
-QVariant FileTreeModel::displayData(const FileTreeItem* item, int column) 
+QVariant FileTreeModel::displayData(const FileTreeItem* item, int column)
 {
   switch (column) {
   case FileName: {

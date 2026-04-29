@@ -2,15 +2,15 @@
 
 # modorganizer-archive
 
-This module provides a wrapper round the 7zip `7z.dll` allowing easy(ish) access to the contents of an archive.
+This module provides a wrapper around the 7zip `7z.so` runtime, allowing access to the contents of an archive.
 
 ## How to build?
 
 If you want to build this as par of ModOrganizer2, simply use ModOrganizer2 build system.
 
-If you want to build this as a standalone DLL, you can run the following (requires `cmake >= 3.16`):
+If you want to build this as a standalone shared library, you can run the following (requires `cmake >= 3.16`):
 
-```batch
+```sh
 mkdir build
 cd build
 cmake ..
@@ -18,11 +18,10 @@ cmake --build . --config Release
 ```
 
 This will download the two required dependencies (7z sources and [`fmtlib`](https://github.com/fmtlib/fmt)), and
-build the DLL under `build/src/Release`.
+build the shared library under `build/src/Release`.
 
-In order to use the DLL, you need to have the `7z.dll` available in your path, otherwize `CreateArchive()` will
-always fail. You can get the `7z.dll` by installing `7z.exe` or by building 7z yourself (building `archive` does
-not build `7z`).
+In order to use the library, you need to have `7z.so` available in the runtime library path, otherwise
+`CreateArchive()` will always fail. You can get `7z.so` from p7zip or by building the bundled 7z target.
 
 ## The `Archive` class
 
@@ -43,7 +42,7 @@ of the available methods:
 /**
  * @brief Check if this Archive wrapper is in a valid state.
  *
- * A non-valid Archive instance usually means that the 7z DLLs could not be loaded properly. Failures
+ * A non-valid Archive instance usually means that the 7z runtime could not be loaded properly. Failures
  * to open or extract archives do not invalidate the Archive, so this should only be used to check
  * if the Archive object has been initialized properly.
  *
@@ -52,7 +51,7 @@ of the available methods:
 bool Archive::isValid() const;
 ```
 
-If this returns `false`, this probably means the system cannot find `7z.dll` or it is corrupt, very old (or possibly too new).
+If this returns `false`, this probably means the system cannot find `7z.so` or it is corrupt, very old (or possibly too new).
 **You should check this before calling `open`.**
 
 ```cpp

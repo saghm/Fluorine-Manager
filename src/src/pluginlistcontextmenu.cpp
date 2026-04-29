@@ -129,7 +129,7 @@ void PluginListContextMenu::sendPluginsToPriority(const QModelIndexList& indices
 
 void PluginListContextMenu::setESPLock(const QModelIndexList& indices, bool locked)
 {
-  for (auto& idx : indices) {
+  for (const auto& idx : indices) {
     if (m_core.pluginList()->isEnabled(idx.row())) {
       m_core.pluginList()->lockESPIndex(idx.row(), locked);
     }
@@ -138,7 +138,7 @@ void PluginListContextMenu::setESPLock(const QModelIndexList& indices, bool lock
 
 void PluginListContextMenu::openOriginExplorer(const QModelIndexList& indices)
 {
-  for (auto& idx : indices) {
+  for (const auto& idx : indices) {
     QString fileName      = idx.data().toString();
     unsigned int modIndex = ModInfo::getIndex(m_core.pluginList()->origin(fileName));
     if (modIndex == UINT_MAX) {

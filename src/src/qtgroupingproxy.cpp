@@ -34,7 +34,7 @@ using namespace MOBase;
 
 QtGroupingProxy::QtGroupingProxy(QModelIndex rootNode, int groupedColumn,
                                  int groupedRole, unsigned int flags, int aggregateRole)
-    :  m_rootNode(rootNode), 
+    :  m_rootNode(rootNode),
       m_groupedRole(groupedRole), m_aggregateRole(aggregateRole), m_flags(flags)
 {
   if (groupedColumn != -1) {
@@ -555,9 +555,7 @@ bool QtGroupingProxy::setData(const QModelIndex& idx, const QVariant& value, int
 bool QtGroupingProxy::isGroup(const QModelIndex& index) const
 {
   int parentCreateIndex = index.internalId();
-  if (parentCreateIndex == -1 && index.row() < m_groupMaps.count())
-    return true;
-  return false;
+  return parentCreateIndex == -1 && index.row() < m_groupMaps.count();
 }
 
 QModelIndex QtGroupingProxy::mapToSource(const QModelIndex& index) const

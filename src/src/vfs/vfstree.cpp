@@ -283,7 +283,7 @@ void VfsNode::insertFile(const std::vector<std::string>& components,
     if (i + 1 == components.size()) {
       auto fileNode              = std::make_unique<VfsNode>();
       fileNode->is_directory     = false;
-      fileNode->file_info        = {real_path, size, mtime, origin, is_backing};
+      fileNode->file_info        = {.real_path=real_path, .size=size, .mtime=mtime, .origin=origin, .is_backing=is_backing};
       current->dir_info.children[key] = std::move(fileNode);
       return;
     }

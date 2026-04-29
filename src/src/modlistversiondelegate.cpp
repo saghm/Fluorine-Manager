@@ -19,7 +19,8 @@ void ModListVersionDelegate::paint(QPainter* painter,
       !m_view->isExpanded(index.sibling(index.row(), 0))) {
     auto* model = m_view->model();
 
-    bool downgrade = false, upgrade = false;
+    bool downgrade = false;
+    bool upgrade = false;
 
     for (int i = 0; i < model->rowCount(index); ++i) {
       const auto mIndex =

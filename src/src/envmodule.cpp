@@ -11,7 +11,7 @@
 #include <fstream>
 #include <sstream>
 #include <unistd.h>
-#include <signal.h>
+#include <csignal>
 
 namespace env
 {
@@ -112,7 +112,7 @@ QString Module::toString() const
   return sl.join(", ");
 }
 
-Module::FileInfo Module::getFileInfo() 
+Module::FileInfo Module::getFileInfo()
 {
   // ELF .so files don't carry the equivalent of a Win32 PE version resource.
   return {};
@@ -129,14 +129,10 @@ QDateTime Module::getTimestamp() const
 
 bool Module::interesting() const
 {
-  if (m_path.startsWith("/usr/lib/", Qt::CaseInsensitive) ||
+  return !(m_path.startsWith("/usr/lib/", Qt::CaseInsensitive) ||
       m_path.startsWith("/usr/lib64/", Qt::CaseInsensitive) ||
       m_path.startsWith("/lib/", Qt::CaseInsensitive) ||
-      m_path.startsWith("/lib64/", Qt::CaseInsensitive)) {
-    return false;
-  }
-
-  return true;
+      m_path.startsWith("/lib64/", Qt::CaseInsensitive));
 }
 
 QString Module::getMD5() const
@@ -269,7 +265,7 @@ std::vector<Module> getLoadedModules()
 
     QFileInfo const fi(qpath);
     if (fi.exists()) {
-      v.push_back(Module(qpath, fi.size()));
+      v.emplace_back(qpath, fi.size());
     }
   }
 
@@ -333,7 +329,7 @@ std::vector<Process> getRunningProcesses()
       }
     }
 
-    v.push_back(Process(pid, ppid, name));
+    v.emplace_back(pid, ppid, name);
   }
 
   closedir(procDir);

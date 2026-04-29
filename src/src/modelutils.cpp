@@ -1,6 +1,7 @@
 #include "modelutils.h"
 
 #include <QAbstractProxyModel>
+#include <utility>
 
 namespace MOShared
 {
@@ -9,7 +10,7 @@ QModelIndexList flatIndex(const QAbstractItemModel* model, int column,
                           const QModelIndex& parent)
 {
   QModelIndexList index;
-  for (std::size_t i = 0; i < model->rowCount(parent); ++i) {
+  for (std::size_t i = 0; std::cmp_less(i , model->rowCount(parent)); ++i) {
     index.append(model->index(i, column, parent));
     index.append(flatIndex(model, column, index.back()));
   }
@@ -25,7 +26,7 @@ static QModelIndexList visibleIndexImpl(QTreeView* view, int column,
 
   auto* model = view->model();
   QModelIndexList index;
-  for (std::size_t i = 0; i < model->rowCount(parent); ++i) {
+  for (std::size_t i = 0; std::cmp_less(i , model->rowCount(parent)); ++i) {
     index.append(model->index(i, column, parent));
     index.append(visibleIndexImpl(view, column, index.back()));
   }
@@ -65,7 +66,7 @@ QModelIndexList indexModelToView(const QModelIndexList& index,
                                  const QAbstractItemView* view)
 {
   QModelIndexList result;
-  for (auto& idx : index) {
+  for (const auto& idx : index) {
     result.append(indexModelToView(idx, view));
   }
   return result;
@@ -75,7 +76,7 @@ QModelIndex indexViewToModel(const QModelIndex& index, const QAbstractItemModel*
 {
   if (index.model() == model) {
     return index;
-  } else if (auto* proxy = qobject_cast<const QAbstractProxyModel*>(index.model())) {
+  } else if (const auto* proxy = qobject_cast<const QAbstractProxyModel*>(index.model())) {
     return indexViewToModel(proxy->mapToSource(index), model);
   } else {
     return {};
@@ -86,7 +87,7 @@ QModelIndexList indexViewToModel(const QModelIndexList& index,
                                  const QAbstractItemModel* model)
 {
   QModelIndexList result;
-  for (auto& idx : index) {
+  for (const auto& idx : index) {
     result.append(indexViewToModel(idx, model));
   }
   return result;

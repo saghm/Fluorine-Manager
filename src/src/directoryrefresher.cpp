@@ -162,7 +162,7 @@ void dumpStats(std::vector<DirectoryStats>& stats)
 }
 
 DirectoryRefresher::DirectoryRefresher(OrganizerCore* core, std::size_t threadCount)
-    : m_Core(*core), m_threadCount(threadCount) 
+    : m_Core(*core), m_threadCount(threadCount)
 {}
 
 DirectoryEntry* DirectoryRefresher::stealDirectoryStructure()
@@ -184,8 +184,7 @@ void DirectoryRefresher::setMods(
     QString path       = std::get<1>(*mod);
     QString const modDataDir = m_Core.managedGame()->modDataDirectory();
     path               = modDataDir.isEmpty() ? path : path + "/" + modDataDir;
-    m_Mods.push_back(
-        EntryInfo(name, path, info->stealFiles(), info->archives(), std::get<2>(*mod)));
+    m_Mods.emplace_back(name, path, info->stealFiles(), info->archives(), std::get<2>(*mod));
   }
 
   m_EnabledArchives = managedArchives;

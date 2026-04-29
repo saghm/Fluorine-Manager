@@ -645,7 +645,7 @@ void Settings::dump() const
   }
 
   m_Network.dump();
-  m_Nexus.dump();
+  NexusSettings::dump();
 }
 
 void Settings::managedGameChanged(IPluginGame const* gamePlugin)
@@ -654,7 +654,7 @@ void Settings::managedGameChanged(IPluginGame const* gamePlugin)
 }
 
 GameSettings::GameSettings(QSettings& settings)
-    : m_Settings(settings) 
+    : m_Settings(settings)
 {}
 
 const MOBase::IPluginGame* GameSettings::plugin()
@@ -783,7 +783,7 @@ bool GeometrySettings::restoreWindowGeometry(QWidget* w) const
   return false;
 }
 
-void GeometrySettings::ensureWindowOnScreen(QWidget* w) 
+void GeometrySettings::ensureWindowOnScreen(QWidget* w)
 {
   // users report that the main window and/or dialogs are displayed off-screen;
   // the usual workaround is keyboard navigation to move it
@@ -2047,7 +2047,7 @@ void NexusSettings::registerAsNXMHandler(bool force)
 {
   Q_UNUSED(force);
   NxmHandlerLinux handler;
-  handler.registerHandler();
+  NxmHandlerLinux::registerHandler();
 }
 
 std::vector<std::chrono::seconds> NexusSettings::validationTimeouts() const
@@ -2072,7 +2072,7 @@ std::vector<std::chrono::seconds> NexusSettings::validationTimeouts() const
       continue;
     }
 
-    v.push_back(std::chrono::seconds(n));
+    v.emplace_back(n);
   }
 
   if (v.empty())
@@ -2081,7 +2081,7 @@ std::vector<std::chrono::seconds> NexusSettings::validationTimeouts() const
   return v;
 }
 
-void NexusSettings::dump() 
+void NexusSettings::dump()
 {
   const auto iniPath = InstanceManager::singleton().globalInstancesRootPath() + "/" +
                        QString::fromStdWString(AppConfig::nxmHandlerIni());

@@ -228,7 +228,7 @@ std::vector<IPlugin*> PluginRequirements::children() const
 std::vector<IPluginRequirement::Problem> PluginRequirements::problems() const
 {
   std::vector<IPluginRequirement::Problem> result;
-  for (auto& requirement : m_Requirements) {
+  for (const auto& requirement : m_Requirements) {
     if (auto p = requirement->check(m_Organizer)) {
       result.push_back(*p);
     }
@@ -260,8 +260,8 @@ QStringList PluginRequirements::requiredGames() const
 {
   // We look for a "GameDependencyRequirement" - There can be only one since otherwise
   // it'd mean that the plugin requires two games at once.
-  for (auto& requirement : m_Requirements) {
-    if (auto* gdep =
+  for (const auto& requirement : m_Requirements) {
+    if (const auto* gdep =
             dynamic_cast<const GameDependencyRequirement*>(requirement.get())) {
       return gdep->gameNames();
     }
@@ -298,7 +298,7 @@ void PluginRequirements::requiredFor(std::vector<MOBase::IPlugin*>& required,
     for (auto& requirement : requirements.m_Requirements) {
 
       // We check for plugin dependency. Game dependency are not checked this way.
-      if (auto* pdep =
+      if (const auto* pdep =
               dynamic_cast<const PluginDependencyRequirement*>(requirement.get())) {
 
         // Check if at least one of the plugin in the requirements is enabled (except
@@ -326,7 +326,7 @@ void PluginRequirements::requiredFor(std::vector<MOBase::IPlugin*>& required,
 // PluginContainer
 
 PluginContainer::PluginContainer(OrganizerCore* organizer)
-    : m_Organizer(organizer), 
+    : m_Organizer(organizer),
       m_GameFeatures(std::make_unique<GameFeatures>(organizer, this)),
       m_PreviewGenerator(*this)
 {}
@@ -355,7 +355,7 @@ QStringList PluginContainer::implementedInterfaces(IPlugin* plugin) const
   return implementedInterfaces(oPlugin);
 }
 
-QStringList PluginContainer::implementedInterfaces(QObject* oPlugin) 
+QStringList PluginContainer::implementedInterfaces(QObject* oPlugin)
 {
   // Find all the names:
   QStringList names;
@@ -383,9 +383,11 @@ QString PluginContainer::topImplementedInterface(IPlugin* plugin) const
   return interfaces.isEmpty() ? "" : interfaces[0];
 }
 
-bool PluginContainer::isBetterInterface(QObject* lhs, QObject* rhs) 
+bool PluginContainer::isBetterInterface(QObject* lhs, QObject* rhs)
 {
-  int count = 0, lhsIdx = -1, rhsIdx = -1;
+  int count = 0;
+  int lhsIdx = -1;
+  int rhsIdx = -1;
   boost::mp11::mp_for_each<PluginTypeOrder>([&](const auto* p) {
     using plugin_type = std::decay_t<decltype(*p)>;
     if (lhsIdx < 0 && qobject_cast<plugin_type*>(lhs)) {
@@ -435,7 +437,7 @@ QStringList PluginContainer::pluginFileNames() const
 QObject* PluginContainer::as_qobject(MOBase::IPlugin* plugin) const
 {
   // Find the correspond QObject - Can this be done safely with a cast?
-  auto& objects = bf::at_key<QObject>(m_Plugins);
+  const auto& objects = bf::at_key<QObject>(m_Plugins);
   auto it =
       std::find_if(std::begin(objects), std::end(objects), [plugin](QObject* obj) {
         return qobject_cast<IPlugin*>(obj) == plugin;
@@ -672,7 +674,7 @@ bool PluginContainer::isEnabled(IPlugin* plugin) const
   }
 
   // Check the master, if any:
-  auto& requirements = m_Requirements.at(plugin);
+  const auto& requirements = m_Requirements.at(plugin);
 
   if (requirements.master()) {
     return isEnabled(requirements.master());
@@ -716,7 +718,7 @@ void PluginContainer::setEnabled(MOBase::IPlugin* plugin, bool enable,
 
 MOBase::IPlugin* PluginContainer::plugin(QString const& pluginName) const
 {
-  auto& map = bf::at_key<QString>(m_AccessPlugins);
+  const auto& map = bf::at_key<QString>(m_AccessPlugins);
   auto it   = map.find(pluginName);
   if (it == std::end(map)) {
     return nullptr;
@@ -726,7 +728,7 @@ MOBase::IPlugin* PluginContainer::plugin(QString const& pluginName) const
 
 MOBase::IPlugin* PluginContainer::plugin(MOBase::IPluginDiagnose* diagnose) const
 {
-  auto& map = bf::at_key<IPluginDiagnose>(m_AccessPlugins);
+  const auto& map = bf::at_key<IPluginDiagnose>(m_AccessPlugins);
   auto it   = map.find(diagnose);
   if (it == std::end(map)) {
     return nullptr;
@@ -736,7 +738,7 @@ MOBase::IPlugin* PluginContainer::plugin(MOBase::IPluginDiagnose* diagnose) cons
 
 MOBase::IPlugin* PluginContainer::plugin(MOBase::IPluginFileMapper* mapper) const
 {
-  auto& map = bf::at_key<IPluginFileMapper>(m_AccessPlugins);
+  const auto& map = bf::at_key<IPluginFileMapper>(m_AccessPlugins);
   auto it   = map.find(mapper);
   if (it == std::end(map)) {
     return nullptr;
@@ -960,7 +962,7 @@ QObject* PluginContainer::loadQtPlugin(const QString& filepath)
   return nullptr;
 }
 
-std::optional<QString> PluginContainer::isQtPluginFolder(const QString& filepath) 
+std::optional<QString> PluginContainer::isQtPluginFolder(const QString& filepath)
 {
 
   if (!QFileInfo(filepath).isDir()) {

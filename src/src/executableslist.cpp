@@ -144,7 +144,7 @@ void ExecutablesList::store(Settings& s)
 }
 
 std::vector<Executable>
-ExecutablesList::getPluginExecutables(MOBase::IPluginGame const* game) 
+ExecutablesList::getPluginExecutables(MOBase::IPluginGame const* game)
 {
   Q_ASSERT(game != nullptr);
 
@@ -164,7 +164,7 @@ ExecutablesList::getPluginExecutables(MOBase::IPluginGame const* game)
     if (!nativeLinux) {
       flags |= Executable::UseProton;
     }
-    v.push_back({info, flags});
+    v.emplace_back(info, flags);
   }
 
   const QFileInfo eppBin(QCoreApplication::applicationDirPath() +

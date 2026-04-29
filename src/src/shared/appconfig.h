@@ -42,9 +42,9 @@ QString basePath();
 // falls back to basePath() + "/plugins".
 QString pluginsPath();
 
-// Returns the directory containing bundled DLLs (7z.so, etc.).
-// Respects MO2_DLLS_DIR on Linux, otherwise basePath() + "/dlls".
-QString dllsPath();
+// Returns the directory containing bundled Linux libraries (7z.so, etc.).
+// Respects MO2_LIBS_DIR, otherwise basePath() + "/lib".
+QString libsPath();
 
 namespace MOShared
 {

@@ -159,8 +159,8 @@ void CategoriesDialog::commitChanges()
       nexusData = ui->categoriesTable->item(index, 3)->data(Qt::UserRole).toList();
     std::vector<CategoryFactory::NexusCategory> nexusCats;
     for (const auto& nexusCat : nexusData) {
-      nexusCats.push_back(CategoryFactory::NexusCategory(
-          nexusCat.toList()[0].toString(), nexusCat.toList()[1].toInt()));
+      nexusCats.emplace_back(
+          nexusCat.toList()[0].toString(), nexusCat.toList()[1].toInt());
     }
 
     categories.addCategory(ui->categoriesTable->item(index, 0)->text().toInt(),
@@ -172,9 +172,9 @@ void CategoriesDialog::commitChanges()
 
   std::vector<CategoryFactory::NexusCategory> nexusCats;
   for (int i = 0; i < ui->nexusCategoryList->count(); ++i) {
-    nexusCats.push_back(CategoryFactory::NexusCategory(
+    nexusCats.emplace_back(
         ui->nexusCategoryList->item(i)->data(Qt::DisplayRole).toString(),
-        ui->nexusCategoryList->item(i)->data(Qt::UserRole).toInt()));
+        ui->nexusCategoryList->item(i)->data(Qt::UserRole).toInt());
   }
 
   categories.setNexusCategories(nexusCats);
@@ -243,7 +243,7 @@ void CategoriesDialog::fillTable()
     nexusItem->setData(Qt::DisplayRole, nexusCat.second.name());
     nexusItem->setData(Qt::UserRole, nexusCat.second.ID());
     list->addItem(nexusItem.release());
-    auto item = table->item(categories.resolveNexusID(nexusCat.first) - 1, 3);
+    auto *item = table->item(categories.resolveNexusID(nexusCat.first) - 1, 3);
     if (item != nullptr) {
       auto itemData = item->data(Qt::UserRole).toList();
       QVariantList newData;
@@ -344,7 +344,7 @@ void CategoriesDialog::nexusImport_clicked()
           table->setItem(row, 3, nexusCatItem.release());
         }
       } else {
-        for (auto item : table->findItems(name, Qt::MatchContains | Qt::MatchWrap)) {
+        for (auto *item : table->findItems(name, Qt::MatchContains | Qt::MatchWrap)) {
           if (item->column() == 1 && item->text() == name && importDialog.remap()) {
             table->setItem(item->row(), 3, nexusCatItem.release());
           } else if (importDialog.remap()) {

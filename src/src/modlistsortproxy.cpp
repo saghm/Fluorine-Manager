@@ -33,13 +33,14 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <QMimeData>
 #include <QTreeView>
 #include <QWidgetAction>
+#include <utility>
 #include <log.h>
 
 using namespace MOBase;
 
 ModListSortProxy::ModListSortProxy(Profile* profile, OrganizerCore* organizer)
     : QSortFilterProxyModel(organizer), m_Organizer(organizer), m_Profile(profile)
-      
+
 {
   setDynamicSortFilter(true);  // this seems to work without dynamicsortfilter
                                // but I don't know why. This should be necessary
@@ -81,7 +82,7 @@ void ModListSortProxy::setCriteria(const std::vector<Criteria>& criteria)
   }
 }
 
-unsigned long ModListSortProxy::flagsId(const std::vector<ModInfo::EFlag>& flags) 
+unsigned long ModListSortProxy::flagsId(const std::vector<ModInfo::EFlag>& flags)
 {
   unsigned long result = 0;
   for (ModInfo::EFlag const flag : flags) {
@@ -93,7 +94,7 @@ unsigned long ModListSortProxy::flagsId(const std::vector<ModInfo::EFlag>& flags
 }
 
 unsigned long ModListSortProxy::conflictFlagsId(
-    const std::vector<ModInfo::EConflictFlag>& flags) 
+    const std::vector<ModInfo::EConflictFlag>& flags)
 {
   unsigned long result = 0;
   for (ModInfo::EConflictFlag const flag : flags) {
@@ -119,7 +120,8 @@ bool ModListSortProxy::lessThan(const QModelIndex& left, const QModelIndex& righ
     }
   }
 
-  bool lOk, rOk;
+  bool lOk;
+  bool rOk;
   int const leftIndex  = left.data(ModList::IndexRole).toInt(&lOk);
   int const rightIndex = right.data(ModList::IndexRole).toInt(&rOk);
 
@@ -272,7 +274,7 @@ void ModListSortProxy::updateFilter(const QString& filter)
 }
 
 bool ModListSortProxy::hasConflictFlag(
-    const std::vector<ModInfo::EConflictFlag>& flags) 
+    const std::vector<ModInfo::EConflictFlag>& flags)
 {
   for (ModInfo::EConflictFlag const flag : flags) {
     if ((flag == ModInfo::FLAG_CONFLICT_MIXED) ||
@@ -318,7 +320,7 @@ bool ModListSortProxy::filterMatchesModOr(ModInfo::Ptr info, bool enabled) const
   return true;
 }
 
-bool ModListSortProxy::optionsMatchMod(ModInfo::Ptr info, bool) 
+bool ModListSortProxy::optionsMatchMod(ModInfo::Ptr info, bool)
 {
   return true;
 }
@@ -430,7 +432,7 @@ bool ModListSortProxy::categoryMatchesMod(ModInfo::Ptr info, bool enabled,
 }
 
 bool ModListSortProxy::contentMatchesMod(ModInfo::Ptr info, bool enabled,
-                                         int content) 
+                                         int content)
 {
   return info->hasContent(content);
 }
@@ -471,14 +473,14 @@ bool ModListSortProxy::filterMatchesMod(ModInfo::Ptr info, bool enabled) const
     bool segmentGood = true;
 
     // split in ORSegments that internally use AND logic
-    for (auto& ORSegment : ORList) {
+    for (const auto& ORSegment : ORList) {
       QStringList const ANDKeywords = ORSegment.split(" ", Qt::SkipEmptyParts);
       segmentGood             = true;
       bool foundKeyword       = false;
 
       // check each word in the segment for match, each word needs to be matched but
       // it doesn't matter where.
-      for (auto& currentKeyword : ANDKeywords) {
+      for (const auto& currentKeyword : ANDKeywords) {
         foundKeyword = false;
 
         // search keyword in name
@@ -584,7 +586,7 @@ bool ModListSortProxy::filterAcceptsRow(int source_row, const QModelIndex& paren
     return false;
   }
 
-  if (source_row >= static_cast<int>(m_Profile->numMods())) {
+  if (std::cmp_greater_equal(source_row, m_Profile->numMods())) {
     log::warn("invalid row index: {}", source_row);
     return false;
   }

@@ -531,16 +531,16 @@ std::vector<Mo2FsContext::DirEntry> buildDirEntries(
 
   std::vector<Mo2FsContext::DirEntry> entries;
   entries.reserve(children.size() + 2);
-  entries.push_back(Mo2FsContext::DirEntry{selfIno, ".", true});
-  entries.push_back(Mo2FsContext::DirEntry{1, "..", true});
+  entries.push_back(Mo2FsContext::DirEntry{.ino=selfIno, .name=".", .is_dir=true});
+  entries.push_back(Mo2FsContext::DirEntry{.ino=1, .name="..", .is_dir=true});
 
   std::unique_lock lock(ctx->inode_mutex);
   for (const auto& child : children) {
     const std::string childPath = joinPath(path, child.name);
     entries.push_back(
-        Mo2FsContext::DirEntry{ctx->inodes->getOrCreate(childPath), child.name,
-                               child.is_dir, child.size, child.mtime,
-                               child.real_path, child.cached_mode});
+        Mo2FsContext::DirEntry{.ino=ctx->inodes->getOrCreate(childPath), .name=child.name,
+                               .is_dir=child.is_dir, .size=child.size, .mtime=child.mtime,
+                               .real_path=child.real_path, .cached_mode=child.cached_mode});
   }
 
   return entries;

@@ -3,7 +3,7 @@
 #include "organizercore.h"
 
 ModListDropInfo::ModListDropInfo(const QMimeData* mimeData, OrganizerCore& core)
-     
+
 {
   // this only check if the drop is valid, not if the content of the drop
   // matches the target, a drop is valid if either
@@ -40,7 +40,8 @@ ModListDropInfo::ModListDropInfo(const QMimeData* mimeData, OrganizerCore& core)
       QDataStream stream(&encoded, QIODevice::ReadOnly);
 
       while (!stream.atEnd()) {
-        int sourceRow, col;
+        int sourceRow;
+        int col;
         QMap<int, QVariant> roleDataMap;
         stream >> sourceRow >> col >> roleDataMap;
         if (col == 0 && sourceRow >= 0) {
@@ -64,7 +65,7 @@ ModListDropInfo::ModListDropInfo(const QMimeData* mimeData, OrganizerCore& core)
 }
 
 std::optional<ModListDropInfo::RelativeUrl>
-ModListDropInfo::relativeUrl(const QUrl& url) 
+ModListDropInfo::relativeUrl(const QUrl& url)
 {
   if (!url.isLocalFile()) {
     return {};
@@ -84,10 +85,10 @@ ModListDropInfo::relativeUrl(const QUrl& url)
     QStringList splitPath = relativeDir.path().split("/");
     originName            = splitPath[0];
     splitPath.pop_front();
-    return {{url, splitPath.join("/"), originName}};
+    return {{.url=url, .relativePath=splitPath.join("/"), .originName=originName}};
   } else if (sourceFile.startsWith(overwriteDir.canonicalPath())) {
-    return {{url, overwriteDir.relativeFilePath(sourceFile),
-             ModInfo::getOverwrite()->name()}};
+    return {{.url=url, .relativePath=overwriteDir.relativeFilePath(sourceFile),
+             .originName=ModInfo::getOverwrite()->name()}};
   }
 
   return {};

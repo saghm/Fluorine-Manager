@@ -22,16 +22,16 @@ QString UnmanagedModName();
 DataTab::DataTab(OrganizerCore& core, PluginContainer& pc, QWidget* parent,
                  Ui::MainWindow* mwui)
     : m_core(core), m_pluginContainer(pc), m_parent(parent),
-      ui{mwui->tabWidget,
-         mwui->dataTab,
-         mwui->dataTabRefresh,
-         mwui->dataTabBrowseVFS,
-         mwui->dataTabBrowseRootBuilder,
-         mwui->dataTree,
-         mwui->dataTabShowOnlyConflicts,
-         mwui->dataTabShowFromArchives,
-         mwui->dataTabShowHiddenFiles}
-      
+      ui{.tabs=mwui->tabWidget,
+         .tab=mwui->dataTab,
+         .refresh=mwui->dataTabRefresh,
+         .browseVFS=mwui->dataTabBrowseVFS,
+         .browseRootBuilder=mwui->dataTabBrowseRootBuilder,
+         .tree=mwui->dataTree,
+         .conflicts=mwui->dataTabShowOnlyConflicts,
+         .archives=mwui->dataTabShowFromArchives,
+         .hiddenFiles=mwui->dataTabShowHiddenFiles}
+
 {
   m_filetree.reset(new FileTree(core, m_pluginContainer, ui.tree));
   m_filter.setUseSourceSort(true);
@@ -86,7 +86,7 @@ DataTab::DataTab(OrganizerCore& core, PluginContainer& pc, QWidget* parent,
     const auto& selectedIndexList = MOShared::indexViewToModel(
         ui.tree->selectionModel()->selectedRows(), fileTreeModel);
     std::set<QString> mods;
-    for (auto& idx : selectedIndexList) {
+    for (const auto& idx : selectedIndexList) {
       mods.insert(fileTreeModel->itemFromIndex(idx)->mod());
     }
     mwui->modList->setHighlightedMods(mods);

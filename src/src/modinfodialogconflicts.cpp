@@ -56,7 +56,7 @@ void forEachInSelection(QTreeView* tree, F&& f)
 
   for (const auto& rowIndex : sel->selectedRows()) {
     auto modelRow = proxy->mapToSource(rowIndex).row();
-    if (auto* item = model->getItem(static_cast<std::size_t>(modelRow))) {
+    if (const auto* item = model->getItem(static_cast<std::size_t>(modelRow))) {
       if (!f(item)) {
         return;
       }
@@ -612,7 +612,7 @@ bool GeneralConflictsTab::update()
         while (parent != nullptr) {
           auto insertResult = checkedDirs.insert(parent);
 
-          if (insertResult.second == false) {
+          if (!insertResult.second) {
             // if already present break as we can assume to have checked the parents as
             // well
             break;
@@ -837,7 +837,7 @@ void GeneralConflictsTab::onOverwriteActivated(const QModelIndex& index)
 
   auto modelIndex = proxy->mapToSource(index);
 
-  auto* item = model->getItem(static_cast<std::size_t>(modelIndex.row()));
+  const auto* item = model->getItem(static_cast<std::size_t>(modelIndex.row()));
   if (!item) {
     return;
   }
@@ -868,7 +868,7 @@ void GeneralConflictsTab::onOverwrittenActivated(const QModelIndex& index)
 
   auto modelIndex = proxy->mapToSource(index);
 
-  auto* item = model->getItem(static_cast<std::size_t>(modelIndex.row()));
+  const auto* item = model->getItem(static_cast<std::size_t>(modelIndex.row()));
   if (!item) {
     return;
   }
@@ -964,7 +964,7 @@ void AdvancedConflictsTab::update()
         while (parent != nullptr) {
           auto insertResult = checkedDirs.insert(parent);
 
-          if (insertResult.second == false) {
+          if (!insertResult.second) {
             // if already present break as we can assume to have checked the parents as
             // well
             break;
@@ -1010,9 +1010,10 @@ AdvancedConflictsTab::createItem(FileIndex index, int fileOrigin, bool archive,
 {
   const auto& ds = *m_core.directoryStructure();
 
-  std::wstring before, after;
+  std::wstring before;
+  std::wstring after;
 
-  auto currOrigin        = m_tab->origin();
+  auto *currOrigin        = m_tab->origin();
   bool isCurrOrigArchive = archive;
 
   if (!alternatives.empty()) {

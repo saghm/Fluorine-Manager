@@ -133,8 +133,9 @@ Version OrganizerProxy::version() const
 VersionInfo OrganizerProxy::appVersion() const
 {
   const auto version = m_Proxied->version();
-  const int major = version.major(), minor = version.minor(),
-            subminor                       = version.patch();
+  const int major = version.major();
+  const int minor = version.minor();
+  const int subminor                       = version.patch();
   int subsubminor                          = 0;
   VersionInfo::ReleaseType infoReleaseType = VersionInfo::RELEASE_FINAL;
 
@@ -324,7 +325,7 @@ QStringList OrganizerProxy::findFiles(const QString& path,
                                       const QStringList& globFilters) const
 {
   QList<GlobPattern<QChar>> patterns;
-  for (auto& gfilter : globFilters) {
+  for (const auto& gfilter : globFilters) {
     patterns.append(GlobPattern(gfilter));
   }
   return findFiles(path, [&patterns](const QString& filename) {

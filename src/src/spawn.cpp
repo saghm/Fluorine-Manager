@@ -47,7 +47,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <cerrno>
 #include <cstring>
-#include <signal.h>
+#include <csignal>
 #include <sys/types.h>
 
 using namespace MOBase;
@@ -735,12 +735,12 @@ FileExecutionTypes getFileExecutionType(const QFileInfo& target)
 FileExecutionContext getFileExecutionContext(QWidget* parent, const QFileInfo& target)
 {
   if (isExeFile(target)) {
-    return {target, "", FileExecutionTypes::Executable};
+    return {.binary=target, .arguments="", .type=FileExecutionTypes::Executable};
   }
 
   if (isBatchFile(target)) {
-    return {getCmdPath(), QString("\"%1\"").arg(target.absoluteFilePath()),
-            FileExecutionTypes::Executable};
+    return {.binary=getCmdPath(), .arguments=QString("\"%1\"").arg(target.absoluteFilePath()),
+            .type=FileExecutionTypes::Executable};
   }
 
   if (isJavaFile(target)) {
@@ -752,14 +752,14 @@ FileExecutionContext getFileExecutionContext(QWidget* parent, const QFileInfo& t
     }
 
     if (!java.isEmpty()) {
-      return {QFileInfo(java),
-              QString("-jar \"%1\"")
+      return {.binary=QFileInfo(java),
+              .arguments=QString("-jar \"%1\"")
                   .arg(QDir::toNativeSeparators(target.absoluteFilePath())),
-              FileExecutionTypes::Executable};
+              .type=FileExecutionTypes::Executable};
     }
   }
 
-  return {{}, {}, FileExecutionTypes::Other};
+  return {.binary={}, .arguments={}, .type=FileExecutionTypes::Other};
 }
 
 }  // namespace spawn

@@ -95,7 +95,7 @@ bool isLikelyCorruptSaveText(QString const& in)
 
 SavesTab::SavesTab(QWidget* window, OrganizerCore& core, Ui::MainWindow* mwui)
     : m_window(window), m_core(core), m_CurrentSaveView(nullptr),
-      ui{mwui->tabWidget, mwui->savesTab, mwui->savegameList}
+      ui{.mainTabs=mwui->tabWidget, .tab=mwui->savesTab, .list=mwui->savegameList}
 {
   m_SavesWatcherTimer.setSingleShot(true);
   m_SavesWatcherTimer.setInterval(500);

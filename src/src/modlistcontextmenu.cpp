@@ -79,7 +79,8 @@ void ModListGlobalContextMenu::populate(OrganizerCore& core, ModListView* view,
 
   addSeparator();
 
-  QString enableTxt = tr("Enable all"), disableTxt = tr("Disable all");
+  QString enableTxt = tr("Enable all");
+  QString disableTxt = tr("Disable all");
 
   if (view->isFilterActive()) {
     enableTxt  = tr("Enable all matching mods");
@@ -295,7 +296,8 @@ void ModListContextMenu::addSendToContextMenu()
       ModInfo::EConflictFlag::FLAG_CONFLICT_MIXED,
       ModInfo::EConflictFlag::FLAG_CONFLICT_OVERWRITE};
 
-  bool overwrite = false, overwritten = false;
+  bool overwrite = false;
+  bool overwritten = false;
   for (auto& idx : m_selected) {
     auto index = idx.data(ModList::IndexRole);
     if (index.isValid()) {
@@ -376,7 +378,7 @@ void ModListContextMenu::addOverwriteActions(ModInfo::Ptr mod)
     });
   }
   addAction(tr("Open in Explorer"), [=, this]() {
-    m_actions.openExplorer(m_selected);
+    ModListViewActions::openExplorer(m_selected);
   });
 }
 
@@ -459,7 +461,7 @@ void ModListContextMenu::addBackupActions(ModInfo::Ptr mod)
   }
 
   addAction(tr("Open in Explorer"), [=, this]() {
-    m_actions.openExplorer(m_selected);
+    ModListViewActions::openExplorer(m_selected);
   });
 }
 
@@ -553,7 +555,7 @@ void ModListContextMenu::addRegularActions(ModInfo::Ptr mod)
         m_actions.setEndorsed(m_selected, true);
       });
       addAction(tr("Won't endorse"), [=, this]() {
-        m_actions.willNotEndorsed(m_selected);
+        ModListViewActions::willNotEndorsed(m_selected);
       });
     } break;
     case EndorsedState::ENDORSED_NEVER: {
@@ -634,6 +636,6 @@ void ModListContextMenu::addRegularActions(ModInfo::Ptr mod)
   }
 
   addAction(tr("Open in Explorer"), [=, this]() {
-    m_actions.openExplorer(m_selected);
+    ModListViewActions::openExplorer(m_selected);
   });
 }

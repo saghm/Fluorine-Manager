@@ -119,7 +119,7 @@ private:
     static DownloadInfo* createNew(const MOBase::ModRepositoryFileInfo* fileInfo,
                                    const QStringList& URLs);
     static DownloadInfo* createFromMeta(const QString& filePath, bool showHidden,
-                                        const QString outputDirectory,
+                                        QString outputDirectory,
                                         std::optional<uint64_t> fileSize = {});
 
     /**
@@ -143,7 +143,7 @@ private:
 
   private:
     DownloadInfo()
-        : 
+        :
           m_DownloadAcc(tag::rolling_window::window_size = 200),
           m_DownloadTimeAcc(tag::rolling_window::window_size = 200)
     {}
@@ -188,7 +188,7 @@ public:
    *
    * @param outputDirectory the new output directory
    **/
-  void setOutputDirectory(const QString& outputDirectory, const bool refresh = true);
+  void setOutputDirectory(const QString& outputDirectory, bool refresh = true);
 
   /**
    * @brief disables feedback from the downlods fileSystemWhatcher untill

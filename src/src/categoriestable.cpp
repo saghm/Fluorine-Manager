@@ -37,11 +37,12 @@ bool CategoriesTable::dropMimeData(int row, int column, const QMimeData* data,
   QDataStream stream(&encoded, QIODevice::ReadOnly);
 
   while (!stream.atEnd()) {
-    int curRow, curCol;
+    int curRow;
+    int curCol;
     QMap<int, QVariant> roleDataMap;
     stream >> curRow >> curCol >> roleDataMap;
 
-    for (auto item : findItems(roleDataMap.value(Qt::DisplayRole).toString(),
+    for (auto *item : findItems(roleDataMap.value(Qt::DisplayRole).toString(),
                                Qt::MatchContains | Qt::MatchWrap)) {
       if (item->column() != 3)
         continue;
@@ -59,7 +60,7 @@ bool CategoriesTable::dropMimeData(int row, int column, const QMimeData* data,
       item->setData(Qt::UserRole, newData);
     }
 
-    auto nexusItem = item(row, 3);
+    auto *nexusItem = item(row, 3);
     auto itemData  = nexusItem->data(Qt::UserRole).toList();
     QVariantList newData;
     newData.append(roleDataMap.value(Qt::DisplayRole).toString());

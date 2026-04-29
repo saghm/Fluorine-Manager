@@ -65,9 +65,9 @@
 #include <QtDebug>
 #include <QtGlobal>  // for qUtf8Printable, etc
 
-#include <limits.h>
-#include <stddef.h>
-#include <string.h>  // for memset, wcsrchr
+#include <climits>
+#include <cstddef>
+#include <cstring>  // for memset, wcsrchr
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <exception>
@@ -235,7 +235,7 @@ QString resolveAbsoluteSaveDir(const WinePrefix& prefix,
 }
 
 OrganizerCore::OrganizerCore(Settings& settings)
-    : 
+    :
       m_CurrentProfile(nullptr), m_Settings(settings),
       m_Updater(&NexusInterface::instance()), m_ModList(m_PluginContainer, this),
       m_PluginList(*this),
@@ -245,7 +245,7 @@ OrganizerCore::OrganizerCore(Settings& settings)
         return VirtualFileTree::makeTree(m_DirectoryStructure);
       }),
       m_DownloadManager(&NexusInterface::instance(), this), m_DirectoryUpdate(false),
-      
+
       m_PluginListsWriter(std::bind(&OrganizerCore::savePluginList, this))
 {
   env::setHandleCloserThreadCount(settings.refreshThreadCount());
@@ -1981,7 +1981,7 @@ void OrganizerCore::clearCaches(std::vector<unsigned int> const& indices) const
     }
   }
 
-  for (auto& index : allIndices) {
+  for (const auto& index : allIndices) {
     ModInfo::getByIndex(index)->clearCaches();
   }
 }
@@ -2005,7 +2005,7 @@ void OrganizerCore::modPrioritiesChanged(const QModelIndexList& indices)
 
   std::vector<unsigned int> vindices;
 
-  for (auto& idx : indices) {
+  for (const auto& idx : indices) {
     vindices.push_back(idx.data(ModList::IndexRole).toInt());
   }
 

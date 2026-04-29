@@ -2393,12 +2393,12 @@ This is likely due to a corrupted or incompatible download or unrecognized archi
     </message>
     <message>
         <location filename="installationmanager.cpp" line="882"/>
-        <source>7z.dll not found</source>
+        <source>7z.so not found</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="installationmanager.cpp" line="885"/>
-        <source>7z.dll isn&apos;t valid</source>
+        <source>7z.so isn&apos;t valid</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -7300,7 +7300,7 @@ Destination:<byte value="xd"/>
     </message>
     <message>
         <location filename="installationmanager.cpp" line="73"/>
-        <source>invalid 7-zip32.dll: %1</source>
+        <source>invalid 7z.so: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

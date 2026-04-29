@@ -37,12 +37,12 @@ void ModListProxy::disconnectSignals()
 
 QString ModListProxy::displayName(const QString& internalName) const
 {
-  return m_Proxied->displayName(internalName);
+  return ModList::displayName(internalName);
 }
 
 QStringList ModListProxy::allMods() const
 {
-  return m_Proxied->allMods();
+  return ModList::allMods();
 }
 
 QStringList ModListProxy::allModsByProfilePriority(MOBase::IProfile* profile) const
@@ -52,7 +52,7 @@ QStringList ModListProxy::allModsByProfilePriority(MOBase::IProfile* profile) co
 
 IModInterface* ModListProxy::getMod(const QString& name) const
 {
-  return m_Proxied->getMod(name);
+  return ModList::getMod(name);
 }
 
 bool ModListProxy::removeMod(MOBase::IModInterface* mod)

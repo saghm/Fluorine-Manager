@@ -269,7 +269,7 @@ HRESULT ArchiveImpl::loadFormats()
 }
 
 ArchiveImpl::ArchiveImpl()
-    : m_Valid(false), m_LastError(Error::ERROR_NONE), m_Library("dlls/7zip.dll"),
+    : m_Valid(false), m_LastError(Error::ERROR_NONE), m_Library("lib/7z.so"),
       m_PasswordCallback{}
 {
   // Reset the log callback:

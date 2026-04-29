@@ -57,7 +57,7 @@ int ModListViewActions::findInstallPriority(const QModelIndex& index) const
         return ModInfo::getByIndex(p.second)->isSeparator();
       };
 
-      auto& ibp = m_core.currentProfile()->getAllIndexesByPriority();
+      const auto& ibp = m_core.currentProfile()->getAllIndexesByPriority();
 
       // start right after/before the current priority and look for the next
       // separator
@@ -253,10 +253,10 @@ void ModListViewActions::checkModsForUpdates() const
 
   if (updatesAvailable || checkingModsForUpdate) {
     m_view->setFilterCriteria(
-        {{ModListSortProxy::TypeSpecial, CategoryFactory::UpdateAvailable, false}});
+        {{.type=ModListSortProxy::TypeSpecial, .id=CategoryFactory::UpdateAvailable, .inverse=false}});
 
     m_filters.setSelection(
-        {{ModListSortProxy::TypeSpecial, CategoryFactory::UpdateAvailable, false}});
+        {{.type=ModListSortProxy::TypeSpecial, .id=CategoryFactory::UpdateAvailable, .inverse=false}});
   }
 }
 
@@ -325,7 +325,7 @@ void ModListViewActions::checkModsForUpdates(
 void ModListViewActions::checkModsForUpdates(const QModelIndexList& indices) const
 {
   std::multimap<QString, int> ids;
-  for (auto& idx : indices) {
+  for (const auto& idx : indices) {
     ModInfo::Ptr const info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
     ids.insert(std::make_pair<QString, int>(info->gameName(), info->nexusId()));
   }
@@ -429,42 +429,31 @@ void ModListViewActions::exportModListCSV() const
       builder.setEscapeMode(CSVBuilder::TYPE_STRING, CSVBuilder::QUOTE_ALWAYS);
       std::vector<std::pair<QString, CSVBuilder::EFieldType>> fields;
       if (mod_Priority->isChecked())
-        fields.push_back(
-            std::make_pair(QString("#Mod_Priority"), CSVBuilder::TYPE_STRING));
+        fields.emplace_back(QString("#Mod_Priority"), CSVBuilder::TYPE_STRING);
       if (mod_Status->isChecked())
-        fields.push_back(
-            std::make_pair(QString("#Mod_Status"), CSVBuilder::TYPE_STRING));
+        fields.emplace_back(QString("#Mod_Status"), CSVBuilder::TYPE_STRING);
       if (mod_Name->isChecked())
-        fields.push_back(std::make_pair(QString("#Mod_Name"), CSVBuilder::TYPE_STRING));
+        fields.emplace_back(QString("#Mod_Name"), CSVBuilder::TYPE_STRING);
       if (mod_Note->isChecked())
-        fields.push_back(std::make_pair(QString("#Note"), CSVBuilder::TYPE_STRING));
+        fields.emplace_back(QString("#Note"), CSVBuilder::TYPE_STRING);
       if (primary_Category->isChecked())
-        fields.push_back(
-            std::make_pair(QString("#Primary_Category"), CSVBuilder::TYPE_STRING));
+        fields.emplace_back(QString("#Primary_Category"), CSVBuilder::TYPE_STRING);
       if (mod_Author->isChecked())
-        fields.push_back(
-            std::make_pair(QString("#Mod_Author"), CSVBuilder::TYPE_STRING));
+        fields.emplace_back(QString("#Mod_Author"), CSVBuilder::TYPE_STRING);
       if (mod_Uploader->isChecked())
-        fields.push_back(
-            std::make_pair(QString("#Mod_Uploader"), CSVBuilder::TYPE_STRING));
+        fields.emplace_back(QString("#Mod_Uploader"), CSVBuilder::TYPE_STRING);
       if (nexus_ID->isChecked())
-        fields.push_back(
-            std::make_pair(QString("#Nexus_ID"), CSVBuilder::TYPE_INTEGER));
+        fields.emplace_back(QString("#Nexus_ID"), CSVBuilder::TYPE_INTEGER);
       if (mod_Nexus_URL->isChecked())
-        fields.push_back(
-            std::make_pair(QString("#Mod_Nexus_URL"), CSVBuilder::TYPE_STRING));
+        fields.emplace_back(QString("#Mod_Nexus_URL"), CSVBuilder::TYPE_STRING);
       if (mod_Uploader_URL->isChecked())
-        fields.push_back(
-            std::make_pair(QString("#Mod_Uploader_URL"), CSVBuilder::TYPE_STRING));
+        fields.emplace_back(QString("#Mod_Uploader_URL"), CSVBuilder::TYPE_STRING);
       if (mod_Version->isChecked())
-        fields.push_back(
-            std::make_pair(QString("#Mod_Version"), CSVBuilder::TYPE_STRING));
+        fields.emplace_back(QString("#Mod_Version"), CSVBuilder::TYPE_STRING);
       if (install_Date->isChecked())
-        fields.push_back(
-            std::make_pair(QString("#Install_Date"), CSVBuilder::TYPE_STRING));
+        fields.emplace_back(QString("#Install_Date"), CSVBuilder::TYPE_STRING);
       if (download_File_Name->isChecked())
-        fields.push_back(
-            std::make_pair(QString("#Download_File_Name"), CSVBuilder::TYPE_STRING));
+        fields.emplace_back(QString("#Download_File_Name"), CSVBuilder::TYPE_STRING);
 
       builder.setFields(fields);
 
@@ -730,7 +719,7 @@ void ModListViewActions::sendModsToFirstConflict(const QModelIndexList& indexes)
 {
   std::set<unsigned int> conflicts;
 
-  for (auto& idx : indexes) {
+  for (const auto& idx : indexes) {
     if (!idx.data(ModList::IndexRole).isValid()) {
       continue;
     }
@@ -753,7 +742,7 @@ void ModListViewActions::sendModsToLastConflict(const QModelIndexList& indexes) 
 {
   std::set<unsigned int> conflicts;
 
-  for (auto& idx : indexes) {
+  for (const auto& idx : indexes) {
     if (!idx.data(ModList::IndexRole).isValid()) {
       continue;
     }
@@ -792,7 +781,7 @@ void ModListViewActions::removeMods(const QModelIndexList& indices) const
       QStringList modNames;
 
       int i = 0;
-      for (auto& idx : indices) {
+      for (const auto& idx : indices) {
         QString const name = idx.data().toString();
         if (!ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt())->isRegular()) {
           continue;
@@ -837,7 +826,7 @@ void ModListViewActions::removeMods(const QModelIndexList& indices) const
 
 void ModListViewActions::ignoreMissingData(const QModelIndexList& indices) const
 {
-  for (auto& idx : indices) {
+  for (const auto& idx : indices) {
     int const row_idx       = idx.data(ModList::IndexRole).toInt();
     ModInfo::Ptr const info = ModInfo::getByIndex(row_idx);
     info->markValidated(true);
@@ -848,7 +837,7 @@ void ModListViewActions::ignoreMissingData(const QModelIndexList& indices) const
 void ModListViewActions::setIgnoreUpdate(const QModelIndexList& indices,
                                          bool ignore) const
 {
-  for (auto& idx : indices) {
+  for (const auto& idx : indices) {
     int const modIdx        = idx.data(ModList::IndexRole).toInt();
     ModInfo::Ptr const info = ModInfo::getByIndex(modIdx);
     info->ignoreUpdate(ignore);
@@ -897,7 +886,7 @@ void ModListViewActions::changeVersioningScheme(const QModelIndex& index) const
 
 void ModListViewActions::markConverted(const QModelIndexList& indices) const
 {
-  for (auto& idx : indices) {
+  for (const auto& idx : indices) {
     int const modIdx        = idx.data(ModList::IndexRole).toInt();
     ModInfo::Ptr const info = ModInfo::getByIndex(modIdx);
     info->markConverted(true);
@@ -913,7 +902,7 @@ void ModListViewActions::visitOnNexus(const QModelIndexList& indices) const
     }
   }
 
-  for (auto& idx : indices) {
+  for (const auto& idx : indices) {
     ModInfo::Ptr const info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
     int const modID         = info->nexusId();
     QString const gameName  = info->gameName();
@@ -933,7 +922,7 @@ void ModListViewActions::visitWebPage(const QModelIndexList& indices) const
     }
   }
 
-  for (auto& idx : indices) {
+  for (const auto& idx : indices) {
     ModInfo::Ptr const info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
 
     const auto url = info->parseCustomURL();
@@ -951,7 +940,7 @@ void ModListViewActions::visitNexusOrWebPage(const QModelIndexList& indices) con
     }
   }
 
-  for (auto& idx : indices) {
+  for (const auto& idx : indices) {
     ModInfo::Ptr const info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
     if (!info) {
       log::error("mod {} not found", idx.data(ModList::IndexRole).toInt());
@@ -980,7 +969,7 @@ void ModListViewActions::visitUploaderProfile(const QModelIndexList& indices) co
     }
   }
 
-  for (auto& idx : indices) {
+  for (const auto& idx : indices) {
     ModInfo::Ptr const info      = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
     const auto uploaderUrl = info->uploaderUrl();
 
@@ -1061,7 +1050,7 @@ void ModListViewActions::restoreHiddenFiles(const QModelIndexList& indices) cons
   if (indices.size() > 1) {
 
     QStringList modNames;
-    for (auto& idx : indices) {
+    for (const auto& idx : indices) {
 
       ModInfo::Ptr const modInfo = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
       const auto flags     = modInfo->getFlags();
@@ -1086,7 +1075,7 @@ void ModListViewActions::restoreHiddenFiles(const QModelIndexList& indices) cons
                 .arg(mods),
             QMessageBox::Yes | QMessageBox::No) == QMessageBox::Yes) {
 
-      for (auto& idx : indices) {
+      for (const auto& idx : indices) {
 
         ModInfo::Ptr const modInfo =
             ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
@@ -1137,7 +1126,7 @@ void ModListViewActions::restoreHiddenFiles(const QModelIndexList& indices) cons
 void ModListViewActions::setTracked(const QModelIndexList& indices, bool tracked) const
 {
   m_core.loggedInAction(m_parent, [=, this] {
-    for (auto& idx : indices) {
+    for (const auto& idx : indices) {
       ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt())->track(tracked);
     }
   });
@@ -1152,22 +1141,22 @@ void ModListViewActions::setEndorsed(const QModelIndexList& indices,
           tr("Endorsing multiple mods will take a while. Please wait..."), m_parent);
     }
 
-    for (auto& idx : indices) {
+    for (const auto& idx : indices) {
       ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt())->endorse(endorsed);
     }
   });
 }
 
-void ModListViewActions::willNotEndorsed(const QModelIndexList& indices) 
+void ModListViewActions::willNotEndorsed(const QModelIndexList& indices)
 {
-  for (auto& idx : indices) {
+  for (const auto& idx : indices) {
     ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt())->setNeverEndorse();
   }
 }
 
 void ModListViewActions::remapCategory(const QModelIndexList& indices) const
 {
-  for (auto& idx : indices) {
+  for (const auto& idx : indices) {
     ModInfo::Ptr const modInfo = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
     if (modInfo->isSeparator())
       continue;
@@ -1213,7 +1202,7 @@ void ModListViewActions::setColor(const QModelIndexList& indices,
 
   settings.colors().setPreviousSeparatorColor(currentColor);
 
-  for (auto& idx : indices) {
+  for (const auto& idx : indices) {
     ModInfo::Ptr const info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
     info->setColor(currentColor);
   }
@@ -1221,7 +1210,7 @@ void ModListViewActions::setColor(const QModelIndexList& indices,
 
 void ModListViewActions::resetColor(const QModelIndexList& indices) const
 {
-  for (auto& idx : indices) {
+  for (const auto& idx : indices) {
     ModInfo::Ptr const info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
     info->setColor(QColor());
   }
@@ -1229,18 +1218,18 @@ void ModListViewActions::resetColor(const QModelIndexList& indices) const
 }
 
 void ModListViewActions::setCategories(
-    ModInfo::Ptr mod, const std::vector<std::pair<int, bool>>& categories) 
+    ModInfo::Ptr mod, const std::vector<std::pair<int, bool>>& categories)
 {
-  for (auto& [id, enabled] : categories) {
+  for (const auto& [id, enabled] : categories) {
     mod->setCategory(id, enabled);
   }
 }
 
 void ModListViewActions::setCategoriesIf(
     ModInfo::Ptr mod, ModInfo::Ptr ref,
-    const std::vector<std::pair<int, bool>>& categories) 
+    const std::vector<std::pair<int, bool>>& categories)
 {
-  for (auto& [id, enabled] : categories) {
+  for (const auto& [id, enabled] : categories) {
     if (ref->categorySet(id) != enabled) {
       mod->setCategory(id, enabled);
     }
@@ -1253,7 +1242,7 @@ void ModListViewActions::setCategories(
 {
   ModInfo::Ptr const refMod = ModInfo::getByIndex(ref.data(ModList::IndexRole).toInt());
   if (selected.size() > 1) {
-    for (auto& idx : selected) {
+    for (const auto& idx : selected) {
       if (idx.row() != ref.row()) {
         setCategoriesIf(ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt()),
                         refMod, categories);
@@ -1265,7 +1254,7 @@ void ModListViewActions::setCategories(
     setCategories(refMod, categories);
   }
 
-  for (auto& idx : selected) {
+  for (const auto& idx : selected) {
     m_core.modList()->notifyChange(idx.data(ModList::IndexRole).toInt());
   }
 
@@ -1280,7 +1269,7 @@ void ModListViewActions::setCategories(
 void ModListViewActions::setPrimaryCategory(const QModelIndexList& selected,
                                             int category, bool force)
 {
-  for (auto& idx : selected) {
+  for (const auto& idx : selected) {
     ModInfo::Ptr const info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
     if (force || info->categorySet(category)) {
       info->setCategory(category, true);
@@ -1296,9 +1285,9 @@ void ModListViewActions::setPrimaryCategory(const QModelIndexList& selected,
   }
 }
 
-void ModListViewActions::openExplorer(const QModelIndexList& index) 
+void ModListViewActions::openExplorer(const QModelIndexList& index)
 {
-  for (auto& idx : index) {
+  for (const auto& idx : index) {
     ModInfo::Ptr const info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
     if (!info->isForeign()) {
       shell::Explore(info->absolutePath());

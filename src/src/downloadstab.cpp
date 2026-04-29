@@ -6,8 +6,8 @@
 
 DownloadsTab::DownloadsTab(OrganizerCore& core, Ui::MainWindow* mwui)
     : m_core(core),
-      ui{mwui->btnRefreshDownloads, mwui->btnQueryDownloadsInfo, mwui->downloadView,
-         mwui->showHiddenBox, mwui->downloadFilterEdit}
+      ui{.refresh=mwui->btnRefreshDownloads, .queryInfos=mwui->btnQueryDownloadsInfo, .list=mwui->downloadView,
+         .showHidden=mwui->showHiddenBox, .filter=mwui->downloadFilterEdit}
 {
   DownloadList* sourceModel = new DownloadList(m_core, ui.list);
 

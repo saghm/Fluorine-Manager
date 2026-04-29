@@ -65,7 +65,7 @@ public
     :  // Public for make_shared (but not accessible by other since not exposed in .h):
   ArchiveFileTreeImpl(std::shared_ptr<const IFileTree> parent, QString name, int index,
                       std::vector<File> files)
-      : FileTreeEntry(parent, name), ArchiveFileEntry(parent, name, index), 
+      : FileTreeEntry(parent, name), ArchiveFileEntry(parent, name, index),
         m_Files(std::move(files))
   {}
 
@@ -200,9 +200,8 @@ protected:
           currentIndex = std::get<2>(p);
         }
       } else {
-        currentFiles.push_back(
-            {QStringList(std::get<0>(p).begin() + 1, std::get<0>(p).end()),
-             std::get<1>(p), std::get<2>(p)});
+        currentFiles.emplace_back(QStringList(std::get<0>(p).begin() + 1, std::get<0>(p).end()),
+             std::get<1>(p), std::get<2>(p));
       }
     }
 
@@ -238,11 +237,10 @@ std::shared_ptr<ArchiveFileTree> ArchiveFileTree::makeTree(Archive const& archiv
       continue;
     }
 
-    files.push_back(
-        std::make_tuple(QString::fromStdWString(data[i]->getArchiveFilePath())
+    files.emplace_back(QString::fromStdWString(data[i]->getArchiveFilePath())
                             .replace("\\", "/")
                             .split("/", Qt::SkipEmptyParts),
-                        data[i]->isDirectory(), (int)i));
+                        data[i]->isDirectory(), (int)i);
   }
 
   auto tree = std::make_shared<ArchiveFileTreeImpl>(nullptr, "", -1, std::move(files));
@@ -260,7 +258,7 @@ void mapToArchive(std::vector<FileData*> const& data, It begin, It end)
 {
   for (auto it = begin; it != end; ++it) {
     auto entry   = *it;
-    auto* aentry = dynamic_cast<const ArchiveFileEntry*>(entry.get());
+    const auto* aentry = dynamic_cast<const ArchiveFileEntry*>(entry.get());
 
     if (aentry->m_Index != -1) {
       data[aentry->m_Index]->addOutputFilePath(aentry->path().toStdWString());

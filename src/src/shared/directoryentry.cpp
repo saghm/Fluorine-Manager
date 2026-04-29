@@ -615,7 +615,7 @@ struct DirectoryEntry::Context
 void DirectoryEntry::addFiles(env::DirectoryWalker& walker, FilesOrigin& origin,
                               const std::wstring& path, DirectoryStats& stats)
 {
-  Context cx = {origin, stats};
+  Context cx = {.origin=origin, .stats=stats};
   cx.current.push(this);
 
   // Convert wstring to narrow string for std::filesystem to avoid
@@ -624,7 +624,7 @@ void DirectoryEntry::addFiles(env::DirectoryWalker& walker, FilesOrigin& origin,
       std::filesystem::exists(QString::fromStdWString(path).toStdString());
 
   if (pathExists) {
-    walker.forEachEntry(
+    env::DirectoryWalker::forEachEntry(
         path, &cx,
         [](void* pcx, std::wstring_view path) {
           onDirectoryStart((Context*)pcx, path);

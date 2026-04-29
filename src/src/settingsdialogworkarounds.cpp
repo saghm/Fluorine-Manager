@@ -15,7 +15,8 @@ WorkaroundsSettingsTab::WorkaroundsSettingsTab(Settings& s, SettingsDialog& d)
   ui->enableArchiveParsingBox->setChecked(settings().archiveParsing());
 
   // steam
-  QString username, password;
+  QString username;
+  QString password;
   settings().steam().login(username, password);
   if (username.length() > 0)
     MOBase::log::getDefault().addToBlacklist(username.toStdString(), "STEAM_USERNAME");

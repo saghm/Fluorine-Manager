@@ -51,7 +51,7 @@ RUNDIR="build/src/src"
 # ── Output layout (staging area — installed to ~/.local/share/fluorine by build-native.sh) ──
 OUT_DIR="/src/build/staging"
 rm -rf "${OUT_DIR}"
-mkdir -p "${OUT_DIR}/plugins" "${OUT_DIR}/dlls" "${OUT_DIR}/lib"
+mkdir -p "${OUT_DIR}/plugins" "${OUT_DIR}/lib"
 
 # ── Main binary + helpers ──
 cp -f "${RUNDIR}/ModOrganizer" "${OUT_DIR}/ModOrganizer-core"
@@ -139,9 +139,9 @@ fi
 
 
 # ── 7z runtime ──
-SO7="build/src/src/dlls/7z.so"
+SO7="build/src/src/lib/7z.so"
 if [ -f "${SO7}" ]; then
-    cp -f "${SO7}" "${OUT_DIR}/dlls/7z.so"
+    cp -f "${SO7}" "${OUT_DIR}/lib/7z.so"
 fi
 
 # ── Project-specific shared libraries ──
@@ -338,7 +338,6 @@ done
 echo "Stripping MO2 binaries..."
 strip --strip-unneeded "${OUT_DIR}/ModOrganizer-core" 2>/dev/null || true
 find "${OUT_DIR}/plugins" -name "*.so" -exec strip --strip-unneeded {} \; 2>/dev/null || true
-find "${OUT_DIR}/dlls" -name "*.so" -o -name "*.dll" | xargs -r strip --strip-unneeded 2>/dev/null || true
 find "${OUT_DIR}/lib" -name "*.so" -exec strip --strip-unneeded {} \; 2>/dev/null || true
 
 # ── Fix RPATH so binaries find libs without LD_LIBRARY_PATH ──
@@ -479,7 +478,7 @@ export PATH="${RUN}:${PATH}"
 export LD_LIBRARY_PATH="${RUN}/lib"
 export MO2_BASE_DIR="${RUN}"
 export MO2_PLUGINS_DIR="${RUN}/plugins"
-export MO2_DLLS_DIR="${RUN}/dlls"
+export MO2_LIBS_DIR="${RUN}/lib"
 unset PYTHONPATH PYTHONNOUSERSITE PYTHONHOME MO2_PYTHON_DIR
 
 # Use bundled Qt6 plugins.
@@ -718,7 +717,7 @@ export LD_LIBRARY_PATH="${HERE}/usr/lib"
 
 export MO2_BASE_DIR="${APPIMAGE_DIR}"
 export MO2_PLUGINS_DIR="${BIN}/plugins"
-export MO2_DLLS_DIR="${BIN}/dlls"
+export MO2_LIBS_DIR="${BIN}/lib"
 
 unset PYTHONPATH PYTHONNOUSERSITE PYTHONHOME MO2_PYTHON_DIR
 

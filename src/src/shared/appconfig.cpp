@@ -53,13 +53,13 @@ QString pluginsPath()
   return basePath() + "/" + QString::fromStdWString(pluginPath());
 }
 
-QString dllsPath()
+QString libsPath()
 {
-  const char* envDir = std::getenv("MO2_DLLS_DIR");
+  const char* envDir = std::getenv("MO2_LIBS_DIR");
   if (envDir && envDir[0] != '\0') {
     return QString::fromUtf8(envDir);
   }
-  return basePath() + "/dlls";
+  return basePath() + "/lib";
 }
 
 namespace MOShared

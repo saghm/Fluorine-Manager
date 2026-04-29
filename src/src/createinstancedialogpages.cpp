@@ -76,7 +76,7 @@ void PlaceholderLabel::setVisible(bool b)
 
 Page::Page(CreateInstanceDialog& dlg)
     : ui(dlg.getUI()), m_dlg(dlg), m_pc(dlg.pluginContainer())
-      
+
 {}
 
 bool Page::ready() const
@@ -183,7 +183,7 @@ bool IntroPage::doSkip() const
 }
 
 TypePage::TypePage(CreateInstanceDialog& dlg)
-    : Page(dlg) 
+    : Page(dlg)
 {
   // replace placeholders with actual paths
   ui->createGlobal->setDescription(ui->createGlobal->description().arg(
@@ -252,7 +252,7 @@ GamePage::Game::Game(IPluginGame* g) : game(g), installed(g->isInstalled())
   }
 }
 
-GamePage::GamePage(CreateInstanceDialog& dlg) : Page(dlg) 
+GamePage::GamePage(CreateInstanceDialog& dlg) : Page(dlg)
 {
   createGames();
   fillList();
@@ -770,7 +770,7 @@ IPluginGame* GamePage::confirmOtherGame(const QString& path, IPluginGame* select
 }
 
 VariantsPage::VariantsPage(CreateInstanceDialog& dlg)
-    : Page(dlg) 
+    : Page(dlg)
 {}
 
 bool VariantsPage::ready() const
@@ -993,7 +993,7 @@ PathsPage::PathsPage(CreateInstanceDialog& dlg)
     : Page(dlg),  m_label(ui->pathsLabel),
       m_simpleExists(ui->locationExists), m_simpleInvalid(ui->locationInvalid),
       m_advancedExists(ui->advancedDirExists),
-      m_advancedInvalid(ui->advancedDirInvalid) 
+      m_advancedInvalid(ui->advancedDirInvalid)
 {
   auto setEdit = [&](QLineEdit* e) {
     QObject::connect(e, &QLineEdit::textEdited, [&] {
@@ -1209,7 +1209,7 @@ bool PathsPage::checkPath(QString path, PlaceholderLabel& existsLabel,
       if (m_dlg.rawCreationInfo().type == CreateInstanceDialog::Portable) {
         // the default data path for a portable instance is the application
         // directory, so it's not an error if it exists
-        if (QDir(path) != m.portablePath()) {
+        if (QDir(path) != InstanceManager::portablePath()) {
           exists = QDir(path).exists();
         }
       } else {
@@ -1245,7 +1245,7 @@ bool PathsPage::checkPath(QString path, PlaceholderLabel& existsLabel,
   return okay;
 }
 
-NexusPage::NexusPage(CreateInstanceDialog& dlg) : Page(dlg) 
+NexusPage::NexusPage(CreateInstanceDialog& dlg) : Page(dlg)
 {
   m_connectionUI.reset(new NexusConnectionUI(&m_dlg, dlg.settings(), ui->nexusConnect,
                                              nullptr, ui->nexusManual, ui->nexusLog));
@@ -1327,7 +1327,7 @@ QString ConfirmationPage::makeReview() const
   return lines.join("\n");
 }
 
-QString ConfirmationPage::dirLine(const QString& caption, const QString& path) 
+QString ConfirmationPage::dirLine(const QString& caption, const QString& path)
 {
   return QString("  - %1: %2").arg(caption).arg(path);
 }

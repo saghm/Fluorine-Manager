@@ -134,7 +134,7 @@ ModInfoWithConflictInfo::Conflicts ModInfoWithConflictInfo::doConflictCheck() co
         while (parent != nullptr) {
           auto insertResult = checkedDirs.insert(parent);
 
-          if (insertResult.second == false) {
+          if (!insertResult.second) {
             // if already present break as we can assume to have checked the parents as
             // well
             break;

@@ -41,7 +41,7 @@ QList<MOBase::ExecutableForcedLoadSetting> ForcedLoadDialog::values()
 {
   QList<MOBase::ExecutableForcedLoadSetting> results;
   for (int row = 0; row < ui->tableWidget->rowCount(); row++) {
-    auto widget = (ForcedLoadDialogWidget*)ui->tableWidget->cellWidget(row, 0);
+    auto *widget = (ForcedLoadDialogWidget*)ui->tableWidget->cellWidget(row, 0);
     results.append(
         ExecutableForcedLoadSetting(widget->getProcess(), widget->getLibraryPath())
             .withEnabled(widget->getEnabled())
@@ -63,7 +63,7 @@ void ForcedLoadDialog::on_deleteRowButton_clicked()
 {
   for (auto rowIndex : ui->tableWidget->selectionModel()->selectedRows()) {
     int const row     = rowIndex.row();
-    auto widget = (ForcedLoadDialogWidget*)ui->tableWidget->cellWidget(row, 0);
+    auto *widget = (ForcedLoadDialogWidget*)ui->tableWidget->cellWidget(row, 0);
     if (!widget->getForced()) {
       ui->tableWidget->removeRow(row);
     }

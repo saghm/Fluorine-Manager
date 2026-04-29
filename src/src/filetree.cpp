@@ -614,8 +614,8 @@ bool FileTree::showShellMenu(QPoint pos)
       }
 
       QString caption = QString::fromStdWString(origin->getName());
-      if (m.second.fileCount() < totalFiles) {
-        const auto d = m.second.fileCount();
+      if (env::ShellMenu::fileCount() < totalFiles) {
+        const auto d = env::ShellMenu::fileCount();
         caption += " " + tr("(only has %1 file(s))").arg(d);
         hasDiscrepancies = true;
       }
@@ -701,7 +701,8 @@ void FileTree::addOpenMenus(QMenu& menu, const MOShared::FileEntry& file)
 {
   using namespace spawn;
 
-  MenuItem openMenu, openHookedMenu;
+  MenuItem openMenu;
+  MenuItem openHookedMenu;
 
   const QFileInfo target(QString::fromStdWString(file.getFullPath()));
 

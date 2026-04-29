@@ -41,7 +41,7 @@ constexpr OriginID InvalidOriginID   = -1;
 // -1
 class DataArchiveOrigin
 {
-  std::wstring name_ = L"";
+  std::wstring name_;
   int order_         = -1;
 
 public:

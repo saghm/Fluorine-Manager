@@ -1,5 +1,7 @@
 #include "modinfodialogcategories.h"
 #include "categories.h"
+
+#include <utility>
 #include "modinfo.h"
 #include "ui_modinfodialog.h"
 
@@ -48,7 +50,7 @@ void CategoriesTab::add(const CategoryFactory& factory,
                         const std::set<int>& enabledCategories, QTreeWidgetItem* root,
                         int rootLevel)
 {
-  for (int i = 0; i < static_cast<int>(factory.numCategories()); ++i) {
+  for (int i = 0; std::cmp_less(i, factory.numCategories()); ++i) {
     if (factory.getParentID(i) != rootLevel) {
       continue;
     }

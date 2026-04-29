@@ -37,7 +37,7 @@ public:
   /// Get a string value by key.
   QString getString(const QString& key) const
   {
-    if (auto* v = get(key); v && v->isString())
+    if (const auto* v = get(key); v && v->isString())
       return v->asString();
     return {};
   }

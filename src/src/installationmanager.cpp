@@ -76,7 +76,7 @@ QString storeMetaPath(const QString& value)
 
 InstallationResult::InstallationResult(IPluginInstaller::EInstallResult result)
     : m_result(result)
-      
+
 {}
 
 template <typename T>
@@ -84,7 +84,7 @@ static T resolveFunction(QLibrary& lib, const char* name)
 {
   T temp = reinterpret_cast<T>(lib.resolve(name));
   if (temp == nullptr) {
-    throw std::runtime_error(QObject::tr("invalid 7-zip32.dll: %1")
+    throw std::runtime_error(QObject::tr("invalid 7z.so: %1")
                                  .arg(lib.errorString())
                                  .toLatin1()
                                  .constData());
@@ -92,7 +92,7 @@ static T resolveFunction(QLibrary& lib, const char* name)
   return temp;
 }
 
-InstallationManager::InstallationManager()  
+InstallationManager::InstallationManager()
 {
   m_ArchiveHandler = CreateArchive();
   if (!m_ArchiveHandler->isValid()) {
@@ -372,7 +372,7 @@ InstallationManager::installArchive(GuessedValue<QString>& modName,
   return install(archiveName, modName, modId).result();
 }
 
-QString InstallationManager::generateBackupName(const QString& directoryName) 
+QString InstallationManager::generateBackupName(const QString& directoryName)
 {
   QString backupName = directoryName + "_backup";
   if (QDir(backupName).exists()) {
@@ -687,8 +687,7 @@ InstallationResult InstallationManager::install(const QString& fileName,
           "This Nexus category has not yet been mapped. Do you wish to proceed without "
           "setting a category, proceed and disable automatic Nexus mappings, or stop "
           "and configure your category mappings?"));
-      QPushButton* proceedButton =
-          nexusQuery.addButton(tr("&Proceed"), QMessageBox::YesRole);
+      nexusQuery.addButton(tr("&Proceed"), QMessageBox::YesRole);
       QPushButton* disableButton =
           nexusQuery.addButton(tr("&Disable"), QMessageBox::AcceptRole);
       QPushButton* stopButton =
@@ -894,10 +893,10 @@ QString InstallationManager::getErrorString(Archive::Error errorCode)
     return tr("no error");
   } break;
   case Archive::Error::ERROR_LIBRARY_NOT_FOUND: {
-    return tr("7z.dll not found");
+    return tr("7z.so not found");
   } break;
   case Archive::Error::ERROR_LIBRARY_INVALID: {
-    return tr("7z.dll isn't valid");
+    return tr("7z.so isn't valid");
   } break;
   case Archive::Error::ERROR_ARCHIVE_NOT_FOUND: {
     return tr("archive not found");
@@ -940,7 +939,7 @@ void InstallationManager::notifyInstallationStart(QString const& archive,
                                                   bool reinstallation,
                                                   ModInfo::Ptr currentMod)
 {
-  auto& installers = m_PluginContainer->plugins<IPluginInstaller>();
+  const auto& installers = m_PluginContainer->plugins<IPluginInstaller>();
   for (auto* installer : installers) {
     if (m_PluginContainer->isEnabled(installer)) {
       installer->onInstallationStart(archive, reinstallation, currentMod.get());
@@ -951,7 +950,7 @@ void InstallationManager::notifyInstallationStart(QString const& archive,
 void InstallationManager::notifyInstallationEnd(const InstallationResult& result,
                                                 ModInfo::Ptr newMod)
 {
-  auto& installers = m_PluginContainer->plugins<IPluginInstaller>();
+  const auto& installers = m_PluginContainer->plugins<IPluginInstaller>();
   for (auto* installer : installers) {
     if (m_PluginContainer->isEnabled(installer)) {
       installer->onInstallationEnd(result.result(), newMod.get());

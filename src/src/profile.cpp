@@ -45,10 +45,10 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <QStringList>  // for QStringList
 #include <QtGlobal>     // for qUtf8Printable
 
-#include <assert.h>  // for assert
-#include <limits.h>  // for UINT_MAX, INT_MAX, etc
-#include <stddef.h>  // for size_t
-#include <string.h>  // for wcslen
+#include <cassert>  // for assert
+#include <climits>  // for UINT_MAX, INT_MAX, etc
+#include <cstddef>  // for size_t
+#include <cstring>  // for wcslen
 
 #include <algorithm>  // for max, min
 #include <exception>  // for exception
@@ -378,7 +378,11 @@ void Profile::renameModInList(QFile& modList, const QString& oldName,
   modList.close();
 
   if (renamed) {
-    modList.open(QIODevice::WriteOnly);
+    if (!modList.open(QIODevice::WriteOnly)) {
+      log::error("failed to write modlist {}: {}", modList.fileName(),
+                 modList.errorString());
+      return;
+    }
     modList.write(outBuffer.buffer());
     modList.close();
   }
@@ -619,8 +623,8 @@ std::vector<std::tuple<QString, QString, int>> Profile::getActiveMods()
   for (const auto& [priority, index] : m_ModIndexByPriority) {
     if (m_ModStatus[index].m_Enabled) {
       ModInfo::Ptr modInfo = ModInfo::getByIndex(index);
-      result.push_back(std::make_tuple(modInfo->internalName(), modInfo->absolutePath(),
-                                       m_ModStatus[index].m_Priority));
+      result.emplace_back(modInfo->internalName(), modInfo->absolutePath(),
+                                       m_ModStatus[index].m_Priority);
     }
   }
 
@@ -753,20 +757,20 @@ void Profile::copyFilesTo(QString& target) const
   copyDir(m_Directory.absolutePath(), target, false);
 }
 
-std::vector<std::wstring> Profile::splitDZString(const wchar_t* buffer) 
+std::vector<std::wstring> Profile::splitDZString(const wchar_t* buffer)
 {
   std::vector<std::wstring> result;
   const wchar_t* pos = buffer;
   size_t length      = wcslen(pos);
   while (length != 0U) {
-    result.push_back(pos);
+    result.emplace_back(pos);
     pos += length + 1;
     length = wcslen(pos);
   }
   return result;
 }
 
-void Profile::mergeTweak(const QString& tweakName, const QString& tweakedIni) 
+void Profile::mergeTweak(const QString& tweakName, const QString& tweakedIni)
 {
   // Parse the tweak INI file line-by-line and merge each key=value into the
   // destination using WriteRegistryValue (which uses the safe line-by-line
@@ -869,9 +873,9 @@ bool Profile::enableLocalSaves(bool enable)
            "games)"),
         QDialogButtonBox::No | QDialogButtonBox::Yes | QDialogButtonBox::Cancel,
         QDialogButtonBox::No);
-    if (res == QMessageBox::Yes) {
+    if (res == QDialogButtonBox::Yes) {
       shellDelete(QStringList(m_Directory.absoluteFilePath("saves")));
-    } else if (res == QMessageBox::No) {
+    } else if (res == QDialogButtonBox::No) {
       // No action
     } else {
       return false;
@@ -900,15 +904,14 @@ bool Profile::localSettingsEnabled() const
     }
     if (!missingFiles.empty()) {
       m_GamePlugin->initializeProfile(m_Directory, IPluginGame::CONFIGURATION);
-      QMessageBox::StandardButton res =
-          QMessageBox::warning(QApplication::activeModalWidget(),
-                               tr("Missing profile-specific game INI files!"),
-                               tr("Some of your profile-specific game INI files were "
-                                  "missing.  They will now be copied "
-                                  "from the vanilla game folder.  You might want to "
-                                  "double-check your settings.\n\n"
-                                  "Missing files:\n") +
-                                   missingFiles.join("\n"));
+      QMessageBox::warning(QApplication::activeModalWidget(),
+                           tr("Missing profile-specific game INI files!"),
+                           tr("Some of your profile-specific game INI files were "
+                              "missing.  They will now be copied "
+                              "from the vanilla game folder.  You might want to "
+                              "double-check your settings.\n\n"
+                              "Missing files:\n") +
+                               missingFiles.join("\n"));
     }
   }
   return enabled;
@@ -930,7 +933,7 @@ bool Profile::enableLocalSettings(bool enable)
                                    QDialogButtonBox::No | QDialogButtonBox::Yes |
                                        QDialogButtonBox::Cancel,
                                    QDialogButtonBox::No);
-    if (res == QMessageBox::Yes) {
+    if (res == QDialogButtonBox::Yes) {
       QStringList filesToDelete;
       for (QString file : m_GamePlugin->iniFiles()) {
         QString resolved = MOBase::resolveFileCaseInsensitive(
@@ -938,7 +941,7 @@ bool Profile::enableLocalSettings(bool enable)
         filesToDelete << resolved;
       }
       shellDelete(filesToDelete, true);
-    } else if (res == QMessageBox::No) {
+    } else if (res == QDialogButtonBox::No) {
       // No action
     } else {
       return false;

@@ -23,7 +23,7 @@ void cleanAppImageEnv(QProcessEnvironment& env)
   // Remove Fluorine/AppImage-specific vars that should never leak to game processes.
   env.remove("QT_QPA_PLATFORM_PLUGIN_PATH");
   env.remove("MO2_PLUGINS_DIR");
-  env.remove("MO2_DLLS_DIR");
+  env.remove("MO2_LIBS_DIR");
   env.remove("MO2_PYTHON_DIR");
   env.remove("MO2_BASE_DIR");
 
@@ -342,7 +342,7 @@ bool parseEnvAssignment(const QString& token, QString& keyOut, QString& valueOut
 }  // namespace
 
 ProtonLauncher::ProtonLauncher()
-     
+
 = default;
 
 ProtonLauncher& ProtonLauncher::setBinary(const QString& path)

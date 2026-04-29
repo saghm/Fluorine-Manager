@@ -61,7 +61,7 @@ sync_dir_overwrite_files() {
 
 # ── Extract/sync writable dirs ──
 sync_dir_overwrite_files "plugins"
-sync_dir_overwrite_files "dlls"
+sync_dir_overwrite_files "lib"
 sync_dir_overwrite_files "python"
 
 # Some existing Windows portable setups include plugins/plugin_python with
@@ -109,10 +109,10 @@ if [ -d "${HERE}/usr/translations/qtwebengine_locales" ]; then
 fi
 
 # Tell the app to use the writable dirs next to the AppImage.
-# MO2_BASE_DIR overrides qApp->applicationDirPath() for plugin/dll discovery.
+# MO2_BASE_DIR overrides qApp->applicationDirPath() for plugin/library discovery.
 export MO2_BASE_DIR="${APPIMAGE_DIR}"
 export MO2_PLUGINS_DIR="${APPIMAGE_DIR}/plugins"
-export MO2_DLLS_DIR="${APPIMAGE_DIR}/dlls"
+export MO2_LIBS_DIR="${APPIMAGE_DIR}/lib"
 MO2_PYTHON_BUNDLED="${HERE}/usr/share/fluorine/python"
 if [ -d "${MO2_PYTHON_BUNDLED}/lib" ]; then
     export MO2_PYTHON_DIR="${MO2_PYTHON_BUNDLED}"

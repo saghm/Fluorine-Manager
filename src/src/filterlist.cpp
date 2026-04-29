@@ -32,7 +32,7 @@ public:
   };
 
   CriteriaItem(FilterList* list, QString name, CriteriaType type, int id)
-      : QTreeWidgetItem({"", name}), m_list(list) 
+      : QTreeWidgetItem({"", name}), m_list(list)
   {
     setData(0, Qt::ToolTipRole, name);
     setData(0, TypeRole, type);
@@ -295,7 +295,7 @@ void FilterList::addSpecialCriteria(int type)
 {
   const auto sc = static_cast<CategoryFactory::SpecialCategories>(type);
 
-  addCriteriaItem(nullptr, m_factory.getSpecialCategoryName(sc), type,
+  addCriteriaItem(nullptr, CategoryFactory::getSpecialCategoryName(sc), type,
                   ModListSortProxy::TypeSpecial);
 }
 

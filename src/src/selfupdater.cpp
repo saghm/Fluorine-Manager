@@ -60,7 +60,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <exception>
 #include <map>
-#include <stddef.h>  //for size_t
+#include <cstddef>  //for size_t
 #include <stdexcept>
 
 using namespace MOBase;

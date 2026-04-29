@@ -1,5 +1,7 @@
 #include "modlistbypriorityproxy.h"
 
+#include <utility>
+
 #include "log.h"
 #include "modinfo.h"
 #include "modlist.h"
@@ -98,7 +100,7 @@ void ModListByPriorityProxy::buildTree()
     }
   };
 
-  auto& ibp = m_profile->getAllIndexesByPriority();
+  const auto& ibp = m_profile->getAllIndexesByPriority();
   if (m_sortOrder == Qt::AscendingOrder) {
     std::for_each(ibp.begin(), ibp.end(), fn);
     m_Root.children.insert(m_Root.children.begin(),
@@ -255,7 +257,7 @@ bool ModListByPriorityProxy::canDropMimeData(const QMimeData* data,
     }
 
     bool const firstRowSeparator =
-        firstRowIndex != -1 && ModInfo::getByIndex(firstRowIndex)->isSeparator();
+        std::cmp_not_equal(firstRowIndex , -1) && ModInfo::getByIndex(firstRowIndex)->isSeparator();
 
     // row = -1 and valid parent means we're dropping onto an item, we don't want to
     // drop separators onto items or items into their own separator

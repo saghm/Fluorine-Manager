@@ -415,7 +415,7 @@ public:
 
   // returns %BASE_DIR%/dirName
   //
-  static QString makeDefaultPath(const QString dirName);
+  static QString makeDefaultPath(QString dirName);
 
 private:
   QSettings& m_Settings;

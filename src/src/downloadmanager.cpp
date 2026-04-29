@@ -49,6 +49,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <boost/bind/bind.hpp>
 #include <regex>
+#include <utility>
 
 using namespace MOBase;
 
@@ -183,13 +184,13 @@ DownloadManager::DownloadInfo::createFromMeta(const QString& filePath, bool show
 ScopedDisableDirWatcher::ScopedDisableDirWatcher(DownloadManager* downloadManager)
 {
   m_downloadManager = downloadManager;
-  m_downloadManager->startDisableDirWatcher();
+  DownloadManager::startDisableDirWatcher();
   log::debug("Scoped Disable DirWatcher: Started");
 }
 
 ScopedDisableDirWatcher::~ScopedDisableDirWatcher()
 {
-  m_downloadManager->endDisableDirWatcher();
+  DownloadManager::endDisableDirWatcher();
   m_downloadManager = nullptr;
   log::debug("Scoped Disable DirWatcher: Stopped");
 }
@@ -250,7 +251,7 @@ QString DownloadManager::DownloadInfo::currentURL()
 
 DownloadManager::DownloadManager(NexusInterface* nexusInterface, QObject* parent)
     : m_NexusInterface(nexusInterface)
-      
+
 {
   m_OrganizerCore = dynamic_cast<OrganizerCore*>(parent);
   connect(&m_DirWatcher, SIGNAL(directoryChanged(QString)), this,
@@ -413,7 +414,7 @@ void DownloadManager::refreshList()
       std::vector<std::wstring>& extensions;
     };
 
-    Context cx = {*this, seen, nameFilters};
+    Context cx = {.self=*this, .seen=seen, .extensions=nameFilters};
 
     for (auto&& d : m_ActiveDownloads) {
       cx.seen.insert(d->m_FileName.toLower().toStdWString());
@@ -472,7 +473,7 @@ void DownloadManager::refreshList()
 void DownloadManager::queryDownloadListInfo()
 {
   int incompleteCount = 0;
-  for (size_t i = 0; i < m_ActiveDownloads.size(); i++) {
+  for (size_t i = 0; std::cmp_less(i , m_ActiveDownloads.size()); i++) {
     if (isInfoIncomplete(i)) {
       incompleteCount++;
     }
@@ -489,7 +490,7 @@ void DownloadManager::queryDownloadListInfo()
     TimeThis const tt("DownloadManager::queryDownloadListInfo()");
     log::info("Querying metadata for every download with incomplete info...");
     startDisableDirWatcher();
-    for (size_t i = 0; i < m_ActiveDownloads.size(); i++) {
+    for (size_t i = 0; std::cmp_less(i , m_ActiveDownloads.size()); i++) {
       if (isInfoIncomplete(i)) {
         queryInfoMd5(i, false);
       }

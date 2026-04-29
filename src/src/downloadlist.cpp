@@ -280,7 +280,8 @@ bool DownloadList::lessThanPredicate(const QModelIndex& left, const QModelIndex&
                  .compare(right.data(Qt::DisplayRole).toString(), Qt::CaseInsensitive) <
              0;
     } else if (left.column() == DownloadList::COL_MODNAME) {
-      QString leftName, rightName;
+      QString leftName;
+      QString rightName;
 
       if (!m_manager.isInfoIncomplete(left.row())) {
         const MOBase::ModRepositoryFileInfo* info = m_manager.getFileInfo(left.row());
@@ -294,7 +295,8 @@ bool DownloadList::lessThanPredicate(const QModelIndex& left, const QModelIndex&
 
       return leftName.compare(rightName, Qt::CaseInsensitive) < 0;
     } else if (left.column() == DownloadList::COL_VERSION) {
-      MOBase::VersionInfo versionLeft, versionRight;
+      MOBase::VersionInfo versionLeft;
+      MOBase::VersionInfo versionRight;
 
       if (!m_manager.isInfoIncomplete(left.row())) {
         const MOBase::ModRepositoryFileInfo* info = m_manager.getFileInfo(left.row());
@@ -308,7 +310,8 @@ bool DownloadList::lessThanPredicate(const QModelIndex& left, const QModelIndex&
 
       return versionLeft < versionRight;
     } else if (left.column() == DownloadList::COL_ID) {
-      int leftID = 0, rightID = 0;
+      int leftID = 0;
+      int rightID = 0;
 
       if (!m_manager.isInfoIncomplete(left.row())) {
         const MOBase::ModRepositoryFileInfo* info = m_manager.getFileInfo(left.row());

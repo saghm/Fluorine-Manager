@@ -58,8 +58,8 @@ QString storeMetaPath(const QString& value)
 
 ModInfoRegular::ModInfoRegular(const QDir& path, OrganizerCore& core)
     : ModInfoWithConflictInfo(core), m_Name(path.dirName()),
-      m_Path(path.absolutePath()), 
-      m_GameName(core.managedGame()->gameShortName()), 
+      m_Path(path.absolutePath()),
+      m_GameName(core.managedGame()->gameShortName()),
       m_NexusBridge(&core.pluginContainer())
 {
   m_CreationTime = QFileInfo(path.absolutePath()).birthTime();
@@ -102,9 +102,7 @@ bool ModInfoRegular::isEmpty() const
   if (!iter.hasNext())
     return true;
   iter.next();
-  if ((iter.fileName() == "meta.ini") && !iter.hasNext())
-    return true;
-  return false;
+  return (iter.fileName() == "meta.ini") && !iter.hasNext();
 }
 
 void ModInfoRegular::readMeta()

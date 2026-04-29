@@ -42,7 +42,7 @@ ModListSettingsTab::ModListSettingsTab(Settings& s, SettingsDialog& d)
   ui->checkUpdateInstallBox->setChecked(
       settings().interface().checkUpdateAfterInstallation());
 
-  for (auto& p : m_columnToBox) {
+  for (const auto& p : m_columnToBox) {
     p.second->setChecked(settings().interface().collapsibleSeparatorsIcons(p.first));
   }
 }
@@ -66,7 +66,7 @@ void ModListSettingsTab::update()
   settings().interface().setCheckUpdateAfterInstallation(
       ui->checkUpdateInstallBox->isChecked());
 
-  for (auto& p : m_columnToBox) {
+  for (const auto& p : m_columnToBox) {
     settings().interface().setCollapsibleSeparatorsIcons(p.first,
                                                          p.second->isChecked());
   }

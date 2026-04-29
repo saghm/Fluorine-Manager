@@ -16,7 +16,7 @@ PluginsSettingsTab::PluginsSettingsTab(Settings& s, PluginContainer* pluginConta
   ui->pluginSettingsList->setStyleSheet("QTreeWidget::item {padding-right: 10px;}");
 
   // Create top-level tree widget:
-  QStringList pluginInterfaces = m_pluginContainer->pluginInterfaces();
+  QStringList pluginInterfaces = PluginContainer::pluginInterfaces();
   pluginInterfaces.sort(Qt::CaseInsensitive);
   std::map<QString, QTreeWidgetItem*> topItems;
   for (QString interfaceName : pluginInterfaces) {
@@ -105,7 +105,7 @@ void PluginsSettingsTab::updateListItems()
     auto* topLevelItem = ui->pluginsList->topLevelItem(i);
     for (auto j = 0; j < topLevelItem->childCount(); ++j) {
       auto* item   = topLevelItem->child(j);
-      auto* plugin = this->plugin(item);
+      auto* plugin = PluginsSettingsTab::plugin(item);
 
       bool inactive = !m_pluginContainer->implementInterface<IPluginGame>(plugin) &&
                       !m_pluginContainer->isEnabled(plugin);
@@ -131,7 +131,7 @@ void PluginsSettingsTab::filterPluginList()
     bool found = false;
     for (auto j = 0; j < topLevelItem->childCount(); ++j) {
       auto* item   = topLevelItem->child(j);
-      auto* plugin = this->plugin(item);
+      auto* plugin = PluginsSettingsTab::plugin(item);
 
       // Check the item or the child - If any match (item or child), the whole
       // group is displayed.
@@ -176,7 +176,7 @@ void PluginsSettingsTab::filterPluginList()
   }
 }
 
-IPlugin* PluginsSettingsTab::plugin(QTreeWidgetItem* pluginItem) 
+IPlugin* PluginsSettingsTab::plugin(QTreeWidgetItem* pluginItem)
 {
   return static_cast<IPlugin*>(qvariant_cast<void*>(pluginItem->data(0, PluginRole)));
 }
@@ -216,7 +216,7 @@ void PluginsSettingsTab::on_checkboxEnabled_clicked(bool checked)
   if (!item || !item->data(0, PluginRole).isValid()) {
     return;
   }
-  IPlugin* plugin          = this->plugin(item);
+  IPlugin* plugin          = PluginsSettingsTab::plugin(item);
   const auto& requirements = m_pluginContainer->requirements(plugin);
 
   // User wants to enable:
@@ -304,7 +304,7 @@ void PluginsSettingsTab::on_pluginsList_currentItemChanged(QTreeWidgetItem* curr
   }
 
   ui->pluginSettingsList->clear();
-  IPlugin* plugin = this->plugin(current);
+  IPlugin* plugin = PluginsSettingsTab::plugin(current);
   ui->authorLabel->setText(plugin->author());
   ui->versionLabel->setText(plugin->version().canonicalString());
   ui->descriptionLabel->setText(plugin->description());
@@ -316,7 +316,7 @@ void PluginsSettingsTab::on_pluginsList_currentItemChanged(QTreeWidgetItem* curr
       plugin->master().isEmpty());
 
   bool enabled       = m_pluginContainer->isEnabled(plugin);
-  auto& requirements = m_pluginContainer->requirements(plugin);
+  const auto& requirements = m_pluginContainer->requirements(plugin);
   auto problems      = requirements.problems();
 
   if (m_pluginContainer->requirements(plugin).isCorePlugin()) {

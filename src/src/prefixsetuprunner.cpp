@@ -418,7 +418,7 @@ void PrefixSetupRunner::buildStepList()
 
   auto addStep = [this](const QString& id, const QString& name,
                         std::function<bool()> fn) {
-    m_steps.append({id, name, SetupStep::Pending, {}});
+    m_steps.append({.id=id, .displayName=name, .status=SetupStep::Pending, .errorMessage={}});
     m_stepFunctions.append(std::move(fn));
   };
 
@@ -569,7 +569,7 @@ QProcess* PrefixSetupRunner::buildWrappedProcess(
 
   // Remove AppImage/Fluorine vars that can confuse Wine.
   for (const char* var : {"QT_QPA_PLATFORM_PLUGIN_PATH", "MO2_PLUGINS_DIR",
-       "MO2_DLLS_DIR", "MO2_PYTHON_DIR", "MO2_BASE_DIR",
+       "MO2_LIBS_DIR", "MO2_PYTHON_DIR", "MO2_BASE_DIR",
        "APPIMAGE", "APPDIR", "OWD", "ARGV0",
        "APPIMAGE_ORIGINAL_EXEC", "DESKTOPINTEGRATION"}) {
     env.remove(var);
@@ -1099,17 +1099,17 @@ bool PrefixSetupRunner::stepDirectXRuntime()
   // All single-DLL extractions: {cabFilter, dllFilter, displayName}
   struct DllEntry { const char* cabFilter; const char* dllFilter; const char* name; };
   static const DllEntry singleDlls[] = {
-    {"*d3dcompiler_42*", "d3dcompiler_42.dll", "d3dcompiler_42"},
-    {"*d3dcompiler_43*", "d3dcompiler_43.dll", "d3dcompiler_43"},
-    {"*d3dx11_42*",      "d3dx11_42.dll",      "d3dx11_42"},
-    {"*d3dx11_43*",      "d3dx11_43.dll",      "d3dx11_43"},
+    {.cabFilter="*d3dcompiler_42*", .dllFilter="d3dcompiler_42.dll", .name="d3dcompiler_42"},
+    {.cabFilter="*d3dcompiler_43*", .dllFilter="d3dcompiler_43.dll", .name="d3dcompiler_43"},
+    {.cabFilter="*d3dx11_42*",      .dllFilter="d3dx11_42.dll",      .name="d3dx11_42"},
+    {.cabFilter="*d3dx11_43*",      .dllFilter="d3dx11_43.dll",      .name="d3dx11_43"},
   };
 
   // Multi-DLL extractions (wildcards): {cabFilter, dllFilter, displayName}
   static const DllEntry multiDlls[] = {
-    {"*d3dx9*",    "d3dx9*.dll",  "d3dx9"},
-    {"*d3dx10*",   "d3dx10*.dll", "d3dx10"},
-    {"*_xinput_*", "xinput*.dll", "xinput"},
+    {.cabFilter="*d3dx9*",    .dllFilter="d3dx9*.dll",  .name="d3dx9"},
+    {.cabFilter="*d3dx10*",   .dllFilter="d3dx10*.dll", .name="d3dx10"},
+    {.cabFilter="*_xinput_*", .dllFilter="xinput*.dll", .name="xinput"},
   };
 
   // Extract single DLLs (both arches).
@@ -1262,9 +1262,9 @@ bool PrefixSetupRunner::stepDotNetRuntimes()
 
   struct RuntimePair { const char* url32; const char* url64; const char* name; };
   static const RuntimePair runtimes[] = {
-    {DOTNET6_X86_URL, DOTNET6_X64_URL, ".NET 6"},
-    {DOTNET7_X86_URL, DOTNET7_X64_URL, ".NET 7"},
-    {DOTNET8_X86_URL, DOTNET8_X64_URL, ".NET 8"},
+    {.url32=DOTNET6_X86_URL, .url64=DOTNET6_X64_URL, .name=".NET 6"},
+    {.url32=DOTNET7_X86_URL, .url64=DOTNET7_X64_URL, .name=".NET 7"},
+    {.url32=DOTNET8_X86_URL, .url64=DOTNET8_X64_URL, .name=".NET 8"},
   };
 
   for (const auto& rt : runtimes) {
@@ -1726,7 +1726,7 @@ QString PrefixSetupRunner::findProtonScript() const
   return QFileInfo::exists(script) ? script : QString();
 }
 
-QString PrefixSetupRunner::detectSteamPath() 
+QString PrefixSetupRunner::detectSteamPath()
 {
   // Use native Steam detection first.
   const QString steamPath = findSteamPath();
@@ -1776,7 +1776,7 @@ QString PrefixSetupRunner::detectSLRRunScript() const
   return {};
 }
 
-QString PrefixSetupRunner::fluorineBinDir() 
+QString PrefixSetupRunner::fluorineBinDir()
 {
   return fluorineDataDir() + "/bin";
 }
@@ -1861,12 +1861,12 @@ void PrefixSetupRunner::killStalePrefixProcesses() const
   QThread::msleep(100);
 }
 
-QString PrefixSetupRunner::fluorineCacheDir() 
+QString PrefixSetupRunner::fluorineCacheDir()
 {
   return fluorineDataDir() + "/cache";
 }
 
-QString PrefixSetupRunner::fluorineTmpDir() 
+QString PrefixSetupRunner::fluorineTmpDir()
 {
   return fluorineDataDir() + "/tmp";
 }

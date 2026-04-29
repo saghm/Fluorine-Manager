@@ -2,8 +2,9 @@ cmake_minimum_required(VERSION 3.16)
 
 find_package(Qt6 REQUIRED COMPONENTS
     Widgets WebSockets Network Concurrent)
-if(WIN32)
-    find_package(Qt6 REQUIRED COMPONENTS WebEngineWidgets)
+option(MO2_ENABLE_WEBENGINE "Build optional Qt WebEngine browser support" OFF)
+if(MO2_ENABLE_WEBENGINE)
+    find_package(Qt6 QUIET COMPONENTS WebEngineWidgets)
 endif()
 find_package(Boost CONFIG REQUIRED COMPONENTS
     program_options)
@@ -66,12 +67,6 @@ if(NOT Qt6WebEngineWidgets_FOUND)
         ${CMAKE_CURRENT_SOURCE_DIR}/browserview.h
         ${CMAKE_CURRENT_SOURCE_DIR}/browserdialog.h)
 endif()
-if(WIN32)
-    list(REMOVE_ITEM ORGANIZER_SOURCES
-        ${CMAKE_CURRENT_SOURCE_DIR}/nxmhandler_linux.cpp)
-    list(REMOVE_ITEM ORGANIZER_HEADERS
-        ${CMAKE_CURRENT_SOURCE_DIR}/nxmhandler_linux.h)
-endif()
 
 add_executable(organizer
     ${ORGANIZER_SOURCES}
@@ -127,28 +122,25 @@ target_compile_definitions(organizer PRIVATE
     FUSE_USE_VERSION=312
     $<$<TARGET_EXISTS:Qt6::WebEngineWidgets>:MO2_WEBENGINE>)
 
-if(NOT WIN32)
-    option(MO2_BUNDLE_7Z_RUNTIME "Copy a Linux 7z module into organizer/dlls" ON)
-    option(MO2_STAGE_PYTHON_PLUGIN_PAYLOAD
-        "Stage shipped Python plugin payload into build plugins/ for Linux runs" OFF)
-    option(MO2_STAGE_INSTALLER_WIZARD
-        "Stage installer_wizard python plugin payload (requires additional wizard package)" OFF)
-    set(MO2_7Z_SO_PATH "" CACHE FILEPATH
-        "Path to a compatible 7z shared module (exports CreateObject/GetHandlerProperty2)")
-    set(MO2_UPSTREAM_PLUGIN_PAYLOAD_DIR
-        "$ENV{HOME}/Downloads/Mod.Organizer-2.5.2/plugins"
-        CACHE PATH "Optional path to upstream MO2 plugins folder for pyCfg.py/data payload")
+option(MO2_BUNDLE_7Z_RUNTIME "Copy a Linux 7z module into organizer/lib" ON)
+option(MO2_STAGE_PYTHON_PLUGIN_PAYLOAD
+    "Stage shipped Python plugin payload into build plugins/ for Linux runs" OFF)
+option(MO2_STAGE_INSTALLER_WIZARD
+    "Stage installer_wizard python plugin payload (requires additional wizard package)" OFF)
+set(MO2_7Z_SO_PATH "" CACHE FILEPATH
+    "Path to a compatible 7z shared module (exports CreateObject/GetHandlerProperty2)")
+set(MO2_UPSTREAM_PLUGIN_PAYLOAD_DIR
+    "$ENV{HOME}/Downloads/Mod.Organizer-2.5.2/plugins"
+    CACHE PATH "Optional path to upstream MO2 plugins folder for pyCfg.py/data payload")
 
     if(MO2_BUNDLE_7Z_RUNTIME)
         if(TARGET 7z)
             # Use the 7z.so built from source by libs/7zip/CMakeLists.txt
             add_dependencies(organizer 7z)
             add_custom_command(TARGET organizer POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:organizer>/dlls"
+                COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:organizer>/lib"
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "$<TARGET_FILE:7z>" "$<TARGET_FILE_DIR:organizer>/dlls/7z.so"
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "$<TARGET_FILE:7z>" "$<TARGET_FILE_DIR:organizer>/dlls/7zip.dll")
+                    "$<TARGET_FILE:7z>" "$<TARGET_FILE_DIR:organizer>/lib/7z.so")
             message(STATUS "[MO2] Will bundle 7z.so built from source")
         else()
             message(WARNING
@@ -221,4 +213,3 @@ if(NOT WIN32)
     # Keep only the canonical Fallout NV plugin filename on Linux (case-sensitive FS).
     add_custom_command(TARGET organizer POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:organizer>/plugins/libgame_falloutnv.so")
-endif()

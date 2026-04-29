@@ -207,7 +207,7 @@ if(BUILD_PLUGIN_PYTHON)
   # If an explicit Python executable was provided (Docker/CI), use it directly.
   # Otherwise, bootstrap a local venv with uv for source builds.
   if(NOT DEFINED Python_EXECUTABLE OR NOT Python_EXECUTABLE)
-    set(_mo2_pyvenv "${CMAKE_SOURCE_DIR}/build/pyvenv")
+    set(_mo2_pyvenv "${CMAKE_BINARY_DIR}/pyvenv")
     set(_mo2_pyvenv_python "${_mo2_pyvenv}/bin/python")
 
     if(NOT EXISTS "${_mo2_pyvenv_python}")

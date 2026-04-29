@@ -123,7 +123,7 @@ void GitHub::request(Method method, const QString& path, const QByteArray& data,
   // remember this reply so it can be deleted in the destructor if necessary
   m_replies.push_back(reply);
 
-  Request req = {method, data, callback, timer, reply};
+  Request req = {.method=method, .data=data, .callback=callback, .timer=timer, .reply=reply};
 
   // finished
   connect(reply, &QNetworkReply::finished, [this, req] {

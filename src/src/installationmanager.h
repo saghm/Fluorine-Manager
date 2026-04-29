@@ -304,7 +304,7 @@ signals:
   /**
    * @brief An existing mod has been replaced with a newly installed one.
    */
-  void modReplaced(const QString fileName);
+  void modReplaced(QString fileName);
 
 private:
   struct CaseInsensitive

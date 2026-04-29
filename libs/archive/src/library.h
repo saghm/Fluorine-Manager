@@ -94,22 +94,22 @@ private:
         exeDir = exeDir.substr(0, slash);
     }
 
-    // AppImage: check MO2_DLLS_DIR env var first (writable dir next to AppImage)
-    std::string envDlls;
-    const char* envVal = std::getenv("MO2_DLLS_DIR");
+    // AppImage: check MO2_LIBS_DIR env var first (writable dir next to AppImage)
+    std::string envLibs;
+    const char* envVal = std::getenv("MO2_LIBS_DIR");
     if (envVal && envVal[0] != '\0') {
-      envDlls = envVal;
+      envLibs = envVal;
     }
 
-    // Try bundled 7z.so locations first (env override, exe dir, dlls/ subdir)
+    // Try bundled 7z.so locations first (env override, exe dir, lib/ subdir)
     std::vector<std::string> tryPaths;
-    if (!envDlls.empty()) {
-      tryPaths.push_back(envDlls + "/7z.so");
+    if (!envLibs.empty()) {
+      tryPaths.push_back(envLibs + "/7z.so");
     }
     tryPaths.push_back(exeDir + "/7z.so");
-    tryPaths.push_back(exeDir + "/dlls/7z.so");
+    tryPaths.push_back(exeDir + "/lib/7z.so");
     tryPaths.push_back("7z.so");
-    tryPaths.push_back("dlls/7z.so");
+    tryPaths.push_back("lib/7z.so");
     tryPaths.push_back("/usr/lib/p7zip/7z.so");
     tryPaths.push_back("/usr/lib64/p7zip/7z.so");
     tryPaths.push_back("/usr/libexec/p7zip/7z.so");

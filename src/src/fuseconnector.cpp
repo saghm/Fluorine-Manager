@@ -993,11 +993,7 @@ static bool isStaleOrMounted(const QString& path)
   // Probe the path directly — ENOTCONN means dead FUSE mount even if
   // /proc/mounts lists it under a different (canonical) path.
   struct stat st;
-  if (::stat(path.toLocal8Bit().constData(), &st) != 0 && errno == ENOTCONN) {
-    return true;
-  }
-
-  return false;
+  return ::stat(path.toLocal8Bit().constData(), &st) != 0 && errno == ENOTCONN;
 }
 
 static void doUnmount(const QString& path)

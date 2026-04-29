@@ -261,7 +261,7 @@ void ModInfo::updateFromDisc(const QString& modsDirectory, OrganizerCore& core,
     }
   }
 
-  auto* game     = core.managedGame();
+  const auto* game     = core.managedGame();
   auto& features = core.pluginContainer().gameFeatures();
   auto unmanaged = features.gameFeature<UnmanagedMods>();
   if (unmanaged != nullptr) {
@@ -329,7 +329,7 @@ bool ModInfo::checkAllForUpdate(PluginContainer* pluginContainer, QObject* recei
   for (auto itr = games.begin(); itr != games.end();) {
     auto gamePlugins        = pluginContainer->plugins<IPluginGame>();
     IPluginGame* gamePlugin = qApp->property("managed_game").value<IPluginGame*>();
-    for (auto plugin : gamePlugins) {
+    for (auto *plugin : gamePlugins) {
       if (plugin != nullptr &&
           plugin->gameShortName().compare(*itr, Qt::CaseInsensitive) == 0) {
         gamePlugin = plugin;
@@ -430,10 +430,8 @@ std::set<QSharedPointer<ModInfo>> ModInfo::filteredMods(QString gameName,
     std::copy_if(s_Collection.begin(), s_Collection.end(),
                  std::inserter(updates, updates.end()),
                  [=](QSharedPointer<ModInfo> info) -> bool {
-                   if (info->gameName().compare(gameName, Qt::CaseInsensitive) == 0 &&
-                       info->canBeUpdated())
-                     return true;
-                   return false;
+                   return info->gameName().compare(gameName, Qt::CaseInsensitive) == 0 &&
+                       info->canBeUpdated();
                  });
     std::set<QSharedPointer<ModInfo>> diff;
     std::set_difference(updates.begin(), updates.end(), finalMods.begin(),

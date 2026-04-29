@@ -32,6 +32,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "shared/filesorigin.h"
 #include "ui_modinfodialog.h"
 #include <filesystem>
+#include <utility>
 
 using namespace MOBase;
 using namespace MOShared;
@@ -156,7 +157,7 @@ FileRenamer::RenameResults restoreHiddenFilesRecursive(FileRenamer& renamer,
 }
 
 ModInfoDialog::TabInfo::TabInfo(std::unique_ptr<ModInfoDialogTab> tab)
-    : tab(std::move(tab)) 
+    : tab(std::move(tab))
 {}
 
 bool ModInfoDialog::TabInfo::isVisible() const
@@ -169,7 +170,7 @@ ModInfoDialog::ModInfoDialog(OrganizerCore& core, PluginContainer& plugin,
                              QWidget* parent)
     : TutorableDialog("ModInfoDialog", parent), ui(new Ui::ModInfoDialog), m_core(core),
       m_plugin(plugin), m_modListView(modListView)
-      
+
 {
   ui->setupUi(this);
 
@@ -225,19 +226,19 @@ void ModInfoDialog::createTabs()
 {
   m_tabs.clear();
 
-  m_tabs.push_back(createTab<TextFilesTab>(*this, ModInfoTabIDs::TextFiles));
-  m_tabs.push_back(createTab<IniFilesTab>(*this, ModInfoTabIDs::IniFiles));
-  m_tabs.push_back(createTab<ImagesTab>(*this, ModInfoTabIDs::Images));
-  m_tabs.push_back(createTab<ESPsTab>(*this, ModInfoTabIDs::Esps));
-  m_tabs.push_back(createTab<ConflictsTab>(*this, ModInfoTabIDs::Conflicts));
-  m_tabs.push_back(createTab<CategoriesTab>(*this, ModInfoTabIDs::Categories));
-  m_tabs.push_back(createTab<NexusTab>(*this, ModInfoTabIDs::Nexus));
-  m_tabs.push_back(createTab<NotesTab>(*this, ModInfoTabIDs::Notes));
-  m_tabs.push_back(createTab<FileTreeTab>(*this, ModInfoTabIDs::Filetree));
+  m_tabs.emplace_back(createTab<TextFilesTab>(*this, ModInfoTabIDs::TextFiles));
+  m_tabs.emplace_back(createTab<IniFilesTab>(*this, ModInfoTabIDs::IniFiles));
+  m_tabs.emplace_back(createTab<ImagesTab>(*this, ModInfoTabIDs::Images));
+  m_tabs.emplace_back(createTab<ESPsTab>(*this, ModInfoTabIDs::Esps));
+  m_tabs.emplace_back(createTab<ConflictsTab>(*this, ModInfoTabIDs::Conflicts));
+  m_tabs.emplace_back(createTab<CategoriesTab>(*this, ModInfoTabIDs::Categories));
+  m_tabs.emplace_back(createTab<NexusTab>(*this, ModInfoTabIDs::Nexus));
+  m_tabs.emplace_back(createTab<NotesTab>(*this, ModInfoTabIDs::Notes));
+  m_tabs.emplace_back(createTab<FileTreeTab>(*this, ModInfoTabIDs::Filetree));
 
   // check for tabs in the ui not having a corresponding tab in the list
   int count = ui->tabWidget->count();
-  if (count < 0 || count > static_cast<int>(m_tabs.size())) {
+  if (count < 0 || std::cmp_greater(count, m_tabs.size())) {
     log::error("mod info dialog has more tabs than expected");
     count = static_cast<int>(m_tabs.size());
   }
@@ -280,7 +281,6 @@ int ModInfoDialog::exec()
   // whether to select the first tab; if the main window requested a specific
   // tab, it is selected when encountered in update()
   const auto noCustomTabRequested = (m_initialTab == ModInfoTabIDs::None);
-  const auto requestedTab         = m_initialTab;
 
   update(true);
 

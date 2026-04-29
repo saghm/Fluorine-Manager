@@ -133,7 +133,7 @@ public:
 };
 
 ModListView::ModListView(QWidget* parent)
-    : QTreeView(parent), 
+    : QTreeView(parent),
       m_markers{{}, {}, {}, {}, {}, {}},
       m_scrollbar(new ModListViewMarkingScrollBar(this))
 {
@@ -346,7 +346,7 @@ QModelIndexList ModListView::indexViewToModel(const QModelIndexList& index) cons
   return ::indexViewToModel(index, m_core->modList());
 }
 
-QModelIndex ModListView::nextIndex(const QModelIndex& index) 
+QModelIndex ModListView::nextIndex(const QModelIndex& index)
 {
   auto* model = index.model();
   if (!model) {
@@ -372,7 +372,7 @@ QModelIndex ModListView::nextIndex(const QModelIndex& index)
   }
 }
 
-QModelIndex ModListView::prevIndex(const QModelIndex& index) 
+QModelIndex ModListView::prevIndex(const QModelIndex& index)
 {
   if (index.row() == 0 && index.parent().isValid()) {
     return index.parent();
@@ -1191,8 +1191,8 @@ QColor ModListView::markerColor(const QModelIndex& index) const
       a += color.alpha();
     }
 
-    return {r / colors.size(), g / colors.size(), b / colors.size(),
-                  a / colors.size()};
+    const auto count = static_cast<int>(colors.size());
+    return {r / count, g / count, b / count, a / count};
   }
 
   return {};
@@ -1224,7 +1224,7 @@ std::vector<ModInfo::EFlag> ModListView::modFlags(const QModelIndex& index,
   }
 
   if (forceCompact) {
-    *forceCompact = true;
+    *forceCompact = compact;
   }
 
   return flags;
@@ -1257,7 +1257,7 @@ std::vector<ModInfo::EConflictFlag> ModListView::conflictFlags(const QModelIndex
   }
 
   if (forceCompact) {
-    *forceCompact = true;
+    *forceCompact = compact;
   }
 
   return flags;

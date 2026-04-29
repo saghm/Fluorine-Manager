@@ -11,7 +11,7 @@ class ESPItem
 {
 public:
   ESPItem(QString rootPath, QString relativePath)
-      : m_rootPath(std::move(rootPath)) 
+      : m_rootPath(std::move(rootPath))
   {
     if (relativePath.contains('/') || relativePath.contains('\\')) {
       m_inactivePath = relativePath;
@@ -121,7 +121,7 @@ public:
   QVariant data(const QModelIndex& index, int role) const override
   {
     if (role == Qt::DisplayRole) {
-      if (auto* esp = getESP(index)) {
+      if (const auto* esp = getESP(index)) {
         return esp->filename();
       }
     }

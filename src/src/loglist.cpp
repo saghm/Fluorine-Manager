@@ -317,7 +317,7 @@ log::Levels convertQtLevel(QtMsgType t)
 void qtLogCallback(QtMsgType type, const QMessageLogContext& context,
                    const QString& message)
 {
-  std::string_view file = "";
+  std::string_view file;
 
   if (type != QtDebugMsg) {
     if (context.file) {

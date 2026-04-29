@@ -114,7 +114,7 @@ QByteArray buildIco(const QByteArray& grpData,
         continue;
 
       QByteArray const hdr(grpData.constData() + grpOff, 8);
-      entries.append({hdr, imgData});
+      entries.append({.header=hdr, .data=imgData});
       break;
     }
   }
@@ -129,7 +129,8 @@ QByteArray buildIco(const QByteArray& grpData,
   ico.reserve(headerSize + count * 4096);
 
   // ICONDIR header.
-  uint16_t zero = 0, one = 1;
+  uint16_t zero = 0;
+  uint16_t one = 1;
   ico.append(reinterpret_cast<const char*>(&zero), 2);
   ico.append(reinterpret_cast<const char*>(&one), 2);
   ico.append(reinterpret_cast<const char*>(&entryCount), 2);
@@ -175,7 +176,8 @@ QByteArray tryExtractIcons(const QByteArray& fileData)
   uint16_t const magic = r16(optHdr);
 
   // Determine resource directory RVA.
-  uint32_t resRva = 0, resSize = 0;
+  uint32_t resRva = 0;
+  uint32_t resSize = 0;
   if (magic == 0x10b) {
     // PE32: data directories start at offset 96 in optional header.
     // Resource table is the 3rd entry (index 2), each entry is 8 bytes.

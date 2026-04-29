@@ -9,6 +9,7 @@
 #include <QStandardPaths>
 #include <QString>
 #include <QTextStream>
+#include <utility>
 
 #include "executableslist.h"
 #include "instancemanager.h"
@@ -126,7 +127,7 @@ static QImage extractIconFromExe(const QString& exePath)
   qint64 const secOff = optOff + optionalHdrSize;
   quint32 rsrcFileOff = 0;
   quint32 rsrcVA      = 0;
-  for (int i = 0; i < numSections; ++i) {
+  for (int i = 0; std::cmp_less(i , numSections); ++i) {
     QByteArray const sec = peek(secOff + i * 40, 40);
     if (sec.size() < 40)
       return {};
@@ -170,7 +171,8 @@ static QImage extractIconFromExe(const QString& exePath)
 
   // Level 0: find RT_GROUP_ICON (14) and RT_ICON (3).
   auto level0 = readDir(rsrcFileOff);
-  quint32 groupIconOff = 0, iconOff = 0;
+  quint32 groupIconOff = 0;
+  quint32 iconOff = 0;
   for (auto& e : level0) {
     if (e.id == 14 && e.isDir) groupIconOff = rsrcFileOff + e.offset;
     if (e.id == 3 && e.isDir)  iconOff = rsrcFileOff + e.offset;
@@ -206,7 +208,7 @@ static QImage extractIconFromExe(const QString& exePath)
   int bestIdx    = -1;
   int bestArea   = 0;
   quint16 bestId = 0;
-  for (int i = 0; i < iconCount; ++i) {
+  for (int i = 0; std::cmp_less(i , iconCount); ++i) {
     const char* e = grpData.constData() + 6 + i * 14;
     int w = static_cast<unsigned char>(e[0]);
     int h = static_cast<unsigned char>(e[1]);
@@ -516,7 +518,7 @@ QString Shortcut::shortcutPath(Locations loc) const
   return dir + "/" + shortcutFilename();
 }
 
-QString Shortcut::shortcutDirectory(Locations loc) 
+QString Shortcut::shortcutDirectory(Locations loc)
 {
   if (loc == Desktop) {
     // XDG desktop directory

@@ -38,7 +38,7 @@ PreviewGenerator::PreviewGenerator(const PluginContainer& pluginContainer)
 bool PreviewGenerator::previewSupported(const QString& fileExtension,
                                         const bool& isArchive) const
 {
-  auto& previews = m_PluginContainer.plugins<IPluginPreview>();
+  const auto& previews = m_PluginContainer.plugins<IPluginPreview>();
   for (auto* preview : previews) {
     if (preview->supportedExtensions().contains(fileExtension)) {
       if (!isArchive)
@@ -53,7 +53,7 @@ bool PreviewGenerator::previewSupported(const QString& fileExtension,
 QWidget* PreviewGenerator::genPreview(const QString& fileName) const
 {
   const QString ext = QFileInfo(fileName).suffix().toLower();
-  auto& previews    = m_PluginContainer.plugins<IPluginPreview>();
+  const auto& previews    = m_PluginContainer.plugins<IPluginPreview>();
   for (auto* preview : previews) {
     if (m_PluginContainer.isEnabled(preview) &&
         preview->supportedExtensions().contains(ext)) {
@@ -67,7 +67,7 @@ QWidget* PreviewGenerator::genArchivePreview(const QByteArray& fileData,
                                              const QString& fileName) const
 {
   const QString ext = QFileInfo(fileName).suffix().toLower();
-  auto& previews    = m_PluginContainer.plugins<IPluginPreview>();
+  const auto& previews    = m_PluginContainer.plugins<IPluginPreview>();
   for (auto* preview : previews) {
     if (m_PluginContainer.isEnabled(preview) &&
         preview->supportedExtensions().contains(ext) && preview->supportsArchives()) {

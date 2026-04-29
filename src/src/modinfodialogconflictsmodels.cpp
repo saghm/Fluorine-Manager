@@ -85,7 +85,7 @@ bool ConflictItem::canExplore() const
 
 ConflictListModel::ConflictListModel(QTreeView* tree, std::vector<Column> columns)
     : m_tree(tree), m_columns(std::move(columns))
-      
+
 {
   m_tree->setModel(this);
 }
@@ -217,7 +217,7 @@ void ConflictListModel::sort(int colIndex, Qt::SortOrder order)
 
   for (int i = 0; i < itemCount; ++i) {
     const QModelIndex& index = oldList[i];
-    oldItems.push_back({itemFromIndex(index), index.column()});
+    oldItems.emplace_back(itemFromIndex(index), index.column());
   }
 
   doSort();
@@ -291,21 +291,21 @@ void ConflictListModel::doSort()
 }
 
 OverwriteConflictListModel::OverwriteConflictListModel(QTreeView* tree)
-    : ConflictListModel(tree, {{tr("File"), &ConflictItem::relativeName},
-                               {tr("Overwritten Mods"), &ConflictItem::before}})
+    : ConflictListModel(tree, {{.caption=tr("File"), .getText=&ConflictItem::relativeName},
+                               {.caption=tr("Overwritten Mods"), .getText=&ConflictItem::before}})
 {}
 
 OverwrittenConflictListModel::OverwrittenConflictListModel(QTreeView* tree)
-    : ConflictListModel(tree, {{tr("File"), &ConflictItem::relativeName},
-                               {tr("Providing Mod"), &ConflictItem::after}})
+    : ConflictListModel(tree, {{.caption=tr("File"), .getText=&ConflictItem::relativeName},
+                               {.caption=tr("Providing Mod"), .getText=&ConflictItem::after}})
 {}
 
 NoConflictListModel::NoConflictListModel(QTreeView* tree)
-    : ConflictListModel(tree, {{tr("File"), &ConflictItem::relativeName}})
+    : ConflictListModel(tree, {{.caption=tr("File"), .getText=&ConflictItem::relativeName}})
 {}
 
 AdvancedConflictListModel::AdvancedConflictListModel(QTreeView* tree)
-    : ConflictListModel(tree, {{tr("Overwrites"), &ConflictItem::before},
-                               {tr("File"), &ConflictItem::relativeName},
-                               {tr("Overwritten By"), &ConflictItem::after}})
+    : ConflictListModel(tree, {{.caption=tr("Overwrites"), .getText=&ConflictItem::before},
+                               {.caption=tr("File"), .getText=&ConflictItem::relativeName},
+                               {.caption=tr("Overwritten By"), .getText=&ConflictItem::after}})
 {}

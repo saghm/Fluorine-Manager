@@ -160,7 +160,7 @@ InstanceManagerDialog::~InstanceManagerDialog() = default;
 
 InstanceManagerDialog::InstanceManagerDialog(PluginContainer& pc, QWidget* parent)
     : QDialog(parent), ui(new Ui::InstanceManagerDialog), m_pc(pc)
-      
+
 {
   ui->setupUi(this);
 
@@ -311,8 +311,8 @@ void InstanceManagerDialog::updateInstances()
   });
 
   // add registered portable instances (non-default paths)
-  const QString defaultPortable = QDir(m.portablePath()).absolutePath();
-  for (const auto& path : m.registeredPortablePaths()) {
+  const QString defaultPortable = QDir(InstanceManager::portablePath()).absolutePath();
+  for (const auto& path : InstanceManager::registeredPortablePaths()) {
     // skip the default portable path (handled separately below)
     if (QDir(path).absolutePath() == defaultPortable) {
       continue;
@@ -329,9 +329,9 @@ void InstanceManagerDialog::updateInstances()
     return (MOBase::naturalCompare(a->displayName(), b->displayName()) < 0);
   });
 
-  if (m.portableInstanceExists()) {
+  if (InstanceManager::portableInstanceExists()) {
     m_instances.insert(m_instances.begin(),
-                       std::make_unique<Instance>(m.portablePath(), true));
+                       std::make_unique<Instance>(InstanceManager::portablePath(), true));
   }
 
   // read all inis, ignore errors
@@ -446,10 +446,10 @@ void InstanceManagerDialog::openSelectedInstance()
     // between the default portable path and user-selected portable locations.
     // An empty string means "use default portable path".
     auto& m = InstanceManager::singleton();
-    if (to.directory() == m.portablePath()) {
-      m.setCurrentInstance("");
+    if (to.directory() == InstanceManager::portablePath()) {
+      InstanceManager::setCurrentInstance("");
     } else {
-      m.setCurrentInstance(to.directory());
+      InstanceManager::setCurrentInstance(to.directory());
     }
   } else {
     InstanceManager::singleton().setCurrentInstance(to.displayName());
@@ -495,7 +495,7 @@ bool InstanceManagerDialog::confirmSwitch(const Instance& to)
 
 void InstanceManagerDialog::rename()
 {
-  auto* i = singleSelection();
+  const auto* i = singleSelection();
   if (!i) {
     return;
   }
@@ -600,7 +600,7 @@ void InstanceManagerDialog::removeFromList()
   }
 
   if (i->isPortable()) {
-    m.unregisterPortableInstance(i->directory());
+    InstanceManager::unregisterPortableInstance(i->directory());
   } else {
     // for global instances, rename the INI so it's no longer auto-discovered
     const QString ini = i->iniPath();
@@ -874,7 +874,7 @@ void InstanceManagerDialog::fillData(const Instance& ii)
     ui->convertToPortable->setVisible(true);
     ui->convertToGlobal->setVisible(false);
 
-    if (m.portableInstanceExists()) {
+    if (InstanceManager::portableInstanceExists()) {
       ui->convertToPortable->setEnabled(false);
       ui->convertToPortable->setToolTip(tr("A portable instance already exists."));
     } else {
@@ -941,7 +941,7 @@ void InstanceManagerDialog::openExistingPortable()
 
   // Register the portable instance so it persists in the sidebar
   auto& m = InstanceManager::singleton();
-  m.registerPortableInstance(dir);
+  InstanceManager::registerPortableInstance(dir);
 
   // Refresh the instance list and select the newly added entry
   updateInstances();

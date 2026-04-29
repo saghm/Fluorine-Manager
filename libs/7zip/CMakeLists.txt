@@ -448,7 +448,7 @@ target_compile_options(7z PRIVATE
 
 target_link_libraries(7z PRIVATE pthread dl)
 
-# Install 7z.so next to the organizer binary (in dlls/ subdirectory)
-install(TARGETS 7z LIBRARY DESTINATION dlls)
+# Install 7z.so with the organizer's Linux libraries.
+install(TARGETS 7z LIBRARY DESTINATION lib)
 # Also install to the bin root so dlopen can find it easily
 install(TARGETS 7z LIBRARY DESTINATION bin)

@@ -8,7 +8,7 @@ class UILockerInterface
 {
 public:
   UILockerInterface(QWidget* mainUI)
-      : m_mainUI(mainUI) 
+      : m_mainUI(mainUI)
   {
     m_timer.reset(new QTimer);
     QObject::connect(m_timer.get(), &QTimer::timeout, [&] {
@@ -395,7 +395,7 @@ const QString& UILocker::Session::name() const
   return m_name;
 }
 
-UILocker::Results UILocker::Session::result() 
+UILocker::Results UILocker::Session::result()
 {
   return UILocker::instance().result();
 }
@@ -412,7 +412,7 @@ UILocker::~UILocker()
 {
   const auto v = m_sessions;
 
-  for (auto& wp : v) {
+  for (const auto& wp : v) {
     if (auto s = wp.lock()) {
       unlock(s.get());
     }
@@ -630,6 +630,6 @@ void UILocker::disable(QWidget* w)
 {
   if (w->isEnabled()) {
     w->setEnabled(false);
-    m_disabled.push_back(w);
+    m_disabled.emplace_back(w);
   }
 }

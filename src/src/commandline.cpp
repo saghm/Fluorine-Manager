@@ -50,7 +50,7 @@ std::string table(const std::vector<std::pair<std::string, std::string>>& v,
   return s;
 }
 
-CommandLine::CommandLine()  
+CommandLine::CommandLine()
 {
   createOptions();
 
@@ -372,7 +372,7 @@ std::string CommandLine::usage(const Command* c) const
         continue;
       }
 
-      v.push_back({c->name(), c->description()});
+      v.emplace_back(c->name(), c->description());
     }
 
     oss << table(v, 2, 4) << "\n"
@@ -441,7 +441,7 @@ const QStringList& CommandLine::untouched() const
   return m_untouched;
 }
 
-std::string CommandLine::more() 
+std::string CommandLine::more()
 {
   return "Multiple processes\n"
          "  A note on terminology: 'instance' can either mean an MO process\n"
