@@ -39,3 +39,6 @@ fomod-plus-settings.ini
 # Nix
 .nix-venv/
 result
+
+# Local Claude Code state
+/.claude/
