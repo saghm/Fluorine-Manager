@@ -26,7 +26,7 @@ public:
 
   size_t highestCount() const
   {
-    std::scoped_lock lock(m_Mutex);
+    std::scoped_lock const lock(m_Mutex);
     return m_Files.size();
   }
 

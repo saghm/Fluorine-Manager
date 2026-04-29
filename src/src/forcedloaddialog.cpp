@@ -52,7 +52,7 @@ QList<MOBase::ExecutableForcedLoadSetting> ForcedLoadDialog::values()
 
 void ForcedLoadDialog::on_addRowButton_clicked()
 {
-  int row = ui->tableWidget->rowCount();
+  int const row = ui->tableWidget->rowCount();
   ui->tableWidget->insertRow(row);
   ForcedLoadDialogWidget* item = new ForcedLoadDialogWidget(m_GamePlugin, this);
   ui->tableWidget->setCellWidget(row, 0, item);
@@ -62,7 +62,7 @@ void ForcedLoadDialog::on_addRowButton_clicked()
 void ForcedLoadDialog::on_deleteRowButton_clicked()
 {
   for (auto rowIndex : ui->tableWidget->selectionModel()->selectedRows()) {
-    int row     = rowIndex.row();
+    int const row     = rowIndex.row();
     auto widget = (ForcedLoadDialogWidget*)ui->tableWidget->cellWidget(row, 0);
     if (!widget->getForced()) {
       ui->tableWidget->removeRow(row);

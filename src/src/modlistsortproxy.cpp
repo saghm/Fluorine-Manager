@@ -84,7 +84,7 @@ void ModListSortProxy::setCriteria(const std::vector<Criteria>& criteria)
 unsigned long ModListSortProxy::flagsId(const std::vector<ModInfo::EFlag>& flags) 
 {
   unsigned long result = 0;
-  for (ModInfo::EFlag flag : flags) {
+  for (ModInfo::EFlag const flag : flags) {
     if ((flag != ModInfo::FLAG_FOREIGN) && (flag != ModInfo::FLAG_OVERWRITE)) {
       result += 1 << (int)flag;
     }
@@ -96,7 +96,7 @@ unsigned long ModListSortProxy::conflictFlagsId(
     const std::vector<ModInfo::EConflictFlag>& flags) 
 {
   unsigned long result = 0;
-  for (ModInfo::EConflictFlag flag : flags) {
+  for (ModInfo::EConflictFlag const flag : flags) {
     if ((flag != ModInfo::FLAG_OVERWRITE_CONFLICT)) {
       result += 1 << (int)flag;
     }
@@ -120,23 +120,23 @@ bool ModListSortProxy::lessThan(const QModelIndex& left, const QModelIndex& righ
   }
 
   bool lOk, rOk;
-  int leftIndex  = left.data(ModList::IndexRole).toInt(&lOk);
-  int rightIndex = right.data(ModList::IndexRole).toInt(&rOk);
+  int const leftIndex  = left.data(ModList::IndexRole).toInt(&lOk);
+  int const rightIndex = right.data(ModList::IndexRole).toInt(&rOk);
 
   if (!lOk || !rOk) {
     return false;
   }
 
-  ModInfo::Ptr leftMod  = ModInfo::getByIndex(leftIndex);
-  ModInfo::Ptr rightMod = ModInfo::getByIndex(rightIndex);
+  ModInfo::Ptr const leftMod  = ModInfo::getByIndex(leftIndex);
+  ModInfo::Ptr const rightMod = ModInfo::getByIndex(rightIndex);
 
   bool lt = left.data(ModList::PriorityRole).toInt() <
             right.data(ModList::PriorityRole).toInt();
 
   switch (left.column()) {
   case ModList::COL_FLAGS: {
-    std::vector<ModInfo::EFlag> leftFlags  = leftMod->getFlags();
-    std::vector<ModInfo::EFlag> rightFlags = rightMod->getFlags();
+    std::vector<ModInfo::EFlag> const leftFlags  = leftMod->getFlags();
+    std::vector<ModInfo::EFlag> const rightFlags = rightMod->getFlags();
     if (leftFlags.size() != rightFlags.size()) {
       lt = leftFlags.size() < rightFlags.size();
     } else {
@@ -144,8 +144,8 @@ bool ModListSortProxy::lessThan(const QModelIndex& left, const QModelIndex& righ
     }
   } break;
   case ModList::COL_CONFLICTFLAGS: {
-    std::vector<ModInfo::EConflictFlag> leftFlags  = leftMod->getConflictFlags();
-    std::vector<ModInfo::EConflictFlag> rightFlags = rightMod->getConflictFlags();
+    std::vector<ModInfo::EConflictFlag> const leftFlags  = leftMod->getConflictFlags();
+    std::vector<ModInfo::EConflictFlag> const rightFlags = rightMod->getConflictFlags();
     if (leftFlags.size() != rightFlags.size()) {
       lt = leftFlags.size() < rightFlags.size();
     } else {
@@ -168,7 +168,7 @@ bool ModListSortProxy::lessThan(const QModelIndex& left, const QModelIndex& righ
     lt = lValue < rValue;
   } break;
   case ModList::COL_NAME: {
-    int comp = QString::compare(leftMod->name(), rightMod->name(), Qt::CaseInsensitive);
+    int const comp = QString::compare(leftMod->name(), rightMod->name(), Qt::CaseInsensitive);
     if (comp != 0)
       lt = comp < 0;
   } break;
@@ -180,10 +180,10 @@ bool ModListSortProxy::lessThan(const QModelIndex& left, const QModelIndex& righ
         lt = true;
       else {
         try {
-          CategoryFactory& categories = CategoryFactory::instance();
-          QString leftCatName         = categories.getCategoryName(
+          CategoryFactory const& categories = CategoryFactory::instance();
+          QString const leftCatName         = categories.getCategoryName(
               categories.getCategoryIndex(leftMod->primaryCategory()));
-          QString rightCatName = categories.getCategoryName(
+          QString const rightCatName = categories.getCategoryName(
               categories.getCategoryIndex(rightMod->primaryCategory()));
           lt = leftCatName < rightCatName;
         } catch (const std::exception& e) {
@@ -196,7 +196,7 @@ bool ModListSortProxy::lessThan(const QModelIndex& left, const QModelIndex& righ
     if (leftMod->author() != rightMod->author()) {
       lt = leftMod->author() < rightMod->author();
     } else {
-      int comp = QString::compare(leftMod->uploader(), rightMod->uploader(),
+      int const comp = QString::compare(leftMod->uploader(), rightMod->uploader(),
                                   Qt::CaseInsensitive);
       if (comp != 0)
         lt = comp < 0;
@@ -206,7 +206,7 @@ bool ModListSortProxy::lessThan(const QModelIndex& left, const QModelIndex& righ
     if (leftMod->uploader() != rightMod->uploader()) {
       lt = leftMod->uploader() < rightMod->uploader();
     } else {
-      int comp = QString::compare(leftMod->uploader(), rightMod->uploader(),
+      int const comp = QString::compare(leftMod->uploader(), rightMod->uploader(),
                                   Qt::CaseInsensitive);
       if (comp != 0)
         lt = comp < 0;
@@ -221,8 +221,8 @@ bool ModListSortProxy::lessThan(const QModelIndex& left, const QModelIndex& righ
       lt = leftMod->version() < rightMod->version();
   } break;
   case ModList::COL_INSTALLTIME: {
-    QDateTime leftTime  = left.data().toDateTime();
-    QDateTime rightTime = right.data().toDateTime();
+    QDateTime const leftTime  = left.data().toDateTime();
+    QDateTime const rightTime = right.data().toDateTime();
     if (leftTime != rightTime)
       return leftTime < rightTime;
   } break;
@@ -230,15 +230,15 @@ bool ModListSortProxy::lessThan(const QModelIndex& left, const QModelIndex& righ
     if (leftMod->gameName() != rightMod->gameName()) {
       lt = leftMod->gameName() < rightMod->gameName();
     } else {
-      int comp =
+      int const comp =
           QString::compare(leftMod->name(), rightMod->name(), Qt::CaseInsensitive);
       if (comp != 0)
         lt = comp < 0;
     }
   } break;
   case ModList::COL_NOTES: {
-    QString leftComments  = leftMod->comments();
-    QString rightComments = rightMod->comments();
+    QString const leftComments  = leftMod->comments();
+    QString const rightComments = rightMod->comments();
     if (leftComments != rightComments) {
       if (leftComments.isEmpty()) {
         lt = sortOrder() == Qt::DescendingOrder;
@@ -274,7 +274,7 @@ void ModListSortProxy::updateFilter(const QString& filter)
 bool ModListSortProxy::hasConflictFlag(
     const std::vector<ModInfo::EConflictFlag>& flags) 
 {
-  for (ModInfo::EConflictFlag flag : flags) {
+  for (ModInfo::EConflictFlag const flag : flags) {
     if ((flag == ModInfo::FLAG_CONFLICT_MIXED) ||
         (flag == ModInfo::FLAG_CONFLICT_OVERWRITE) ||
         (flag == ModInfo::FLAG_CONFLICT_OVERWRITTEN) ||
@@ -466,13 +466,13 @@ bool ModListSortProxy::filterMatchesMod(ModInfo::Ptr info, bool enabled) const
     bool display       = false;
     QString filterCopy = QString(m_Filter);
     filterCopy.replace("||", ";").replace("OR", ";").replace("|", ";");
-    QStringList ORList = filterCopy.split(";", Qt::SkipEmptyParts);
+    QStringList const ORList = filterCopy.split(";", Qt::SkipEmptyParts);
 
     bool segmentGood = true;
 
     // split in ORSegments that internally use AND logic
     for (auto& ORSegment : ORList) {
-      QStringList ANDKeywords = ORSegment.split(" ", Qt::SkipEmptyParts);
+      QStringList const ANDKeywords = ORSegment.split(" ", Qt::SkipEmptyParts);
       segmentGood             = true;
       bool foundKeyword       = false;
 
@@ -508,7 +508,7 @@ bool ModListSortProxy::filterMatchesMod(ModInfo::Ptr info, bool enabled) const
 
         // Search by categories
         if (!foundKeyword && m_EnabledColumns[ModList::COL_CATEGORY]) {
-          for (auto category : info->categories()) {
+          for (const auto& category : info->categories()) {
             if (category.contains(currentKeyword, Qt::CaseInsensitive)) {
               foundKeyword = true;
               break;
@@ -519,7 +519,7 @@ bool ModListSortProxy::filterMatchesMod(ModInfo::Ptr info, bool enabled) const
         // Search by Nexus ID
         if (!foundKeyword && m_EnabledColumns[ModList::COL_MODID]) {
           bool ok;
-          int filterID = currentKeyword.toInt(&ok);
+          int const filterID = currentKeyword.toInt(&ok);
           if (ok) {
             int modID = info->nexusId();
             while (modID > 0) {
@@ -589,7 +589,7 @@ bool ModListSortProxy::filterAcceptsRow(int source_row, const QModelIndex& paren
     return false;
   }
 
-  QModelIndex idx = sourceModel()->index(source_row, 0, parent);
+  QModelIndex const idx = sourceModel()->index(source_row, 0, parent);
   if (!idx.isValid()) {
     log::debug("invalid mod index");
     return false;
@@ -619,7 +619,7 @@ bool ModListSortProxy::filterAcceptsRow(int source_row, const QModelIndex& paren
 
     return false;
   } else {
-    bool modEnabled =
+    bool const modEnabled =
         idx.sibling(source_row, 0).data(Qt::CheckStateRole).toInt() == Qt::Checked;
     return filterMatchesMod(ModInfo::getByIndex(index), modEnabled);
   }
@@ -634,7 +634,7 @@ bool ModListSortProxy::canDropMimeData(const QMimeData* data, Qt::DropAction act
                                        int row, int column,
                                        const QModelIndex& parent) const
 {
-  ModListDropInfo dropInfo(data, *m_Organizer);
+  ModListDropInfo const dropInfo(data, *m_Organizer);
 
   if (!dropInfo.isLocalFileDrop() && sortColumn() != ModList::COL_PRIORITY) {
     return false;
@@ -662,7 +662,7 @@ bool ModListSortProxy::canDropMimeData(const QMimeData* data, Qt::DropAction act
 bool ModListSortProxy::dropMimeData(const QMimeData* data, Qt::DropAction action,
                                     int row, int column, const QModelIndex& parent)
 {
-  ModListDropInfo dropInfo(data, *m_Organizer);
+  ModListDropInfo const dropInfo(data, *m_Organizer);
 
   if (!dropInfo.isLocalFileDrop() && sortColumn() != ModList::COL_PRIORITY) {
     QWidget* wid = qApp->activeWindow()->findChild<QTreeView*>("modList");

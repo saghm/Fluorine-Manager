@@ -47,7 +47,7 @@ ModInfoForeign::ModInfoForeign(const QString& modName, const QString& referenceF
   IPluginGame const* game = core.managedGame();
   QList<QDir> directories = {game->dataDirectory()};
   directories.append(game->secondaryDataDirectories().values());
-  for (QDir directory : directories) {
+  for (const QDir& directory : directories) {
     if (referenceFile.startsWith(directory.absolutePath(), Qt::CaseInsensitive)) {
       m_BaseDirectory = directory.absolutePath();
     }

@@ -27,7 +27,7 @@ QString parseQuotedRegValue(const QString& s)
   QString result;
   bool esc = false;
   for (int i = 1; i < s.size(); ++i) {
-    QChar c = s[i];
+    QChar const c = s[i];
     if (esc) {
       if (c == 'n') result += '\n';
       else if (c == 'r') result += '\r';
@@ -50,14 +50,14 @@ QString parseQuotedRegValue(const QString& s)
 /// Parse a registry value line like "ValueName"="value".
 std::pair<QString, QString> parseRegValueLine(const QString& line)
 {
-  int eq = line.indexOf('=');
+  int const eq = line.indexOf('=');
   if (eq < 0)
     return {};
 
-  QString namePart = line.left(eq).trimmed();
-  QString valPart  = line.mid(eq + 1);
+  QString const namePart = line.left(eq).trimmed();
+  QString const valPart  = line.mid(eq + 1);
 
-  QString name = (namePart == QStringLiteral("@"))
+  QString const name = (namePart == QStringLiteral("@"))
       ? QStringLiteral("@")
       : namePart.mid(1, namePart.size() - 2);  // strip quotes
 
@@ -66,7 +66,7 @@ std::pair<QString, QString> parseRegValueLine(const QString& line)
     value = parseQuotedRegValue(valPart);
   } else if (valPart.startsWith(QStringLiteral("dword:"))) {
     bool ok;
-    uint v = valPart.mid(6).toUInt(&ok, 16);
+    uint const v = valPart.mid(6).toUInt(&ok, 16);
     value  = ok ? QString::number(v) : valPart;
   } else {
     value = valPart;
@@ -222,7 +222,7 @@ QVector<DetectedGame> detectSteamGames()
     }
 
     for (const QString& steamapps : allSteamapps) {
-      QDir dir(steamapps);
+      QDir const dir(steamapps);
       const QStringList acfs =
           dir.entryList({QStringLiteral("appmanifest_*.acf")}, QDir::Files);
 
@@ -231,7 +231,7 @@ QVector<DetectedGame> detectSteamGames()
         if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
           continue;
 
-        AppManifest m = AppManifest::fromVdf(QString::fromUtf8(f.readAll()));
+        AppManifest const m = AppManifest::fromVdf(QString::fromUtf8(f.readAll()));
         if (m.app_id.isEmpty() || !m.isInstalled())
           continue;
 
@@ -286,7 +286,7 @@ QString getHeroicGamePrefix(const QString& heroicPath, const QString& appName)
   if (!f.open(QIODevice::ReadOnly))
     return {};
 
-  QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+  QJsonDocument const doc = QJsonDocument::fromJson(f.readAll());
   QJsonObject root  = doc.object();
 
   // Try direct or nested under appName.
@@ -318,7 +318,7 @@ QVector<DetectedGame> detectHeroicGames()
     {
       QFile f(heroicPath + "/gog_store/installed.json");
       if (f.open(QIODevice::ReadOnly)) {
-        QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+        QJsonDocument const doc = QJsonDocument::fromJson(f.readAll());
 
         QJsonArray installed;
         if (doc.isObject() && doc.object().contains(QStringLiteral("installed")))
@@ -364,7 +364,7 @@ QVector<DetectedGame> detectHeroicGames()
 
       QFile f(epicPath);
       if (f.open(QIODevice::ReadOnly)) {
-        QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+        QJsonDocument const doc = QJsonDocument::fromJson(f.readAll());
         if (doc.isObject()) {
           const QJsonObject obj = doc.object();
           for (auto it = obj.begin(); it != obj.end(); ++it) {
@@ -431,7 +431,7 @@ QVector<DetectedGame> detectBottlesGames()
     if (!QFileInfo::exists(bottlesPath))
       continue;
 
-    QDir dir(bottlesPath);
+    QDir const dir(bottlesPath);
     for (const QString& bottleName :
          dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
       const QString bottlePath = dir.absoluteFilePath(bottleName);

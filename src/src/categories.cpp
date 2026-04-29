@@ -62,7 +62,7 @@ void CategoryFactory::loadCategories()
   } else {
     int lineNum = 0;
     while (!categoryFile.atEnd()) {
-      QByteArray line = categoryFile.readLine();
+      QByteArray const line = categoryFile.readLine();
       ++lineNum;
       QList<QByteArray> cells = line.split('|');
       if (cells.count() == 4) {
@@ -72,7 +72,7 @@ void CategoryFactory::loadCategories()
           for (QList<QByteArray>::iterator iter = nexusIDStrings.begin();
                iter != nexusIDStrings.end(); ++iter) {
             bool ok  = false;
-            int temp = iter->toInt(&ok);
+            int const temp = iter->toInt(&ok);
             if (!ok) {
               log::error(tr("invalid category id {0}"), iter->constData());
             }
@@ -81,8 +81,8 @@ void CategoryFactory::loadCategories()
         }
         bool cell0Ok = true;
         bool cell3Ok = true;
-        int id       = cells[0].toInt(&cell0Ok);
-        int parentID = cells[3].trimmed().toInt(&cell3Ok);
+        int const id       = cells[0].toInt(&cell0Ok);
+        int const parentID = cells[3].trimmed().toInt(&cell3Ok);
         if (!cell0Ok || !cell3Ok) {
           log::error(tr("invalid category line {0}: {1}"), lineNum, line.constData());
         }
@@ -90,8 +90,8 @@ void CategoryFactory::loadCategories()
       } else if (cells.count() == 3) {
         bool cell0Ok = true;
         bool cell3Ok = true;
-        int id       = cells[0].toInt(&cell0Ok);
-        int parentID = cells[2].trimmed().toInt(&cell3Ok);
+        int const id       = cells[0].toInt(&cell0Ok);
+        int const parentID = cells[2].trimmed().toInt(&cell3Ok);
         if (!cell0Ok || !cell3Ok) {
           log::error(tr("invalid category line {0}: {1}"), lineNum, line.constData());
         }
@@ -111,18 +111,18 @@ void CategoryFactory::loadCategories()
     } else {
       int nexLineNum = 0;
       while (!nexusMapFile.atEnd()) {
-        QByteArray nexLine = nexusMapFile.readLine();
+        QByteArray const nexLine = nexusMapFile.readLine();
         ++nexLineNum;
         QList<QByteArray> nexCells = nexLine.split('|');
         if (nexCells.count() == 3) {
-          std::vector<NexusCategory> nexusCats;
-          QString nexName = nexCells[1];
+          std::vector<NexusCategory> const nexusCats;
+          QString const nexName = nexCells[1];
           bool ok         = false;
-          int nexID       = nexCells[2].toInt(&ok);
+          int const nexID       = nexCells[2].toInt(&ok);
           if (!ok) {
             log::error(tr("invalid nexus ID {}"), nexCells[2].constData());
           }
-          int catID = nexCells[0].toInt(&ok);
+          int const catID = nexCells[0].toInt(&ok);
           if (!ok) {
             log::error(tr("invalid category id {}"), nexCells[0].constData());
           }
@@ -164,7 +164,7 @@ void CategoryFactory::setParents()
 
   for (const auto& category : m_Categories) {
     if (category.parentID() != 0) {
-      std::map<int, unsigned int>::const_iterator iter =
+      std::map<int, unsigned int>::const_iterator const iter =
           m_IDMap.find(category.parentID());
       if (iter != m_IDMap.end()) {
         m_Categories[iter->second].setHasChildren(true);
@@ -252,7 +252,7 @@ int CategoryFactory::addCategory(const QString& name,
 
 void CategoryFactory::addCategory(int id, const QString& name, int parentID)
 {
-  int index = static_cast<int>(m_Categories.size());
+  int const index = static_cast<int>(m_Categories.size());
   m_Categories.push_back(
       Category(index, id, name, parentID, std::vector<NexusCategory>()));
   m_IDMap[id] = index;
@@ -266,7 +266,7 @@ void CategoryFactory::addCategory(int id, const QString& name,
     m_NexusMap.insert_or_assign(nexusCat.ID(), nexusCat);
     m_NexusMap.at(nexusCat.ID()).setCategoryID(id);
   }
-  int index = static_cast<int>(m_Categories.size());
+  int const index = static_cast<int>(m_Categories.size());
   m_Categories.push_back(Category(index, id, name, parentID, nexusCats));
   m_IDMap[id] = index;
 }
@@ -378,10 +378,10 @@ bool CategoryFactory::isDescendantOfImpl(int id, int parentID,
     return false;
   }
 
-  std::map<int, unsigned int>::const_iterator iter = m_IDMap.find(id);
+  std::map<int, unsigned int>::const_iterator const iter = m_IDMap.find(id);
 
   if (iter != m_IDMap.end()) {
-    unsigned int index = iter->second;
+    unsigned int const index = iter->second;
     if (m_Categories[index].parentID() == 0) {
       return false;
     } else if (m_Categories[index].parentID() == parentID) {
@@ -483,7 +483,7 @@ int CategoryFactory::getCategoryID(unsigned int index) const
 
 int CategoryFactory::getCategoryIndex(int ID) const
 {
-  std::map<int, unsigned int>::const_iterator iter = m_IDMap.find(ID);
+  std::map<int, unsigned int>::const_iterator const iter = m_IDMap.find(ID);
   if (iter == m_IDMap.end()) {
     throw MyException(tr("invalid category id: %1").arg(ID));
   }

@@ -150,9 +150,9 @@ bool ModListChangeCategoryMenu::populate(QMenu* menu, CategoryFactory* factory,
         targetMenu = menu->addMenu(factory->getCategoryName(i).replace('&', "&&"));
       }
 
-      int id = factory->getCategoryID(i);
+      int const id = factory->getCategoryID(i);
       auto checkBox = std::make_unique<QCheckBox>(targetMenu);
-      bool enabled = categories.contains(id);
+      bool const enabled = categories.contains(id);
       checkBox->setText(factory->getCategoryName(i).replace('&', "&&"));
       if (enabled) {
         childEnabled = true;
@@ -188,8 +188,8 @@ void ModListPrimaryCategoryMenu::populate(const CategoryFactory* factory,
 {
   clear();
   const std::set<int>& categories = mod->getCategories();
-  for (int categoryID : categories) {
-    int catIdx            = factory->getCategoryIndex(categoryID);
+  for (int const categoryID : categories) {
+    int const catIdx            = factory->getCategoryIndex(categoryID);
     QWidgetAction* action = new QWidgetAction(this);
     try {
       QRadioButton* categoryBox =
@@ -232,7 +232,7 @@ ModListContextMenu::ModListContextMenu(const QModelIndex& index, OrganizerCore& 
     m_selected = {index};
   }
 
-  ModInfo::Ptr info = ModInfo::getByIndex(index.data(ModList::IndexRole).toInt());
+  ModInfo::Ptr const info = ModInfo::getByIndex(index.data(ModList::IndexRole).toInt());
 
   QMenu* allMods =
       new ModListGlobalContextMenu(core, view, m_index, view->topLevelWidget());
@@ -241,7 +241,7 @@ ModListContextMenu::ModListContextMenu(const QModelIndex& index, OrganizerCore& 
 
   auto viewIndex = view->indexModelToView(m_index);
   if (view->model()->hasChildren(viewIndex)) {
-    bool expanded = view->isExpanded(viewIndex);
+    bool const expanded = view->isExpanded(viewIndex);
     addSeparator();
     addAction(tr("Collapse all"), view, &QTreeView::collapseAll);
     addAction(tr("Collapse others"), [=, this]() {
@@ -351,7 +351,7 @@ void ModListContextMenu::addCategoryContextMenus(ModInfo::Ptr mod)
   ModListPrimaryCategoryMenu* primaryCategoryMenu =
       new ModListPrimaryCategoryMenu(m_categories, mod, this);
   connect(primaryCategoryMenu, &QMenu::aboutToHide, [=, this]() {
-    int category = primaryCategoryMenu->primaryCategory();
+    int const category = primaryCategoryMenu->primaryCategory();
     if (category != -1) {
       m_actions.setPrimaryCategory(m_selected, category);
     }

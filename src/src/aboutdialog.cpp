@@ -126,8 +126,8 @@ void AboutDialog::on_creditsList_currentItemChanged(QListWidgetItem* current,
 {
   auto iter = m_LicenseFiles.find(current->data(Qt::UserRole).toInt());
   if (iter != m_LicenseFiles.end()) {
-    QString filePath = qApp->applicationDirPath() + "/licenses/" + iter->second;
-    QString text     = MOBase::readFileText(filePath);
+    QString const filePath = qApp->applicationDirPath() + "/licenses/" + iter->second;
+    QString const text     = MOBase::readFileText(filePath);
     ui->licenseText->setText(text);
   } else {
     ui->licenseText->setText(tr("No license"));

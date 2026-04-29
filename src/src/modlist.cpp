@@ -185,10 +185,10 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
     return {};
   if (!modelIndex.isValid())
     return {};
-  unsigned int modIndex = modelIndex.row();
-  int column            = modelIndex.column();
+  unsigned int const modIndex = modelIndex.row();
+  int const column            = modelIndex.column();
 
-  ModInfo::Ptr modInfo = ModInfo::getByIndex(modIndex);
+  ModInfo::Ptr const modInfo = ModInfo::getByIndex(modIndex);
   if ((role == Qt::DisplayRole) || (role == Qt::EditRole)) {
     if ((column == COL_FLAGS) || (column == COL_CONTENT) ||
         (column == COL_CONFLICTFLAGS)) {
@@ -196,7 +196,7 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
     } else if (column == COL_NAME) {
       return getDisplayName(modInfo);
     } else if (column == COL_VERSION) {
-      VersionInfo verInfo = modInfo->version();
+      VersionInfo const verInfo = modInfo->version();
       QString version     = verInfo.displayString();
       if (role != Qt::EditRole) {
         if (version.isEmpty() && modInfo->canBeUpdated()) {
@@ -211,7 +211,7 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
         return QString::number(m_Profile->getModPriority(modIndex));
       }
     } else if (column == COL_MODID) {
-      int modID = modInfo->nexusId();
+      int const modID = modInfo->nexusId();
       if (modID > 0) {
         return modID;
       } else {
@@ -232,10 +232,10 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
       } else {
         int category = modInfo->primaryCategory();
         if (category != -1) {
-          CategoryFactory& categoryFactory = CategoryFactory::instance();
+          CategoryFactory const& categoryFactory = CategoryFactory::instance();
           if (categoryFactory.categoryExists(category)) {
             try {
-              int categoryIdx = categoryFactory.getCategoryIndex(category);
+              int const categoryIdx = categoryFactory.getCategoryIndex(category);
               return categoryFactory.getCategoryName(categoryIdx);
             } catch (const std::exception& e) {
               log::error("failed to retrieve category name: {}", e.what());
@@ -289,8 +289,8 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
   } else if (role == GroupingRole) {
     if (column == COL_CATEGORY) {
       QVariantList categoryNames;
-      std::set<int> categories         = modInfo->getCategories();
-      CategoryFactory& categoryFactory = CategoryFactory::instance();
+      std::set<int> const categories         = modInfo->getCategories();
+      CategoryFactory const& categoryFactory = CategoryFactory::instance();
       for (auto iter = categories.begin(); iter != categories.end(); ++iter) {
         categoryNames.append(
             categoryFactory.getCategoryName(categoryFactory.getCategoryIndex(*iter)));
@@ -355,7 +355,7 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
     return {};
   } else if (role == Qt::ForegroundRole) {
     if (column == COL_NAME) {
-      int highlight = modInfo->getHighlight();
+      int const highlight = modInfo->getHighlight();
       if (highlight & ModInfo::HIGHLIGHT_IMPORTANT) {
         return QBrush(Qt::darkRed);
       } else if (highlight & ModInfo::HIGHLIGHT_INVALID) {
@@ -385,7 +385,7 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
     if (column == COL_FLAGS) {
       QString result;
 
-      for (ModInfo::EFlag flag : modInfo->getFlags()) {
+      for (ModInfo::EFlag const flag : modInfo->getFlags()) {
         if (result.length() != 0)
           result += "<br>";
         result += getFlagText(flag, modInfo);
@@ -395,7 +395,7 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
     } else if (column == COL_CONFLICTFLAGS) {
       QString result;
 
-      for (ModInfo::EConflictFlag flag : modInfo->getConflictFlags()) {
+      for (ModInfo::EConflictFlag const flag : modInfo->getConflictFlags()) {
         if (result.length() != 0)
           result += "<br>";
         result += getConflictFlagText(flag, modInfo);
@@ -436,11 +436,11 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
       }
       if (modInfo->nexusId() > 0) {
         if (!modInfo->canBeUpdated()) {
-          qint64 remains =
+          qint64 const remains =
               QDateTime::currentDateTimeUtc().secsTo(modInfo->getExpires());
-          qint64 minutes = remains / 60;
-          qint64 seconds = remains % 60;
-          QString remainsStr(
+          qint64 const minutes = remains / 60;
+          qint64 const seconds = remains % 60;
+          QString const remainsStr(
               tr("%1 minute(s) and %2 second(s)").arg(minutes).arg(seconds));
           text +=
               "<br>" + tr("This mod will be available to check in %2.").arg(remainsStr);
@@ -454,7 +454,7 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
       }
       std::wostringstream categoryString;
       categoryString << ToWString(tr("Categories: <br>"));
-      CategoryFactory& categoryFactory = CategoryFactory::instance();
+      CategoryFactory const& categoryFactory = CategoryFactory::instance();
       for (std::set<int>::const_iterator catIter = categories.begin();
            catIter != categories.end(); ++catIter) {
         if (catIter != categories.begin()) {
@@ -496,8 +496,8 @@ bool ModList::renameMod(int index, const QString& newName)
     return false;
   }
 
-  ModInfo::Ptr modInfo = ModInfo::getByIndex(index);
-  QString oldName      = modInfo->name();
+  ModInfo::Ptr const modInfo = ModInfo::getByIndex(index);
+  QString const oldName      = modInfo->name();
   if (nameFixed != oldName) {
     // before we rename, ensure there is no scheduled asynchronous to rewrite
     m_Profile->cancelModlistWrite();
@@ -524,17 +524,17 @@ bool ModList::setData(const QModelIndex& index, const QVariant& value, int role)
     return false;
   }
 
-  int modID = index.row();
+  int const modID = index.row();
 
-  ModInfo::Ptr info            = ModInfo::getByIndex(modID);
-  IModList::ModStates oldState = state(modID);
+  ModInfo::Ptr const info            = ModInfo::getByIndex(modID);
+  IModList::ModStates const oldState = state(modID);
 
   bool result = false;
 
   emit aboutToChangeData();
 
   if (role == Qt::CheckStateRole) {
-    bool enabled = value.toInt() == Qt::Checked;
+    bool const enabled = value.toInt() == Qt::Checked;
     if (m_Profile->modEnabled(modID) != enabled) {
       m_Profile->setModEnabled(modID, enabled);
       m_Modified = true;
@@ -550,7 +550,7 @@ bool ModList::setData(const QModelIndex& index, const QVariant& value, int role)
     } break;
     case COL_PRIORITY: {
       bool ok         = false;
-      int newPriority = value.toInt(&ok);
+      int const newPriority = value.toInt(&ok);
       if (ok) {
         changeModPriority(modID, newPriority);
         result = true;
@@ -560,7 +560,7 @@ bool ModList::setData(const QModelIndex& index, const QVariant& value, int role)
     } break;
     case COL_MODID: {
       bool ok   = false;
-      int newID = value.toInt(&ok);
+      int const newID = value.toInt(&ok);
       if (ok) {
         info->setNexusID(newID);
         emit tutorialModlistUpdate();
@@ -570,8 +570,8 @@ bool ModList::setData(const QModelIndex& index, const QVariant& value, int role)
       }
     } break;
     case COL_VERSION: {
-      VersionInfo::VersionScheme scheme = info->version().scheme();
-      VersionInfo version(value.toString(), scheme, true);
+      VersionInfo::VersionScheme const scheme = info->version().scheme();
+      VersionInfo const version(value.toString(), scheme, true);
       if (version.isValid()) {
         info->setVersion(version);
         result = true;
@@ -625,7 +625,7 @@ Qt::ItemFlags ModList::flags(const QModelIndex& modelIndex) const
     return Qt::ItemIsEnabled;
   }
   if (modelIndex.isValid()) {
-    ModInfo::Ptr modInfo = ModInfo::getByIndex(modelIndex.row());
+    ModInfo::Ptr const modInfo = ModInfo::getByIndex(modelIndex.row());
     if (!modInfo->hasAutomaticPriority()) {
       result |= Qt::ItemIsDragEnabled;
       result |= Qt::ItemIsUserCheckable;
@@ -694,7 +694,7 @@ void ModList::changeModPriority(std::vector<int> sourceIndices, int newPriority)
 
   // move mods that are decreasing in priority
   for (const auto& index : sourceIndices) {
-    int oldPriority = m_Profile->getModPriority(index);
+    int const oldPriority = m_Profile->getModPriority(index);
     if (oldPriority > newPriority) {
       if (m_Profile->setModPriority(index, newPriority)) {
         m_ModMoved(ModInfo::getByIndex(index)->name(), oldPriority, newPriority);
@@ -711,7 +711,7 @@ void ModList::changeModPriority(std::vector<int> sourceIndices, int newPriority)
   // if at least one mod is increasing in priority, the target index is
   // that of the row BELOW the dropped location, otherwise it's the one above
   for (const auto& index : sourceIndices) {
-    int oldPriority = m_Profile->getModPriority(index);
+    int const oldPriority = m_Profile->getModPriority(index);
     if (oldPriority < newPriority) {
       --newPriority;
       break;
@@ -720,7 +720,7 @@ void ModList::changeModPriority(std::vector<int> sourceIndices, int newPriority)
 
   // move mods that are increasing in priority
   for (const auto& index : sourceIndices) {
-    int oldPriority = m_Profile->getModPriority(index);
+    int const oldPriority = m_Profile->getModPriority(index);
     if (oldPriority < newPriority) {
       if (m_Profile->setModPriority(index, newPriority)) {
         m_ModMoved(ModInfo::getByIndex(index)->name(), oldPriority, newPriority);
@@ -774,7 +774,7 @@ void ModList::modInfoChanged(ModInfo::Ptr info)
       m_ModStateChanged({{info->name(), newState}});
     }
 
-    int row = ModInfo::getIndex(info->name());
+    int const row = ModInfo::getIndex(info->name());
     info->diskContentModified();
     emit aboutToChangeData();
     emit dataChanged(index(row, 0), index(row, columnCount()));
@@ -801,7 +801,7 @@ IModList::ModStates ModList::state(unsigned int modIndex) const
   IModList::ModStates result;
   if (modIndex != UINT_MAX) {
     result |= IModList::STATE_EXISTS;
-    ModInfo::Ptr modInfo = ModInfo::getByIndex(modIndex);
+    ModInfo::Ptr const modInfo = ModInfo::getByIndex(modIndex);
     if (modInfo->isEmpty()) {
       result |= IModList::STATE_EMPTY;
     }
@@ -812,7 +812,7 @@ IModList::ModStates ModList::state(unsigned int modIndex) const
       result |= IModList::STATE_VALID;
     }
     if (modInfo->isRegular()) {
-      QSharedPointer<ModInfoRegular> modInfoRegular =
+      QSharedPointer<ModInfoRegular> const modInfoRegular =
           modInfo.staticCast<ModInfoRegular>();
       if (modInfoRegular->isAlternate() && !modInfoRegular->isConverted())
         result |= IModList::STATE_ALTERNATE;
@@ -832,7 +832,7 @@ IModList::ModStates ModList::state(unsigned int modIndex) const
 
 QString ModList::displayName(const QString& internalName) 
 {
-  unsigned int modIndex = ModInfo::getIndex(internalName);
+  unsigned int const modIndex = ModInfo::getIndex(internalName);
   if (modIndex == UINT_MAX) {
     // might be better to throw an exception?
     return internalName;
@@ -867,13 +867,13 @@ QStringList ModList::allModsByProfilePriority(MOBase::IProfile* profile) const
 
 MOBase::IModInterface* ModList::getMod(const QString& name) 
 {
-  unsigned int index = ModInfo::getIndex(name);
+  unsigned int const index = ModInfo::getIndex(name);
   return index == UINT_MAX ? nullptr : ModInfo::getByIndex(index).data();
 }
 
 bool ModList::removeMod(MOBase::IModInterface* mod) const
 {
-  bool result = ModInfo::removeMod(ModInfo::getIndex(mod->name()));
+  bool const result = ModInfo::removeMod(ModInfo::getIndex(mod->name()));
   if (result) {
     notifyModRemoved(mod->name());
   }
@@ -883,7 +883,7 @@ bool ModList::removeMod(MOBase::IModInterface* mod) const
 MOBase::IModInterface* ModList::renameMod(MOBase::IModInterface* mod,
                                           const QString& name)
 {
-  unsigned int index = ModInfo::getIndex(mod->name());
+  unsigned int const index = ModInfo::getIndex(mod->name());
   if (index == UINT_MAX) {
     if (auto* p = dynamic_cast<ModInfo*>(mod)) {
       p->setName(name);
@@ -902,14 +902,14 @@ MOBase::IModInterface* ModList::renameMod(MOBase::IModInterface* mod,
 
 IModList::ModStates ModList::state(const QString& name) const
 {
-  unsigned int modIndex = ModInfo::getIndex(name);
+  unsigned int const modIndex = ModInfo::getIndex(name);
 
   return state(modIndex);
 }
 
 bool ModList::setActive(const QString& name, bool active)
 {
-  unsigned int modIndex = ModInfo::getIndex(name);
+  unsigned int const modIndex = ModInfo::getIndex(name);
   if (modIndex == UINT_MAX) {
     log::debug("Trying to {} mod {} which does not exist.",
                active ? "enable" : "disable", name);
@@ -947,7 +947,7 @@ int ModList::setActive(const QStringList& names, bool active)
 
 int ModList::priority(const QString& name) const
 {
-  unsigned int modIndex = ModInfo::getIndex(name);
+  unsigned int const modIndex = ModInfo::getIndex(name);
   if (modIndex == UINT_MAX) {
     return -1;
   } else {
@@ -957,7 +957,7 @@ int ModList::priority(const QString& name) const
 
 bool ModList::setPriority(const QString& name, int newPriority)
 {
-  unsigned int index = ModInfo::getIndex(name);
+  unsigned int const index = ModInfo::getIndex(name);
   if (index == UINT_MAX) {
     return false;
   } else {
@@ -1002,7 +1002,7 @@ void ModList::notifyModStateChanged(QList<unsigned int> modIndices) const
   std::map<QString, IModList::ModStates> mods;
   for (auto modIndex : modIndices) {
     indices.append(index(modIndex, 0));
-    ModInfo::Ptr modInfo = ModInfo::getByIndex(modIndex);
+    ModInfo::Ptr const modInfo = ModInfo::getByIndex(modIndex);
     mods.emplace(modInfo->name(), state(modIndex));
   }
 
@@ -1044,20 +1044,20 @@ bool ModList::dropLocalFiles(const ModListDropInfo& dropInfo, int row,
   if (row == -1) {
     row = parent.row();
   }
-  ModInfo::Ptr modInfo = ModInfo::getByIndex(row);
-  QDir modDir          = QDir(modInfo->absolutePath());
+  ModInfo::Ptr const modInfo = ModInfo::getByIndex(row);
+  QDir const modDir          = QDir(modInfo->absolutePath());
 
   QStringList sourceList;
   QStringList targetList;
   QList<QPair<QString, QString>> relativePathList;
 
-  for (auto localUrl : dropInfo.localUrls()) {
-    QFileInfo sourceInfo(localUrl.url.toLocalFile());
+  for (const auto& localUrl : dropInfo.localUrls()) {
+    QFileInfo const sourceInfo(localUrl.url.toLocalFile());
     if (localUrl.originName.compare("overwrite", Qt::CaseInsensitive) == 0) {
       bool needsMove = true;
       if (sourceInfo.isDir()) {
-        for (auto dir : m_Organizer->managedGame()->getModMappings().keys()) {
-          QDir overDir(m_Organizer->overwritePath());
+        for (const auto& dir : m_Organizer->managedGame()->getModMappings().keys()) {
+          QDir const overDir(m_Organizer->overwritePath());
           if (sourceInfo.canonicalFilePath().compare(overDir.absoluteFilePath(dir),
                                                      Qt::CaseInsensitive) == 0) {
             needsMove = false;
@@ -1066,9 +1066,9 @@ bool ModList::dropLocalFiles(const ModListDropInfo& dropInfo, int row,
                                  QDir::AllDirs | QDir::Files | QDir::NoDotAndDotDot);
             while (dirIter.hasNext()) {
               auto entry         = dirIter.nextFileInfo();
-              QString sourceFile = entry.canonicalFilePath();
+              QString const sourceFile = entry.canonicalFilePath();
 
-              QFileInfo targetInfo(modDir.absoluteFilePath(
+              QFileInfo const targetInfo(modDir.absoluteFilePath(
                   overDir.relativeFilePath(entry.absoluteFilePath())));
               sourceList << sourceFile;
               targetList << targetInfo.absoluteFilePath();
@@ -1079,18 +1079,18 @@ bool ModList::dropLocalFiles(const ModListDropInfo& dropInfo, int row,
         }
       }
       if (needsMove) {
-        QString sourceFile = sourceInfo.canonicalFilePath();
+        QString const sourceFile = sourceInfo.canonicalFilePath();
 
-        QFileInfo targetInfo(modDir.absoluteFilePath(localUrl.relativePath));
+        QFileInfo const targetInfo(modDir.absoluteFilePath(localUrl.relativePath));
         sourceList << sourceFile;
         targetList << targetInfo.absoluteFilePath();
         relativePathList << QPair<QString, QString>(localUrl.relativePath,
                                                     localUrl.originName);
       }
     } else {
-      QString sourceFile = sourceInfo.canonicalFilePath();
+      QString const sourceFile = sourceInfo.canonicalFilePath();
 
-      QFileInfo targetInfo(modDir.absoluteFilePath(localUrl.relativePath));
+      QFileInfo const targetInfo(modDir.absoluteFilePath(localUrl.relativePath));
       sourceList << sourceFile;
       targetList << targetInfo.absoluteFilePath();
       relativePathList << QPair<QString, QString>(localUrl.relativePath,
@@ -1105,7 +1105,7 @@ bool ModList::dropLocalFiles(const ModListDropInfo& dropInfo, int row,
     }
   }
 
-  for (auto iter : relativePathList) {
+  for (const auto& iter : relativePathList) {
     emit fileMoved(iter.first, iter.second, modInfo->name());
   }
 
@@ -1128,11 +1128,11 @@ bool ModList::canDropMimeData(const QMimeData* mimeData, Qt::DropAction action, 
     return false;
   }
 
-  ModListDropInfo dropInfo(mimeData, *m_Organizer);
+  ModListDropInfo const dropInfo(mimeData, *m_Organizer);
 
   if (dropInfo.isLocalFileDrop()) {
     if (row == -1 && parent.isValid()) {
-      ModInfo::Ptr modInfo = ModInfo::getByIndex(parent.row());
+      ModInfo::Ptr const modInfo = ModInfo::getByIndex(parent.row());
       return modInfo->isRegular() && !modInfo->isSeparator();
     }
   } else if (dropInfo.isValid()) {
@@ -1140,7 +1140,7 @@ bool ModList::canDropMimeData(const QMimeData* mimeData, Qt::DropAction action, 
     if (row == -1 && parent.isValid()) {
       return true;
     } else if (hasIndex(row, column, parent)) {
-      ModInfo::Ptr modInfo = ModInfo::getByIndex(row);
+      ModInfo::Ptr const modInfo = ModInfo::getByIndex(row);
       return !modInfo->isBackup() && (modInfo->isSeparator() || !parent.isValid());
     } else {
       return true;
@@ -1157,13 +1157,13 @@ bool ModList::dropMimeData(const QMimeData* mimeData, Qt::DropAction action, int
     return true;
   }
 
-  ModListDropInfo dropInfo(mimeData, *m_Organizer);
+  ModListDropInfo const dropInfo(mimeData, *m_Organizer);
 
   if (!m_Profile || !dropInfo.isValid()) {
     return false;
   }
 
-  int dropPriority = this->dropPriority(row, parent);
+  int const dropPriority = this->dropPriority(row, parent);
   if (dropPriority == -1) {
     return false;
   }
@@ -1209,9 +1209,9 @@ void ModList::removeRowForce(int row, const QModelIndex& parent)
   if (m_Profile == nullptr)
     return;
 
-  ModInfo::Ptr modInfo = ModInfo::getByIndex(row);
+  ModInfo::Ptr const modInfo = ModInfo::getByIndex(row);
 
-  bool wasEnabled = m_Profile->modEnabled(row);
+  bool const wasEnabled = m_Profile->modEnabled(row);
 
   m_Profile->setModEnabled(row, false);
 
@@ -1245,7 +1245,7 @@ bool ModList::removeRows(int row, int count, const QModelIndex& parent)
   bool success = false;
 
   if (count == 1) {
-    ModInfo::Ptr modInfo = ModInfo::getByIndex(row);
+    ModInfo::Ptr const modInfo = ModInfo::getByIndex(row);
     if (modInfo->isOverwrite() && QDir(modInfo->absolutePath()).count() > 2) {
       emit clearOverwrite();
       success = true;
@@ -1253,7 +1253,7 @@ bool ModList::removeRows(int row, int count, const QModelIndex& parent)
   }
 
   for (int i = 0; i < count; ++i) {
-    ModInfo::Ptr modInfo = ModInfo::getByIndex(row + i);
+    ModInfo::Ptr const modInfo = ModInfo::getByIndex(row + i);
     if (!modInfo->isRegular()) {
       continue;
     }
@@ -1300,7 +1300,7 @@ void ModList::notifyChange(int rowStart, int rowEnd)
   }
 
   m_InNotifyChange = true;
-  Guard g([&] {
+  Guard const g([&] {
     m_InNotifyChange = false;
   });
 
@@ -1431,7 +1431,7 @@ void ModList::shiftModsPriority(const QModelIndexList& indices, int offset)
     allIndex.push_back(index);
   }
   std::sort(allIndex.begin(), allIndex.end(), [=, this](int lhs, int rhs) {
-    bool cmp = m_Profile->getModPriority(lhs) < m_Profile->getModPriority(rhs);
+    bool const cmp = m_Profile->getModPriority(lhs) < m_Profile->getModPriority(rhs);
     return offset > 0 ? !cmp : cmp;
   });
 

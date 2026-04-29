@@ -144,7 +144,7 @@ void InstallationManager::queryPassword()
 bool InstallationManager::extractFiles(QString extractPath, QString title,
                                        bool showFilenames, bool silent)
 {
-  TimeThis tt("InstallationManager::extractFiles");
+  TimeThis const tt("InstallationManager::extractFiles");
 
   // Callback for errors:
   QString errorMessage;
@@ -207,7 +207,7 @@ bool InstallationManager::extractFiles(QString extractPath, QString title,
                                 auto progressType, uint64_t current, uint64_t total) {
       if (progressType == Archive::ProgressType::EXTRACTION) {
         {
-          std::scoped_lock guard(mutex);
+          std::scoped_lock const guard(mutex);
           currentProgress = static_cast<int>(100 * current / total);
         }
         emit progressUpdate();
@@ -217,7 +217,7 @@ bool InstallationManager::extractFiles(QString extractPath, QString title,
         [this, &currentFileName, &mutex](auto changeType, std::wstring const& file) {
           if (changeType == Archive::FileChangeType::EXTRACTION_START) {
             {
-              std::scoped_lock guard(mutex);
+              std::scoped_lock const guard(mutex);
               currentFileName = QString::fromStdWString(file);
             }
             emit progressUpdate();
@@ -239,7 +239,7 @@ bool InstallationManager::extractFiles(QString extractPath, QString title,
 
     while (!futureWatcher.isFinished()) {
       loop.processEvents(QEventLoop::AllEvents | QEventLoop::WaitForMoreEvents);
-      std::scoped_lock guard(mutex);
+      std::scoped_lock const guard(mutex);
       if (currentProgress != installationProgress->value()) {
         installationProgress->setValue(currentProgress);
       }
@@ -407,7 +407,7 @@ InstallationResult InstallationManager::testOverwrite(GuessedValue<QString>& mod
       settings.setKeepBackupOnInstall(overwriteDialog.backup());
 
       if (overwriteDialog.backup()) {
-        QString backupDirectory = generateBackupName(targetDirectory);
+        QString const backupDirectory = generateBackupName(targetDirectory);
         if (!copyDir(targetDirectory, backupDirectory, false)) {
           reportError(tr("Failed to create backup"));
           return {IPluginInstaller::RESULT_FAILED};
@@ -420,7 +420,7 @@ InstallationResult InstallationManager::testOverwrite(GuessedValue<QString>& mod
 
       if (overwriteDialog.action() == QueryOverwriteDialog::ACT_RENAME) {
         bool ok      = false;
-        QString name = QInputDialog::getText(m_ParentWidget, tr("Mod Name"), tr("Name"),
+        QString const name = QInputDialog::getText(m_ParentWidget, tr("Mod Name"), tr("Name"),
                                              QLineEdit::Normal, modName, &ok);
         if (ok && !name.isEmpty()) {
           modName.update(name, GUESS_USER);
@@ -430,7 +430,7 @@ InstallationResult InstallationManager::testOverwrite(GuessedValue<QString>& mod
           targetDirectory = QDir::fromNativeSeparators(m_ModsDirectory) + "/" + modName;
         }
       } else if (overwriteDialog.action() == QueryOverwriteDialog::ACT_REPLACE) {
-        unsigned int idx = ModInfo::getIndex(modName);
+        unsigned int const idx = ModInfo::getIndex(modName);
         if (idx != UINT_MAX) {
           auto modInfo = ModInfo::getByIndex(idx);
           // mark the old install file as uninstalled
@@ -506,7 +506,7 @@ InstallationResult InstallationManager::doInstall(GuessedValue<QString>& modName
     return {IPluginInstaller::RESULT_FAILED};
   }
 
-  bool merge = false;
+  bool const merge = false;
   // determine target directory
   InstallationResult result = testOverwrite(modName);
   if (!result) {
@@ -515,7 +515,7 @@ InstallationResult InstallationManager::doInstall(GuessedValue<QString>& modName
 
   result.m_name = modName;
 
-  QString targetDirectory       = QDir(m_ModsDirectory + "/" + modName).canonicalPath();
+  QString const targetDirectory       = QDir(m_ModsDirectory + "/" + modName).canonicalPath();
   QString targetDirectoryNative = QDir::toNativeSeparators(targetDirectory);
 
   log::debug("installing to \"{}\"", targetDirectoryNative);
@@ -534,7 +534,7 @@ InstallationResult InstallationManager::doInstall(GuessedValue<QString>& modName
       QFile::remove(destPath);
     }
 
-    QDir dir = QFileInfo(destPath).absoluteDir();
+    QDir const dir = QFileInfo(destPath).absoluteDir();
     if (!dir.exists()) {
       dir.mkpath(".");
     }
@@ -615,7 +615,7 @@ void InstallationManager::postInstallCleanup()
   // TODO: this doesn't yet remove directories. Also, the files may be left there if
   // this point isn't reached
   for (const QString& tempFile : m_TempFilesToDelete) {
-    QFileInfo fileInfo(QDir::tempPath() + "/" + tempFile);
+    QFileInfo const fileInfo(QDir::tempPath() + "/" + tempFile);
     if (fileInfo.exists()) {
       if (!fileInfo.isReadable() || !fileInfo.isWritable()) {
         QFile::setPermissions(fileInfo.absoluteFilePath(),
@@ -646,7 +646,7 @@ InstallationResult InstallationManager::install(const QString& fileName,
     m_IsRunning = false;
   });
 
-  QFileInfo fileInfo(fileName);
+  QFileInfo const fileInfo(fileName);
   if (!getSupportedExtensions().contains(fileInfo.suffix(), Qt::CaseInsensitive)) {
     reportError(tr("File format \"%1\" not supported").arg(fileInfo.suffix()));
     return {IPluginInstaller::RESULT_FAILED};
@@ -665,9 +665,9 @@ InstallationResult InstallationManager::install(const QString& fileName,
   int fileCategoryID    = 1;
   QString repository    = "Nexus";
 
-  QString metaName = fileName + ".meta";
+  QString const metaName = fileName + ".meta";
   if (QFile(metaName).exists()) {
-    QSettings metaFile(metaName, QSettings::IniFormat);
+    QSettings const metaFile(metaName, QSettings::IniFormat);
     gameName = metaFile.value("gameName", "").toString();
     modID    = metaFile.value("modID", 0).toInt();
     QTextDocument doc;
@@ -678,7 +678,7 @@ InstallationResult InstallationManager::install(const QString& fileName,
     version                    = metaFile.value("version", "").toString();
     newestVersion              = metaFile.value("newestVersion", "").toString();
     category                   = metaFile.value("category", 0).toInt();
-    unsigned int categoryIndex = CategoryFactory::instance().resolveNexusID(category);
+    unsigned int const categoryIndex = CategoryFactory::instance().resolveNexusID(category);
     if (category != 0 && categoryIndex == 0U &&
         Settings::instance().nexus().categoryMappings()) {
       QMessageBox nexusQuery;
@@ -707,7 +707,7 @@ InstallationResult InstallationManager::install(const QString& fileName,
   }
 
   if (version.isEmpty()) {
-    QDateTime lastMod = fileInfo.lastModified();
+    QDateTime const lastMod = fileInfo.lastModified();
     version           = "d" + lastMod.toString("yyyy.M.d");
   }
 
@@ -740,7 +740,7 @@ InstallationResult InstallationManager::install(const QString& fileName,
 
   // open the archive and construct the directory tree the installers work on
 
-  bool archiveOpen =
+  bool const archiveOpen =
       m_ArchiveHandler->open(fileName.toStdWString(), [this]() -> std::wstring {
         m_Password = QString();
 
@@ -834,13 +834,13 @@ InstallationResult InstallationManager::install(const QString& fileName,
             (((filesTree != nullptr) && installer->isArchiveSupported(filesTree)) ||
              ((filesTree == nullptr) &&
               installerCustom->isArchiveSupported(fileName)))) {
-          std::set<QString> installerExt = installerCustom->supportedExtensions();
+          std::set<QString> const installerExt = installerCustom->supportedExtensions();
           if (installerExt.contains(fileInfo.suffix())) {
             installResult.m_result =
                 installerCustom->install(modName, gameName, fileName, version, modID);
-            unsigned int idx = ModInfo::getIndex(modName);
+            unsigned int const idx = ModInfo::getIndex(modName);
             if (idx != UINT_MAX) {
-              ModInfo::Ptr info = ModInfo::getByIndex(idx);
+              ModInfo::Ptr const info = ModInfo::getByIndex(idx);
               info->setRepository(repository);
             }
           }
@@ -928,7 +928,7 @@ QStringList InstallationManager::getSupportedExtensions() const
   for (auto* installer : m_PluginContainer->plugins<IPluginInstaller>()) {
     if (m_PluginContainer->isEnabled(installer)) {
       if (auto* installerCustom = dynamic_cast<IPluginInstallerCustom*>(installer)) {
-        std::set<QString> extensions = installerCustom->supportedExtensions();
+        std::set<QString> const extensions = installerCustom->supportedExtensions();
         supportedExtensions.insert(extensions.begin(), extensions.end());
       }
     }

@@ -234,7 +234,7 @@ void CreateInstanceDialog::addShortcutAction(QKeySequence seq, Actions a)
 
 void CreateInstanceDialog::doAction(Actions a)
 {
-  std::size_t i = static_cast<std::size_t>(ui->pages->currentIndex());
+  std::size_t const i = static_cast<std::size_t>(ui->pages->currentIndex());
 
   if (i >= m_pages.size()) {
     return;

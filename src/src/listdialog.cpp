@@ -34,7 +34,7 @@ ListDialog::~ListDialog()
 
 int ListDialog::exec()
 {
-  GeometrySaver gs(Settings::instance(), this);
+  GeometrySaver const gs(Settings::instance(), this);
   return QDialog::exec();
 }
 
@@ -57,7 +57,7 @@ QString ListDialog::getChoice() const
 void ListDialog::on_filterEdit_textChanged(QString filter)
 {
   QStringList newChoices;
-  for (auto choice : m_Choices) {
+  for (const auto& choice : m_Choices) {
     if (choice.contains(filter, Qt::CaseInsensitive)) {
       newChoices << choice;
     }

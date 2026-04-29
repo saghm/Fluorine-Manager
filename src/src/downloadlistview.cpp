@@ -55,7 +55,7 @@ void DownloadProgressDelegate::paint(QPainter* painter,
     return;
   }
 
-  bool pendingDownload = (sourceIndex.row() >= m_Manager->numTotalDownloads());
+  bool const pendingDownload = (sourceIndex.row() >= m_Manager->numTotalDownloads());
   if (sourceIndex.column() == DownloadList::COL_STATUS && !pendingDownload &&
       m_Manager->getState(sourceIndex.row()) == DownloadManager::STATE_DOWNLOADING) {
     QProgressBar progressBar;
@@ -168,7 +168,7 @@ void DownloadListView::setSourceModel(DownloadList* sourceModel)
 
 void DownloadListView::onDoubleClick(const QModelIndex& index)
 {
-  QModelIndex sourceIndex =
+  QModelIndex const sourceIndex =
       qobject_cast<QSortFilterProxyModel*>(model())->mapToSource(index);
   if (m_Manager->getState(sourceIndex.row()) >= DownloadManager::STATE_READY)
     emit installDownload(sourceIndex.row());
@@ -184,7 +184,7 @@ void DownloadListView::onHeaderCustomContextMenu(const QPoint& point)
   // display a list of all headers as checkboxes
   QAbstractItemModel* model = header()->model();
   for (int i = 1; i < model->columnCount(); ++i) {
-    QString columnName  = model->headerData(i, Qt::Horizontal).toString();
+    QString const columnName  = model->headerData(i, Qt::Horizontal).toString();
     QCheckBox* checkBox = new QCheckBox(&menu);
     checkBox->setText(columnName);
     checkBox->setChecked(!header()->isSectionHidden(i));
@@ -221,14 +221,14 @@ void DownloadListView::resizeEvent(QResizeEvent* event)
 void DownloadListView::onCustomContextMenu(const QPoint& point)
 {
   QMenu menu(this);
-  QModelIndex index = indexAt(point);
+  QModelIndex const index = indexAt(point);
   bool hidden       = false;
 
   try {
     if (index.row() >= 0) {
       const int row =
           qobject_cast<QSortFilterProxyModel*>(model())->mapToSource(index).row();
-      DownloadManager::DownloadState state = m_Manager->getState(row);
+      DownloadManager::DownloadState const state = m_Manager->getState(row);
 
       hidden = m_Manager->isHidden(row);
 
@@ -421,7 +421,7 @@ void DownloadListView::issueDeleteSelected()
   // point at the wrong file or be out of range.
   QStringList fileNames;
   for (const auto& idx : selectionModel()->selectedRows()) {
-    int row = proxy->mapToSource(idx).row();
+    int const row = proxy->mapToSource(idx).row();
     auto state = m_Manager->getState(row);
     if (state >= DownloadManager::STATE_READY) {
       fileNames.append(m_Manager->getFileName(row));

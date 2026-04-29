@@ -20,7 +20,7 @@ namespace
 {
 QString ensureDir(const QString& path)
 {
-  QDir dir(path);
+  QDir const dir(path);
   if (!dir.exists() && !QDir().mkpath(path)) {
     return {};
   }

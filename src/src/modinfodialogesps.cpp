@@ -274,7 +274,7 @@ void ESPsTab::onActivate()
     return;
   }
 
-  QDir root(esp->rootPath());
+  QDir const root(esp->rootPath());
   const QFileInfo file(esp->fileInfo());
 
   QString newName = file.fileName();
@@ -324,7 +324,7 @@ void ESPsTab::onDeactivate()
     return;
   }
 
-  QDir root(esp->rootPath());
+  QDir const root(esp->rootPath());
 
   // if we moved the file from optional to active in this session, we move the
   // file back to where it came from. Otherwise, it is moved to the new folder

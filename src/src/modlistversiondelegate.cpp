@@ -41,8 +41,8 @@ void ModListVersionDelegate::paint(QPainter* painter,
     opt.decorationAlignment = Qt::AlignCenter;
 
     if (upgrade) {
-      QIcon icon(":/MO/gui/update_available");
-      QPixmap pixmap = decoration(opt, icon);
+      QIcon const icon(":/MO/gui/update_available");
+      QPixmap const pixmap = decoration(opt, icon);
 
       QSize pm = icon.actualSize(opt.decorationSize);
       pm.rwidth() += 2 * margin;
@@ -54,8 +54,8 @@ void ModListVersionDelegate::paint(QPainter* painter,
     }
 
     if (downgrade) {
-      QIcon icon(":/MO/gui/warning");
-      QPixmap pixmap = decoration(opt, icon);
+      QIcon const icon(":/MO/gui/warning");
+      QPixmap const pixmap = decoration(opt, icon);
 
       QSize pm = icon.actualSize(opt.decorationSize);
       pm.rwidth() += 2 * margin;

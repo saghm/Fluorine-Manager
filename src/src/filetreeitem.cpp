@@ -37,7 +37,7 @@ const QString& cachedFileType(const std::wstring& file, bool /*isOnFilesystem*/)
     return cachedFileTypeNoExtension();
   }
 
-  std::scoped_lock lock(mutex);
+  std::scoped_lock const lock(mutex);
   const auto sv = std::wstring_view(file.c_str() + dot, file.size() - dot);
 
   auto itor = map.find(sv);
@@ -45,9 +45,9 @@ const QString& cachedFileType(const std::wstring& file, bool /*isOnFilesystem*/)
     return itor->second;
   }
 
-  static QMimeDatabase mimeDb;
-  QString filename   = QString::fromStdWString(file);
-  QMimeType mimeType = mimeDb.mimeTypeForFile(filename, QMimeDatabase::MatchExtension);
+  static QMimeDatabase const mimeDb;
+  QString const filename   = QString::fromStdWString(file);
+  QMimeType const mimeType = mimeDb.mimeTypeForFile(filename, QMimeDatabase::MatchExtension);
   QString s          = mimeType.comment();
   if (s.isEmpty()) {
     s = cachedFileTypeNoExtension();

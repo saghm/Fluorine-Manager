@@ -202,7 +202,7 @@ FileTreeModel::FileTreeModel(OrganizerCore& core, QObject* parent)
 
 void FileTreeModel::refresh()
 {
-  TimeThis tt("FileTreeModel::refresh()");
+  TimeThis const tt("FileTreeModel::refresh()");
 
   m_fullyLoaded = false;
   update(*m_root, *m_core.directoryStructure(), L"", false);
@@ -232,7 +232,7 @@ void FileTreeModel::recursiveFetchMore(const QModelIndex& m)
 void FileTreeModel::ensureFullyLoaded()
 {
   if (!m_fullyLoaded) {
-    TimeThis tt("FileTreeModel:: fully loading for search");
+    TimeThis const tt("FileTreeModel:: fully loading for search");
     recursiveFetchMore(QModelIndex());
     sortItem(*m_root, false);
     m_fullyLoaded = true;
@@ -945,7 +945,7 @@ FileTreeItem::Ptr FileTreeModel::createFileItem(FileTreeItem& parentItem,
 void FileTreeModel::updateFileItem(FileTreeItem& item, const MOShared::FileEntry& file)
 {
   bool isArchive = false;
-  int originID   = file.getOrigin(isArchive);
+  int const originID   = file.getOrigin(isArchive);
 
   FileTreeItem::Flags flags = FileTreeItem::NoFlags;
 
@@ -1210,7 +1210,7 @@ QVariant FileTreeModel::makeIcon(const FileTreeItem& item,
 
 void FileTreeModel::updatePendingIcons()
 {
-  std::vector<QModelIndex> v(std::move(m_iconPending));
+  std::vector<QModelIndex> const v(std::move(m_iconPending));
   m_iconPending.clear();
 
   for (auto&& index : v) {

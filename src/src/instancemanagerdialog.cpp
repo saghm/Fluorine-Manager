@@ -70,7 +70,7 @@ QIcon instanceIcon(PluginContainer& pc, const Instance& i)
   const QString old = game->isInstalled() ? game->gameDirectory().path() : "";
 
   // revert
-  Guard g([&] {
+  Guard const g([&] {
     game->setGamePath(old);
   });
 
@@ -823,7 +823,7 @@ void InstanceManagerDialog::fillData(const Instance& ii)
   {
     const QString ini = ii.iniPath();
     if (!ini.isEmpty() && QFile::exists(ini)) {
-      QSettings s(ini, QSettings::IniFormat);
+      QSettings const s(ini, QSettings::IniFormat);
       ui->prefixPath->setText(s.value("Settings/proton_prefix_path").toString());
       ui->protonVersion->setText(s.value("fluorine/proton_name").toString());
 

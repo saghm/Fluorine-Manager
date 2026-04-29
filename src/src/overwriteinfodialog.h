@@ -75,10 +75,10 @@ public:
   bool dropMimeData(const QMimeData* data, Qt::DropAction action, int row,
                             int column, const QModelIndex& parent) override
   {
-    ModListDropInfo dropInfo(data, m_Organizer);
+    ModListDropInfo const dropInfo(data, m_Organizer);
     if (dropInfo.isLocalFileDrop()) {
-      for (auto entry : dropInfo.localUrls()) {
-        QFileInfo sourceInfo(entry.url.toLocalFile());
+      for (const auto& entry : dropInfo.localUrls()) {
+        QFileInfo const sourceInfo(entry.url.toLocalFile());
         if (sourceInfo.isDir() &&
             m_Organizer.managedGame()->getModMappings().keys().contains(
                 entry.relativePath, Qt::CaseInsensitive)) {

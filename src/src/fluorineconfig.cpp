@@ -138,7 +138,7 @@ void FluorineConfig::destroyPrefix() const
   // filesystems.
   const QString cleanCompat = QDir::cleanPath(compatData);
   const QString cleanPrefix = QDir::cleanPath(compatData + "/pfx");
-  QDir procDir("/proc");
+  QDir const procDir("/proc");
   const QStringList pids =
       procDir.entryList({QStringLiteral("[0-9]*")}, QDir::Dirs);
   QList<qint64> victims;
@@ -166,7 +166,7 @@ void FluorineConfig::destroyPrefix() const
     }
   }
 
-  for (qint64 p : victims)
+  for (qint64 const p : victims)
     ::kill(static_cast<pid_t>(p), SIGKILL);
   if (!victims.isEmpty())
     QThread::msleep(200);

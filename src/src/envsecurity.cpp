@@ -90,7 +90,7 @@ FileSecurity getFileSecurity(const QString& path)
 
   struct passwd* pw = getpwuid(st.st_uid);
   if (pw) {
-    uid_t currentUid = getuid();
+    uid_t const currentUid = getuid();
     if (st.st_uid == currentUid) {
       fs.owner = "(this user)";
     } else {

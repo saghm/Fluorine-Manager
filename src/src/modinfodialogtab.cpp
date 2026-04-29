@@ -244,7 +244,7 @@ void NotesTab::onSetColor()
 
 void NotesTab::onResetColor()
 {
-  QColor color = QColor();
+  QColor const color = QColor();
 
   mod().setColor(color);
   updateCommentsColor();

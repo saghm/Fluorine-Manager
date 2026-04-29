@@ -14,7 +14,7 @@ void IconFetcher::Waiter::wait()
 void IconFetcher::Waiter::wakeUp()
 {
   {
-    std::scoped_lock lock(m_wakeUpMutex);
+    std::scoped_lock const lock(m_wakeUpMutex);
     m_queueAvailable = true;
   }
 
@@ -100,7 +100,7 @@ void IconFetcher::checkCache(Cache& cache)
   std::set<QString> queue;
 
   {
-    std::scoped_lock lock(cache.queueMutex);
+    std::scoped_lock const lock(cache.queueMutex);
     queue = std::move(cache.queue);
     cache.queue.clear();
   }
@@ -115,7 +115,7 @@ void IconFetcher::checkCache(Cache& cache)
   }
 
   {
-    std::scoped_lock lock(cache.mapMutex);
+    std::scoped_lock const lock(cache.mapMutex);
     for (auto&& p : map) {
       cache.map.insert(std::move(p));
     }
@@ -125,7 +125,7 @@ void IconFetcher::checkCache(Cache& cache)
 void IconFetcher::queue(Cache& cache, QString path) const
 {
   {
-    std::scoped_lock lock(cache.queueMutex);
+    std::scoped_lock const lock(cache.queueMutex);
     cache.queue.insert(std::move(path));
   }
 
@@ -135,7 +135,7 @@ void IconFetcher::queue(Cache& cache, QString path) const
 QVariant IconFetcher::fileIcon(const QString& path) const
 {
   {
-    std::scoped_lock lock(m_fileCache.mapMutex);
+    std::scoped_lock const lock(m_fileCache.mapMutex);
     auto itor = m_fileCache.map.find(path);
     if (itor != m_fileCache.map.end()) {
       return itor->second;
@@ -149,7 +149,7 @@ QVariant IconFetcher::fileIcon(const QString& path) const
 QVariant IconFetcher::extensionIcon(const QStringView& ext) const
 {
   {
-    std::scoped_lock lock(m_extensionCache.mapMutex);
+    std::scoped_lock const lock(m_extensionCache.mapMutex);
     auto itor = m_extensionCache.map.find(ext);
     if (itor != m_extensionCache.map.end()) {
       return itor->second;

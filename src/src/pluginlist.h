@@ -55,7 +55,7 @@ public:
   ChangeBracket(C* model) : m_Model(nullptr)
   {
     QVariant var       = model->property("__aboutToChange");
-    bool aboutToChange = var.isValid() && var.toBool();
+    bool const aboutToChange = var.isValid() && var.toBool();
     if (!aboutToChange) {
       model->layoutAboutToBeChanged();
       model->setProperty("__aboutToChange", true);

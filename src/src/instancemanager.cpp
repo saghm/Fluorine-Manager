@@ -783,7 +783,7 @@ std::unique_ptr<Instance> selectInstance()
 
   // since there is no instance currently active, load plugins with a null
   // OrganizerCore; see PluginContainer::initPlugin()
-  NexusInterface ni(nullptr);
+  NexusInterface const ni(nullptr);
   PluginContainer pc(nullptr);
   pc.loadPlugins();
 

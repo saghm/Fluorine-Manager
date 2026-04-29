@@ -112,7 +112,7 @@ void ModInfoRegular::readMeta()
   QSettings metaFile(m_Path + "/meta.ini", QSettings::IniFormat);
   m_Comments           = metaFile.value("comments", "").toString();
   m_Notes              = metaFile.value("notes", "").toString();
-  QString tempGameName = metaFile.value("gameName", m_GameName).toString();
+  QString const tempGameName = metaFile.value("gameName", m_GameName).toString();
   if (tempGameName.size())
     m_GameName = tempGameName;
   m_NexusID = metaFile.value("modid", -1).toInt();
@@ -230,13 +230,13 @@ void ModInfoRegular::readMeta()
     }
   }
 
-  QString categoriesString = metaFile.value("category", "").toString();
+  QString const categoriesString = metaFile.value("category", "").toString();
 
   QStringList categories = categoriesString.split(',', Qt::SkipEmptyParts);
   for (QStringList::iterator iter = categories.begin(); iter != categories.end();
        ++iter) {
     bool ok        = false;
-    int categoryID = iter->toInt(&ok);
+    int const categoryID = iter->toInt(&ok);
     if (categoryID < 0) {
       // ignore invalid id
       continue;
@@ -250,7 +250,7 @@ void ModInfoRegular::readMeta()
     }
   }
 
-  int numFiles = metaFile.beginReadArray("installedFiles");
+  int const numFiles = metaFile.beginReadArray("installedFiles");
   for (int i = 0; i < numFiles; ++i) {
     metaFile.setArrayIndex(i);
     m_InstalledFileIDs.insert(std::make_pair(metaFile.value("modid").toInt(),
@@ -260,9 +260,9 @@ void ModInfoRegular::readMeta()
 
   // Plugin settings:
   metaFile.beginGroup("Plugins");
-  for (auto pluginName : metaFile.childGroups()) {
+  for (const auto& pluginName : metaFile.childGroups()) {
     metaFile.beginGroup(pluginName);
-    for (auto settingKey : metaFile.childKeys()) {
+    for (const auto& settingKey : metaFile.childKeys()) {
       m_PluginSettings[pluginName][settingKey] = metaFile.value(settingKey);
     }
     metaFile.endGroup();
@@ -381,7 +381,7 @@ void ModInfoRegular::nxmDescriptionAvailable(QString, int, QVariant,
   if ((m_EndorsedState != EndorsedState::ENDORSED_NEVER) &&
       (result.contains("endorsement"))) {
     QVariantMap endorsement   = result["endorsement"].toMap();
-    QString endorsementStatus = endorsement["endorse_status"].toString();
+    QString const endorsementStatus = endorsement["endorse_status"].toString();
     if (endorsementStatus.compare("Endorsed", Qt::CaseInsensitive) == 00)
       setEndorsedState(EndorsedState::ENDORSED_TRUE);
     else if (endorsementStatus.compare("Abstained", Qt::CaseInsensitive) == 00)
@@ -401,7 +401,7 @@ void ModInfoRegular::nxmDescriptionAvailable(QString, int, QVariant,
 void ModInfoRegular::nxmEndorsementToggled(QString, int, QVariant, QVariant resultData)
 {
   QMap results = resultData.toMap();
-  QMutexLocker locker(&s_Mutex);
+  QMutexLocker const locker(&s_Mutex);
   for (auto& mod : s_Collection) {
     if (mod->gameName().compare(m_GameName, Qt::CaseInsensitive) == 0 &&
         mod->nexusId() == m_NexusID) {
@@ -420,7 +420,7 @@ void ModInfoRegular::nxmEndorsementToggled(QString, int, QVariant, QVariant resu
 
 void ModInfoRegular::nxmTrackingToggled(QString, int, QVariant, bool tracked)
 {
-  QMutexLocker locker(&s_Mutex);
+  QMutexLocker const locker(&s_Mutex);
   for (auto& mod : s_Collection) {
     if (mod->gameName().compare(m_GameName, Qt::CaseInsensitive) == 0 &&
         mod->nexusId() == m_NexusID) {
@@ -458,8 +458,8 @@ bool ModInfoRegular::updateNXMInfo()
 bool ModInfoRegular::needsDescriptionUpdate() const
 {
   if (m_NexusID > 0) {
-    QDateTime time   = QDateTime::currentDateTimeUtc();
-    QDateTime target = m_LastNexusQuery.addDays(1);
+    QDateTime const time   = QDateTime::currentDateTimeUtc();
+    QDateTime const target = m_LastNexusQuery.addDays(1);
 
     if (time >= target) {
       return true;
@@ -479,7 +479,7 @@ void ModInfoRegular::setCategory(int categoryID, bool active)
       m_PrimaryCategory = categoryID;
     }
   } else {
-    std::set<int>::iterator iter = m_Categories.find(categoryID);
+    std::set<int>::iterator const iter = m_Categories.find(categoryID);
     if (iter != m_Categories.end()) {
       m_Categories.erase(iter);
     }
@@ -499,7 +499,7 @@ bool ModInfoRegular::setName(const QString& name)
     return false;
   }
 
-  QString newPath =
+  QString const newPath =
       m_Path.mid(0).replace(m_Path.length() - m_Name.length(), m_Name.length(), name);
   QDir modDir(m_Path.mid(0, m_Path.length() - m_Name.length()));
 
@@ -525,11 +525,11 @@ bool ModInfoRegular::setName(const QString& name)
     }
   }
 
-  std::map<QString, unsigned int>::iterator nameIter = s_ModsByName.find(m_Name);
+  std::map<QString, unsigned int>::iterator const nameIter = s_ModsByName.find(m_Name);
   if (nameIter != s_ModsByName.end()) {
-    QMutexLocker locker(&s_Mutex);
+    QMutexLocker const locker(&s_Mutex);
 
-    unsigned int index = nameIter->second;
+    unsigned int const index = nameIter->second;
     s_ModsByName.erase(nameIter);
 
     m_Name = name;
@@ -700,8 +700,8 @@ void ModInfoRegular::ignoreUpdate(bool ignore)
 
 bool ModInfoRegular::canBeUpdated() const
 {
-  QDateTime now    = QDateTime::currentDateTimeUtc();
-  QDateTime target = getExpires();
+  QDateTime const now    = QDateTime::currentDateTimeUtc();
+  QDateTime const target = getExpires();
   if (now >= target)
     return m_NexusID > 0;
   return false;
@@ -775,7 +775,7 @@ QString ModInfoRegular::getDescription() const
     }
     std::wostringstream categoryString;
     categoryString << ToWString(tr("Categories: <br>"));
-    CategoryFactory& categoryFactory = CategoryFactory::instance();
+    CategoryFactory const& categoryFactory = CategoryFactory::instance();
     for (std::set<int>::const_iterator catIter = categories.begin();
          catIter != categories.end(); ++catIter) {
       if (catIter != categories.begin()) {
@@ -955,8 +955,8 @@ QStringList ModInfoRegular::archives(bool checkOnDisk)
 {
   if (checkOnDisk) {
     QStringList result;
-    QDir dir(this->absolutePath());
-    QStringList bsaList = dir.entryList(QStringList({"*.bsa", "*.ba2"}));
+    QDir const dir(this->absolutePath());
+    QStringList const bsaList = dir.entryList(QStringList({"*.bsa", "*.ba2"}));
     for (const QString& archive : bsaList) {
       result.append(this->absolutePath() + "/" + archive);
     }
@@ -973,7 +973,7 @@ void ModInfoRegular::addInstalledFile(int modId, int fileId)
 
 std::vector<QString> ModInfoRegular::getIniTweaks() const
 {
-  QString metaFileName = absolutePath().append("/meta.ini");
+  QString const metaFileName = absolutePath().append("/meta.ini");
   QSettings metaFile(metaFileName, QSettings::IniFormat);
 
   std::vector<QString> result;
@@ -987,7 +987,7 @@ std::vector<QString> ModInfoRegular::getIniTweaks() const
 
   for (int i = 0; i < numTweaks; ++i) {
     metaFile.setArrayIndex(i);
-    QString filename =
+    QString const filename =
         absolutePath().append("/INI Tweaks/").append(metaFile.value("name").toString());
     result.push_back(filename);
   }

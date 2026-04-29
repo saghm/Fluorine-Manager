@@ -476,7 +476,7 @@ void ImagesTab::paintThumbnailText(const PaintContext& cx)
 
   cx.painter.setFont(m_theme.font);
 
-  QFontMetrics fm(m_theme.font);
+  QFontMetrics const fm(m_theme.font);
 
   const auto text = fm.elidedText(cx.file->filename(), Qt::ElideRight, tr.width());
 
@@ -956,7 +956,7 @@ void File::load(const Geometry& geo)
   ensureOriginalLoaded();
 
   if (m_failed) {
-    QImage warning(":/MO/gui/warning");
+    QImage const warning(":/MO/gui/warning");
     const auto scaledSize = geo.scaledImageSize(warning.size());
 
     m_thumbnail =

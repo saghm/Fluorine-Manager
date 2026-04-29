@@ -77,7 +77,7 @@ void ModListByPriorityProxy::buildTree()
 
   auto fn = [&](const auto& p) {
     auto& [priority, index] = p;
-    ModInfo::Ptr modInfo    = ModInfo::getByIndex(index);
+    ModInfo::Ptr const modInfo    = ModInfo::getByIndex(index);
     TreeItem* item          = m_IndexToItem[index].get();
 
     if (modInfo->isSeparator()) {
@@ -151,7 +151,7 @@ void ModListByPriorityProxy::onModelDataChanged(const QModelIndex& topLeft,
                                                 const QModelIndex& bottomRight,
                                                 const QVector<int>& roles)
 {
-  QModelIndex proxyTopLeft = mapFromSource(topLeft);
+  QModelIndex const proxyTopLeft = mapFromSource(topLeft);
   if (!proxyTopLeft.isValid()) {
     return;
   }
@@ -159,7 +159,7 @@ void ModListByPriorityProxy::onModelDataChanged(const QModelIndex& topLeft,
   if (topLeft == bottomRight) {
     emit dataChanged(proxyTopLeft, proxyTopLeft);
   } else {
-    QModelIndex proxyBottomRight = mapFromSource(bottomRight);
+    QModelIndex const proxyBottomRight = mapFromSource(bottomRight);
     emit dataChanged(proxyTopLeft, proxyBottomRight);
   }
 }
@@ -232,7 +232,7 @@ bool ModListByPriorityProxy::canDropMimeData(const QMimeData* data,
                                              Qt::DropAction action, int row, int column,
                                              const QModelIndex& parent) const
 {
-  ModListDropInfo dropInfo(data, m_core);
+  ModListDropInfo const dropInfo(data, m_core);
 
   if (!dropInfo.isValid() || dropInfo.isLocalFileDrop()) {
     return QAbstractProxyModel::canDropMimeData(data, action, row, column, parent);
@@ -254,7 +254,7 @@ bool ModListByPriorityProxy::canDropMimeData(const QMimeData* data,
       }
     }
 
-    bool firstRowSeparator =
+    bool const firstRowSeparator =
         firstRowIndex != -1 && ModInfo::getByIndex(firstRowIndex)->isSeparator();
 
     // row = -1 and valid parent means we're dropping onto an item, we don't want to

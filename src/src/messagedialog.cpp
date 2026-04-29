@@ -32,12 +32,12 @@ MessageDialog::MessageDialog(const QString& text, QWidget* reference)
 
   // very crude way to ensure no single word in the test is wider than the message
   // window. ellide in the center if necessary
-  QFontMetrics metrics(ui->message->font());
+  QFontMetrics const metrics(ui->message->font());
   QString restrictedText;
-  QStringList lines = text.split("\n");
+  QStringList const lines = text.split("\n");
   foreach (const QString& line, lines) {
     QString newLine;
-    QStringList words = line.split(" ");
+    QStringList const words = line.split(" ");
     foreach (const QString& word, words) {
       if (word.length() > 10) {
         newLine +=

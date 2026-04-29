@@ -652,11 +652,11 @@ void FuseConnector::rebuild(
   }
 
   {
-    std::unique_lock lock(m_context->tree_mutex);
+    std::unique_lock const lock(m_context->tree_mutex);
     m_context->tree.swap(newTree);
   }
   {
-    std::scoped_lock lock(m_context->open_dirs_mutex);
+    std::scoped_lock const lock(m_context->open_dirs_mutex);
     m_context->open_dirs.clear();
   }
 }
@@ -679,8 +679,8 @@ void FuseConnector::updateMapping(const MappingType& mapping)
 
   // Auto-derive tracking file path if not explicitly set
   if (m_trackingFilePath.empty() && !overwriteDir.isEmpty()) {
-    QDir owDir(overwriteDir);
-    QString trackPath = QDir::cleanPath(owDir.absoluteFilePath("../tracked_writes.json"));
+    QDir const owDir(overwriteDir);
+    QString const trackPath = QDir::cleanPath(owDir.absoluteFilePath("../tracked_writes.json"));
     m_trackingFilePath = trackPath.toStdString();
     std::fprintf(stderr, "[VFS] auto-derived tracking path: '%s'\n",
                  m_trackingFilePath.c_str());
@@ -966,11 +966,11 @@ void FuseConnector::flushStagingLive()
       buildDataDirVfs(m_baseFileCache, m_dataDirPath, m_lastMods, m_overwriteDir));
 
   {
-    std::unique_lock lock(m_context->tree_mutex);
+    std::unique_lock const lock(m_context->tree_mutex);
     m_context->tree.swap(newTree);
   }
   {
-    std::scoped_lock lock(m_context->open_dirs_mutex);
+    std::scoped_lock const lock(m_context->open_dirs_mutex);
     m_context->open_dirs.clear();
   }
 
@@ -1129,11 +1129,11 @@ static void loadRootManifest(const std::string& storageDir,
   if (!in.is_open()) return;
 
   try {
-    std::string content((std::istreambuf_iterator<char>(in)),
+    std::string const content((std::istreambuf_iterator<char>(in)),
                         std::istreambuf_iterator<char>());
     // Simple JSON parsing — the manifest is { "deployed": [...], "backups": {...} }
     // Use Qt's JSON for simplicity
-    QJsonDocument doc = QJsonDocument::fromJson(
+    QJsonDocument const doc = QJsonDocument::fromJson(
         QByteArray::fromStdString(content));
     if (doc.isNull()) return;
 

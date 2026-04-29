@@ -43,7 +43,7 @@ public:
 
   void addFile(FileIndex index)
   {
-    std::scoped_lock lock(m_Mutex);
+    std::scoped_lock const lock(m_Mutex);
     m_Files.insert(index);
   }
 

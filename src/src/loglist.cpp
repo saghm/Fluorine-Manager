@@ -384,7 +384,7 @@ void initLogging()
 bool createAndMakeWritable(const std::wstring& subPath)
 {
   QString const dataPath = qApp->property("dataPath").toString();
-  QString fullPath       = dataPath + "/" + QString::fromStdWString(subPath);
+  QString const fullPath       = dataPath + "/" + QString::fromStdWString(subPath);
 
   if (!QDir(fullPath).exists() && !QDir().mkdir(fullPath)) {
     QMessageBox::critical(nullptr, QObject::tr("Error"),

@@ -59,7 +59,7 @@ int run(int argc, char* argv[])
     if (i > 0)
       cmdLine += L' ';
     std::string arg(argv[i]);
-    std::wstring warg(arg.begin(), arg.end());
+    std::wstring const warg(arg.begin(), arg.end());
     if (warg.find(L' ') != std::wstring::npos) {
       cmdLine += L'"';
       cmdLine += warg;
@@ -253,7 +253,7 @@ static void linuxCrashHandler(int sig)
   fprintf(stderr, "\n=== MO2 CRASH: signal %s (%d) ===\n", sigName, sig);
 
   void* frames[64];
-  int count = backtrace(frames, 64);
+  int const count = backtrace(frames, 64);
   fprintf(stderr, "Backtrace (%d frames):\n", count);
   backtrace_symbols_fd(frames, count, STDERR_FILENO);
   fprintf(stderr, "=== END BACKTRACE ===\n");
@@ -289,7 +289,7 @@ static void linuxTerminateHandler() noexcept
 
   fprintf(stderr, "\n=== MO2 std::terminate ===\n");
   void* frames[64];
-  int count = backtrace(frames, 64);
+  int const count = backtrace(frames, 64);
   fprintf(stderr, "Backtrace (%d frames):\n", count);
   backtrace_symbols_fd(frames, count, STDERR_FILENO);
   fprintf(stderr, "=== END BACKTRACE ===\n");

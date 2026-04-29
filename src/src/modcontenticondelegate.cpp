@@ -9,7 +9,7 @@ ModContentIconDelegate::ModContentIconDelegate(ModListView* view, int column,
 
 QList<QString> ModContentIconDelegate::getIcons(const QModelIndex& index) const
 {
-  QVariant modIndex = index.data(ModList::IndexRole);
+  QVariant const modIndex = index.data(ModList::IndexRole);
 
   if (!modIndex.isValid()) {
     return {};

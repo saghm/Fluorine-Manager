@@ -148,7 +148,7 @@ void DataTab::onRefresh()
 
 void DataTab::onBrowseVFS()
 {
-  QString dataPath = m_core.managedGame()->dataDirectory().absolutePath();
+  QString const dataPath = m_core.managedGame()->dataDirectory().absolutePath();
 
   // Mount the FUSE VFS so the file manager sees the merged mod files.
   log::info("Mounting VFS for Browse...");
@@ -176,7 +176,7 @@ void DataTab::onBrowseVFS()
 
 void DataTab::onBrowseRootBuilder()
 {
-  QString gameRoot = m_core.managedGame()->gameDirectory().absolutePath();
+  QString const gameRoot = m_core.managedGame()->gameDirectory().absolutePath();
 
   // Mount the FUSE VFS which also triggers Root Builder deployment to the
   // game root directory.

@@ -91,13 +91,13 @@ void NexusTab::clear()
 
 void NexusTab::update()
 {
-  QScopedValueRollback loading(m_loading, true);
+  QScopedValueRollback const loading(m_loading, true);
 
   clear();
 
   ui->modID->setText(QString("%1").arg(mod().nexusId()));
 
-  QString gameName = mod().gameName();
+  QString const gameName = mod().gameName();
   ui->sourceGame->addItem(core().managedGame()->gameName(),
                           core().managedGame()->gameShortName());
 
@@ -105,7 +105,7 @@ void NexusTab::update()
     ui->sourceGame->setDisabled(true);
   } else {
     for (auto game : plugin().plugins<MOBase::IPluginGame>()) {
-      for (QString gameName : core().managedGame()->validShortNames()) {
+      for (const QString& gameName : core().managedGame()->validShortNames()) {
         if (game->gameShortName().compare(gameName, Qt::CaseInsensitive) == 0) {
           ui->sourceGame->addItem(game->gameName(), game->gameShortName());
           break;
@@ -377,7 +377,7 @@ void NexusTab::onVersionChanged()
     return;
   }
 
-  MOBase::VersionInfo version(ui->version->text());
+  MOBase::VersionInfo const version(ui->version->text());
   mod().setVersion(version);
   updateVersionColor();
 }
@@ -388,7 +388,7 @@ void NexusTab::onCategoryChanged()
     return;
   }
 
-  int category = ui->category->text().toInt();
+  int const category = ui->category->text().toInt();
   mod().setNexusCategory(category);
 }
 

@@ -138,7 +138,7 @@ EditExecutablesDialog::~EditExecutablesDialog() = default;
 
 int EditExecutablesDialog::exec()
 {
-  GeometrySaver gs(Settings::instance(), this);
+  GeometrySaver const gs(Settings::instance(), this);
   return QDialog::exec();
 }
 
@@ -341,7 +341,7 @@ QListWidgetItem* EditExecutablesDialog::createListItem(const Executable& exe)
 void EditExecutablesDialog::updateUI(const QListWidgetItem* item, const Executable* e)
 {
   // the ui is currently being set, ignore changes
-  IgnoreChanges c(this);
+  IgnoreChanges const c(this);
 
   if (e) {
     setEdits(*e);
@@ -842,7 +842,7 @@ void EditExecutablesDialog::setBinary(const QFileInfo& binary)
 
 void EditExecutablesDialog::on_browseWorkingDirectory_clicked()
 {
-  QString dirName = FileDialogMemory::getExistingDirectory(
+  QString const dirName = FileDialogMemory::getExistingDirectory(
       "editExecutableDirectory", this, tr("Select a directory"),
       ui->workingDirectory->text());
 
@@ -916,7 +916,7 @@ void EditExecutablesDialog::setJarBinary(const QFileInfo& binary)
 
   {
     // only save once
-    IgnoreChanges c(this);
+    IgnoreChanges const c(this);
 
     ui->binary->setText(java);
     ui->workingDirectory->setText(QDir::toNativeSeparators(binary.absolutePath()));

@@ -278,7 +278,7 @@ void FilterList::addCategoryCriteria(QTreeWidgetItem* root,
   const auto count = static_cast<unsigned int>(m_factory.numCategories());
   for (unsigned int i = 1; i < count; ++i) {
     if (m_factory.getParentID(i) == targetID) {
-      int categoryID = m_factory.getCategoryID(i);
+      int const categoryID = m_factory.getCategoryID(i);
       if (categoriesUsed.contains(categoryID)) {
         QTreeWidgetItem* item =
             addCriteriaItem(root, m_factory.getCategoryName(i), categoryID,
@@ -322,8 +322,8 @@ void FilterList::refresh()
 
   std::set<int> categoriesUsed;
   for (unsigned int modIdx = 0; modIdx < ModInfo::getNumMods(); ++modIdx) {
-    ModInfo::Ptr modInfo = ModInfo::getByIndex(modIdx);
-    for (int categoryID : modInfo->getCategories()) {
+    ModInfo::Ptr const modInfo = ModInfo::getByIndex(modIdx);
+    for (int const categoryID : modInfo->getCategories()) {
       int currentID = categoryID;
       std::set<int> cycleTest;
       // also add parents so they show up in the tree

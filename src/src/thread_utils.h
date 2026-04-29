@@ -52,7 +52,7 @@ void parallelMap(It begin, It end, Callable callable, std::size_t nThreads)
       while (true) {
         decltype(begin) it;
         {
-          std::scoped_lock lock(m);
+          std::scoped_lock const lock(m);
           if (begin == end) {
             break;
           }

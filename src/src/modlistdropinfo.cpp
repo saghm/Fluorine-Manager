@@ -25,7 +25,7 @@ ModListDropInfo::ModListDropInfo(const QMimeData* mimeData, OrganizerCore& core)
       if (m_localUrls.empty() && mimeData->urls().size() == 1) {
         auto url = mimeData->urls()[0];
         if (url.isLocalFile() && !relativeUrl(url)) {
-          QFileInfo info(url.toLocalFile());
+          QFileInfo const info(url.toLocalFile());
           if (info.isDir()) {
             m_url = url;
           } else if (core.installationManager()->getSupportedExtensions().contains(
@@ -70,17 +70,17 @@ ModListDropInfo::relativeUrl(const QUrl& url)
     return {};
   }
 
-  QDir allModsDir(Settings::instance().paths().mods());
-  QDir overwriteDir(Settings::instance().paths().overwrite());
+  QDir const allModsDir(Settings::instance().paths().mods());
+  QDir const overwriteDir(Settings::instance().paths().overwrite());
 
-  QFileInfo sourceInfo(url.toLocalFile());
-  QString sourceFile = sourceInfo.canonicalFilePath();
+  QFileInfo const sourceInfo(url.toLocalFile());
+  QString const sourceFile = sourceInfo.canonicalFilePath();
 
-  QString relativePath;
+  QString const relativePath;
   QString originName;
 
   if (sourceFile.startsWith(allModsDir.canonicalPath())) {
-    QDir relativeDir(allModsDir.relativeFilePath(sourceFile));
+    QDir const relativeDir(allModsDir.relativeFilePath(sourceFile));
     QStringList splitPath = relativeDir.path().split("/");
     originName            = splitPath[0];
     splitPath.pop_front();

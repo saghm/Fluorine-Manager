@@ -76,7 +76,7 @@ public:
 
   void addTo(QMenu& menu)
   {
-    QString s;
+    QString const s;
 
     setTips();
 
@@ -346,13 +346,13 @@ void FileTree::openModInfo(FileTreeItem* item)
   const auto& origin = m_core.directoryStructure()->getOriginByID(originID);
   const auto& name   = QString::fromStdWString(origin.getName());
 
-  unsigned int index = ModInfo::getIndex(name);
+  unsigned int const index = ModInfo::getIndex(name);
   if (index == UINT_MAX) {
     log::error("can't open mod info, mod '{}' not found", name);
     return;
   }
 
-  ModInfo::Ptr modInfo = ModInfo::getByIndex(index);
+  ModInfo::Ptr const modInfo = ModInfo::getByIndex(index);
   if (modInfo) {
     emit displayModInformation(modInfo, index, ModInfoTabIDs::None);
   }
@@ -419,7 +419,7 @@ void FileTree::dumpToFile() const
 {
   log::debug("dumping filetree to file");
 
-  QString file = QFileDialog::getSaveFileName(m_tree->window());
+  QString const file = QFileDialog::getSaveFileName(m_tree->window());
   if (file.isEmpty()) {
     log::debug("user canceled");
     return;

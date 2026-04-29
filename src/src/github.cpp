@@ -24,7 +24,7 @@ GitHub::~GitHub()
 
 QJsonArray GitHub::releases(const Repository& repo)
 {
-  QJsonDocument result = request(
+  QJsonDocument const result = request(
       Method::GET, QString("repos/%1/%2/releases").arg(repo.owner, repo.project),
       QByteArray(), true);
   return result.array();
@@ -54,7 +54,7 @@ QJsonDocument GitHub::handleReply(QNetworkReply* reply)
           reply->attribute(QNetworkRequest::HttpReasonPhraseAttribute).toString()}}));
   }
 
-  QByteArray data = reply->readAll();
+  QByteArray const data = reply->readAll();
   if (data.isNull() || data.isEmpty() || (strcmp(data.constData(), "null") == 0)) {
     return {};
   }
@@ -99,7 +99,7 @@ QJsonDocument GitHub::request(Method method, const QString& path,
   QJsonDocument result = handleReply(reply);
   reply->deleteLater();
 
-  QJsonObject object = result.object();
+  QJsonObject const object = result.object();
   if (object.value("http_status").toDouble() == 301.0) {
     return request(method, object.value("redirection").toString(), data, false);
   } else {
@@ -146,8 +146,8 @@ void GitHub::request(Method method, const QString& path, const QByteArray& data,
 
 void GitHub::onFinished(const Request& req)
 {
-  QJsonDocument result = handleReply(req.reply);
-  QJsonObject object   = result.object();
+  QJsonDocument const result = handleReply(req.reply);
+  QJsonObject const object   = result.object();
 
   req.timer->stop();
 
@@ -174,8 +174,8 @@ void GitHub::onError(const Request& req, QNetworkReply::NetworkError error)
   req.timer->stop();
   req.reply->disconnect();
 
-  QJsonObject root({{"network_error", req.reply->errorString()}});
-  QJsonDocument doc(root);
+  QJsonObject const root({{"network_error", req.reply->errorString()}});
+  QJsonDocument const doc(root);
 
   req.callback(doc);
 

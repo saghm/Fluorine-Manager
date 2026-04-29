@@ -53,7 +53,7 @@ void CategoriesTab::add(const CategoryFactory& factory,
       continue;
     }
 
-    int categoryID = factory.getCategoryID(i);
+    int const categoryID = factory.getCategoryID(i);
 
     QTreeWidgetItem* newItem =
         new QTreeWidgetItem(QStringList(factory.getCategoryName(i)));
@@ -79,7 +79,7 @@ void CategoriesTab::updatePrimary()
 {
   ui->primaryCategories->clear();
 
-  int primaryCategory = mod().primaryCategory();
+  int const primaryCategory = mod().primaryCategory();
 
   addChecked(ui->categories->invisibleRootItem());
 

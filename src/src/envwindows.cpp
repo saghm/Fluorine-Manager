@@ -33,7 +33,7 @@ WindowsInfo::Version WindowsInfo::getKernelVersion()
   Version v;
 
   // Parse kernel version like "6.18.9-2-cachyos".
-  QString kver      = QString::fromUtf8(uts.release);
+  QString const kver      = QString::fromUtf8(uts.release);
   QStringList parts = kver.split('.');
 
   if (!parts.empty())
@@ -42,7 +42,7 @@ WindowsInfo::Version WindowsInfo::getKernelVersion()
     v.minor = parts[1].toUInt();
   if (parts.size() >= 3) {
     QString buildStr = parts[2];
-    int dashPos      = buildStr.indexOf('-');
+    int const dashPos      = buildStr.indexOf('-');
     if (dashPos >= 0) {
       buildStr = buildStr.left(dashPos);
     }
@@ -64,7 +64,7 @@ WindowsInfo::Release WindowsInfo::getRelease()
       if (eqPos == std::string::npos)
         continue;
 
-      std::string key = line.substr(0, eqPos);
+      std::string const key = line.substr(0, eqPos);
       std::string val = line.substr(eqPos + 1);
 
       if (val.size() >= 2 && val.front() == '"' && val.back() == '"') {

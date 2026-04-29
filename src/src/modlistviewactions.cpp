@@ -243,8 +243,8 @@ void ModListViewActions::checkModsForUpdates() const
   }
 
   bool updatesAvailable = false;
-  for (auto mod : m_core.modList()->allMods()) {
-    ModInfo::Ptr modInfo = ModInfo::getByName(mod);
+  for (const auto& mod : m_core.modList()->allMods()) {
+    ModInfo::Ptr const modInfo = ModInfo::getByName(mod);
     if (modInfo->updateAvailable()) {
       updatesAvailable = true;
       break;
@@ -277,22 +277,22 @@ void ModListViewActions::assignCategories() const
     if (result == QMessageBox::Cancel)
       return;
   }
-  for (auto mod : m_core.modList()->allMods()) {
-    ModInfo::Ptr modInfo = ModInfo::getByName(mod);
+  for (const auto& mod : m_core.modList()->allMods()) {
+    ModInfo::Ptr const modInfo = ModInfo::getByName(mod);
     if (modInfo->isSeparator())
       continue;
     int nexusCategory = modInfo->getNexusCategory();
     if (!nexusCategory) {
-      QSettings downloadMeta(m_core.downloadsPath() + "/" +
+      QSettings const downloadMeta(m_core.downloadsPath() + "/" +
                                  modInfo->installationFile() + ".meta",
                              QSettings::IniFormat);
       if (downloadMeta.contains("category")) {
         nexusCategory = downloadMeta.value("category", 0).toInt();
       }
     }
-    int newCategory = CategoryFactory::instance().resolveNexusID(nexusCategory);
+    int const newCategory = CategoryFactory::instance().resolveNexusID(nexusCategory);
     if (newCategory != 0) {
-      for (auto category : modInfo->categories()) {
+      for (const auto& category : modInfo->categories()) {
         modInfo->removeCategory(category);
       }
     }
@@ -326,7 +326,7 @@ void ModListViewActions::checkModsForUpdates(const QModelIndexList& indices) con
 {
   std::multimap<QString, int> ids;
   for (auto& idx : indices) {
-    ModInfo::Ptr info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
+    ModInfo::Ptr const info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
     ids.insert(std::make_pair<QString, int>(info->gameName(), info->nexusId()));
   }
   checkModsForUpdates(ids);
@@ -419,8 +419,8 @@ void ModListViewActions::exportModListCSV() const
 
   if (selection.exec() == QDialog::Accepted) {
 
-    unsigned int numMods = ModInfo::getNumMods();
-    int selectedRowID    = buttonGroupRows->checkedId();
+    unsigned int const numMods = ModInfo::getNumMods();
+    int const selectedRowID    = buttonGroupRows->checkedId();
 
     try {
       QBuffer buffer;
@@ -472,8 +472,8 @@ void ModListViewActions::exportModListCSV() const
 
       auto indexesByPriority = m_core.currentProfile()->getAllIndexesByPriority();
       for (auto& iter : indexesByPriority) {
-        ModInfo::Ptr info = ModInfo::getByIndex(iter.second);
-        bool enabled      = m_core.currentProfile()->modEnabled(iter.second);
+        ModInfo::Ptr const info = ModInfo::getByIndex(iter.second);
+        bool const enabled      = m_core.currentProfile()->modEnabled(iter.second);
         if ((selectedRowID == 1) && !enabled) {
           continue;
         } else if ((selectedRowID == 2) && !m_view->isModVisible(iter.second)) {
@@ -538,20 +538,20 @@ void ModListViewActions::exportModListCSV() const
 void ModListViewActions::displayModInformation(const QString& modName,
                                                ModInfoTabIDs tab) const
 {
-  unsigned int index = ModInfo::getIndex(modName);
+  unsigned int const index = ModInfo::getIndex(modName);
   if (index == UINT_MAX) {
     log::error("failed to resolve mod name {}", modName);
     return;
   }
 
-  ModInfo::Ptr modInfo = ModInfo::getByIndex(index);
+  ModInfo::Ptr const modInfo = ModInfo::getByIndex(index);
   displayModInformation(modInfo, index, tab);
 }
 
 void ModListViewActions::displayModInformation(unsigned int index,
                                                ModInfoTabIDs tab) const
 {
-  ModInfo::Ptr modInfo = ModInfo::getByIndex(index);
+  ModInfo::Ptr const modInfo = ModInfo::getByIndex(index);
   displayModInformation(modInfo, index, tab);
 }
 
@@ -621,7 +621,7 @@ void ModListViewActions::displayModInformation(ModInfo::Ptr modInfo,
           m_core.directoryStructure()->getOriginByName(ToWString(modInfo->name()));
       origin.enable(false);
       QString path       = modInfo->absolutePath();
-      QString modDataDir = m_core.managedGame()->modDataDirectory();
+      QString const modDataDir = m_core.managedGame()->modDataDirectory();
       path               = modDataDir.isEmpty() ? path : path + "/" + modDataDir;
       m_core.directoryRefresher()->addModToStructure(
           m_core.directoryStructure(), modInfo->name(),
@@ -647,7 +647,7 @@ void ModListViewActions::sendModsToBottom(const QModelIndexList& indexes) const
 void ModListViewActions::sendModsToPriority(const QModelIndexList& indexes) const
 {
   bool ok;
-  int priority = QInputDialog::getInt(m_parent, tr("Set Priority"),
+  int const priority = QInputDialog::getInt(m_parent, tr("Set Priority"),
                                       tr("Set the priority of the selected mods"), 0, 0,
                                       std::numeric_limits<int>::max(), 1, &ok);
   if (!ok)
@@ -662,7 +662,7 @@ void ModListViewActions::sendModsToSeparator(const QModelIndexList& indexes) con
   const auto& ibp = m_core.currentProfile()->getAllIndexesByPriority();
   for (const auto& [priority, index] : ibp) {
     if (index < ModInfo::getNumMods()) {
-      ModInfo::Ptr modInfo = ModInfo::getByIndex(index);
+      ModInfo::Ptr const modInfo = ModInfo::getByIndex(index);
       if (modInfo->isSeparator()) {
         separators << modInfo->name().chopped(
             10);  // chops the "_separator" away from the name
@@ -793,7 +793,7 @@ void ModListViewActions::removeMods(const QModelIndexList& indices) const
 
       int i = 0;
       for (auto& idx : indices) {
-        QString name = idx.data().toString();
+        QString const name = idx.data().toString();
         if (!ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt())->isRegular()) {
           continue;
         }
@@ -819,7 +819,7 @@ void ModListViewActions::removeMods(const QModelIndexList& indices) const
         // use mod names instead of indexes because those become invalid during the
         // removal
         DownloadManager::startDisableDirWatcher();
-        for (QString name : modNames) {
+        for (const QString& name : modNames) {
           m_core.modList()->removeRowForce(ModInfo::getIndex(name), QModelIndex());
         }
         DownloadManager::endDisableDirWatcher();
@@ -838,8 +838,8 @@ void ModListViewActions::removeMods(const QModelIndexList& indices) const
 void ModListViewActions::ignoreMissingData(const QModelIndexList& indices) const
 {
   for (auto& idx : indices) {
-    int row_idx       = idx.data(ModList::IndexRole).toInt();
-    ModInfo::Ptr info = ModInfo::getByIndex(row_idx);
+    int const row_idx       = idx.data(ModList::IndexRole).toInt();
+    ModInfo::Ptr const info = ModInfo::getByIndex(row_idx);
     info->markValidated(true);
     m_core.modList()->notifyChange(row_idx);
   }
@@ -849,8 +849,8 @@ void ModListViewActions::setIgnoreUpdate(const QModelIndexList& indices,
                                          bool ignore) const
 {
   for (auto& idx : indices) {
-    int modIdx        = idx.data(ModList::IndexRole).toInt();
-    ModInfo::Ptr info = ModInfo::getByIndex(modIdx);
+    int const modIdx        = idx.data(ModList::IndexRole).toInt();
+    ModInfo::Ptr const info = ModInfo::getByIndex(modIdx);
     info->ignoreUpdate(ignore);
     m_core.modList()->notifyChange(modIdx);
   }
@@ -866,18 +866,18 @@ void ModListViewActions::changeVersioningScheme(const QModelIndex& index) const
              "the installed version is outdated."),
           QMessageBox::Yes | QMessageBox::Cancel) == QMessageBox::Yes) {
 
-    ModInfo::Ptr info = ModInfo::getByIndex(index.data(ModList::IndexRole).toInt());
+    ModInfo::Ptr const info = ModInfo::getByIndex(index.data(ModList::IndexRole).toInt());
 
     bool success = false;
 
-    static VersionInfo::VersionScheme schemes[] = {
+    static VersionInfo::VersionScheme const schemes[] = {
         VersionInfo::SCHEME_REGULAR, VersionInfo::SCHEME_DECIMALMARK,
         VersionInfo::SCHEME_NUMBERSANDLETTERS};
 
     for (int i = 0;
          i < sizeof(schemes) / sizeof(VersionInfo::VersionScheme) && !success; ++i) {
-      VersionInfo verOld(info->version().canonicalString(), schemes[i]);
-      VersionInfo verNew(info->newestVersion().canonicalString(), schemes[i]);
+      VersionInfo const verOld(info->version().canonicalString(), schemes[i]);
+      VersionInfo const verNew(info->newestVersion().canonicalString(), schemes[i]);
       if (verOld < verNew) {
         info->setVersion(verOld);
         info->setNewestVersion(verNew);
@@ -898,8 +898,8 @@ void ModListViewActions::changeVersioningScheme(const QModelIndex& index) const
 void ModListViewActions::markConverted(const QModelIndexList& indices) const
 {
   for (auto& idx : indices) {
-    int modIdx        = idx.data(ModList::IndexRole).toInt();
-    ModInfo::Ptr info = ModInfo::getByIndex(modIdx);
+    int const modIdx        = idx.data(ModList::IndexRole).toInt();
+    ModInfo::Ptr const info = ModInfo::getByIndex(modIdx);
     info->markConverted(true);
     m_core.modList()->notifyChange(modIdx);
   }
@@ -914,9 +914,9 @@ void ModListViewActions::visitOnNexus(const QModelIndexList& indices) const
   }
 
   for (auto& idx : indices) {
-    ModInfo::Ptr info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
-    int modID         = info->nexusId();
-    QString gameName  = info->gameName();
+    ModInfo::Ptr const info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
+    int const modID         = info->nexusId();
+    QString const gameName  = info->gameName();
     if (modID > 0) {
       shell::Open(QUrl(NexusInterface::instance().getModURL(modID, gameName)));
     } else {
@@ -934,7 +934,7 @@ void ModListViewActions::visitWebPage(const QModelIndexList& indices) const
   }
 
   for (auto& idx : indices) {
-    ModInfo::Ptr info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
+    ModInfo::Ptr const info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
 
     const auto url = info->parseCustomURL();
     if (url.isValid()) {
@@ -952,14 +952,14 @@ void ModListViewActions::visitNexusOrWebPage(const QModelIndexList& indices) con
   }
 
   for (auto& idx : indices) {
-    ModInfo::Ptr info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
+    ModInfo::Ptr const info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
     if (!info) {
       log::error("mod {} not found", idx.data(ModList::IndexRole).toInt());
       continue;
     }
 
-    int modID        = info->nexusId();
-    QString gameName = info->gameName();
+    int const modID        = info->nexusId();
+    QString const gameName = info->gameName();
     const auto url   = info->parseCustomURL();
 
     if (modID > 0) {
@@ -981,7 +981,7 @@ void ModListViewActions::visitUploaderProfile(const QModelIndexList& indices) co
   }
 
   for (auto& idx : indices) {
-    ModInfo::Ptr info      = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
+    ModInfo::Ptr const info      = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
     const auto uploaderUrl = info->uploaderUrl();
 
     if (!uploaderUrl.isEmpty()) {
@@ -1005,11 +1005,11 @@ bool ModListViewActions::askOpenLinksConfirmation(std::size_t numberOfLinks,
 
 void ModListViewActions::reinstallMod(const QModelIndex& index) const
 {
-  ModInfo::Ptr modInfo = ModInfo::getByIndex(index.data(ModList::IndexRole).toInt());
-  QString installationFile = modInfo->installationFile();
+  ModInfo::Ptr const modInfo = ModInfo::getByIndex(index.data(ModList::IndexRole).toInt());
+  QString const installationFile = modInfo->installationFile();
   if (installationFile.length() != 0) {
     QString fullInstallationFile;
-    QFileInfo fileInfo(installationFile);
+    QFileInfo const fileInfo(installationFile);
     if (fileInfo.isAbsolute()) {
       if (fileInfo.exists()) {
         fullInstallationFile = installationFile;
@@ -1036,8 +1036,8 @@ void ModListViewActions::reinstallMod(const QModelIndex& index) const
 
 void ModListViewActions::createBackup(const QModelIndex& index) const
 {
-  ModInfo::Ptr modInfo = ModInfo::getByIndex(index.data(ModList::IndexRole).toInt());
-  QString backupDirectory =
+  ModInfo::Ptr const modInfo = ModInfo::getByIndex(index.data(ModList::IndexRole).toInt());
+  QString const backupDirectory =
       m_core.installationManager()->generateBackupName(modInfo->absolutePath());
   if (!copyDir(modInfo->absolutePath(), backupDirectory, false)) {
     QMessageBox::information(m_parent, tr("Failed"), tr("Failed to create backup."));
@@ -1063,7 +1063,7 @@ void ModListViewActions::restoreHiddenFiles(const QModelIndexList& indices) cons
     QStringList modNames;
     for (auto& idx : indices) {
 
-      ModInfo::Ptr modInfo = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
+      ModInfo::Ptr const modInfo = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
       const auto flags     = modInfo->getFlags();
 
       if (!modInfo->isRegular() ||
@@ -1088,7 +1088,7 @@ void ModListViewActions::restoreHiddenFiles(const QModelIndexList& indices) cons
 
       for (auto& idx : indices) {
 
-        ModInfo::Ptr modInfo =
+        ModInfo::Ptr const modInfo =
             ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
 
         const auto flags = modInfo->getFlags();
@@ -1110,7 +1110,7 @@ void ModListViewActions::restoreHiddenFiles(const QModelIndexList& indices) cons
     }
   } else if (!indices.isEmpty()) {
     // single selection
-    ModInfo::Ptr modInfo =
+    ModInfo::Ptr const modInfo =
         ModInfo::getByIndex(indices[0].data(ModList::IndexRole).toInt());
     const QString modDir = modInfo->absolutePath();
 
@@ -1168,20 +1168,20 @@ void ModListViewActions::willNotEndorsed(const QModelIndexList& indices)
 void ModListViewActions::remapCategory(const QModelIndexList& indices) const
 {
   for (auto& idx : indices) {
-    ModInfo::Ptr modInfo = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
+    ModInfo::Ptr const modInfo = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
     if (modInfo->isSeparator())
       continue;
 
     int categoryID = modInfo->getNexusCategory();
     if (!categoryID) {
-      QSettings downloadMeta(m_core.downloadsPath() + "/" +
+      QSettings const downloadMeta(m_core.downloadsPath() + "/" +
                                  modInfo->installationFile() + ".meta",
                              QSettings::IniFormat);
       if (downloadMeta.contains("category")) {
         categoryID = downloadMeta.value("category", 0).toInt();
       }
     }
-    unsigned int categoryIndex = CategoryFactory::instance().resolveNexusID(categoryID);
+    unsigned int const categoryIndex = CategoryFactory::instance().resolveNexusID(categoryID);
     if (categoryIndex != 0)
       modInfo->setPrimaryCategory(
           CategoryFactory::instance().getCategoryID(categoryIndex));
@@ -1192,7 +1192,7 @@ void ModListViewActions::setColor(const QModelIndexList& indices,
                                   const QModelIndex& refIndex) const
 {
   auto& settings       = m_core.settings();
-  ModInfo::Ptr modInfo = ModInfo::getByIndex(refIndex.data(ModList::IndexRole).toInt());
+  ModInfo::Ptr const modInfo = ModInfo::getByIndex(refIndex.data(ModList::IndexRole).toInt());
 
   QColorDialog dialog(m_parent);
   dialog.setOption(QColorDialog::ShowAlphaChannel);
@@ -1214,7 +1214,7 @@ void ModListViewActions::setColor(const QModelIndexList& indices,
   settings.colors().setPreviousSeparatorColor(currentColor);
 
   for (auto& idx : indices) {
-    ModInfo::Ptr info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
+    ModInfo::Ptr const info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
     info->setColor(currentColor);
   }
 }
@@ -1222,7 +1222,7 @@ void ModListViewActions::setColor(const QModelIndexList& indices,
 void ModListViewActions::resetColor(const QModelIndexList& indices) const
 {
   for (auto& idx : indices) {
-    ModInfo::Ptr info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
+    ModInfo::Ptr const info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
     info->setColor(QColor());
   }
   m_core.settings().colors().removePreviousSeparatorColor();
@@ -1251,7 +1251,7 @@ void ModListViewActions::setCategories(
     const QModelIndexList& selected, const QModelIndex& ref,
     const std::vector<std::pair<int, bool>>& categories) const
 {
-  ModInfo::Ptr refMod = ModInfo::getByIndex(ref.data(ModList::IndexRole).toInt());
+  ModInfo::Ptr const refMod = ModInfo::getByIndex(ref.data(ModList::IndexRole).toInt());
   if (selected.size() > 1) {
     for (auto& idx : selected) {
       if (idx.row() != ref.row()) {
@@ -1281,7 +1281,7 @@ void ModListViewActions::setPrimaryCategory(const QModelIndexList& selected,
                                             int category, bool force)
 {
   for (auto& idx : selected) {
-    ModInfo::Ptr info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
+    ModInfo::Ptr const info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
     if (force || info->categorySet(category)) {
       info->setCategory(category, true);
       info->setPrimaryCategory(category);
@@ -1299,7 +1299,7 @@ void ModListViewActions::setPrimaryCategory(const QModelIndexList& selected,
 void ModListViewActions::openExplorer(const QModelIndexList& index) 
 {
   for (auto& idx : index) {
-    ModInfo::Ptr info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
+    ModInfo::Ptr const info = ModInfo::getByIndex(idx.data(ModList::IndexRole).toInt());
     if (!info->isForeign()) {
       shell::Explore(info->absolutePath());
     }
@@ -1308,11 +1308,11 @@ void ModListViewActions::openExplorer(const QModelIndexList& index)
 
 void ModListViewActions::restoreBackup(const QModelIndex& index) const
 {
-  QRegularExpression backupRegEx("(.*)_backup[0-9]*$");
-  ModInfo::Ptr modInfo = ModInfo::getByIndex(index.data(ModList::IndexRole).toInt());
+  QRegularExpression const backupRegEx("(.*)_backup[0-9]*$");
+  ModInfo::Ptr const modInfo = ModInfo::getByIndex(index.data(ModList::IndexRole).toInt());
   auto match           = backupRegEx.match(modInfo->name());
   if (match.hasMatch()) {
-    QString regName = match.captured(1);
+    QString const regName = match.captured(1);
     QDir modDir(QDir::fromNativeSeparators(m_core.settings().paths().mods()));
     if (!modDir.exists(regName) ||
         (QMessageBox::question(
@@ -1323,7 +1323,7 @@ void ModListViewActions::restoreBackup(const QModelIndex& index) const
           !shellDelete(QStringList(modDir.absoluteFilePath(regName)))) {
         reportError(tr("failed to remove mod \"%1\"").arg(regName));
       } else {
-        QString destinationPath =
+        QString const destinationPath =
             QDir::fromNativeSeparators(m_core.settings().paths().mods()) + "/" +
             regName;
         if (!modDir.rename(modInfo->absolutePath(), destinationPath)) {
@@ -1340,7 +1340,7 @@ void ModListViewActions::restoreBackup(const QModelIndex& index) const
 
 void ModListViewActions::moveOverwriteContentsTo(const QString& absolutePath) const
 {
-  ModInfo::Ptr overwriteInfo = ModInfo::getOverwrite();
+  ModInfo::Ptr const overwriteInfo = ModInfo::getOverwrite();
   const QString overwritePath = overwriteInfo->absolutePath();
   const QDir overwriteDir(overwritePath);
   const QDir destDir(absolutePath);
@@ -1400,7 +1400,7 @@ void ModListViewActions::moveOverwriteContentsTo(const QString& absolutePath) co
                            QDirIterator::Subdirectories);
     while (trackIter.hasNext()) {
       trackIter.next();
-      QString relPath = destDir.relativeFilePath(trackIter.filePath());
+      QString const relPath = destDir.relativeFilePath(trackIter.filePath());
       m_core.trackOverwriteMove(relPath, absolutePath);
     }
     MessageDialog::showMessage(tr("Move successful."), m_parent);
@@ -1449,7 +1449,7 @@ void ModListViewActions::moveOverwriteContentToExistingMod() const
   auto indexesByPriority = m_core.currentProfile()->getAllIndexesByPriority();
   for (auto& iter : indexesByPriority) {
     if ((iter.second != UINT_MAX)) {
-      ModInfo::Ptr modInfo = ModInfo::getByIndex(iter.second);
+      ModInfo::Ptr const modInfo = ModInfo::getByIndex(iter.second);
       if (!modInfo->isSeparator() && !modInfo->isForeign() && !modInfo->isOverwrite()) {
         mods << modInfo->name();
       }
@@ -1468,7 +1468,7 @@ void ModListViewActions::moveOverwriteContentToExistingMod() const
 
       for (const auto& mod : m_core.modList()->allModsByProfilePriority()) {
         if (result.compare(mod) == 0) {
-          ModInfo::Ptr modInfo = ModInfo::getByIndex(ModInfo::getIndex(mod));
+          ModInfo::Ptr const modInfo = ModInfo::getByIndex(ModInfo::getIndex(mod));
           modAbsolutePath      = modInfo->absolutePath();
           break;
         }
@@ -1486,19 +1486,19 @@ void ModListViewActions::moveOverwriteContentToExistingMod() const
 
 void ModListViewActions::clearOverwrite() const
 {
-  ModInfo::Ptr modInfo = ModInfo::getOverwrite();
+  ModInfo::Ptr const modInfo = ModInfo::getOverwrite();
   if (modInfo) {
-    QDir overwriteDir(modInfo->absolutePath());
+    QDir const overwriteDir(modInfo->absolutePath());
     if (QMessageBox::question(
             m_parent, tr("Are you sure?"),
             tr("About to recursively delete:\n") + overwriteDir.absolutePath(),
             QMessageBox::Ok | QMessageBox::Cancel) == QMessageBox::Ok) {
       QStringList delList;
-      for (auto f : overwriteDir.entryInfoList(QDir::AllDirs | QDir::Files |
+      for (const auto& f : overwriteDir.entryInfoList(QDir::AllDirs | QDir::Files |
                                                QDir::NoDotAndDotDot)) {
         if (f.isDir() && m_core.managedGame()->getModMappings().keys().contains(
                              f.fileName(), Qt::CaseInsensitive)) {
-          for (auto sf :
+          for (const auto& sf :
                QDir(f.absoluteFilePath())
                    .entryInfoList(QDir::AllDirs | QDir::Files | QDir::NoDotAndDotDot)) {
             delList.push_back(sf.absoluteFilePath());

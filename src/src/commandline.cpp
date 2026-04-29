@@ -123,7 +123,7 @@ std::optional<int> CommandLine::process(const std::wstring& line)
               po::store(parsed, m_vm);
 
               if (m_vm.contains("help")) {
-                env::Console console;
+                env::Console const console;
                 std::cout << usage(c.get()) << "\n";
                 return 0;
               }
@@ -138,7 +138,7 @@ std::optional<int> CommandLine::process(const std::wstring& line)
 
             return runEarly();
           } catch (po::error& e) {
-            env::Console console;
+            env::Console const console;
 
             std::cerr << e.what() << "\n" << usage(c.get()) << "\n";
 
@@ -154,7 +154,7 @@ std::optional<int> CommandLine::process(const std::wstring& line)
 
     // look for help
     if (m_vm.contains("help")) {
-      env::Console console;
+      env::Console const console;
       std::cout << usage() << "\n";
       return 0;
     }
@@ -165,7 +165,7 @@ std::optional<int> CommandLine::process(const std::wstring& line)
       if (qs.startsWith("--")) {
         // assume that for something like `ModOrganizer.exe --bleh`, it's just
         // a bad option instead of an executable that starts with "--"
-        env::Console console;
+        env::Console const console;
         std::cerr << "\nUnrecognized option " << qs.toStdString() << "\n";
 
         return 1;
@@ -194,7 +194,7 @@ std::optional<int> CommandLine::process(const std::wstring& line)
 
     return {};
   } catch (po::error& e) {
-    env::Console console;
+    env::Console const console;
 
     std::cerr << e.what() << "\n" << usage() << "\n";
 
@@ -235,7 +235,7 @@ std::optional<int> CommandLine::runPostApplication(MOApplication& a)
 {
   // handle -i with no arguments
   if (m_vm.contains("instance") && m_vm["instance"].as<std::string>().empty()) {
-    env::Console c;
+    env::Console const c;
 
     if (auto i = InstanceManager::singleton().currentInstance()) {
       std::cout << i->displayName().toStdString() << "\n";
@@ -600,7 +600,7 @@ Command::Meta CrashDumpCommand::meta() const
 
 std::optional<int> CrashDumpCommand::runEarly()
 {
-  env::Console console;
+  env::Console const console;
 
   const auto typeString = vm()["type"].as<std::string>();
   const auto type       = env::coreDumpTypeFromString(typeString);
@@ -882,7 +882,7 @@ po::positional_options_description CreatePortableCommand::getPositional() const
 
 std::optional<int> CreatePortableCommand::runEarly()
 {
-  env::Console console;
+  env::Console const console;
 
   const auto name = QString::fromStdString(vm()["name"].as<std::string>());
   const auto outputDir = QString::fromStdString(vm()["output"].as<std::string>());
@@ -979,7 +979,7 @@ Command::Meta ListInstancesCommand::meta() const
 
 std::optional<int> ListInstancesCommand::runEarly()
 {
-  env::Console console;
+  env::Console const console;
 
   // Check common locations for portable instances
   const QStringList searchPaths = {
@@ -990,13 +990,13 @@ std::optional<int> ListInstancesCommand::runEarly()
 
   bool found = false;
   for (const auto& searchPath : searchPaths) {
-    QDir dir(searchPath);
+    QDir const dir(searchPath);
     if (!dir.exists()) continue;
 
     for (const auto& entry : dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
       const QString iniPath = QDir(dir.filePath(entry)).filePath("ModOrganizer.ini");
       if (QFile::exists(iniPath)) {
-        QSettings ini(iniPath, QSettings::IniFormat);
+        QSettings const ini(iniPath, QSettings::IniFormat);
         if (ini.value("General/portable", false).toBool()) {
           if (!found) {
             std::cout << "Portable instances:\n";
@@ -1044,7 +1044,7 @@ po::positional_options_description InfoCommand::getPositional() const
 
 std::optional<int> InfoCommand::runEarly()
 {
-  env::Console console;
+  env::Console const console;
 
   const auto instancePath = QString::fromStdString(vm()["INSTANCE"].as<std::string>());
   const QString iniPath = QDir(instancePath).filePath("ModOrganizer.ini");
@@ -1054,7 +1054,7 @@ std::optional<int> InfoCommand::runEarly()
     return 1;
   }
 
-  QSettings ini(iniPath, QSettings::IniFormat);
+  QSettings const ini(iniPath, QSettings::IniFormat);
 
   std::cout << "Instance: " << instancePath.toStdString() << "\n";
   std::cout << "  Game:       " << ini.value("General/gameName", "not set").toString().toStdString() << "\n";

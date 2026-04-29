@@ -80,7 +80,7 @@ QString ModInfoOverwrite::getDescription() const
 QStringList ModInfoOverwrite::archives(bool checkOnDisk)
 {
   QStringList result;
-  QDir dir(this->absolutePath());
+  QDir const dir(this->absolutePath());
   for (const QString& archive : dir.entryList(QStringList({"*.bsa", "*.ba2"}))) {
     result.append(this->absolutePath() + "/" + archive);
   }

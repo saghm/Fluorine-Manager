@@ -214,7 +214,7 @@ void configureQtWebEngineProcessPath()
 
 MOApplication::MOApplication(int& argc, char** argv) : QApplication(argc, argv)
 {
-  TimeThis tt("MOApplication()");
+  TimeThis const tt("MOApplication()");
 
   // Ensure the app name is always "ModOrganizer" regardless of the binary
   // filename (e.g. "ModOrganizer.bin" inside an AppImage).
@@ -335,7 +335,7 @@ int MOApplication::setup(MOMultiProcess& multiProcess, bool forceSelect)
   tt.start("MOApplication::doOneRun() log and checks");
 
   // logging and checking
-  env::Environment env;
+  env::Environment const env;
   env.dump(*m_settings);
   m_settings->dump();
   sanity::checkEnvironment(env);
@@ -419,7 +419,7 @@ int MOApplication::setup(MOMultiProcess& multiProcess, bool forceSelect)
   {
     auto prefixPath = FluorineConfig::prefixPath();
     if (!prefixPath || prefixPath->isEmpty()) {
-      QSettings instanceSettings(m_settings->filename(), QSettings::IniFormat);
+      QSettings const instanceSettings(m_settings->filename(), QSettings::IniFormat);
       for (const auto& key : {"Settings/proton_prefix_path", "Settings/prefix_path",
                               "Proton/prefix_path", "fluorine/prefix_path"}) {
         const QString value = instanceSettings.value(key).toString().trimmed();
@@ -430,7 +430,7 @@ int MOApplication::setup(MOMultiProcess& multiProcess, bool forceSelect)
       }
     }
     if (prefixPath && !prefixPath->isEmpty()) {
-      WinePrefix prefix(*prefixPath);
+      WinePrefix const prefix(*prefixPath);
       if (prefix.isValid()) {
         log::info("checking for stale backup files in prefix '{}'", *prefixPath);
         prefix.restoreStaleBackups();
@@ -533,7 +533,7 @@ void MOApplication::externalMessage(const QString& message)
 {
   log::debug("received external message '{}'", message);
 
-  MOShortcut moshortcut(message);
+  MOShortcut const moshortcut(message);
 
   if (moshortcut.isValid()) {
     if (moshortcut.hasExecutable()) {
@@ -650,7 +650,7 @@ void MOApplication::purgeOldFiles()
 {
   // remove the temporary backup directory in case we're restarting after an
   // update
-  QString backupDirectory = qApp->applicationDirPath() + "/update_backup";
+  QString const backupDirectory = qApp->applicationDirPath() + "/update_backup";
   if (QDir(backupDirectory).exists()) {
     shellDelete(QStringList(backupDirectory));
   }
@@ -683,7 +683,7 @@ void MOApplication::resetForRestart()
 bool MOApplication::setStyleFile(const QString& styleName)
 {
   // remove all files from watch
-  QStringList currentWatch = m_styleWatcher.files();
+  QStringList const currentWatch = m_styleWatcher.files();
   if (currentWatch.count() != 0) {
     m_styleWatcher.removePaths(currentWatch);
   }
@@ -712,7 +712,7 @@ bool MOApplication::setStyleFile(const QString& styleName)
 
     QString resolved;
     for (const auto& dir : searchDirs) {
-      QString candidate = dir + "/" + styleName;
+      QString const candidate = dir + "/" + styleName;
       if (QFile::exists(candidate)) {
         resolved = candidate;
         break;
@@ -916,7 +916,7 @@ MOSplash::MOSplash(const Settings& settings, const QString& dataPath,
     return;
   }
 
-  QPixmap image(splashPath);
+  QPixmap const image(splashPath);
   if (image.isNull()) {
     log::error("failed to load splash from {}", splashPath);
     return;
@@ -948,7 +948,7 @@ QString MOSplash::getSplashPath(const Settings& settings, const QString& dataPat
   // try splash from instance directory
   const QString splashPath = dataPath + "/splash.png";
   if (QFile::exists(dataPath + "/splash.png")) {
-    QImage image(splashPath);
+    QImage const image(splashPath);
     if (!image.isNull()) {
       return splashPath;
     }
@@ -957,7 +957,7 @@ QString MOSplash::getSplashPath(const Settings& settings, const QString& dataPat
   // try splash from plugin
   QString pluginSplash = QString(":/%1/splash").arg(game->gameShortName());
   if (QFile::exists(pluginSplash)) {
-    QImage image(pluginSplash);
+    QImage const image(pluginSplash);
     if (!image.isNull()) {
       image.save(splashPath);
       return pluginSplash;
@@ -967,7 +967,7 @@ QString MOSplash::getSplashPath(const Settings& settings, const QString& dataPat
   // try default splash from resource
   QString defaultSplash = ":/MO/gui/splash";
   if (QFile::exists(defaultSplash)) {
-    QImage image(defaultSplash);
+    QImage const image(defaultSplash);
     if (!image.isNull()) {
       return defaultSplash;
     }

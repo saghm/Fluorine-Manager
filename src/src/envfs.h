@@ -133,7 +133,7 @@ private:
     void wakeup()
     {
       {
-        std::scoped_lock lock(mutex);
+        std::scoped_lock const lock(mutex);
         ready = true;
       }
 

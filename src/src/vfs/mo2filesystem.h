@@ -96,8 +96,8 @@ struct Mo2FsContext
   };
   struct PairHash {
     size_t operator()(const std::pair<fuse_ino_t, std::string>& p) const {
-      size_t h1 = std::hash<fuse_ino_t>{}(p.first);
-      size_t h2 = std::hash<std::string>{}(p.second);
+      size_t const h1 = std::hash<fuse_ino_t>{}(p.first);
+      size_t const h2 = std::hash<std::string>{}(p.second);
       return h1 ^ (h2 * 0x9e3779b97f4a7c15ULL + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
     }
   };

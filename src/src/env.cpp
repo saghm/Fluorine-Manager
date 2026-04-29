@@ -111,7 +111,7 @@ const Metrics& Environment::metrics() const
 
 QString Environment::timezone() 
 {
-  QTimeZone tz = QTimeZone::systemTimeZone();
+  QTimeZone const tz = QTimeZone::systemTimeZone();
   if (!tz.isValid()) {
     log::error("failed to get system timezone");
     return "unknown";
@@ -348,7 +348,7 @@ bool registryValueExists(const QString&, const QString&)
 std::filesystem::path thisProcessPath()
 {
   char buf[PATH_MAX] = {};
-  ssize_t len        = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+  ssize_t const len        = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
   if (len <= 0) {
     std::cerr << "failed to readlink /proc/self/exe: " << strerror(errno) << "\n";
     return {};
@@ -375,7 +375,7 @@ pid_t findOtherPid()
     const auto pidStr = entry.path().filename().string();
 
     bool isNumber = true;
-    for (char c : pidStr) {
+    for (char const c : pidStr) {
       if (!std::isdigit(static_cast<unsigned char>(c))) {
         isNumber = false;
         break;
@@ -385,7 +385,7 @@ pid_t findOtherPid()
       continue;
     }
 
-    pid_t pid = std::stoi(pidStr);
+    pid_t const pid = std::stoi(pidStr);
     if (pid == thisPid) {
       continue;
     }

@@ -14,7 +14,7 @@ CSVBuilder::~CSVBuilder() = default;
 
 void CSVBuilder::setFieldSeparator(char sep)
 {
-  char oldSeparator = m_Separator;
+  char const oldSeparator = m_Separator;
   m_Separator       = sep;
   try {
     checkFields(m_Fields);

@@ -99,7 +99,7 @@ void OverwriteInfoDialog::setModInfo(ModInfo::Ptr modInfo)
 bool OverwriteInfoDialog::recursiveDelete(const QModelIndex& index)
 {
   for (int childRow = 0; childRow < m_FileSystemModel->rowCount(index); ++childRow) {
-    QModelIndex childIndex = m_FileSystemModel->index(childRow, 0, index);
+    QModelIndex const childIndex = m_FileSystemModel->index(childRow, 0, index);
     if (m_FileSystemModel->isDir(childIndex)) {
       if (!recursiveDelete(childIndex)) {
         log::error("failed to delete {}", m_FileSystemModel->fileName(childIndex));
@@ -122,10 +122,10 @@ bool OverwriteInfoDialog::recursiveDelete(const QModelIndex& index)
 void OverwriteInfoDialog::deleteFile(const QModelIndex& index)
 {
 
-  bool res = m_FileSystemModel->isDir(index) ? recursiveDelete(index)
+  bool const res = m_FileSystemModel->isDir(index) ? recursiveDelete(index)
                                              : m_FileSystemModel->remove(index);
   if (!res) {
-    QString fileName = m_FileSystemModel->fileName(index);
+    QString const fileName = m_FileSystemModel->fileName(index);
     reportError(tr("Failed to delete \"%1\"").arg(fileName));
   }
 }
@@ -141,7 +141,7 @@ void OverwriteInfoDialog::delete_activated()
       if (selection->selectedRows().count() == 0) {
         return;
       } else if (selection->selectedRows().count() == 1) {
-        for (auto modDir : m_Organizer.managedGame()->getModMappings().keys()) {
+        for (const auto& modDir : m_Organizer.managedGame()->getModMappings().keys()) {
           if (root.absoluteFilePath(modDir).compare(
                   m_FileSystemModel->filePath(selection->selectedRows().at(0)),
                   Qt::CaseInsensitive) == 0) {
@@ -149,7 +149,7 @@ void OverwriteInfoDialog::delete_activated()
           }
         }
 
-        QString fileName = m_FileSystemModel->fileName(selection->selectedRows().at(0));
+        QString const fileName = m_FileSystemModel->fileName(selection->selectedRows().at(0));
         if (QMessageBox::question(
                 this, tr("Confirm"),
                 tr("Are you sure you want to delete \"%1\"?").arg(fileName),
@@ -166,7 +166,7 @@ void OverwriteInfoDialog::delete_activated()
       }
 
       foreach (QModelIndex index, selection->selectedRows()) {
-        for (auto modDir : m_Organizer.managedGame()->getModMappings().keys()) {
+        for (const auto& modDir : m_Organizer.managedGame()->getModMappings().keys()) {
           if (root.absoluteFilePath(modDir).compare(m_FileSystemModel->filePath(index),
                                                     Qt::CaseInsensitive) == 0) {
             return;
@@ -184,14 +184,14 @@ void OverwriteInfoDialog::deleteTriggered()
   if (m_FileSelection.count() == 0) {
     return;
   } else if (m_FileSelection.count() == 1) {
-    for (auto modDir : m_Organizer.managedGame()->getModMappings().keys()) {
+    for (const auto& modDir : m_Organizer.managedGame()->getModMappings().keys()) {
       if (root.absoluteFilePath(modDir).compare(
               m_FileSystemModel->filePath(m_FileSelection.at(0)),
               Qt::CaseInsensitive) == 0) {
         return;
       }
     }
-    QString fileName = m_FileSystemModel->fileName(m_FileSelection.at(0));
+    QString const fileName = m_FileSystemModel->fileName(m_FileSelection.at(0));
     if (QMessageBox::question(
             this, tr("Confirm"),
             tr("Are you sure you want to delete \"%1\"?").arg(fileName),
@@ -207,7 +207,7 @@ void OverwriteInfoDialog::deleteTriggered()
   }
 
   foreach (QModelIndex index, m_FileSelection) {
-    for (auto modDir : m_Organizer.managedGame()->getModMappings().keys()) {
+    for (const auto& modDir : m_Organizer.managedGame()->getModMappings().keys()) {
       if (root.absoluteFilePath(modDir).compare(m_FileSystemModel->filePath(index),
                                                 Qt::CaseInsensitive) == 0) {
         return;
@@ -220,12 +220,12 @@ void OverwriteInfoDialog::deleteTriggered()
 void OverwriteInfoDialog::renameTriggered()
 {
   auto root             = m_FileSystemModel->rootDirectory();
-  QModelIndex selection = m_FileSelection.at(0);
-  QModelIndex index     = selection.sibling(selection.row(), 0);
+  QModelIndex const selection = m_FileSelection.at(0);
+  QModelIndex const index     = selection.sibling(selection.row(), 0);
   if (!index.isValid() || m_FileSystemModel->isReadOnly()) {
     return;
   }
-  for (auto modDir : m_Organizer.managedGame()->getModMappings().keys()) {
+  for (const auto& modDir : m_Organizer.managedGame()->getModMappings().keys()) {
     if (root.absoluteFilePath(modDir).compare(m_FileSystemModel->filePath(selection),
                                               Qt::CaseInsensitive) == 0) {
       return;
@@ -248,14 +248,14 @@ void OverwriteInfoDialog::openTriggered()
 
 void OverwriteInfoDialog::createDirectoryTriggered()
 {
-  QModelIndex selection = m_FileSelection.at(0);
+  QModelIndex const selection = m_FileSelection.at(0);
 
   QModelIndex index =
       m_FileSystemModel->isDir(selection) ? selection : selection.parent();
   index = index.sibling(index.row(), 0);
 
   QString name = tr("New Folder");
-  QString path = m_FileSystemModel->filePath(index).append("/");
+  QString const path = m_FileSystemModel->filePath(index).append("/");
 
   QModelIndex existingIndex = m_FileSystemModel->index(path + name);
   int suffix                = 1;
@@ -264,7 +264,7 @@ void OverwriteInfoDialog::createDirectoryTriggered()
     existingIndex = m_FileSystemModel->index(path + name);
   }
 
-  QModelIndex newIndex = m_FileSystemModel->mkdir(index, name);
+  QModelIndex const newIndex = m_FileSystemModel->mkdir(index, name);
   if (!newIndex.isValid()) {
     reportError(tr("Failed to create \"%1\"").arg(name));
     return;

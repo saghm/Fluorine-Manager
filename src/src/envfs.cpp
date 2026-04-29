@@ -59,7 +59,7 @@ namespace
                      DirEndF* dirEndF, FileF* fileF)
   {
     std::error_code ec;
-    fs::directory_iterator it(path, ec);
+    fs::directory_iterator const it(path, ec);
     if (ec) {
       return;
     }

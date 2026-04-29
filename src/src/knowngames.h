@@ -163,7 +163,7 @@ inline const KnownGame* findKnownGameByTitle(const QString& title)
   // Helper: strip non-alphanumeric, collapse whitespace.
   auto normalize = [](const QString& s) -> QString {
     QString out;
-    for (QChar c : s) {
+    for (QChar const c : s) {
       out += (c.isLetterOrNumber() || c == ' ') ? c : QChar(' ');
     }
     return out.simplified();

@@ -111,7 +111,7 @@ QVariant DownloadList::data(const QModelIndex& index, int role) const
   if (!index.isValid() || index.row() < 0 || index.row() >= rowCount())
     return {};
 
-  bool pendingDownload = index.row() >= m_manager.numTotalDownloads();
+  bool const pendingDownload = index.row() >= m_manager.numTotalDownloads();
   if (role == Qt::DisplayRole) {
     if (pendingDownload) {
       std::tuple<QString, int, int> nexusids =
@@ -203,7 +203,7 @@ QVariant DownloadList::data(const QModelIndex& index, int role) const
     if (pendingDownload) {
       return QColor(Qt::darkBlue);
     } else {
-      DownloadManager::DownloadState state = m_manager.getState(index.row());
+      DownloadManager::DownloadState const state = m_manager.getState(index.row());
       if (state == DownloadManager::STATE_READY)
         return QColor(Qt::darkGreen);
       else if (state == DownloadManager::STATE_UNINSTALLED)
@@ -270,8 +270,8 @@ void DownloadList::rowChanged(int row)
 
 bool DownloadList::lessThanPredicate(const QModelIndex& left, const QModelIndex& right)
 {
-  int leftIndex  = left.row();
-  int rightIndex = right.row();
+  int const leftIndex  = left.row();
+  int const rightIndex = right.row();
   if ((leftIndex < m_manager.numTotalDownloads()) &&
       (rightIndex < m_manager.numTotalDownloads())) {
     if (left.column() == DownloadList::COL_NAME) {
@@ -322,8 +322,8 @@ bool DownloadList::lessThanPredicate(const QModelIndex& left, const QModelIndex&
 
       return leftID < rightID;
     } else if (left.column() == DownloadList::COL_STATUS) {
-      DownloadManager::DownloadState leftState  = m_manager.getState(left.row());
-      DownloadManager::DownloadState rightState = m_manager.getState(right.row());
+      DownloadManager::DownloadState const leftState  = m_manager.getState(left.row());
+      DownloadManager::DownloadState const rightState = m_manager.getState(right.row());
       if (leftState == rightState)
         return m_manager.getFileTime(left.row()) > m_manager.getFileTime(right.row());
       else

@@ -105,7 +105,7 @@ public:  // Overrides:
       if (entry->isDir()) {
         const ArchiveFileTreeImpl& archiveEntry =
             dynamic_cast<const ArchiveFileTreeImpl&>(*entry);
-        QString tmp = path + archiveEntry.name();
+        QString const tmp = path + archiveEntry.name();
         if (archiveEntry.m_Index != -1) {
           data[archiveEntry.m_Index]->addOutputFilePath(tmp.toStdWString());
         }

@@ -79,7 +79,7 @@ ModConflictIconDelegate::getIconsForFlags(std::vector<ModInfo::EConflictFlag> fl
 
 QList<QString> ModConflictIconDelegate::getIcons(const QModelIndex& index) const
 {
-  QVariant modIndex = index.data(ModList::IndexRole);
+  QVariant const modIndex = index.data(ModList::IndexRole);
 
   if (!modIndex.isValid()) {
     return {};
@@ -121,7 +121,7 @@ QString ModConflictIconDelegate::getFlagIcon(ModInfo::EConflictFlag flag)
 
 size_t ModConflictIconDelegate::getNumIcons(const QModelIndex& index) const
 {
-  QVariant modIndex = index.data(ModList::IndexRole);
+  QVariant const modIndex = index.data(ModList::IndexRole);
 
   if (!modIndex.isValid()) {
     return 0;
@@ -133,8 +133,8 @@ size_t ModConflictIconDelegate::getNumIcons(const QModelIndex& index) const
 QSize ModConflictIconDelegate::sizeHint(const QStyleOptionViewItem& option,
                                         const QModelIndex& modelIndex) const
 {
-  size_t count       = getNumIcons(modelIndex);
-  unsigned int index = modelIndex.data(ModList::IndexRole).toInt();
+  size_t const count       = getNumIcons(modelIndex);
+  unsigned int const index = modelIndex.data(ModList::IndexRole).toInt();
   QSize result;
   if (index < ModInfo::getNumMods()) {
     result = QSize(static_cast<int>(count) * 40, 20);

@@ -23,9 +23,9 @@ LogHighlighter::LogHighlighter(QObject* parent) : QSyntaxHighlighter(parent) {}
 
 void LogHighlighter::highlightBlock(const QString& text)
 {
-  int spacePos = text.indexOf(" ");
+  int const spacePos = text.indexOf(" ");
   if (spacePos != -1) {
-    QString type = text.mid(0, spacePos);
+    QString const type = text.mid(0, spacePos);
     if (type == "DEBUG") {
       setFormat(0, text.length(), Qt::gray);
     } else if (type == "INFO") {

@@ -272,7 +272,7 @@ void NexusSSOLogin::onConnected()
   m_keyReceived = false;
 
   boost::uuids::random_generator generator;
-  boost::uuids::uuid sessionId = generator();
+  boost::uuids::uuid const sessionId = generator();
   m_guid                       = boost::uuids::to_string(sessionId).c_str();
 
   QJsonObject data;
@@ -816,7 +816,7 @@ NXMAccessManager::createRequest(QNetworkAccessManager::Operation operation,
 
 void NXMAccessManager::showCookies() const
 {
-  QUrl url(NexusBaseUrl + "/");
+  QUrl const url(NexusBaseUrl + "/");
   for (const QNetworkCookie& cookie : cookieJar()->cookiesForUrl(url)) {
     log::debug("{} - {} (expires: {})", cookie.name().constData(),
                cookie.value().constData(), cookie.expirationDate().toString());
@@ -945,7 +945,7 @@ const QString& NXMAccessManager::MOVersion() const
 QString NXMAccessManager::userAgent(const QString& subModule) const
 {
   QStringList comments;
-  QString os;
+  QString const os;
   if (QSysInfo::productType() == "windows")
     comments << ((QSysInfo::kernelType() == "winnt") ? "Windows_NT " : "Windows ") +
                     QSysInfo::kernelVersion();

@@ -21,9 +21,9 @@ int64_t rvaToOffset(uint32_t rva, const char* sections, int numSections)
 {
   for (int i = 0; i < numSections; ++i) {
     const char* sec = sections + i * 40;
-    uint32_t va   = r32(sec + 12);
-    uint32_t rawSz = r32(sec + 16);
-    uint32_t rawOff = r32(sec + 20);
+    uint32_t const va   = r32(sec + 12);
+    uint32_t const rawSz = r32(sec + 16);
+    uint32_t const rawOff = r32(sec + 20);
     if (rva >= va && rva < va + rawSz)
       return rawOff + (rva - va);
   }
@@ -43,9 +43,9 @@ QVector<ResDirEntry> parseResDir(const char* base, uint32_t dirOffset)
 {
   QVector<ResDirEntry> entries;
   const char* dir = base + dirOffset;
-  uint16_t numNamed  = r16(dir + 12);
-  uint16_t numId     = r16(dir + 14);
-  int count = numNamed + numId;
+  uint16_t const numNamed  = r16(dir + 12);
+  uint16_t const numId     = r16(dir + 14);
+  int const count = numNamed + numId;
 
   for (int i = 0; i < count; ++i) {
     const char* e = dir + 16 + i * 8;
@@ -66,10 +66,10 @@ QByteArray getResourceData(const char* resBase, uint32_t dataEntryOffset,
                            const char* sections, int numSections)
 {
   const char* de = resBase + dataEntryOffset;
-  uint32_t dataRva  = r32(de);
-  uint32_t dataSize = r32(de + 4);
+  uint32_t const dataRva  = r32(de);
+  uint32_t const dataSize = r32(de + 4);
 
-  int64_t off = rvaToOffset(dataRva, sections, numSections);
+  int64_t const off = rvaToOffset(dataRva, sections, numSections);
   if (off < 0 || off + dataSize > fileSize)
     return {};
   return {fileData + off, static_cast<int>(dataSize)};
@@ -92,8 +92,8 @@ QByteArray buildIco(const QByteArray& grpData,
   QVector<Entry> entries;
 
   for (int i = 0; i < count; ++i) {
-    int grpOff = 6 + i * 14;
-    uint16_t iconId = r16(grpData.constData() + grpOff + 12);
+    int const grpOff = 6 + i * 14;
+    uint16_t const iconId = r16(grpData.constData() + grpOff + 12);
 
     // Find RT_ICON with this ID.
     for (const auto& ie : iconTypeEntries) {
@@ -108,12 +108,12 @@ QByteArray buildIco(const QByteArray& grpData,
       if (langEntry.isDir)
         continue;
 
-      QByteArray imgData = getResourceData(
+      QByteArray const imgData = getResourceData(
           resBase, langEntry.offsetOrData, fileData, fileSize, sections, numSections);
       if (imgData.isEmpty())
         continue;
 
-      QByteArray hdr(grpData.constData() + grpOff, 8);
+      QByteArray const hdr(grpData.constData() + grpOff, 8);
       entries.append({hdr, imgData});
       break;
     }
@@ -125,7 +125,7 @@ QByteArray buildIco(const QByteArray& grpData,
   // Build ICO file.
   QByteArray ico;
   uint16_t entryCount = static_cast<uint16_t>(entries.size());
-  int headerSize = 6 + entryCount * 16;
+  int const headerSize = 6 + entryCount * 16;
   ico.reserve(headerSize + count * 4096);
 
   // ICONDIR header.
@@ -160,19 +160,19 @@ QByteArray tryExtractIcons(const QByteArray& fileData)
   if (sz < 64 || d[0] != 'M' || d[1] != 'Z')
     return {};
 
-  int32_t peOffset = r32(d + 60);
+  int32_t const peOffset = r32(d + 60);
   if (peOffset + 24 > sz)
     return {};
   if (memcmp(d + peOffset, "PE\0\0", 4) != 0)
     return {};
 
   const char* coff = d + peOffset + 4;
-  uint16_t machine     = r16(coff);
-  uint16_t numSections = r16(coff + 2);
-  uint16_t optHdrSize  = r16(coff + 16);
+  uint16_t const machine     = r16(coff);
+  uint16_t const numSections = r16(coff + 2);
+  uint16_t const optHdrSize  = r16(coff + 16);
 
   const char* optHdr = coff + 20;
-  uint16_t magic = r16(optHdr);
+  uint16_t const magic = r16(optHdr);
 
   // Determine resource directory RVA.
   uint32_t resRva = 0, resSize = 0;
@@ -197,7 +197,7 @@ QByteArray tryExtractIcons(const QByteArray& fileData)
     return {};
 
   const char* sections = optHdr + optHdrSize;
-  int64_t resFileOff = rvaToOffset(resRva, sections, numSections);
+  int64_t const resFileOff = rvaToOffset(resRva, sections, numSections);
   if (resFileOff < 0 || resFileOff + resSize > sz)
     return {};
 
@@ -242,19 +242,19 @@ QByteArray tryExtractIcons(const QByteArray& fileData)
     if (grpData.size() < 6)
       continue;
 
-    int count = r16(grpData.constData() + 4);
+    int const count = r16(grpData.constData() + 4);
     if (grpData.size() < 6 + count * 14)
       continue;
 
     int totalArea = 0;
     for (int i = 0; i < count; ++i) {
-      int off = 6 + i * 14;
-      int w = (uint8_t)grpData[off]   == 0 ? 256 : (uint8_t)grpData[off];
-      int h = (uint8_t)grpData[off+1] == 0 ? 256 : (uint8_t)grpData[off+1];
+      int const off = 6 + i * 14;
+      int const w = (uint8_t)grpData[off]   == 0 ? 256 : (uint8_t)grpData[off];
+      int const h = (uint8_t)grpData[off+1] == 0 ? 256 : (uint8_t)grpData[off+1];
       totalArea += w * h;
     }
 
-    QByteArray ico = buildIco(grpData, iconEntries, resBase, d, sz, sections, numSections);
+    QByteArray const ico = buildIco(grpData, iconEntries, resBase, d, sz, sections, numSections);
     if (!ico.isEmpty() && totalArea > bestArea) {
       bestArea = totalArea;
       bestIco  = ico;
@@ -271,6 +271,6 @@ QByteArray extractExeIcon(const QString& exePath)
   QFile f(exePath);
   if (!f.open(QIODevice::ReadOnly))
     return {};
-  QByteArray data = f.readAll();
+  QByteArray const data = f.readAll();
   return tryExtractIcons(data);
 }

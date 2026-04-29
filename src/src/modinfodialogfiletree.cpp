@@ -144,7 +144,7 @@ void FileTreeTab::onCreateDirectory()
   index             = index.sibling(index.row(), 0);
 
   QString name = tr("New Folder");
-  QString path = m_fs->filePath(index).append("/");
+  QString const path = m_fs->filePath(index).append("/");
 
   QModelIndex existingIndex = m_fs->index(path + name);
   int suffix                = 1;
@@ -153,7 +153,7 @@ void FileTreeTab::onCreateDirectory()
     existingIndex = m_fs->index(path + name);
   }
 
-  QModelIndex newIndex = m_fs->mkdir(index, name);
+  QModelIndex const newIndex = m_fs->mkdir(index, name);
   if (!newIndex.isValid()) {
     reportError(tr("Failed to create \"%1\"").arg(name));
     return;
@@ -245,7 +245,7 @@ void FileTreeTab::onRename()
     return;
   }
 
-  QModelIndex index = selection.sibling(selection.row(), 0);
+  QModelIndex const index = selection.sibling(selection.row(), 0);
   if (!index.isValid() || m_fs->isReadOnly()) {
     return;
   }
@@ -263,7 +263,7 @@ void FileTreeTab::onDelete()
   QString message;
 
   if (rows.count() == 1) {
-    QString fileName = m_fs->fileName(rows[0]);
+    QString const fileName = m_fs->fileName(rows[0]);
     message          = tr("Are you sure you want to delete \"%1\"?").arg(fileName);
   } else {
     message = tr("Are you sure you want to delete the selected files?");
@@ -314,7 +314,7 @@ bool FileTreeTab::deleteFile(const QModelIndex& index)
 bool FileTreeTab::deleteFileRecursive(const QModelIndex& parent)
 {
   for (int row = 0; row < m_fs->rowCount(parent); ++row) {
-    QModelIndex index = m_fs->index(row, 0, parent);
+    QModelIndex const index = m_fs->index(row, 0, parent);
 
     if (m_fs->isDir(index)) {
       if (!deleteFileRecursive(index)) {
@@ -434,7 +434,7 @@ void FileTreeTab::onContextMenu(const QPoint& pos)
     enableDelete    = true;
 
     // only enable open action if a file is selected
-    bool hasFiles = false;
+    bool const hasFiles = false;
 
     const QString fileName = m_fs->fileName(selection[0]);
 

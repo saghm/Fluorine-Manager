@@ -37,10 +37,10 @@ public:
   NewIDValidator(const std::set<int>& ids) : m_UsedIDs(ids) {}
   State validate(QString& input, int& pos) const override
   {
-    State intRes = QIntValidator::validate(input, pos);
+    State const intRes = QIntValidator::validate(input, pos);
     if (intRes == Acceptable) {
       bool ok = false;
-      int id  = input.toInt(&ok);
+      int const id  = input.toInt(&ok);
       if (m_UsedIDs.contains(id)) {
         return QValidator::Intermediate;
       }
@@ -58,10 +58,10 @@ public:
   ExistingIDValidator(const std::set<int>& ids) : m_UsedIDs(ids) {}
   State validate(QString& input, int& pos) const override
   {
-    State intRes = QIntValidator::validate(input, pos);
+    State const intRes = QIntValidator::validate(input, pos);
     if (intRes == Acceptable) {
       bool ok = false;
-      int id  = input.toInt(&ok);
+      int const id  = input.toInt(&ok);
       if ((id == 0) || (m_UsedIDs.contains(id))) {
         return QValidator::Acceptable;
       } else {
@@ -135,13 +135,13 @@ CategoriesDialog::~CategoriesDialog()
 
 int CategoriesDialog::exec()
 {
-  GeometrySaver gs(Settings::instance(), this);
+  GeometrySaver const gs(Settings::instance(), this);
   return QDialog::exec();
 }
 
 void CategoriesDialog::cellChanged(int row, int)
 {
-  int currentID = ui->categoriesTable->item(row, 0)->text().toInt();
+  int const currentID = ui->categoriesTable->item(row, 0)->text().toInt();
   if (currentID > m_HighestID) {
     m_HighestID = currentID;
   }
@@ -153,12 +153,12 @@ void CategoriesDialog::commitChanges()
   categories.reset();
 
   for (int i = 0; i < ui->categoriesTable->rowCount(); ++i) {
-    int index = ui->categoriesTable->verticalHeader()->logicalIndex(i);
+    int const index = ui->categoriesTable->verticalHeader()->logicalIndex(i);
     QVariantList nexusData;
     if (ui->categoriesTable->item(index, 3) != nullptr)
       nexusData = ui->categoriesTable->item(index, 3)->data(Qt::UserRole).toList();
     std::vector<CategoryFactory::NexusCategory> nexusCats;
-    for (auto nexusCat : nexusData) {
+    for (const auto& nexusCat : nexusData) {
       nexusCats.push_back(CategoryFactory::NexusCategory(
           nexusCat.toList()[0].toString(), nexusCat.toList()[1].toInt()));
     }
@@ -186,7 +186,7 @@ void CategoriesDialog::refreshIDs()
 {
   m_HighestID = 0;
   for (int i = 0; i < ui->categoriesTable->rowCount(); ++i) {
-    int id = ui->categoriesTable->item(i, 0)->text().toInt();
+    int const id = ui->categoriesTable->item(i, 0)->text().toInt();
     if (id > m_HighestID) {
       m_HighestID = id;
     }
@@ -196,7 +196,7 @@ void CategoriesDialog::refreshIDs()
 
 void CategoriesDialog::fillTable()
 {
-  CategoryFactory& categories = CategoryFactory::instance();
+  CategoryFactory const& categories = CategoryFactory::instance();
   QTableWidget* table         = ui->categoriesTable;
   QListWidget* list           = ui->nexusCategoryList;
 
@@ -251,7 +251,7 @@ void CategoriesDialog::fillTable()
       newData.append(nexusCat.second.ID());
       itemData.insert(itemData.length(), newData);
       QStringList names;
-      for (auto cat : itemData) {
+      for (const auto& cat : itemData) {
         names.append(cat.toList()[0].toString());
       }
       item->setData(Qt::UserRole, itemData);
@@ -265,7 +265,7 @@ void CategoriesDialog::fillTable()
 
 void CategoriesDialog::addCategory_clicked()
 {
-  int row = m_ContextRow >= 0 ? m_ContextRow : 0;
+  int const row = m_ContextRow >= 0 ? m_ContextRow : 0;
   ui->categoriesTable->setSortingEnabled(false);
   ui->categoriesTable->insertRow(row);
 
@@ -314,8 +314,8 @@ void CategoriesDialog::nexusImport_clicked()
     int row = 0;
     table->setSortingEnabled(false);
     for (int i = 0; i < list->count(); ++i) {
-      QString name = list->item(i)->data(Qt::DisplayRole).toString();
-      int nexusID  = list->item(i)->data(Qt::UserRole).toInt();
+      QString const name = list->item(i)->data(Qt::DisplayRole).toString();
+      int const nexusID  = list->item(i)->data(Qt::UserRole).toInt();
       QStringList nexusLabel;
       QVariantList nexusData;
       nexusLabel.append(name);
@@ -364,8 +364,8 @@ void CategoriesDialog::nxmGameInfoAvailable(QString gameName, QVariant,
                                             QVariant resultData, int)
 {
   QVariantMap result          = resultData.toMap();
-  QVariantList categories     = result["categories"].toList();
-  CategoryFactory& catFactory = CategoryFactory::instance();
+  QVariantList const categories     = result["categories"].toList();
+  CategoryFactory const& catFactory = CategoryFactory::instance();
   QListWidget* list           = ui->nexusCategoryList;
   list->clear();
   for (const auto& category : categories) {

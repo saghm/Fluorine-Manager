@@ -683,7 +683,7 @@ bool GeneralConflictsTab::update()
           continue;
         }
 
-        bool currModFileArchive = currModAlt->isFromArchive();
+        bool const currModFileArchive = currModAlt->isFromArchive();
 
         m_overwrittenModel->add(createOverwrittenItem(file->getIndex(), fileOrigin,
                                                       archive, std::move(fileName),
@@ -767,7 +767,7 @@ void GeneralConflictsTab::updateUICounters()
   ui->overwrittenCount->display(m_counts.numOverwritten);
   ui->noConflictCount->display(m_counts.numNonConflicting);
 
-  QString tooltipBase =
+  QString const tooltipBase =
       tr("<table cellspacing=\"5\">"
          "<tr><th>Type</th><th>%1</th><th>Total</th><th>Percent</th></tr>"
          "<tr><td>Loose files:&emsp;</td>"
@@ -778,7 +778,7 @@ void GeneralConflictsTab::updateUICounters()
          "<td align=right>%8</td><td align=right>%9</td><td align=right>%10%</td></tr>"
          "</table>");
 
-  QString tooltipOverwrite =
+  QString const tooltipOverwrite =
       tooltipBase.arg(tr("Winning"))
           .arg(m_counts.numOverwriteLoose)
           .arg(m_counts.numTotalLoose)
@@ -790,7 +790,7 @@ void GeneralConflictsTab::updateUICounters()
           .arg(m_counts.numTotalFiles)
           .arg(percent(m_counts.numOverwrite, m_counts.numTotalFiles));
 
-  QString tooltipOverwritten =
+  QString const tooltipOverwritten =
       tooltipBase.arg(tr("Losing"))
           .arg(m_counts.numOverwrittenLoose)
           .arg(m_counts.numTotalLoose)
@@ -802,7 +802,7 @@ void GeneralConflictsTab::updateUICounters()
           .arg(m_counts.numTotalFiles)
           .arg(percent(m_counts.numOverwritten, m_counts.numTotalFiles));
 
-  QString tooltipNonConflict =
+  QString const tooltipNonConflict =
       tooltipBase.arg(tr("Non conflicting"))
           .arg(m_counts.numNonConflictingLoose)
           .arg(m_counts.numTotalLoose)

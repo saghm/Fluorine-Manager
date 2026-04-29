@@ -126,7 +126,7 @@ void MOMultiProcess::receiveMessage()
     }
   }
 
-  QString message = QString::fromUtf8(socket->readAll().constData());
+  QString const message = QString::fromUtf8(socket->readAll().constData());
   emit messageSent(message);
   socket->disconnectFromServer();
 }

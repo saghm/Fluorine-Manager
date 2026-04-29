@@ -120,7 +120,7 @@ Module::FileInfo Module::getFileInfo()
 
 QDateTime Module::getTimestamp() const
 {
-  QFileInfo fi(m_path);
+  QFileInfo const fi(m_path);
   if (!fi.exists()) {
     return {};
   }
@@ -260,14 +260,14 @@ std::vector<Module> getLoadedModules()
       continue;
     }
 
-    QString qpath = QString::fromStdString(path);
+    QString const qpath = QString::fromStdString(path);
 
     if (seen.contains(qpath)) {
       continue;
     }
     seen.insert(qpath);
 
-    QFileInfo fi(qpath);
+    QFileInfo const fi(qpath);
     if (fi.exists()) {
       v.push_back(Module(qpath, fi.size()));
     }
@@ -304,11 +304,11 @@ std::vector<Process> getRunningProcesses()
       continue;
     }
 
-    pid_t pid = static_cast<pid_t>(std::strtol(entry->d_name, nullptr, 10));
+    pid_t const pid = static_cast<pid_t>(std::strtol(entry->d_name, nullptr, 10));
 
     QString name;
     {
-      std::string commPath = "/proc/" + std::string(entry->d_name) + "/comm";
+      std::string const commPath = "/proc/" + std::string(entry->d_name) + "/comm";
       std::ifstream commFile(commPath);
       if (commFile.is_open()) {
         std::string commName;
@@ -319,7 +319,7 @@ std::vector<Process> getRunningProcesses()
 
     pid_t ppid = 0;
     {
-      std::string statusPath = "/proc/" + std::string(entry->d_name) + "/status";
+      std::string const statusPath = "/proc/" + std::string(entry->d_name) + "/status";
       std::ifstream statusFile(statusPath);
       if (statusFile.is_open()) {
         std::string statusLine;
@@ -372,7 +372,7 @@ Process getProcessTree(pid_t pid)
 
 QString getProcessName(pid_t pid)
 {
-  std::string commPath = "/proc/" + std::to_string(pid) + "/comm";
+  std::string const commPath = "/proc/" + std::to_string(pid) + "/comm";
   std::ifstream commFile(commPath);
 
   if (!commFile.is_open()) {
@@ -387,7 +387,7 @@ QString getProcessName(pid_t pid)
 
 pid_t getProcessParentID(pid_t pid)
 {
-  std::string statusPath = "/proc/" + std::to_string(pid) + "/status";
+  std::string const statusPath = "/proc/" + std::to_string(pid) + "/status";
   std::ifstream statusFile(statusPath);
 
   if (!statusFile.is_open()) {

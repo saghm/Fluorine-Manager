@@ -111,7 +111,7 @@ FileRenamer::RenameResults hideFile(FileRenamer& renamer, const QString& oldName
 
 FileRenamer::RenameResults unhideFile(FileRenamer& renamer, const QString& oldName)
 {
-  QString newName = oldName.left(oldName.length() - ModInfo::s_HiddenExt.length());
+  QString const newName = oldName.left(oldName.length() - ModInfo::s_HiddenExt.length());
   return renamer.rename(oldName, newName);
 }
 
@@ -119,13 +119,13 @@ FileRenamer::RenameResults restoreHiddenFilesRecursive(FileRenamer& renamer,
                                                        const QString& targetDir)
 {
   FileRenamer::RenameResults results = FileRenamer::RESULT_OK;
-  QDir currentDir                    = targetDir;
-  for (QString hiddenFile :
+  QDir const currentDir                    = targetDir;
+  for (const QString& hiddenFile :
        currentDir.entryList((QStringList() << "*" + ModInfo::s_HiddenExt),
                             QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot)) {
 
-    QString oldName = currentDir.absoluteFilePath(hiddenFile);
-    QString newName = oldName.left(oldName.length() - ModInfo::s_HiddenExt.length());
+    QString const oldName = currentDir.absoluteFilePath(hiddenFile);
+    QString const newName = oldName.left(oldName.length() - ModInfo::s_HiddenExt.length());
 
     auto partialResult = renamer.rename(oldName, newName);
 
@@ -138,7 +138,7 @@ FileRenamer::RenameResults restoreHiddenFilesRecursive(FileRenamer& renamer,
     }
   }
 
-  for (QString dirName : currentDir.entryList(QDir::AllDirs | QDir::NoDotAndDotDot)) {
+  for (const QString& dirName : currentDir.entryList(QDir::AllDirs | QDir::NoDotAndDotDot)) {
 
     const QString dirPath = currentDir.absoluteFilePath(dirName);
     // recurse on childrend directories
@@ -274,7 +274,7 @@ void ModInfoDialog::createTabs()
 
 int ModInfoDialog::exec()
 {
-  GeometrySaver gs(Settings::instance(), this);
+  GeometrySaver const gs(Settings::instance(), this);
   restoreState();
 
   // whether to select the first tab; if the main window requested a specific
@@ -387,7 +387,7 @@ void ModInfoDialog::setTabsVisibility(bool firstTime)
 {
   // this flag is picked up by onTabSelectionChanged() to avoid triggering
   // activation events while moving tabs around
-  QScopedValueRollback arrangingTabs(m_arrangingTabs, true);
+  QScopedValueRollback const arrangingTabs(m_arrangingTabs, true);
 
   // one bool per tab to indicate whether the tab should be visible
   std::vector<bool> visibility(m_tabs.size());

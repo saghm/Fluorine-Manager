@@ -1038,9 +1038,9 @@ void MainWindow::updateProblemsButton()
 
 bool MainWindow::errorReported(QString& logFile)
 {
-  QDir dir(qApp->property("dataPath").toString() + "/" +
+  QDir const dir(qApp->property("dataPath").toString() + "/" +
            QString::fromStdWString(AppConfig::logPath()));
-  QFileInfoList files =
+  QFileInfoList const files =
       dir.entryInfoList(QStringList("ModOrganizer_??_??_??_??_??.log"), QDir::Files,
                         QDir::Name | QDir::Reversed);
 
@@ -1078,12 +1078,12 @@ void MainWindow::checkForProblemsImpl()
 {
   m_ProblemsCheckRequired = true;
 
-  std::scoped_lock lk(m_CheckForProblemsMutex);
+  std::scoped_lock const lk(m_CheckForProblemsMutex);
 
   // another thread might already have checked while this one was waiting on the lock
   if (m_ProblemsCheckRequired) {
     m_ProblemsCheckRequired = false;
-    TimeThis tt("MainWindow::checkForProblemsImpl()");
+    TimeThis const tt("MainWindow::checkForProblemsImpl()");
     size_t numProblems = 0;
     for (QObject* pluginObj : m_PluginContainer.plugins<QObject>()) {
       IPlugin* plugin = qobject_cast<IPlugin*>(pluginObj);
@@ -1179,9 +1179,9 @@ void MainWindow::createHelpMenu()
       log::error("Failed to open {}", fileName);
       continue;
     }
-    QString firstLine = QString::fromUtf8(file.readLine());
+    QString const firstLine = QString::fromUtf8(file.readLine());
     if (firstLine.startsWith("//TL")) {
-      QStringList params = firstLine.mid(4).trimmed().split('#');
+      QStringList const params = firstLine.mid(4).trimmed().split('#');
       if (params.size() != 2) {
         log::error("invalid header line for tutorial {}, expected 2 parameters",
                    fileName);
@@ -1213,7 +1213,7 @@ bool MainWindow::addProfile()
   QComboBox* profileBox = findChild<QComboBox*>("profileBox");
   bool okClicked        = false;
 
-  QString name = QInputDialog::getText(this, tr("Name"),
+  QString const name = QInputDialog::getText(this, tr("Name"),
                                        tr("Please enter a name for the new profile"),
                                        QLineEdit::Normal, QString(), &okClicked);
   if (okClicked && (name.size() > 0)) {
@@ -1242,9 +1242,9 @@ void MainWindow::hookUpWindowTutorials()
       log::error("Failed to open {}", fileName);
       continue;
     }
-    QString firstLine = QString::fromUtf8(file.readLine());
+    QString const firstLine = QString::fromUtf8(file.readLine());
     if (firstLine.startsWith("//WIN")) {
-      QString windowName = firstLine.mid(6).trimmed();
+      QString const windowName = firstLine.mid(6).trimmed();
       if (!m_OrganizerCore.settings().interface().isTutorialCompleted(windowName)) {
         TutorialManager::instance().activateTutorial(windowName, fileName);
       }
@@ -1605,17 +1605,17 @@ void MainWindow::updateToolMenu()
   QMap<QString, QList<QPair<QString, IPluginTool*>>> submenuMap;
   for (auto toolPlugin : toolPlugins) {
     QStringList toolName = toolPlugin->displayName().split("/");
-    QString submenu      = toolName[0];
+    QString const submenu      = toolName[0];
     toolName.pop_front();
     submenuMap[submenu].append(
         QPair<QString, IPluginTool*>(toolName.join("/"), toolPlugin));
   }
 
   // Start registering plugins
-  for (auto submenuKey : submenuMap.keys()) {
+  for (const auto& submenuKey : submenuMap.keys()) {
     if (submenuMap[submenuKey].length() > 1) {
       QMenu* submenu = new QMenu(submenuKey, this);
-      for (auto info : submenuMap[submenuKey]) {
+      for (const auto& info : submenuMap[submenuKey]) {
         registerPluginTool(info.second, info.first, submenu);
       }
       ui->actionTool->menu()->addMenu(submenu);
@@ -1663,7 +1663,7 @@ bool MainWindow::registerNexusPage(const QString& gameName)
     return false;
 
   // Get the gameURL
-  QString gameURL = NexusInterface::instance().getGameURL(gameName);
+  QString const gameURL = NexusInterface::instance().getGameURL(gameName);
   if (gameURL.isEmpty())
     return false;
 
@@ -1715,12 +1715,12 @@ void MainWindow::updateModPageMenu()
   QStringList registeredSources;
 
   // Add the primary game
-  QString gameShortName = m_OrganizerCore.managedGame()->gameShortName();
+  QString const gameShortName = m_OrganizerCore.managedGame()->gameShortName();
   if (registerNexusPage(gameShortName))
     registeredSources << gameShortName;
 
   // Add the primary sources
-  for (auto gameName : m_OrganizerCore.managedGame()->primarySources()) {
+  for (const auto& gameName : m_OrganizerCore.managedGame()->primarySources()) {
     if (!registeredSources.contains(gameName) && registerNexusPage(gameName))
       registeredSources << gameName;
   }
@@ -1732,13 +1732,13 @@ void MainWindow::updateModPageMenu()
   // Add the secondary games (sorted)
   QStringList secondaryGames = m_OrganizerCore.managedGame()->validShortNames();
   secondaryGames.sort(Qt::CaseInsensitive);
-  for (auto gameName : secondaryGames) {
+  for (const auto& gameName : secondaryGames) {
     if (!registeredSources.contains(gameName) && registerNexusPage(gameName))
       registeredSources << gameName;
   }
 
   // No mod page plugin and the menu was visible
-  bool keepOriginalAction =
+  bool const keepOriginalAction =
       modPagePlugins.empty() && registeredSources.length() <= 1;
   if (keepOriginalAction) {
     ui->toolBar->insertAction(ui->actionAdd_Profile, ui->actionNexus);
@@ -1768,7 +1768,7 @@ void MainWindow::startExeAction()
   }
 
   action->setEnabled(false);
-  Guard g([&] {
+  Guard const g([&] {
     action->setEnabled(true);
   });
 
@@ -1799,7 +1799,7 @@ void MainWindow::on_profileBox_currentIndexChanged(int index)
     return;
   }
 
-  int previousIndex = m_OldProfileIndex;
+  int const previousIndex = m_OldProfileIndex;
   m_OldProfileIndex = index;
 
   // select has changed, save stuff
@@ -1886,7 +1886,7 @@ bool MainWindow::refreshProfiles(bool selectProfile, QString newProfile)
 {
   QComboBox* profileBox = findChild<QComboBox*>("profileBox");
 
-  QString currentProfileName = profileBox->currentText();
+  QString const currentProfileName = profileBox->currentText();
 
   profileBox->blockSignals(true);
   profileBox->clear();
@@ -2011,9 +2011,9 @@ void MainWindow::updateBSAList(const QStringList& defaultArchives,
   std::vector<std::pair<UINT32, QTreeWidgetItem*>> items;
 
   auto invalidation = m_OrganizerCore.gameFeatures().gameFeature<BSAInvalidation>();
-  std::vector<FileEntryPtr> files = m_OrganizerCore.directoryStructure()->getFiles();
+  std::vector<FileEntryPtr> const files = m_OrganizerCore.directoryStructure()->getFiles();
 
-  QStringList plugins =
+  QStringList const plugins =
       m_OrganizerCore.findFiles("", [](const QString& fileName) -> bool {
         return fileName.endsWith(".esp", Qt::CaseInsensitive) ||
                fileName.endsWith(".esm", Qt::CaseInsensitive) ||
@@ -2023,7 +2023,7 @@ void MainWindow::updateBSAList(const QStringList& defaultArchives,
   QList<std::pair<QString, QString>> pluginNamePairs;
   pluginNamePairs.reserve(plugins.size());
   for (const QString& pluginName : plugins) {
-    QFileInfo pluginInfo(pluginName);
+    QFileInfo const pluginInfo(pluginName);
     pluginNamePairs.append(
         std::make_pair(pluginInfo.completeBaseName(), pluginInfo.fileName()));
   }
@@ -2039,8 +2039,8 @@ void MainWindow::updateBSAList(const QStringList& defaultArchives,
     return false;
   };
 
-  for (FileEntryPtr current : files) {
-    QFileInfo fileInfo(ToQString(current->getName().c_str()));
+  for (const FileEntryPtr& current : files) {
+    QFileInfo const fileInfo(ToQString(current->getName().c_str()));
 
     if (fileInfo.suffix().toLower() == "bsa" || fileInfo.suffix().toLower() == "ba2") {
       int index = activeArchives.indexOf(fileInfo.fileName());
@@ -2055,8 +2055,8 @@ void MainWindow::updateBSAList(const QStringList& defaultArchives,
         index = 1;
       }
 
-      int originId = current->getOrigin();
-      FilesOrigin& origin =
+      int const originId = current->getOrigin();
+      FilesOrigin const& origin =
           m_OrganizerCore.directoryStructure()->getOriginByID(originId);
 
       QTreeWidgetItem* newItem = new QTreeWidgetItem(
@@ -2085,14 +2085,14 @@ void MainWindow::updateBSAList(const QStringList& defaultArchives,
       if (index < 0)
         index = 0;
 
-      UINT32 sortValue = ((origin.getPriority() & 0xFFFF) << 16) | (index & 0xFFFF);
+      UINT32 const sortValue = ((origin.getPriority() & 0xFFFF) << 16) | (index & 0xFFFF);
       items.push_back(std::make_pair(sortValue, newItem));
     }
   }
   std::sort(items.begin(), items.end(), BySortValue);
 
   for (auto iter = items.begin(); iter != items.end(); ++iter) {
-    int originID = iter->second->data(1, Qt::UserRole).toInt();
+    int const originID = iter->second->data(1, Qt::UserRole).toInt();
 
     const FilesOrigin& origin =
         m_OrganizerCore.directoryStructure()->getOriginByID(originID);
@@ -2103,11 +2103,11 @@ void MainWindow::updateBSAList(const QStringList& defaultArchives,
     if (modIndex == UINT_MAX) {
       modName = UnmanagedModName();
     } else {
-      ModInfo::Ptr modInfo = ModInfo::getByIndex(modIndex);
+      ModInfo::Ptr const modInfo = ModInfo::getByIndex(modIndex);
       modName              = modInfo->name();
     }
 
-    QList<QTreeWidgetItem*> items =
+    QList<QTreeWidgetItem*> const items =
         ui->bsaList->findItems(modName, Qt::MatchFixedString);
     QTreeWidgetItem* subItem = nullptr;
     if (!items.empty()) {
@@ -2133,7 +2133,7 @@ void MainWindow::checkBSAList()
       ui->bsaList->blockSignals(false);
     });
 
-    QStringList defaultArchives =
+    QStringList const defaultArchives =
         archives->archives(m_OrganizerCore.currentProfile().get());
 
     bool warning = false;
@@ -2143,7 +2143,7 @@ void MainWindow::checkBSAList()
       QTreeWidgetItem* tlItem = ui->bsaList->topLevelItem(i);
       for (int j = 0; j < tlItem->childCount(); ++j) {
         QTreeWidgetItem* item = tlItem->child(j);
-        QString filename      = item->text(0);
+        QString const filename      = item->text(0);
         item->setIcon(0, QIcon());
         item->setToolTip(0, QString());
 
@@ -2174,7 +2174,7 @@ void MainWindow::saveModMetas()
   if (m_MetaSave.isFinished()) {
     m_MetaSave = QtConcurrent::run([this]() {
       for (unsigned int i = 0; i < ModInfo::getNumMods(); ++i) {
-        ModInfo::Ptr modInfo = ModInfo::getByIndex(i);
+        ModInfo::Ptr const modInfo = ModInfo::getByIndex(i);
         modInfo->saveMeta();
       }
     });
@@ -2184,8 +2184,8 @@ void MainWindow::saveModMetas()
 void MainWindow::fixCategories()
 {
   for (unsigned int i = 0; i < ModInfo::getNumMods(); ++i) {
-    ModInfo::Ptr modInfo     = ModInfo::getByIndex(i);
-    std::set<int> categories = modInfo->getCategories();
+    ModInfo::Ptr const modInfo     = ModInfo::getByIndex(i);
+    std::set<int> const categories = modInfo->getCategories();
     for (std::set<int>::iterator iter = categories.begin(); iter != categories.end();
          ++iter) {
       if (!m_CategoryFactory.categoryExists(*iter)) {
@@ -2380,7 +2380,7 @@ void MainWindow::on_startButton_clicked()
   }
 
   ui->startButton->setEnabled(false);
-  Guard g([&] {
+  Guard const g([&] {
     ui->startButton->setEnabled(true);
   });
 
@@ -2390,7 +2390,7 @@ void MainWindow::on_startButton_clicked()
     const auto* s = Settings::maybeInstance();
     bool useSLR = true;
     if (s) {
-      QSettings instanceIni(s->filename(), QSettings::IniFormat);
+      QSettings const instanceIni(s->filename(), QSettings::IniFormat);
       useSLR = instanceIni.value("fluorine/use_slr", true).toBool();
     }
     if (useSLR && !isSlrInstalled()) {
@@ -2603,7 +2603,7 @@ void MainWindow::modInstalled(const QString& modName)
     return;
   }
 
-  unsigned int index = ModInfo::getIndex(modName);
+  unsigned int const index = ModInfo::getIndex(modName);
 
   if (index == UINT_MAX) {
     return;
@@ -2661,16 +2661,16 @@ void MainWindow::fileMoved(const QString& filePath, const QString& oldOriginName
     try {
       if (m_OrganizerCore.directoryStructure()->originExists(
               ToWString(newOriginName))) {
-        FilesOrigin& newOrigin = m_OrganizerCore.directoryStructure()->getOriginByName(
+        FilesOrigin const& newOrigin = m_OrganizerCore.directoryStructure()->getOriginByName(
             ToWString(newOriginName));
 
-        QString fullNewPath = ToQString(newOrigin.getPath()) + "/" + filePath;
+        QString const fullNewPath = ToQString(newOrigin.getPath()) + "/" + filePath;
         FILETIME ft = {};
-        QFileInfo fi(fullNewPath);
+        QFileInfo const fi(fullNewPath);
         if (fi.exists()) {
           // Win32 FILETIME = 100-ns intervals since 1601-01-01.
-          qint64 msecs   = fi.birthTime().toMSecsSinceEpoch();
-          uint64_t ticks = (static_cast<uint64_t>(msecs) * 10000ULL) +
+          qint64 const msecs   = fi.birthTime().toMSecsSinceEpoch();
+          uint64_t const ticks = (static_cast<uint64_t>(msecs) * 10000ULL) +
                            116444736000000000ULL;
           ft.dwLowDateTime  = static_cast<DWORD>(ticks & 0xFFFFFFFF);
           ft.dwHighDateTime = static_cast<DWORD>(ticks >> 32);
@@ -2679,7 +2679,7 @@ void MainWindow::fileMoved(const QString& filePath, const QString& oldOriginName
       }
       if (m_OrganizerCore.directoryStructure()->originExists(
               ToWString(oldOriginName))) {
-        FilesOrigin& oldOrigin = m_OrganizerCore.directoryStructure()->getOriginByName(
+        FilesOrigin const& oldOrigin = m_OrganizerCore.directoryStructure()->getOriginByName(
             ToWString(oldOriginName));
         filePtr->removeOrigin(oldOrigin.getID());
       }
@@ -2692,11 +2692,11 @@ void MainWindow::fileMoved(const QString& filePath, const QString& oldOriginName
     }
 
     // Track files moved from Overwrite to a mod for in-place write-back.
-    ModInfo::Ptr owInfo = ModInfo::getOverwrite();
+    ModInfo::Ptr const owInfo = ModInfo::getOverwrite();
     if (owInfo && oldOriginName == owInfo->name()) {
       if (m_OrganizerCore.directoryStructure()->originExists(
               ToWString(newOriginName))) {
-        FilesOrigin& newOrigin =
+        FilesOrigin const& newOrigin =
             m_OrganizerCore.directoryStructure()->getOriginByName(
                 ToWString(newOriginName));
         m_OrganizerCore.trackOverwriteMove(filePath, ToQString(newOrigin.getPath()));
@@ -2761,7 +2761,7 @@ void MainWindow::saveArchiveList()
 
 void MainWindow::openInstanceFolder()
 {
-  QString dataPath = qApp->property("dataPath").toString();
+  QString const dataPath = qApp->property("dataPath").toString();
   shell::Explore(dataPath);
 }
 
@@ -2891,7 +2891,7 @@ void MainWindow::on_linkButton_pressed()
   const QIcon addIcon(":/MO/gui/link");
   const QIcon removeIcon(":/MO/gui/remove");
 
-  env::Shortcut shortcut(*exe);
+  env::Shortcut const shortcut(*exe);
 
   m_LinkToolbar->setIcon(exe->isShownOnToolbar() ? removeIcon : addIcon);
 
@@ -2908,13 +2908,13 @@ void MainWindow::on_actionSettings_triggered()
 {
   Settings& settings = m_OrganizerCore.settings();
 
-  QString oldModDirectory(settings.paths().mods());
-  QString oldCacheDirectory(settings.paths().cache());
-  QString oldProfilesDirectory(settings.paths().profiles());
-  QString oldManagedGameDirectory(settings.game().directory().value_or(""));
-  bool oldDisplayForeign(settings.interface().displayForeign());
-  bool oldArchiveParsing(settings.archiveParsing());
-  bool proxy                    = settings.network().useProxy();
+  QString const oldModDirectory(settings.paths().mods());
+  QString const oldCacheDirectory(settings.paths().cache());
+  QString const oldProfilesDirectory(settings.paths().profiles());
+  QString const oldManagedGameDirectory(settings.game().directory().value_or(""));
+  bool const oldDisplayForeign(settings.interface().displayForeign());
+  bool const oldArchiveParsing(settings.archiveParsing());
+  bool const proxy                    = settings.network().useProxy();
   DownloadManager* dlManager    = m_OrganizerCore.downloadManager();
   const bool oldCheckForUpdates = settings.checkForUpdates();
   const int oldMaxDumps         = settings.diagnostics().maxCoreDumps();
@@ -3040,7 +3040,7 @@ void MainWindow::refreshNexusCategories(CategoriesDialog* dialog)
 
 void MainWindow::categoriesSaved()
 {
-  for (auto modName : m_OrganizerCore.modList()->allMods()) {
+  for (const auto& modName : m_OrganizerCore.modList()->allMods()) {
     auto mod = ModInfo::getByName(modName);
     for (auto category : mod->getCategories()) {
       if (!m_CategoryFactory.categoryExists(category))
@@ -3117,7 +3117,7 @@ void MainWindow::originModified(int originID)
 
   DirectoryStats dummy;
   QString path       = QString::fromStdWString(origin.getPath());
-  QString modDataDir = m_OrganizerCore.managedGame()->modDataDirectory();
+  QString const modDataDir = m_OrganizerCore.managedGame()->modDataDirectory();
   path               = modDataDir.isEmpty() ? path : path + "/" + modDataDir;
   m_OrganizerCore.directoryStructure()->addFromOrigin(
       origin.getName(), path.toStdWString(), origin.getPriority(), dummy);
@@ -3137,7 +3137,7 @@ void MainWindow::motdReceived(const QString& motd)
   // don't show motd after 5 seconds, may be annoying. Hopefully the user's
   // internet connection is faster next time
   if (m_StartTime.secsTo(QTime::currentTime()) < 5) {
-    uint hash = qHash(motd);
+    uint const hash = qHash(motd);
     if (hash != m_OrganizerCore.settings().motdHash()) {
       MotDDialog dialog(motd);
       dialog.exec();
@@ -3240,29 +3240,29 @@ void MainWindow::toggleUpdateAction()
 
 void MainWindow::nxmEndorsementsAvailable(QVariant userData, QVariant resultData, int)
 {
-  QVariantList data = resultData.toList();
+  QVariantList const data = resultData.toList();
   std::multimap<QString, std::pair<int, QString>> sorted;
   QStringList games = m_OrganizerCore.managedGame()->validShortNames();
   games += m_OrganizerCore.managedGame()->gameShortName();
   bool searchedMO2NexusGame = false;
-  for (auto endorsementData : data) {
+  for (const auto& endorsementData : data) {
     QVariantMap endorsement      = endorsementData.toMap();
     std::pair<int, QString> data = std::make_pair<int, QString>(
         endorsement["mod_id"].toInt(), endorsement["status"].toString());
     sorted.insert(std::pair<QString, std::pair<int, QString>>(
         endorsement["domain_name"].toString(), data));
   }
-  for (auto game : games) {
+  for (const auto& game : games) {
     IPluginGame* gamePlugin = m_OrganizerCore.getGame(game);
     if (gamePlugin != nullptr &&
         gamePlugin->gameShortName().compare("SkyrimSE", Qt::CaseInsensitive) == 0)
       searchedMO2NexusGame = true;
     auto iter = sorted.equal_range(gamePlugin->gameNexusName());
     for (auto result = iter.first; result != iter.second; ++result) {
-      std::vector<ModInfo::Ptr> modsList =
+      std::vector<ModInfo::Ptr> const modsList =
           ModInfo::getByModID(result->first, result->second.first);
 
-      for (auto mod : modsList) {
+      for (const auto& mod : modsList) {
         if (mod->endorsedState() != EndorsedState::ENDORSED_NEVER) {
           if (result->second.second == "Endorsed")
             mod->setIsEndorsed(true);
@@ -3312,7 +3312,7 @@ void MainWindow::nxmUpdateInfoAvailable(QString gameName, QVariant userData,
       break;
     }
   }
-  QVariantList resultList = resultData.toList();
+  QVariantList const resultList = resultData.toList();
 
   auto* watcher = new QFutureWatcher<NxmUpdateInfoData>();
   QObject::connect(watcher, &QFutureWatcher<NxmUpdateInfoData>::finished,
@@ -3358,8 +3358,8 @@ void MainWindow::nxmUpdatesAvailable(QString gameName, int modID, QVariant userD
                                      QVariant resultData, int requestID)
 {
   QVariantMap resultInfo = resultData.toMap();
-  QList files            = resultInfo["files"].toList();
-  QList fileUpdates      = resultInfo["file_updates"].toList();
+  QList const files            = resultInfo["files"].toList();
+  QList const fileUpdates      = resultInfo["file_updates"].toList();
   QString gameNameReal;
 
   for (IPluginGame* game : m_PluginContainer.plugins<IPluginGame>()) {
@@ -3369,14 +3369,14 @@ void MainWindow::nxmUpdatesAvailable(QString gameName, int modID, QVariant userD
     }
   }
 
-  std::vector<ModInfo::Ptr> modsList = ModInfo::getByModID(gameNameReal, modID);
+  std::vector<ModInfo::Ptr> const modsList = ModInfo::getByModID(gameNameReal, modID);
 
   bool requiresInfo = false;
 
-  for (auto mod : modsList) {
+  for (const auto& mod : modsList) {
     QString validNewVersion;
     int newModStatus      = -1;
-    QString installedFile = QFileInfo(mod->installationFile()).fileName();
+    QString const installedFile = QFileInfo(mod->installationFile()).fileName();
 
     if (!installedFile.isEmpty()) {
       QVariantMap foundFileData;
@@ -3444,7 +3444,7 @@ void MainWindow::nxmUpdatesAvailable(QString gameName, int modID, QVariant userD
                 const QVariantMap& fileData = file.toMap();
 
                 if (currentUpdateId == fileData["file_id"].toInt()) {
-                  int updateStatus = fileData["category_id"].toInt();
+                  int const updateStatus = fileData["category_id"].toInt();
 
                   if (updateStatus != NexusInterface::FileStatus::OLD_VERSION &&
                       updateStatus != NexusInterface::FileStatus::REMOVED &&
@@ -3512,11 +3512,11 @@ void MainWindow::nxmModInfoAvailable(QString gameName, int modID, QVariant userD
     }
   }
 
-  std::vector<ModInfo::Ptr> modsList = ModInfo::getByModID(gameNameReal, modID);
+  std::vector<ModInfo::Ptr> const modsList = ModInfo::getByModID(gameNameReal, modID);
 
-  for (auto mod : modsList) {
-    QDateTime now          = QDateTime::currentDateTimeUtc();
-    QDateTime updateTarget = mod->getExpires();
+  for (const auto& mod : modsList) {
+    QDateTime const now          = QDateTime::currentDateTimeUtc();
+    QDateTime const updateTarget = mod->getExpires();
 
     // if file is still listed as optional or miscellaneous don't update the version as
     // often optional files are left with an older version than the main mod version.
@@ -3544,7 +3544,7 @@ void MainWindow::nxmModInfoAvailable(QString gameName, int modID, QVariant userD
     if ((mod->endorsedState() != EndorsedState::ENDORSED_NEVER) &&
         (result.contains("endorsement"))) {
       QVariantMap endorsement   = result["endorsement"].toMap();
-      QString endorsementStatus = endorsement["endorse_status"].toString();
+      QString const endorsementStatus = endorsement["endorse_status"].toString();
 
       if (endorsementStatus.compare("Endorsed") == 00)
         mod->setIsEndorsed(true);
@@ -3624,7 +3624,7 @@ void MainWindow::nxmTrackedModsAvailable(QVariant userData, QVariant resultData,
 
     bool found       = false;
     auto resultsList = resultData.toList();
-    for (auto item : resultsList) {
+    for (const auto& item : resultsList) {
       auto results = item.toMap();
       if ((gameNames[results["domain_name"].toString()].compare(
                modInfo->gameName(), Qt::CaseInsensitive) == 0) &&
@@ -3678,10 +3678,10 @@ void MainWindow::nxmGameInfoAvailable(QString gameName, QVariant, QVariant resul
                                       int)
 {
   QVariantMap result          = resultData.toMap();
-  QVariantList categories     = result["categories"].toList();
+  QVariantList const categories     = result["categories"].toList();
   CategoryFactory& catFactory = CategoryFactory::instance();
   catFactory.reset();
-  for (auto category : categories) {
+  for (const auto& category : categories) {
     auto catMap = category.toMap();
     std::vector<CategoryFactory::NexusCategory> nexusCat;
     nexusCat.push_back(CategoryFactory::NexusCategory(catMap["name"].toString(),
@@ -3708,7 +3708,7 @@ void MainWindow::nxmRequestFailed(QString gameName, int modID, int, QVariant, in
       }
     }
     auto orphanedMods = ModInfo::getByModID(gameNameReal, modID);
-    for (auto mod : orphanedMods) {
+    for (const auto& mod : orphanedMods) {
       mod->setLastNexusUpdate(QDateTime::currentDateTimeUtc());
       mod->setLastNexusQuery(QDateTime::currentDateTimeUtc());
     }
@@ -3725,11 +3725,11 @@ BSA::EErrorCode MainWindow::extractBSA(BSA::Archive& archive, BSA::Folder::Ptr f
 {
   QDir().mkdir(destination);
   BSA::EErrorCode result = BSA::ERROR_NONE;
-  QString errorFile;
+  QString const errorFile;
 
   for (unsigned int i = 0; i < folder->getNumFiles(); ++i) {
-    BSA::File::Ptr file = folder->getFile(i);
-    BSA::EErrorCode res = archive.extract(file, qUtf8Printable(destination));
+    BSA::File::Ptr const file = folder->getFile(i);
+    BSA::EErrorCode const res = archive.extract(file, qUtf8Printable(destination));
     if (res != BSA::ERROR_NONE) {
       reportError(tr("failed to read %1: %2").arg(file->getName().c_str()).arg(res));
       result = res;
@@ -3752,8 +3752,8 @@ BSA::EErrorCode MainWindow::extractBSA(BSA::Archive& archive, BSA::Folder::Ptr f
   }
 
   for (unsigned int i = 0; i < folder->getNumSubFolders(); ++i) {
-    BSA::Folder::Ptr subFolder = folder->getSubFolder(i);
-    BSA::EErrorCode res        = extractBSA(
+    BSA::Folder::Ptr const subFolder = folder->getSubFolder(i);
+    BSA::EErrorCode const res        = extractBSA(
         archive, subFolder,
         destination.mid(0).append("/").append(subFolder->getName().c_str()), progress);
     if (res != BSA::ERROR_NONE) {
@@ -3778,7 +3778,7 @@ void MainWindow::extractBSATriggered(QTreeWidgetItem* item)
 
   QString origin;
 
-  QString targetFolder =
+  QString const targetFolder =
       FileDialogMemory::getExistingDirectory("extractBSA", this, tr("Extract BSA"));
   QStringList archives = {};
   if (!targetFolder.isEmpty()) {
@@ -3798,10 +3798,10 @@ void MainWindow::extractBSATriggered(QTreeWidgetItem* item)
       archives = QStringList({item->text(0)});
     }
 
-    for (auto archiveName : archives) {
+    for (const auto& archiveName : archives) {
       BSA::Archive archive;
-      QString archivePath = QDir(origin).filePath(archiveName);
-      BSA::EErrorCode result =
+      QString const archivePath = QDir(origin).filePath(archiveName);
+      BSA::EErrorCode const result =
           archive.read(archivePath.toLocal8Bit().constData(), true);
       if ((result != BSA::ERROR_NONE) && (result != BSA::ERROR_INVALIDHASHES)) {
         reportError(tr("failed to read %1: %2").arg(archivePath).arg(result));
@@ -3935,9 +3935,9 @@ const char* MainWindow::PATTERN_BACKUP_DATE = "yyyy_MM_dd_hh_mm_ss";
 
 bool MainWindow::createBackup(const QString& filePath, const QDateTime& time)
 {
-  QString outPath = filePath + "." + time.toString(PATTERN_BACKUP_DATE);
+  QString const outPath = filePath + "." + time.toString(PATTERN_BACKUP_DATE);
   if (shellCopy(QStringList(filePath), QStringList(outPath), this)) {
-    QFileInfo fileInfo(filePath);
+    QFileInfo const fileInfo(filePath);
     removeOldFiles(fileInfo.absolutePath(), fileInfo.fileName() + PATTERN_BACKUP_GLOB,
                    10, QDir::Name);
     return true;
@@ -3949,7 +3949,7 @@ bool MainWindow::createBackup(const QString& filePath, const QDateTime& time)
 void MainWindow::on_saveButton_clicked()
 {
   m_OrganizerCore.savePluginList();
-  QDateTime now = QDateTime::currentDateTime();
+  QDateTime const now = QDateTime::currentDateTime();
   if (createBackup(m_OrganizerCore.currentProfile()->getPluginsFileName(), now) &&
       createBackup(m_OrganizerCore.currentProfile()->getLoadOrderFileName(), now) &&
       createBackup(m_OrganizerCore.currentProfile()->getLockedOrderFileName(), now)) {
@@ -3959,25 +3959,25 @@ void MainWindow::on_saveButton_clicked()
 
 QString MainWindow::queryRestore(const QString& filePath)
 {
-  QFileInfo pluginFileInfo(filePath);
-  QString pattern     = pluginFileInfo.fileName() + ".*";
+  QFileInfo const pluginFileInfo(filePath);
+  QString const pattern     = pluginFileInfo.fileName() + ".*";
   QFileInfoList files = pluginFileInfo.absoluteDir().entryInfoList(
       QStringList(pattern), QDir::Files, QDir::Name);
 
   SelectionDialog dialog(tr("Choose backup to restore"), this);
-  QRegularExpression exp(QRegularExpression::anchoredPattern(pluginFileInfo.fileName() +
+  QRegularExpression const exp(QRegularExpression::anchoredPattern(pluginFileInfo.fileName() +
                                                              PATTERN_BACKUP_REGEX));
   // match orphaned SafeWriteFile temporaries
-  QRegularExpression exp2(QRegularExpression::anchoredPattern(
+  QRegularExpression const exp2(QRegularExpression::anchoredPattern(
       pluginFileInfo.fileName() + "\\.([A-Za-z]{6})"));
-  QRegularExpression exp3(
+  QRegularExpression const exp3(
       QRegularExpression::anchoredPattern(pluginFileInfo.fileName() + "\\.(.*)"));
   for (const QFileInfo& info : boost::adaptors::reverse(files)) {
     auto match  = exp.match(info.fileName());
     auto match2 = exp2.match(info.fileName());
     auto match3 = exp3.match(info.fileName());
     if (match.hasMatch()) {
-      QDateTime time = QDateTime::fromString(match.captured(1), PATTERN_BACKUP_DATE);
+      QDateTime const time = QDateTime::fromString(match.captured(1), PATTERN_BACKUP_DATE);
       dialog.addChoice(time.toString(), "", match.captured(1));
     } else if (match2.hasMatch()) {
       dialog.addChoice(match2.captured(1),
@@ -4004,11 +4004,11 @@ QString MainWindow::queryRestore(const QString& filePath)
 
 void MainWindow::on_restoreButton_clicked()
 {
-  QString pluginName = m_OrganizerCore.currentProfile()->getPluginsFileName();
-  QString choice     = queryRestore(pluginName);
+  QString const pluginName = m_OrganizerCore.currentProfile()->getPluginsFileName();
+  QString const choice     = queryRestore(pluginName);
   if (!choice.isEmpty()) {
-    QString loadOrderName = m_OrganizerCore.currentProfile()->getLoadOrderFileName();
-    QString lockedName    = m_OrganizerCore.currentProfile()->getLockedOrderFileName();
+    QString const loadOrderName = m_OrganizerCore.currentProfile()->getLoadOrderFileName();
+    QString const lockedName    = m_OrganizerCore.currentProfile()->getLockedOrderFileName();
     if (!shellCopy(pluginName + "." + choice, pluginName, true, this) ||
         !shellCopy(loadOrderName + "." + choice, loadOrderName, true, this) ||
         !shellCopy(lockedName + "." + choice, lockedName, true, this)) {
@@ -4026,7 +4026,7 @@ void MainWindow::on_restoreButton_clicked()
 void MainWindow::on_saveModsButton_clicked()
 {
   m_OrganizerCore.currentProfile()->writeModlistNow(true);
-  QDateTime now = QDateTime::currentDateTime();
+  QDateTime const now = QDateTime::currentDateTime();
   if (createBackup(m_OrganizerCore.currentProfile()->getModlistFileName(), now)) {
     MessageDialog::showMessage(tr("Backup of mod list created"), this);
   }
@@ -4034,8 +4034,8 @@ void MainWindow::on_saveModsButton_clicked()
 
 void MainWindow::on_restoreModsButton_clicked()
 {
-  QString modlistName = m_OrganizerCore.currentProfile()->getModlistFileName();
-  QString choice      = queryRestore(modlistName);
+  QString const modlistName = m_OrganizerCore.currentProfile()->getModlistFileName();
+  QString const choice      = queryRestore(modlistName);
   if (!choice.isEmpty()) {
     if (!shellCopy(modlistName + "." + choice, modlistName, true, this)) {
       const auto e = GetLastError();
@@ -4068,18 +4068,18 @@ void MainWindow::dragEnterEvent(QDragEnterEvent* event)
     QMimeData const* data = event->mimeData();
 
     if (data->hasUrls()) {
-      QStringList extensions =
+      QStringList const extensions =
           m_OrganizerCore.installationManager()->getSupportedExtensions();
 
       // This is probably OK - scan to see if these are moderately sane archive
       // types
-      QList<QUrl> urls = data->urls();
+      QList<QUrl> const urls = data->urls();
       bool ok          = true;
       for (const QUrl& url : urls) {
         if (url.isLocalFile()) {
-          QString local = url.toLocalFile();
+          QString const local = url.toLocalFile();
           bool fok      = false;
-          for (auto ext : extensions) {
+          for (const auto& ext : extensions) {
             if (local.endsWith(ext, Qt::CaseInsensitive)) {
               fok = true;
               break;
@@ -4100,7 +4100,7 @@ void MainWindow::dragEnterEvent(QDragEnterEvent* event)
 
 void MainWindow::dropLocalFile(const QUrl& url, const QString& outputDir, bool move)
 {
-  QFileInfo file(url.toLocalFile());
+  QFileInfo const file(url.toLocalFile());
   if (!file.exists()) {
     log::warn("invalid source file: {}", file.absoluteFilePath());
     return;
@@ -4141,8 +4141,8 @@ void MainWindow::dropLocalFile(const QUrl& url, const QString& outputDir, bool m
 
 void MainWindow::dropEvent(QDropEvent* event)
 {
-  Qt::DropAction action = event->proposedAction();
-  QString outputDir     = m_OrganizerCore.downloadManager()->getOutputDirectory();
+  Qt::DropAction const action = event->proposedAction();
+  QString const outputDir     = m_OrganizerCore.downloadManager()->getOutputDirectory();
   if (action == Qt::MoveAction) {
     // Tell windows I'm taking control and will delete the source of a move.
     event->setDropAction(Qt::TargetMoveAction);
@@ -4167,7 +4167,7 @@ void MainWindow::keyReleaseEvent(QKeyEvent* event)
     // if the menubar is hidden and showMenuBarOnAlt is true,
     // pressing Alt will make it visible
     if (event->key() == Qt::Key_Alt) {
-      bool showMenubarOnAlt = settings.interface().showMenubarOnAlt();
+      bool const showMenubarOnAlt = settings.interface().showMenubarOnAlt();
       if (showMenubarOnAlt && !ui->menuBar->isVisible()) {
         ui->menuBar->show();
       }

@@ -45,7 +45,7 @@ public:
     auto match      = m_TagNameExp.match(input, 1, QRegularExpression::NormalMatch,
                                          QRegularExpression::AnchorAtOffsetMatchOption);
     QString tagName = match.captured(0).toLower();
-    TagMap::iterator tagIter = m_TagMap.find(tagName);
+    TagMap::iterator const tagIter = m_TagMap.find(tagName);
     if (tagIter != m_TagMap.end()) {
       // recognized tag
       if (tagName.endsWith('=')) {
@@ -69,9 +69,9 @@ public:
         closeTagPos = 6;
         // leave closeTagLength at 0 because there is no close tag to skip over
       } else {
-        QRegularExpression nextTag(QString("\\[%1[=\\]]?").arg(tagName),
+        QRegularExpression const nextTag(QString("\\[%1[=\\]]?").arg(tagName),
                                    QRegularExpression::CaseInsensitiveOption);
-        QString closeTag = QString("[/%1]").arg(tagName);
+        QString const closeTag = QString("[/%1]").arg(tagName);
         closeTagPos      = input.indexOf(closeTag, 0, Qt::CaseInsensitive);
         nextTagPos       = nextTag.match(input, nextTagSearchIndex).capturedStart(0);
         while (nextTagPos != -1 && closeTagPos != -1 && nextTagPos < closeTagPos) {
@@ -98,7 +98,7 @@ public:
           if (tagIter->second.second.isEmpty()) {
             if (tagName == "color") {
               QString color   = match.captured(1);
-              QString content = match.captured(2);
+              QString const content = match.captured(2);
               if (color.at(0) == '#') {
                 return temp.replace(tagIter->second.first,
                                     QString("<font style=\"color: %1;\">%2</font>")
@@ -285,7 +285,7 @@ QString convertToHTML(const QString& inputParam)
 
     if ((pos < (input.size() - 1)) && (input.at(pos + 1) == '/')) {
       // skip invalid end tag
-      int tagEnd = input.indexOf(']', pos) + 1;
+      int const tagEnd = input.indexOf(']', pos) + 1;
       if (tagEnd == 0) {
         // no closing tag found
         // move the pos up one so that the opening bracket is ignored next iteration
@@ -296,7 +296,7 @@ QString convertToHTML(const QString& inputParam)
     } else {
       // convert the tag and content if necessary
       int length          = -1;
-      QString replacement = BBCodeMap::instance().convertTag(input.mid(pos), length);
+      QString const replacement = BBCodeMap::instance().convertTag(input.mid(pos), length);
       if (length != 0) {
         result.append(convertToHTML(replacement));
         // length contains the number of characters in the original tag

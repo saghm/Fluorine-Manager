@@ -84,7 +84,7 @@ static QImage extractIconFromExe(const QString& exePath)
   if (dosHdr.size() < 64 || dosHdr[0] != 'M' || dosHdr[1] != 'Z')
     return {};
 
-  quint32 peOff = u32(dosHdr.constData() + 0x3C);
+  quint32 const peOff = u32(dosHdr.constData() + 0x3C);
 
   // PE signature.
   QByteArray peSig = peek(peOff, 4);
@@ -92,20 +92,20 @@ static QImage extractIconFromExe(const QString& exePath)
     return {};
 
   // COFF header (20 bytes) immediately after the 4-byte PE signature.
-  QByteArray coffHdr = peek(peOff + 4, 20);
+  QByteArray const coffHdr = peek(peOff + 4, 20);
   if (coffHdr.size() < 20)
     return {};
-  quint16 numSections     = u16(coffHdr.constData() + 2);
-  quint16 optionalHdrSize = u16(coffHdr.constData() + 16);
+  quint16 const numSections     = u16(coffHdr.constData() + 2);
+  quint16 const optionalHdrSize = u16(coffHdr.constData() + 16);
 
   // Optional header — we need the magic (PE32 vs PE32+) and the
   // resource data directory entry (index 2).
-  qint64 optOff = peOff + 4 + 20;
-  QByteArray optHdr = peek(optOff, optionalHdrSize);
+  qint64 const optOff = peOff + 4 + 20;
+  QByteArray const optHdr = peek(optOff, optionalHdrSize);
   if (optHdr.size() < 4)
     return {};
 
-  quint16 magic = u16(optHdr.constData());
+  quint16 const magic = u16(optHdr.constData());
   int ddOffset; // offset of DataDirectory[0] inside optional header
   if (magic == 0x10b)       // PE32
     ddOffset = 96;
@@ -115,7 +115,7 @@ static QImage extractIconFromExe(const QString& exePath)
     return {};
 
   // DataDirectory[2] = resource table (each entry is 8 bytes: RVA + Size).
-  int rsrcDDOff = ddOffset + 2 * 8;
+  int const rsrcDDOff = ddOffset + 2 * 8;
   if (rsrcDDOff + 8 > optHdr.size())
     return {};
   quint32 rsrcRVA  = u32(optHdr.constData() + rsrcDDOff);
@@ -123,16 +123,16 @@ static QImage extractIconFromExe(const QString& exePath)
     return {};
 
   // Section headers — find the section containing rsrcRVA.
-  qint64 secOff = optOff + optionalHdrSize;
+  qint64 const secOff = optOff + optionalHdrSize;
   quint32 rsrcFileOff = 0;
   quint32 rsrcVA      = 0;
   for (int i = 0; i < numSections; ++i) {
-    QByteArray sec = peek(secOff + i * 40, 40);
+    QByteArray const sec = peek(secOff + i * 40, 40);
     if (sec.size() < 40)
       return {};
-    quint32 virtAddr = u32(sec.constData() + 12);
-    quint32 virtSize = u32(sec.constData() + 8);
-    quint32 rawOff   = u32(sec.constData() + 20);
+    quint32 const virtAddr = u32(sec.constData() + 12);
+    quint32 const virtSize = u32(sec.constData() + 8);
+    quint32 const rawOff   = u32(sec.constData() + 20);
     if (rsrcRVA >= virtAddr && rsrcRVA < virtAddr + virtSize) {
       rsrcFileOff = rawOff + (rsrcRVA - virtAddr);
       rsrcVA      = virtAddr;
@@ -151,17 +151,17 @@ static QImage extractIconFromExe(const QString& exePath)
   struct DirEntry { quint32 id; quint32 offset; bool isDir; };
   auto readDir = [&](quint32 dirFileOff) -> std::vector<DirEntry> {
     std::vector<DirEntry> entries;
-    QByteArray dh = peek(dirFileOff, 16);
+    QByteArray const dh = peek(dirFileOff, 16);
     if (dh.size() < 16) return entries;
-    quint16 numNamed = u16(dh.constData() + 12);
-    quint16 numId    = u16(dh.constData() + 14);
-    int total = numNamed + numId;
-    QByteArray ea = peek(dirFileOff + 16, total * 8);
+    quint16 const numNamed = u16(dh.constData() + 12);
+    quint16 const numId    = u16(dh.constData() + 14);
+    int const total = numNamed + numId;
+    QByteArray const ea = peek(dirFileOff + 16, total * 8);
     if (ea.size() < total * 8) return entries;
     for (int i = 0; i < total; ++i) {
-      quint32 nameOrId = u32(ea.constData() + i * 8);
+      quint32 const nameOrId = u32(ea.constData() + i * 8);
       quint32 off      = u32(ea.constData() + i * 8 + 4);
-      bool isDir       = (off & 0x80000000u) != 0;
+      bool const isDir       = (off & 0x80000000u) != 0;
       off &= 0x7FFFFFFFu;
       entries.push_back({nameOrId, off, isDir});
     }
@@ -189,17 +189,17 @@ static QImage extractIconFromExe(const QString& exePath)
     return {};
 
   // Read the data entry (RVA + size).
-  QByteArray dataEntry = peek(rsrcFileOff + groupL2[0].offset, 16);
+  QByteArray const dataEntry = peek(rsrcFileOff + groupL2[0].offset, 16);
   if (dataEntry.size() < 16)
     return {};
-  quint32 grpDataRVA  = u32(dataEntry.constData());
-  quint32 grpDataSize = u32(dataEntry.constData() + 4);
-  QByteArray grpData  = peek(rvaToFile(grpDataRVA), grpDataSize);
+  quint32 const grpDataRVA  = u32(dataEntry.constData());
+  quint32 const grpDataSize = u32(dataEntry.constData() + 4);
+  QByteArray const grpData  = peek(rvaToFile(grpDataRVA), grpDataSize);
   if (grpData.size() < 6)
     return {};
 
   // Parse the GRPICONDIR: pick the icon entry with the largest area.
-  quint16 iconCount = u16(grpData.constData() + 4);
+  quint16 const iconCount = u16(grpData.constData() + 4);
   if (grpData.size() < 6 + iconCount * 14)
     return {};
 
@@ -212,7 +212,7 @@ static QImage extractIconFromExe(const QString& exePath)
     int h = static_cast<unsigned char>(e[1]);
     if (w == 0) w = 256;
     if (h == 0) h = 256;
-    int area = w * h;
+    int const area = w * h;
     if (area > bestArea) {
       bestArea = area;
       bestIdx  = i;
@@ -236,12 +236,12 @@ static QImage extractIconFromExe(const QString& exePath)
   if (iconEntryOff == 0)
     return {};
 
-  QByteArray iconDE = peek(iconEntryOff, 16);
+  QByteArray const iconDE = peek(iconEntryOff, 16);
   if (iconDE.size() < 16)
     return {};
-  quint32 iconDataRVA  = u32(iconDE.constData());
-  quint32 iconDataSize = u32(iconDE.constData() + 4);
-  QByteArray iconData  = peek(rvaToFile(iconDataRVA), iconDataSize);
+  quint32 const iconDataRVA  = u32(iconDE.constData());
+  quint32 const iconDataSize = u32(iconDE.constData() + 4);
+  QByteArray const iconData  = peek(rvaToFile(iconDataRVA), iconDataSize);
   if (iconData.isEmpty())
     return {};
 
@@ -263,7 +263,7 @@ static QImage extractIconFromExe(const QString& exePath)
   const char* grpE = grpData.constData() + 6 + bestIdx * 14;
   char entry[16];
   memcpy(entry, grpE, 12);            // copy w,h,colorCount,reserved,planes,bitCount,size
-  quint32 dataOff = 6 + 16;           // offset to icon data = after header + 1 entry
+  quint32 const dataOff = 6 + 16;           // offset to icon data = after header + 1 entry
   entry[12] = dataOff & 0xFF;
   entry[13] = (dataOff >> 8) & 0xFF;
   entry[14] = (dataOff >> 16) & 0xFF;
@@ -285,7 +285,7 @@ static QImage extractIconFromExe(const QString& exePath)
 // or the installed hicolor copy.  Empty string if neither exists.
 static QString bundledFluorineIcon()
 {
-  QString appDir = QProcessEnvironment::systemEnvironment().value("APPDIR");
+  QString const appDir = QProcessEnvironment::systemEnvironment().value("APPDIR");
   if (!appDir.isEmpty()) {
     QString bundled = appDir + "/usr/share/icons/hicolor/256x256/apps/com.fluorine.manager.png";
     if (QFile::exists(bundled))
@@ -302,7 +302,7 @@ static QString bundledFluorineIcon()
 // (same file size as the bundled one).
 static bool isFallbackIcon(const QString& iconPath)
 {
-  QString bundled = bundledFluorineIcon();
+  QString const bundled = bundledFluorineIcon();
   if (bundled.isEmpty())
     return false;
   return QFileInfo(iconPath).size() == QFileInfo(bundled).size();
@@ -316,7 +316,7 @@ static bool isFallbackIcon(const QString& iconPath)
 // in case the executable has changed or was previously unavailable.
 static QString installIcon(const QString& iconBaseName, const QString& exePath = {})
 {
-  QString iconDir  = QDir::homePath() + "/.local/share/icons/fluorine";
+  QString const iconDir  = QDir::homePath() + "/.local/share/icons/fluorine";
   QString iconDest = iconDir + "/" + iconBaseName + ".png";
 
   // If the icon already exists and is NOT the fallback, keep it.
@@ -347,7 +347,7 @@ static QString installIcon(const QString& iconBaseName, const QString& exePath =
   }
 
   // Install the bundled Fluorine icon as a fallback.
-  QString bundled = bundledFluorineIcon();
+  QString const bundled = bundledFluorineIcon();
   if (!bundled.isEmpty()) {
     QFile::copy(bundled, iconDest);
     return iconDest;
@@ -367,7 +367,7 @@ Shortcut::Shortcut(const Executable& exe) : Shortcut()
   // For portable instances, use the absolute directory path so MO2 can
   // find it (line 595 in instancemanager.cpp handles abs path lookup).
   // For global instances, use the display name.
-  QString instanceId = i.isPortable() ? QDir(i.directory()).absolutePath()
+  QString const instanceId = i.isPortable() ? QDir(i.directory()).absolutePath()
                                       : i.displayName();
   m_arguments = QString("\"moshortcut://%1:%2\"")
                     .arg(instanceId)
@@ -378,12 +378,12 @@ Shortcut::Shortcut(const Executable& exe) : Shortcut()
   // Try to extract the icon from the executable (works for .exe files).
   // For native Linux binaries with a custom icon, use that directly.
   // Falls back to the bundled Fluorine icon.
-  QString exePath = exe.binaryInfo().absoluteFilePath();
+  QString const exePath = exe.binaryInfo().absoluteFilePath();
   if (exe.usesOwnIcon() && !exePath.endsWith(".exe", Qt::CaseInsensitive)) {
     m_icon = exePath;
   }
   if (m_icon.isEmpty()) {
-    QString iconBase = sanitizeDesktopName(m_instanceName) + "-" +
+    QString const iconBase = sanitizeDesktopName(m_instanceName) + "-" +
                        sanitizeDesktopName(m_name);
     m_icon = installIcon(iconBase, exePath);
   }

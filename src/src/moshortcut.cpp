@@ -7,8 +7,8 @@ MOShortcut::MOShortcut(const QString& link)
       
 {
   if (m_valid) {
-    int start = (int)strlen("moshortcut://");
-    int sep   = link.indexOf(':', start);
+    int const start = (int)strlen("moshortcut://");
+    int const sep   = link.indexOf(':', start);
     if (sep >= 0) {
       m_hasInstance = true;
       m_instance    = link.mid(start, sep - start);
