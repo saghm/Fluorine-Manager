@@ -174,7 +174,7 @@ QVariant LogModel::headerData(int, Qt::Orientation, int) const
 }
 
 LogList::LogList(QWidget* parent)
-    : QTreeView(parent), m_core(nullptr), m_copyFilter(this, [=](auto&& index) {
+    : QTreeView(parent),  m_copyFilter(this, [=](auto&& index) {
         return LogModel::instance().formattedMessage(index);
       })
 {

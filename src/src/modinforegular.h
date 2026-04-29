@@ -21,11 +21,11 @@ class ModInfoRegular : public ModInfoWithConflictInfo
   friend class ModInfo;
 
 public:
-  ~ModInfoRegular();
+  ~ModInfoRegular() override;
 
-  virtual bool isRegular() const override { return true; }
+  bool isRegular() const override { return true; }
 
-  virtual bool isEmpty() const override;
+  bool isEmpty() const override;
 
   bool isAlternate() { return m_IsAlternate; }
   bool isConverted() { return m_Converted; }
@@ -46,7 +46,7 @@ public:
   /**
    * @return true if the current update is being ignored
    */
-  virtual bool updateIgnored() const override
+  bool updateIgnored() const override
   {
     return m_IgnoredVersion.isValid() && m_IgnoredVersion == m_NewestVersion;
   }
@@ -116,7 +116,7 @@ public:
    *
    * @param gameName the source game shortName
    */
-  virtual void setGameName(const QString& gameName) override;
+  void setGameName(const QString& gameName) override;
 
   /**
    * @brief set/change the nexus mod id of this mod
@@ -151,9 +151,9 @@ public:
    * @brief changes/updates the nexus description text
    * @param description the current description text
    */
-  virtual void setNexusDescription(const QString& description) override;
+  void setNexusDescription(const QString& description) override;
 
-  virtual void setInstallationFile(const QString& fileName) override;
+  void setInstallationFile(const QString& fileName) override;
 
   /**
    * @brief sets the category id from a nexus category id. Conversion to MO id happens
@@ -161,13 +161,13 @@ public:
    * @param categoryID the nexus category id
    * @note if a mapping is not possible, the category is set to the default value
    */
-  virtual void addNexusCategory(int categoryID) override;
+  void addNexusCategory(int categoryID) override;
 
   /**
    * @brief sets the new primary category of the mod
    * @param categoryID the category to set
    */
-  virtual void setPrimaryCategory(int categoryID) override
+  void setPrimaryCategory(int categoryID) override
   {
     m_PrimaryCategory = categoryID;
     m_MetaInfoChanged = true;
@@ -177,7 +177,7 @@ public:
    * @brief sets the download repository
    * @param repository
    */
-  virtual void setRepository(const QString& repository) override
+  void setRepository(const QString& repository) override
   {
     m_Repository = repository;
   }
@@ -187,46 +187,46 @@ public:
    * buffered state, it does not sync with Nexus
    * @param endorsed the new endorsement state
    */
-  virtual void setIsEndorsed(bool endorsed) override;
+  void setIsEndorsed(bool endorsed) override;
 
   /**
    * set the mod to "i don't intend to endorse". The mod will not show as unendorsed but
    * can still be endorsed
    */
-  virtual void setNeverEndorse() override;
+  void setNeverEndorse() override;
 
   /**
    * update the tracked state for the mod.  This only changes the
    * buffered state.  It does not sync with Nexus
    * @param tracked the new tracked state
    */
-  virtual void setIsTracked(bool tracked) override;
+  void setIsTracked(bool tracked) override;
 
   /**
    * @brief endorse or un-endorse the mod
    * @param doEndorse if true, the mod is endorsed, if false, it's un-endorsed.
    * @note if doEndorse doesn't differ from the current value, nothing happens.
    */
-  virtual void endorse(bool doEndorse) override;
+  void endorse(bool doEndorse) override;
 
   /**
    * @brief track or untrack the mod.  This will sync with nexus!
    * @param doTrack if true, the mod is tracked, if false, it's untracked.
    * @note if doTrack doesn't differ from the current value, nothing happens.
    */
-  virtual void track(bool doTrack) override;
+  void track(bool doTrack) override;
 
   /**
    * @brief updates the mod to flag it as converted in order to ignore the alternate
    * game warning
    */
-  virtual void markConverted(bool converted) override;
+  void markConverted(bool converted) override;
 
   /**
    * @brief updates the mod to flag it as valid in order to ignore the invalid game data
    * flag
    */
-  virtual void markValidated(bool validated) override;
+  void markValidated(bool validated) override;
 
   /**
    * @brief getter for the mod name
@@ -271,27 +271,27 @@ public:
   /**
    * @return true if the mod can be updated
    */
-  virtual bool canBeUpdated() const override;
+  bool canBeUpdated() const override;
 
   /**
    * @return the update expiration date based on the last updated date from Nexus
    */
-  virtual QDateTime getExpires() const override;
+  QDateTime getExpires() const override;
 
   /**
    * @return true if the mod can be enabled/disabled
    */
-  virtual bool canBeEnabled() const override { return true; }
+  bool canBeEnabled() const override { return true; }
 
   /**
    * @return a list of flags for this mod
    */
-  virtual std::vector<EFlag> getFlags() const override;
+  std::vector<EFlag> getFlags() const override;
 
   /**
    * @return an indicator if and how this mod should be highlighted by the UI
    */
-  virtual int getHighlight() const override;
+  int getHighlight() const override;
 
   /**
    * @return list of names of ini tweaks
@@ -301,33 +301,33 @@ public:
   /**
    * @return a description about the mod, to be displayed in the ui
    */
-  virtual QString getDescription() const override;
+  QString getDescription() const override;
 
   /**
    * @return the nexus file status (aka category ID)
    */
-  virtual int getNexusFileStatus() const override;
+  int getNexusFileStatus() const override;
 
   /**
    * @brief sets the file status (category ID) from Nexus
    * @param status the status id of the installed file
    */
-  virtual void setNexusFileStatus(int status) override;
+  void setNexusFileStatus(int status) override;
 
   /**
    * @return comments for this mod
    */
-  virtual QString comments() const override;
+  QString comments() const override;
 
   /**
    * @return manually set notes for this mod
    */
-  virtual QString notes() const override;
+  QString notes() const override;
 
   /**
    * @return time this mod was created (file time of the directory)
    */
-  virtual QDateTime creationTime() const override;
+  QDateTime creationTime() const override;
 
   /**
    * @return nexus description of the mod (html)
@@ -337,125 +337,125 @@ public:
   /**
    * @return repository from which the file was downloaded
    */
-  virtual QString repository() const override;
+  QString repository() const override;
 
   /**
    * @return true if the file has been endorsed on nexus
    */
-  virtual MOBase::EndorsedState endorsedState() const override;
+  MOBase::EndorsedState endorsedState() const override;
 
   /**
    * @return true if the file is being tracked on nexus
    */
-  virtual MOBase::TrackedState trackedState() const override;
+  MOBase::TrackedState trackedState() const override;
 
   /**
    * @brief get the last time nexus was checked for file updates on this mod
    */
-  virtual QDateTime getLastNexusUpdate() const override;
+  QDateTime getLastNexusUpdate() const override;
 
   /**
    * @brief set the last time nexus was checked for file updates on this mod
    */
-  virtual void setLastNexusUpdate(QDateTime time) override;
+  void setLastNexusUpdate(QDateTime time) override;
 
   /**
    * @return last time nexus was queried for infos on this mod
    */
-  virtual QDateTime getLastNexusQuery() const override;
+  QDateTime getLastNexusQuery() const override;
 
   /**
    * @brief set the last time nexus was queried for info on this mod
    */
-  virtual void setLastNexusQuery(QDateTime time) override;
+  void setLastNexusQuery(QDateTime time) override;
 
   /**
    * @return last time the mod was updated on Nexus
    */
-  virtual QDateTime getNexusLastModified() const override;
+  QDateTime getNexusLastModified() const override;
 
   /**
    * @brief set the last time the mod was updated on Nexus
    */
-  virtual void setNexusLastModified(QDateTime time) override;
+  void setNexusLastModified(QDateTime time) override;
 
   /**
    * @return the assigned nexus category ID
    */
-  virtual int getNexusCategory() const override;
+  int getNexusCategory() const override;
 
   /**
    * @brief Assigns the given Nexus category ID
    */
-  virtual void setNexusCategory(int category) override;
+  void setNexusCategory(int category) override;
 
   /**
    * @return the author of the mod.
    */
-  virtual QString author() const override;
+  QString author() const override;
 
   /**
    * @brief Set the author of the mod.
    */
-  virtual void setAuthor(const QString&) override;
+  void setAuthor(const QString&) override;
 
   /**
    * @return the name of the uploader of this mod.
    */
-  virtual QString uploader() const override;
+  QString uploader() const override;
 
   /**
    * @brief Set the name of the uploader of this mod.
    */
-  virtual void setUploader(const QString&) override;
+  void setUploader(const QString&) override;
 
   /**
    * @return the URL of the uploader of this mod's profile.
    */
-  virtual QString uploaderUrl() const override;
+  QString uploaderUrl() const override;
 
   /**
    * @brief Set the URL of the uploader of this mod's profile.
    */
-  virtual void setUploaderUrl(const QString&) override;
+  void setUploaderUrl(const QString&) override;
 
-  virtual QStringList archives(bool checkOnDisk = false) override;
+  QStringList archives(bool checkOnDisk = false) override;
 
-  virtual void setColor(QColor color) override;
+  void setColor(QColor color) override;
 
-  virtual QColor color() const override;
+  QColor color() const override;
 
-  virtual void addInstalledFile(int modId, int fileId) override;
+  void addInstalledFile(int modId, int fileId) override;
 
   /**
    * @brief stores meta information back to disk
    */
-  virtual void saveMeta() override;
+  void saveMeta() override;
 
   void readMeta() override;
 
-  virtual void setHasCustomURL(bool b) override;
-  virtual bool hasCustomURL() const override;
-  virtual void setCustomURL(QString const&) override;
-  virtual QString url() const override;
+  void setHasCustomURL(bool b) override;
+  bool hasCustomURL() const override;
+  void setCustomURL(QString const&) override;
+  QString url() const override;
 
-  virtual QString gameName() const override { return m_GameName; }
-  virtual QString installationFile() const override { return m_InstallationFile; }
-  virtual bool converted() const override { return m_Converted; }
-  virtual bool validated() const override { return m_Validated; }
-  virtual std::set<std::pair<int, int>> installedFiles() const override
+  QString gameName() const override { return m_GameName; }
+  QString installationFile() const override { return m_InstallationFile; }
+  bool converted() const override { return m_Converted; }
+  bool validated() const override { return m_Validated; }
+  std::set<std::pair<int, int>> installedFiles() const override
   {
     return m_InstalledFileIDs;
   }
 
 public:  // Plugin operations:
-  virtual QVariant pluginSetting(const QString& pluginName, const QString& key,
+  QVariant pluginSetting(const QString& pluginName, const QString& key,
                                  const QVariant& defaultValue) const override;
-  virtual std::map<QString, QVariant>
+  std::map<QString, QVariant>
   pluginSettings(const QString& pluginName) const override;
-  virtual bool setPluginSetting(const QString& pluginName, const QString& key,
+  bool setPluginSetting(const QString& pluginName, const QString& key,
                                 const QVariant& value) override;
-  virtual std::map<QString, QVariant>
+  std::map<QString, QVariant>
   clearPluginSettings(const QString& pluginName) override;
 
 private:
@@ -472,7 +472,7 @@ private slots:
                         int errorCode, const QString& errorMessage);
 
 protected:
-  virtual std::set<int> doGetContents() const override;
+  std::set<int> doGetContents() const override;
 
   ModInfoRegular(const QDir& path, OrganizerCore& core);
 
@@ -510,16 +510,16 @@ private:
   // List of plugin settings:
   std::map<QString, std::map<QString, QVariant>> m_PluginSettings;
 
-  bool m_MetaInfoChanged;
-  bool m_IsAlternate;
-  bool m_Converted;
-  bool m_Validated;
+  bool m_MetaInfoChanged{false};
+  bool m_IsAlternate{false};
+  bool m_Converted{false};
+  bool m_Validated{false};
   int m_NexusFileStatus;
   MOBase::VersionInfo m_NewestVersion;
   MOBase::VersionInfo m_IgnoredVersion;
 
-  MOBase::EndorsedState m_EndorsedState;
-  MOBase::TrackedState m_TrackedState;
+  MOBase::EndorsedState m_EndorsedState{EndorsedState::ENDORSED_UNKNOWN};
+  MOBase::TrackedState m_TrackedState{TrackedState::TRACKED_UNKNOWN};
 
   NexusBridge m_NexusBridge;
 

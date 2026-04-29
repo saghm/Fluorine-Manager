@@ -252,9 +252,9 @@ signals:
   void credentialsReceived(const APIUserAccount& user);
 
 protected:
-  virtual QNetworkReply* createRequest(QNetworkAccessManager::Operation operation,
+  QNetworkReply* createRequest(QNetworkAccessManager::Operation operation,
                                        const QNetworkRequest& request,
-                                       QIODevice* device);
+                                       QIODevice* device) override;
 
 private:
   enum States

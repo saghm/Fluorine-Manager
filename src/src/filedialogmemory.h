@@ -34,15 +34,15 @@ public:
   static void save(Settings& settings);
   static void restore(const Settings& settings);
 
-  static QString getOpenFileName(const QString& dirID, QWidget* parent = 0,
+  static QString getOpenFileName(const QString& dirID, QWidget* parent = nullptr,
                                  const QString& caption       = QString(),
                                  const QString& dir           = QString(),
                                  const QString& filter        = QString(),
-                                 QString* selectedFilter      = 0,
+                                 QString* selectedFilter      = nullptr,
                                  QFileDialog::Options options = QFileDialog::Option(0));
 
   static QString
-  getExistingDirectory(const QString& dirID, QWidget* parent = 0,
+  getExistingDirectory(const QString& dirID, QWidget* parent = nullptr,
                        const QString& caption       = QString(),
                        const QString& dir           = QString(),
                        QFileDialog::Options options = QFileDialog::ShowDirsOnly);

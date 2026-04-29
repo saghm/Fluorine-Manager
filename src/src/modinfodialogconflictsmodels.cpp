@@ -84,8 +84,8 @@ bool ConflictItem::canExplore() const
 }
 
 ConflictListModel::ConflictListModel(QTreeView* tree, std::vector<Column> columns)
-    : m_tree(tree), m_columns(std::move(columns)), m_sortColumn(-1),
-      m_sortOrder(Qt::AscendingOrder)
+    : m_tree(tree), m_columns(std::move(columns))
+      
 {
   m_tree->setModel(this);
 }

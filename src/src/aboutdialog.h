@@ -37,8 +37,8 @@ class AboutDialog : public QDialog
   Q_OBJECT
 
 public:
-  explicit AboutDialog(const QString& version, QWidget* parent = 0);
-  ~AboutDialog();
+  explicit AboutDialog(const QString& version, QWidget* parent = nullptr);
+  ~AboutDialog() override;
 
 private:
   enum Licenses

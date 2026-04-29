@@ -148,7 +148,7 @@ public:
   explicit EditExecutablesDialog(OrganizerCore& oc, int selection = -1,
                                  QWidget* parent = nullptr);
 
-  ~EditExecutablesDialog();
+  ~EditExecutablesDialog() override;
 
   // also saves and restores geometry
   //
@@ -202,7 +202,7 @@ private:
 
   // true when the change events being triggered are in response to loading
   // the executable's data into the UI, not from a user change
-  bool m_settingUI;
+  bool m_settingUI{false};
 
   void loadCustomOverwrites();
   void loadForcedLibraries();

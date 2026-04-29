@@ -21,7 +21,7 @@ class InstanceManagerDialog : public QDialog
 public:
   explicit InstanceManagerDialog(PluginContainer& pc, QWidget* parent = nullptr);
 
-  ~InstanceManagerDialog();
+  ~InstanceManagerDialog() override;
 
   // selects the instance having the given index in the list
   //
@@ -97,8 +97,8 @@ private:
   PluginContainer& m_pc;
   std::vector<std::unique_ptr<Instance>> m_instances;
   MOBase::FilterWidget m_filter;
-  QStandardItemModel* m_model;
-  bool m_restartOnSelect;
+  QStandardItemModel* m_model{nullptr};
+  bool m_restartOnSelect{true};
 
   // refreshes the list instances from disk
   //

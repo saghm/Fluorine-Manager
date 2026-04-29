@@ -53,7 +53,7 @@ EditExecutablesDialog::EditExecutablesDialog(OrganizerCore& oc, int sel,
                                              QWidget* parent)
     : TutorableDialog("EditExecutables", parent), ui(new Ui::EditExecutablesDialog),
       m_organizerCore(oc), m_originalExecutables(*oc.executablesList()),
-      m_executablesList(*oc.executablesList()), m_settingUI(false)
+      m_executablesList(*oc.executablesList()) 
 {
   ui->setupUi(this);
   ui->splitter->setSizes({200, 1});

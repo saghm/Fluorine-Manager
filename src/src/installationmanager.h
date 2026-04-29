@@ -73,10 +73,10 @@ private:
 
   QString m_name;
 
-  bool m_iniTweaks;
-  bool m_backup;
-  bool m_merged;
-  bool m_replaced;
+  bool m_iniTweaks{false};
+  bool m_backup{false};
+  bool m_merged{false};
+  bool m_replaced{false};
 };
 
 class InstallationManager : public QObject, public MOBase::IInstallationManager
@@ -91,7 +91,7 @@ public:
    **/
   explicit InstallationManager();
 
-  virtual ~InstallationManager();
+  ~InstallationManager() override;
 
   void setParentWidget(QWidget* widget);
 
@@ -333,9 +333,9 @@ private:
   // The plugin container, mostly to check if installer are enabled or not.
   const PluginContainer* m_PluginContainer;
 
-  bool m_IsRunning;
+  bool m_IsRunning{false};
 
-  QWidget* m_ParentWidget;
+  QWidget* m_ParentWidget{nullptr};
 
   QString m_ModsDirectory;
   QString m_DownloadsDirectory;

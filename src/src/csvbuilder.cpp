@@ -1,7 +1,7 @@
 #include "csvbuilder.h"
 
 CSVBuilder::CSVBuilder(QIODevice* target)
-    : m_Out(target), m_Separator(','), m_LineBreak(BREAK_CRLF)
+    : m_Out(target) 
 {
   m_Out.setEncoding(QStringConverter::Encoding::Utf8);
 
@@ -89,7 +89,7 @@ void CSVBuilder::setDefault(const QString& field, const QVariant& value)
 
 void CSVBuilder::writeHeader()
 {
-  if (m_Fields.size() == 0) {
+  if (m_Fields.empty()) {
     throw CSVException(QObject::tr("no fields set up yet!"));
   }
 

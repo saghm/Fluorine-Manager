@@ -237,14 +237,12 @@ void setFilterShortcuts(QWidget* widget, QLineEdit* edit)
 
 MainWindow::MainWindow(Settings& settings, OrganizerCore& organizerCore,
                        PluginContainer& pluginContainer, QWidget* parent)
-    : QMainWindow(parent), ui(new Ui::MainWindow), m_WasVisible(false),
-      m_FirstPaint(true), m_linksSeparator(nullptr), m_Tutorial(this, "MainWindow"),
-      m_OldProfileIndex(-1), m_OldExecutableIndex(-1),
+    : QMainWindow(parent), ui(new Ui::MainWindow),  m_Tutorial(this, "MainWindow"),
+      
       m_CategoryFactory(CategoryFactory::instance()), m_OrganizerCore(organizerCore),
       m_PluginContainer(pluginContainer),
       m_ArchiveListWriter(std::bind(&MainWindow::saveArchiveList, this)),
-      m_LinkToolbar(nullptr), m_LinkDesktop(nullptr), m_LinkStartMenu(nullptr),
-      m_SystemTrayManager(nullptr), m_NumberOfProblems(0),
+       m_NumberOfProblems(0),
       m_ProblemsCheckRequired(false)
 {
   // disables incredibly slow menu fade in effect that looks and feels like crap.
@@ -1728,7 +1726,7 @@ void MainWindow::updateModPageMenu()
   }
 
   // Add a separator if needed
-  if (registeredSources.length() > 0)
+  if (!registeredSources.empty())
     ui->actionModPage->menu()->addSeparator();
 
   // Add the secondary games (sorted)
@@ -1741,7 +1739,7 @@ void MainWindow::updateModPageMenu()
 
   // No mod page plugin and the menu was visible
   bool keepOriginalAction =
-      modPagePlugins.size() == 0 && registeredSources.length() <= 1;
+      modPagePlugins.empty() && registeredSources.length() <= 1;
   if (keepOriginalAction) {
     ui->toolBar->insertAction(ui->actionAdd_Profile, ui->actionNexus);
   } else {
@@ -2112,7 +2110,7 @@ void MainWindow::updateBSAList(const QStringList& defaultArchives,
     QList<QTreeWidgetItem*> items =
         ui->bsaList->findItems(modName, Qt::MatchFixedString);
     QTreeWidgetItem* subItem = nullptr;
-    if (items.length() > 0) {
+    if (!items.empty()) {
       subItem = items.at(0);
     } else {
       subItem = new QTreeWidgetItem(QStringList(modName));

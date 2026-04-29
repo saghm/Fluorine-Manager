@@ -19,7 +19,7 @@ class FuseConnectorException : public std::exception
 {
 public:
   explicit FuseConnectorException(const QString& text)
-      : std::exception(), m_Message(text.toLocal8Bit())
+      :  m_Message(text.toLocal8Bit())
   {}
 
   const char* what() const throw() override { return m_Message.constData(); }

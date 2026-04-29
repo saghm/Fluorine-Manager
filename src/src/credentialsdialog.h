@@ -32,8 +32,8 @@ class CredentialsDialog : public QDialog
   Q_OBJECT
 
 public:
-  explicit CredentialsDialog(QWidget* parent = 0);
-  ~CredentialsDialog();
+  explicit CredentialsDialog(QWidget* parent = nullptr);
+  ~CredentialsDialog() override;
 
   bool store() const;
   bool neverAsk() const;

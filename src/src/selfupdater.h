@@ -79,7 +79,7 @@ public:
    **/
   explicit SelfUpdater(NexusInterface* nexusInterface);
 
-  virtual ~SelfUpdater();
+  ~SelfUpdater() override;
 
   void setUserInterface(QWidget* widget);
 

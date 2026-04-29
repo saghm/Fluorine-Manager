@@ -178,7 +178,7 @@ void paintBackground(QTableWidget* table, QPainter* p,
   }
 }
 
-ColorTable::ColorTable(QWidget* parent) : QTableWidget(parent), m_settings(nullptr)
+ColorTable::ColorTable(QWidget* parent) : QTableWidget(parent) 
 {
   setColumnCount(4);
   setHorizontalHeaderLabels({"", "", "", ""});

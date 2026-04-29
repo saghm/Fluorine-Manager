@@ -8,11 +8,11 @@ class ModIDLineEdit : public QLineEdit
   Q_OBJECT
 
 public:
-  explicit ModIDLineEdit(QWidget* parent = 0);
-  explicit ModIDLineEdit(const QString& text, QWidget* parent = 0);
+  explicit ModIDLineEdit(QWidget* parent = nullptr);
+  explicit ModIDLineEdit(const QString& text, QWidget* parent = nullptr);
 
 public:
-  virtual bool event(QEvent* event) override;
+  bool event(QEvent* event) override;
 
 signals:
   void linkClicked(QString);

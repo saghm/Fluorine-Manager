@@ -27,7 +27,7 @@ namespace env
 
 using namespace MOBase;
 
-Console::Console() : m_hasConsole(false), m_in(nullptr), m_out(nullptr), m_err(nullptr)
+Console::Console()  
 {
   // stdout/stderr are already attached on Linux.
 }
@@ -35,7 +35,7 @@ Console::Console() : m_hasConsole(false), m_in(nullptr), m_out(nullptr), m_err(n
 Console::~Console() = default;
 
 ModuleNotification::ModuleNotification(QObject* o, std::function<void(Module)> f)
-    : m_cookie(nullptr), m_object(o), m_f(std::move(f))
+    :  m_object(o), m_f(std::move(f))
 {}
 
 ModuleNotification::~ModuleNotification() = default;

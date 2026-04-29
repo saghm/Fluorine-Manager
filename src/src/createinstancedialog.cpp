@@ -99,8 +99,7 @@ private:
 
 CreateInstanceDialog::CreateInstanceDialog(const PluginContainer& pc, Settings* s,
                                            QWidget* parent)
-    : QDialog(parent), ui(new Ui::CreateInstanceDialog), m_pc(pc), m_settings(s),
-      m_switching(false), m_singlePage(false)
+    : QDialog(parent), ui(new Ui::CreateInstanceDialog), m_pc(pc), m_settings(s) 
 {
   using namespace cid;
 

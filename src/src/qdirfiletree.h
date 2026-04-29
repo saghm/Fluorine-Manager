@@ -52,9 +52,9 @@ public:
 protected:
   using IFileTree::IFileTree;
 
-  virtual bool
+  bool
   doPopulate(std::shared_ptr<const IFileTree> parent,
-             std::vector<std::shared_ptr<FileTreeEntry>>& entries) const = 0;
+             std::vector<std::shared_ptr<FileTreeEntry>>& entries) const override = 0;
 };
 
 #endif

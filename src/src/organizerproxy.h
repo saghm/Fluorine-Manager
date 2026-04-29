@@ -21,7 +21,7 @@ class OrganizerProxy : public MOBase::IOrganizer
 public:
   OrganizerProxy(OrganizerCore* organizer, PluginContainer* pluginContainer,
                  MOBase::IPlugin* plugin);
-  ~OrganizerProxy();
+  ~OrganizerProxy() override;
 
 public:
   /**
@@ -49,7 +49,7 @@ public:  // IOrganizer interface
                      const QVariant& value, bool sync = true) override;
   QString pluginDataPath() const override;
   MOBase::IModInterface* installMod(const QString& fileName,
-                                    const QString& nameSuggestion = QString());
+                                    const QString& nameSuggestion = QString()) override;
   QString resolvePath(const QString& fileName) const override;
   QStringList listDirectories(const QString& directoryName) const override;
   QStringList
@@ -104,25 +104,25 @@ public:  // IOrganizer interface
       std::function<void(MOBase::IProfile*, MOBase::IProfile*)> const& func) override;
 
   // Plugin related:
-  virtual bool isPluginEnabled(QString const& pluginName) const override;
-  virtual bool isPluginEnabled(MOBase::IPlugin* plugin) const override;
-  virtual QVariant pluginSetting(const QString& pluginName,
+  bool isPluginEnabled(QString const& pluginName) const override;
+  bool isPluginEnabled(MOBase::IPlugin* plugin) const override;
+  QVariant pluginSetting(const QString& pluginName,
                                  const QString& key) const override;
-  virtual void setPluginSetting(const QString& pluginName, const QString& key,
+  void setPluginSetting(const QString& pluginName, const QString& key,
                                 const QVariant& value) override;
-  virtual bool onPluginSettingChanged(
+  bool onPluginSettingChanged(
       std::function<void(QString const&, const QString& key, const QVariant&,
                          const QVariant&)> const& func) override;
-  virtual bool
+  bool
   onPluginEnabled(std::function<void(const MOBase::IPlugin*)> const& func) override;
-  virtual bool onPluginEnabled(const QString& pluginName,
+  bool onPluginEnabled(const QString& pluginName,
                                std::function<void()> const& func) override;
-  virtual bool
+  bool
   onPluginDisabled(std::function<void(const MOBase::IPlugin*)> const& func) override;
-  virtual bool onPluginDisabled(const QString& pluginName,
+  bool onPluginDisabled(const QString& pluginName,
                                 std::function<void()> const& func) override;
 
-  virtual MOBase::IPluginGame const* managedGame() const;
+  MOBase::IPluginGame const* managedGame() const override;
 
 protected:
   // The container needs access to some callbacks to simulate startup.

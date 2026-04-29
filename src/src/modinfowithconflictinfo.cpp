@@ -155,7 +155,7 @@ ModInfoWithConflictInfo::Conflicts ModInfoWithConflictInfo::doConflictCheck() co
 
       hasVisibleFiles   = true;
       auto alternatives = file->getAlternatives();
-      if ((alternatives.size() == 0) ||
+      if ((alternatives.empty()) ||
           std::find(dataIDs.begin(), dataIDs.end(), alternatives.back().originID()) !=
               dataIDs.end()) {
         // no alternatives -> no conflict
@@ -226,7 +226,7 @@ ModInfoWithConflictInfo::Conflicts ModInfoWithConflictInfo::doConflictCheck() co
       }
     }
 
-    if (files.size() != 0) {
+    if (!files.empty()) {
       if (hasVisibleFiles && !providesAnything)
         conflicts.m_CurrentConflictState = CONFLICT_REDUNDANT;
       else if (!conflicts.m_OverwriteList.empty() &&

@@ -85,8 +85,8 @@ private:
     ~DownloadInfo() { delete m_FileInfo; }
     accumulator_set<qint64, stats<tag::rolling_mean>> m_DownloadAcc;
     accumulator_set<qint64, stats<tag::rolling_mean>> m_DownloadTimeAcc;
-    qint64 m_DownloadLast;
-    qint64 m_DownloadTimeLast;
+    qint64 m_DownloadLast{0};
+    qint64 m_DownloadTimeLast{0};
     unsigned int m_DownloadID;
     QString m_FileName;
     QFile m_Output;
@@ -94,12 +94,12 @@ private:
     QElapsedTimer m_StartTime;
     qint64 m_PreResumeSize;
     std::pair<int, QString> m_Progress;
-    bool m_HasData;
+    bool m_HasData{false};
     DownloadState m_State;
     int m_CurrentUrl;
     QStringList m_Urls;
     qint64 m_ResumePos;
-    qint64 m_TotalSize;
+    qint64 m_TotalSize{0};
     QDateTime m_Created;  // used as a cache in DownloadManager::getFileTime, may not be
                           // valid elsewhere
     QByteArray m_Hash;
@@ -107,14 +107,14 @@ private:
     QString m_RemoteFileName;
 
     int m_Tries;
-    bool m_ReQueried;
-    bool m_AskIfNotFound;
+    bool m_ReQueried{false};
+    bool m_AskIfNotFound{true};
 
     quint32 m_TaskProgressId;
 
     MOBase::ModRepositoryFileInfo* m_FileInfo{nullptr};
 
-    bool m_Hidden;
+    bool m_Hidden{false};
 
     static DownloadInfo* createNew(const MOBase::ModRepositoryFileInfo* fileInfo,
                                    const QStringList& URLs);
@@ -143,8 +143,7 @@ private:
 
   private:
     DownloadInfo()
-        : m_TotalSize(0), m_ReQueried(false), m_Hidden(false), m_HasData(false),
-          m_AskIfNotFound(true), m_DownloadTimeLast(0), m_DownloadLast(0),
+        : 
           m_DownloadAcc(tag::rolling_window::window_size = 200),
           m_DownloadTimeAcc(tag::rolling_window::window_size = 200)
     {}
@@ -164,7 +163,7 @@ public:
    **/
   explicit DownloadManager(NexusInterface* nexusInterface, QObject* parent);
 
-  ~DownloadManager();
+  ~DownloadManager() override;
 
   void setParentWidget(QWidget* w);
 
@@ -601,7 +600,7 @@ private:
   NexusInterface* m_NexusInterface;
 
   OrganizerCore* m_OrganizerCore;
-  QWidget* m_ParentWidget;
+  QWidget* m_ParentWidget{nullptr};
 
   QVector<std::tuple<QString, int, int>> m_PendingDownloads;
 
@@ -627,7 +626,7 @@ private:
 
   std::map<QString, int> m_DownloadFails;
 
-  bool m_ShowHidden;
+  bool m_ShowHidden{false};
 
   MOBase::IPluginGame const* m_ManagedGame;
 

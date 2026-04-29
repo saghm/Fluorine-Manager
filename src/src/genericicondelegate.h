@@ -27,8 +27,8 @@ public:
                       int logicalIndex = -1, int compactSize = 150);
 
 private:
-  virtual QList<QString> getIcons(const QModelIndex& index) const;
-  virtual size_t getNumIcons(const QModelIndex& index) const;
+  QList<QString> getIcons(const QModelIndex& index) const override;
+  size_t getNumIcons(const QModelIndex& index) const override;
 
 private:
   int m_Role;

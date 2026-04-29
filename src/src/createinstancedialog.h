@@ -93,7 +93,7 @@ public:
   CreateInstanceDialog(const PluginContainer& pc, Settings* s,
                        QWidget* parent = nullptr);
 
-  ~CreateInstanceDialog();
+  ~CreateInstanceDialog() override;
 
   Ui::CreateInstanceDialog* getUI();
   const PluginContainer& pluginContainer();
@@ -169,8 +169,8 @@ private:
   Settings* m_settings;
   std::vector<std::unique_ptr<cid::Page>> m_pages;
   QString m_originalNext;
-  bool m_switching;
-  bool m_singlePage;
+  bool m_switching{false};
+  bool m_singlePage{false};
 
   // creates a shortcut for the given sequence
   //

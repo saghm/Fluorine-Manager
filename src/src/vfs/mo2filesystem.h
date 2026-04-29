@@ -58,7 +58,7 @@ struct Mo2FsContext
     std::string name;
     bool is_dir = false;
     uint64_t size = 0;
-    std::chrono::system_clock::time_point mtime{};
+    std::chrono::system_clock::time_point mtime;
     std::string real_path;
     mode_t cached_mode = 0;
   };
@@ -78,7 +78,7 @@ struct Mo2FsContext
   struct CachedAttr
   {
     struct stat st {};
-    std::chrono::steady_clock::time_point expires_at{};
+    std::chrono::steady_clock::time_point expires_at;
     bool valid = false;
   };
   std::unordered_map<fuse_ino_t, CachedAttr> attr_cache;

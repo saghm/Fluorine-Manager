@@ -64,9 +64,9 @@ class SettingsDialog : public MOBase::TutorableDialog
 
 public:
   explicit SettingsDialog(PluginContainer* pluginContainer, Settings& settings,
-                          QWidget* parent = 0);
+                          QWidget* parent = nullptr);
 
-  ~SettingsDialog();
+  ~SettingsDialog() override;
 
   /**
    * @brief get stylesheet of settings buttons with colored background
@@ -83,7 +83,7 @@ public:
   int exec() override;
 
 public slots:
-  virtual void accept();
+  void accept() override;
 
 private:
   Ui::SettingsDialog* ui;

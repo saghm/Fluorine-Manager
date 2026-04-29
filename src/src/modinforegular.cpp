@@ -58,11 +58,8 @@ QString storeMetaPath(const QString& value)
 
 ModInfoRegular::ModInfoRegular(const QDir& path, OrganizerCore& core)
     : ModInfoWithConflictInfo(core), m_Name(path.dirName()),
-      m_Path(path.absolutePath()), m_Repository(),
-      m_GameName(core.managedGame()->gameShortName()), m_IsAlternate(false),
-      m_Converted(false), m_Validated(false), m_MetaInfoChanged(false),
-      m_EndorsedState(EndorsedState::ENDORSED_UNKNOWN),
-      m_TrackedState(TrackedState::TRACKED_UNKNOWN),
+      m_Path(path.absolutePath()), 
+      m_GameName(core.managedGame()->gameShortName()), 
       m_NexusBridge(&core.pluginContainer())
 {
   m_CreationTime = QFileInfo(path.absolutePath()).birthTime();
@@ -487,7 +484,7 @@ void ModInfoRegular::setCategory(int categoryID, bool active)
       m_Categories.erase(iter);
     }
     if (categoryID == m_PrimaryCategory) {
-      if (m_Categories.size() == 0) {
+      if (m_Categories.empty()) {
         m_PrimaryCategory = -1;
       } else {
         m_PrimaryCategory = *(m_Categories.begin());

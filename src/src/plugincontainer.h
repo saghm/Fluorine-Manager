@@ -183,7 +183,7 @@ public:
 
 public:
   PluginContainer(OrganizerCore* organizer);
-  virtual ~PluginContainer();
+  ~PluginContainer() override;
 
   /**
    * @brief Start the plugins.
@@ -360,11 +360,11 @@ public:
   QStringList mergedProxyList(MOBase::IPluginProxy* proxy) const;
 
 public:  // IPluginDiagnose interface
-  virtual std::vector<unsigned int> activeProblems() const;
-  virtual QString shortDescription(unsigned int key) const;
-  virtual QString fullDescription(unsigned int key) const;
-  virtual bool hasGuidedFix(unsigned int key) const;
-  virtual void startGuidedFix(unsigned int key) const;
+  std::vector<unsigned int> activeProblems() const override;
+  QString shortDescription(unsigned int key) const override;
+  QString fullDescription(unsigned int key) const override;
+  bool hasGuidedFix(unsigned int key) const override;
+  void startGuidedFix(unsigned int key) const override;
 
 signals:
 

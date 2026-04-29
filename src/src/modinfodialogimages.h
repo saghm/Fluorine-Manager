@@ -56,7 +56,7 @@ protected:
 
   // forwards to ImagesTab::thumbnailAreaWheelEvent()
   //
-  void wheelEvent(QWheelEvent* e);
+  void wheelEvent(QWheelEvent* e) override;
 
   // forwards to ImagesTab::scrollAreaResized()
   //
@@ -103,7 +103,7 @@ protected:
 private:
   QString m_path;
   QImage m_original, m_scaled;
-  int m_border;
+  int m_border{1};
   QColor m_borderColor, m_backgroundColor;
 };
 
@@ -117,22 +117,22 @@ struct Theme
 struct Metrics
 {
   // space outside the thumbnail border
-  int margins;
+  int margins{3};
 
   // size of the border
-  int border;
+  int border{1};
 
   // space between the border and the image
-  int padding;
+  int padding{0};
 
   // spacing between the thumbnail and the text
-  int textSpacing;
+  int textSpacing{2};
 
   // height of the text
-  int textHeight;
+  int textHeight{0};
 
   // spacing between thumbnails
-  int spacing;
+  int spacing{5};
 
   Metrics();
 };
@@ -246,7 +246,7 @@ private:
   QString m_path;
   mutable QString m_filename;
   QImage m_original, m_thumbnail;
-  bool m_failed;
+  bool m_failed{false};
 
   bool needsLoad(const Geometry& geo) const;
   void load(const Geometry& geo);
@@ -285,16 +285,16 @@ private:
   std::vector<File> m_allFiles;
   std::vector<File*> m_filteredFiles;
   std::size_t m_selection;
-  bool m_filtered;
+  bool m_filtered{false};
 };
 
 struct PaintContext
 {
   mutable QPainter painter;
   Geometry geo;
-  File* file;
-  std::size_t thumbIndex;
-  std::size_t fileIndex;
+  File* file{nullptr};
+  std::size_t thumbIndex{0};
+  std::size_t fileIndex{0};
 
   PaintContext(QWidget* w, Geometry geo);
 };
@@ -336,7 +336,7 @@ private:
   std::vector<QString> m_supportedFormats;
   Files m_files;
   FilterWidget m_filter;
-  bool m_ddsAvailable, m_ddsEnabled;
+  bool m_ddsAvailable{false}, m_ddsEnabled{false};
   Theme m_theme;
   Metrics m_metrics;
 

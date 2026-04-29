@@ -47,7 +47,7 @@ public:
 
 public:
   QueryOverwriteDialog(QWidget* parent, Backup b);
-  ~QueryOverwriteDialog();
+  ~QueryOverwriteDialog() override;
   bool backup() const;
   Action action() const { return m_Action; }
 private slots:

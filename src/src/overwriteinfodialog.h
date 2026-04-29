@@ -37,16 +37,16 @@ class OverwriteFileSystemModel : public QFileSystemModel
 
 public:
   OverwriteFileSystemModel(QObject* parent, OrganizerCore& organizer)
-      : QFileSystemModel(parent), m_Organizer(organizer), m_RegularColumnCount(0)
+      : QFileSystemModel(parent), m_Organizer(organizer) 
   {}
 
-  virtual int columnCount(const QModelIndex& parent) const
+  int columnCount(const QModelIndex& parent) const override
   {
     m_RegularColumnCount = QFileSystemModel::columnCount(parent);
     return m_RegularColumnCount;
   }
 
-  virtual QVariant headerData(int section, Qt::Orientation orientation, int role) const
+  QVariant headerData(int section, Qt::Orientation orientation, int role) const override
   {
     if ((orientation == Qt::Horizontal) && (section >= m_RegularColumnCount)) {
       if (role == Qt::DisplayRole) {
@@ -59,7 +59,7 @@ public:
     }
   }
 
-  virtual QVariant data(const QModelIndex& index, int role) const
+  QVariant data(const QModelIndex& index, int role) const override
   {
     if (index.column() == m_RegularColumnCount + 0) {
       if (role == Qt::DisplayRole) {
@@ -72,8 +72,8 @@ public:
     }
   }
 
-  virtual bool dropMimeData(const QMimeData* data, Qt::DropAction action, int row,
-                            int column, const QModelIndex& parent)
+  bool dropMimeData(const QMimeData* data, Qt::DropAction action, int row,
+                            int column, const QModelIndex& parent) override
   {
     ModListDropInfo dropInfo(data, m_Organizer);
     if (dropInfo.isLocalFileDrop()) {
@@ -90,7 +90,7 @@ public:
   }
 
 private:
-  mutable int m_RegularColumnCount;
+  mutable int m_RegularColumnCount{0};
 
   OrganizerCore& m_Organizer;
 };
@@ -101,8 +101,8 @@ class OverwriteInfoDialog : public QDialog
 
 public:
   explicit OverwriteInfoDialog(ModInfo::Ptr modInfo, OrganizerCore& organizer,
-                               QWidget* parent = 0);
-  ~OverwriteInfoDialog();
+                               QWidget* parent = nullptr);
+  ~OverwriteInfoDialog() override;
 
   ModInfo::Ptr modInfo() const { return m_ModInfo; }
 

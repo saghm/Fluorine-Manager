@@ -62,8 +62,8 @@ FileTreeItem::FileTreeItem(FileTreeModel* model, FileTreeItem* parent,
     : m_model(model), m_parent(parent), m_indexGuess(NoIndexGuess),
       m_virtualParentPath(QString::fromStdWString(dataRelativeParentPath)),
       m_wsFile(file), m_wsLcFile(ToLowerCopy(file)), m_key(m_wsLcFile),
-      m_file(QString::fromStdWString(file)), m_isDirectory(isDirectory), m_originID(-1),
-      m_flags(NoFlags), m_loaded(false), m_expanded(false), m_sortingStale(true)
+      m_file(QString::fromStdWString(file)), m_isDirectory(isDirectory), 
+      m_flags(NoFlags) 
 {}
 
 FileTreeItem::Ptr FileTreeItem::createFile(FileTreeModel* model, FileTreeItem* parent,

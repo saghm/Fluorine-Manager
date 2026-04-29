@@ -47,9 +47,9 @@ private:
   QString m_adapter;
   QString m_monitorDevice;
   bool m_primary;
-  int m_resX, m_resY;
-  int m_dpi;
-  int m_refreshRate;
+  int m_resX{0}, m_resY{0};
+  int m_dpi{0};
+  int m_refreshRate{0};
 
   void getSettings();
 };

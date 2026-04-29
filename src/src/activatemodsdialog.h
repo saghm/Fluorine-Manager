@@ -49,8 +49,8 @@ public:
    * @param parent ... Defaults to 0.
    **/
   explicit ActivateModsDialog(MOBase::SaveGameInfo::MissingAssets const& missingAssets,
-                              QWidget* parent = 0);
-  ~ActivateModsDialog();
+                              QWidget* parent = nullptr);
+  ~ActivateModsDialog() override;
 
   /**
    * @brief get a list of mods that the user chose to activate

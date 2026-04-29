@@ -15,7 +15,7 @@ QString localizedUserAccountType(APIUserAccountTypes t)
   }
 }
 
-APIUserAccount::APIUserAccount() : m_type(APIUserAccountTypes::None) {}
+APIUserAccount::APIUserAccount()  {}
 
 bool APIUserAccount::isValid() const
 {

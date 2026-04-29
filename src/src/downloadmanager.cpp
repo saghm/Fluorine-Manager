@@ -249,8 +249,8 @@ QString DownloadManager::DownloadInfo::currentURL()
 }
 
 DownloadManager::DownloadManager(NexusInterface* nexusInterface, QObject* parent)
-    : m_NexusInterface(nexusInterface), m_DirWatcher(), m_ShowHidden(false),
-      m_ParentWidget(nullptr)
+    : m_NexusInterface(nexusInterface)
+      
 {
   m_OrganizerCore = dynamic_cast<OrganizerCore*>(parent);
   connect(&m_DirWatcher, SIGNAL(directoryChanged(QString)), this,
@@ -334,7 +334,7 @@ void DownloadManager::setOutputDirectory(const QString& outputDirectory,
                                          const bool refresh)
 {
   QStringList directories = m_DirWatcher.directories();
-  if (directories.length() != 0) {
+  if (!directories.empty()) {
     m_DirWatcher.removePaths(directories);
   }
   m_OutputDirectory = QDir::fromNativeSeparators(outputDirectory);
@@ -399,7 +399,7 @@ void DownloadManager::refreshList()
         orphans.append(dir.absoluteFilePath(metaFile));
       }
     }
-    if (orphans.size() > 0) {
+    if (!orphans.empty()) {
       log::debug("{} orphaned meta files will be deleted", orphans.size());
       shellDelete(orphans, true);
     }
@@ -1086,7 +1086,7 @@ void DownloadManager::resumeDownloadInt(int index)
         }
       }
     }
-    if ((info->m_Urls.size() == 0) ||
+    if ((info->m_Urls.empty()) ||
         ((info->m_Urls.size() == 1) && (info->m_Urls[0].size() == 0))) {
       emit showMessage(
           tr("No known download urls. Sorry, this download can't be resumed."));
@@ -2126,7 +2126,7 @@ void DownloadManager::nxmDownloadURLsAvailable(QString gameName, int modID, int 
   ModRepositoryFileInfo* info =
       qobject_cast<ModRepositoryFileInfo*>(qvariant_cast<QObject*>(userData));
   QVariantList resultList = resultData.toList();
-  if (resultList.length() == 0) {
+  if (resultList.empty()) {
     removePending(gameName, modID, fileID);
     emit showMessage(tr("No download server available. Please try again later."));
     return;

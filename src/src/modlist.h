@@ -110,7 +110,7 @@ public:
    **/
   ModList(PluginContainer* pluginContainer, OrganizerCore* parent);
 
-  ~ModList();
+  ~ModList() override;
 
   /**
    * @brief set the profile used for status information
@@ -215,16 +215,16 @@ public:
   onModMoved(const std::function<void(const QString&, int, int)>& func);
 
 public:  // implementation of virtual functions of QAbstractItemModel
-  virtual int rowCount(const QModelIndex& parent = QModelIndex()) const;
-  virtual bool hasChildren(const QModelIndex& parent = QModelIndex()) const;
-  virtual int columnCount(const QModelIndex& parent = QModelIndex()) const;
-  virtual QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const;
-  virtual bool setData(const QModelIndex& index, const QVariant& value,
-                       int role = Qt::EditRole);
-  virtual QVariant headerData(int section, Qt::Orientation orientation,
-                              int role = Qt::DisplayRole) const;
-  virtual Qt::ItemFlags flags(const QModelIndex& modelIndex) const;
-  virtual bool removeRows(int row, int count, const QModelIndex& parent);
+  int rowCount(const QModelIndex& parent = QModelIndex()) const override;
+  bool hasChildren(const QModelIndex& parent = QModelIndex()) const override;
+  int columnCount(const QModelIndex& parent = QModelIndex()) const override;
+  QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
+  bool setData(const QModelIndex& index, const QVariant& value,
+                       int role = Qt::EditRole) override;
+  QVariant headerData(int section, Qt::Orientation orientation,
+                              int role = Qt::DisplayRole) const override;
+  Qt::ItemFlags flags(const QModelIndex& modelIndex) const override;
+  bool removeRows(int row, int count, const QModelIndex& parent) override;
 
   Qt::DropActions supportedDropActions() const override
   {
@@ -237,11 +237,11 @@ public:  // implementation of virtual functions of QAbstractItemModel
   bool dropMimeData(const QMimeData* data, Qt::DropAction action, int row, int column,
                     const QModelIndex& parent) override;
 
-  virtual QModelIndex index(int row, int column,
-                            const QModelIndex& parent = QModelIndex()) const;
-  virtual QModelIndex parent(const QModelIndex& child) const;
+  QModelIndex index(int row, int column,
+                            const QModelIndex& parent = QModelIndex()) const override;
+  QModelIndex parent(const QModelIndex& child) const override;
 
-  virtual QMap<int, QVariant> itemData(const QModelIndex& index) const;
+  QMap<int, QVariant> itemData(const QModelIndex& index) const override;
 
 public slots:
 
@@ -378,14 +378,14 @@ private:
   struct TModInfo
   {
     TModInfo(unsigned int index, ModInfo::Ptr modInfo)
-        : modInfo(modInfo), nameOrder(index), priorityOrder(0), modIDOrder(0),
-          categoryOrder(0)
+        : modInfo(modInfo), nameOrder(index)
+          
     {}
     ModInfo::Ptr modInfo;
     unsigned int nameOrder;
-    unsigned int priorityOrder;
-    unsigned int modIDOrder;
-    unsigned int categoryOrder;
+    unsigned int priorityOrder{0};
+    unsigned int modIDOrder{0};
+    unsigned int categoryOrder{0};
   };
 
   struct TModInfoChange

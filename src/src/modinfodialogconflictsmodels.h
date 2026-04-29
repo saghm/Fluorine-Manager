@@ -60,9 +60,9 @@ public:
   int rowCount(const QModelIndex& parent = {}) const override;
   int columnCount(const QModelIndex& = {}) const override;
   QVariant data(const QModelIndex& index, int role) const override;
-  QVariant headerData(int col, Qt::Orientation, int role) const;
+  QVariant headerData(int col, Qt::Orientation, int role) const override;
 
-  void sort(int colIndex, Qt::SortOrder order = Qt::AscendingOrder);
+  void sort(int colIndex, Qt::SortOrder order = Qt::AscendingOrder) override;
   void add(ConflictItem item);
 
   void finished();
@@ -73,8 +73,8 @@ private:
   QTreeView* m_tree;
   std::vector<Column> m_columns;
   std::vector<ConflictItem> m_items;
-  int m_sortColumn;
-  Qt::SortOrder m_sortOrder;
+  int m_sortColumn{-1};
+  Qt::SortOrder m_sortOrder{Qt::AscendingOrder};
 
   const ConflictItem* itemFromIndex(const QModelIndex& index) const;
   QModelIndex indexFromItem(const ConflictItem* item, int col);

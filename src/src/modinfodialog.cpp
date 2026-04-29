@@ -156,7 +156,7 @@ FileRenamer::RenameResults restoreHiddenFilesRecursive(FileRenamer& renamer,
 }
 
 ModInfoDialog::TabInfo::TabInfo(std::unique_ptr<ModInfoDialogTab> tab)
-    : tab(std::move(tab)), realPos(-1), widget(nullptr)
+    : tab(std::move(tab)) 
 {}
 
 bool ModInfoDialog::TabInfo::isVisible() const
@@ -168,8 +168,8 @@ ModInfoDialog::ModInfoDialog(OrganizerCore& core, PluginContainer& plugin,
                              ModInfo::Ptr mod, ModListView* modListView,
                              QWidget* parent)
     : TutorableDialog("ModInfoDialog", parent), ui(new Ui::ModInfoDialog), m_core(core),
-      m_plugin(plugin), m_modListView(modListView), m_initialTab(ModInfoTabIDs::None),
-      m_arrangingTabs(false)
+      m_plugin(plugin), m_modListView(modListView)
+      
 {
   ui->setupUi(this);
 

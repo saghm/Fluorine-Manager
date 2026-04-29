@@ -62,7 +62,7 @@ public:
   // directories
   //
   Range(FileTreeModel* model, FileTreeItem& parentItem, int start = 0)
-      : m_model(model), m_parentItem(parentItem), m_first(-1), m_current(start)
+      : m_model(model), m_parentItem(parentItem),  m_current(start)
   {}
 
   // includes the current index in the range
@@ -167,7 +167,7 @@ public:
 private:
   FileTreeModel* m_model;
   FileTreeItem& m_parentItem;
-  int m_first;
+  int m_first{-1};
   int m_current;
 };
 
@@ -182,9 +182,9 @@ void* makeInternalPointer(FileTreeItem* item)
 }
 
 FileTreeModel::FileTreeModel(OrganizerCore& core, QObject* parent)
-    : QAbstractItemModel(parent), m_core(core), m_enabled(true),
+    : QAbstractItemModel(parent), m_core(core), 
       m_root(FileTreeItem::createDirectory(this, nullptr, L"", L"")),
-      m_flags(HiddenFiles), m_fullyLoaded(false), m_sortingEnabled(true)
+      m_flags(HiddenFiles) 
 {
   m_root->setExpanded(true);
   m_sortTimer.setSingleShot(true);
@@ -971,7 +971,7 @@ void FileTreeModel::updateFileItem(FileTreeItem& item, const MOShared::FileEntry
 bool FileTreeModel::shouldShowFile(const FileEntry& file) const
 {
   if (showConflictsOnly() &&
-      ((file.getAlternatives().size() == 0) ||
+      ((file.getAlternatives().empty()) ||
        QString::fromStdWString(file.getName())
            .endsWith(ModInfo::s_HiddenExt, Qt::CaseInsensitive))) {
     // only conflicts should be shown, but this file is hidden or not conflicted

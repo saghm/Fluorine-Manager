@@ -87,7 +87,7 @@ public:
 
   Profile(const Profile& reference);
 
-  ~Profile();
+  ~Profile() override;
 
   /**
    * Determines the default settings for the profile based on the current state of the
@@ -126,7 +126,7 @@ public:
    * @note currently, invalidation is not supported if the relevant entry in the ini
    *file does not exist
    **/
-  bool invalidationActive(bool* supported) const;
+  bool invalidationActive(bool* supported) const override;
 
   /**
    * @brief deactivate archive invalidation if it was active
@@ -141,7 +141,7 @@ public:
   /**
    * @return true if this profile uses local save games
    */
-  virtual bool localSavesEnabled() const override;
+  bool localSavesEnabled() const override;
 
   /**
    * @brief enables or disables the use of local save games for this profile
@@ -154,7 +154,7 @@ public:
   /**
    * @return true if this profile uses local ini files
    */
-  virtual bool localSettingsEnabled() const override;
+  bool localSettingsEnabled() const override;
 
   /**
    * @brief enables or disables the use of local ini files for this profile
@@ -166,7 +166,7 @@ public:
   /**
    * @return name of the profile (this is identical to its directory name)
    **/
-  virtual QString name() const override { return m_Directory.dirName(); }
+  QString name() const override { return m_Directory.dirName(); }
 
   /**
    * @return the path of the plugins file in this profile
@@ -220,7 +220,7 @@ public:
   /**
    * @return path to this profile
    **/
-  virtual QString absolutePath() const override;
+  QString absolutePath() const override;
 
   /**
    * @return path to this profile's save games
@@ -376,11 +376,11 @@ private:
     friend class Profile;
 
   public:
-    ModStatus() : m_Enabled(false), m_Priority(-1) {}
+    ModStatus()  {}
 
   private:
-    bool m_Enabled;
-    int m_Priority;
+    bool m_Enabled{false};
+    int m_Priority{-1};
   };
 
 private:

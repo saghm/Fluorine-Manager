@@ -152,7 +152,7 @@ bool ModListChangeCategoryMenu::populate(QMenu* menu, CategoryFactory* factory,
 
       int id = factory->getCategoryID(i);
       auto checkBox = std::make_unique<QCheckBox>(targetMenu);
-      bool enabled = categories.find(id) != categories.end();
+      bool enabled = categories.contains(id);
       checkBox->setText(factory->getCategoryName(i).replace('&', "&&"));
       if (enabled) {
         childEnabled = true;

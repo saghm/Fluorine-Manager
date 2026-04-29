@@ -51,12 +51,12 @@ public:
 
 private:
   // whether the console was allocated successfully
-  bool m_hasConsole;
+  bool m_hasConsole{false};
 
   // standard streams
-  FILE* m_in;
-  FILE* m_out;
-  FILE* m_err;
+  FILE* m_in{nullptr};
+  FILE* m_out{nullptr};
+  FILE* m_err{nullptr};
 };
 
 class ModuleNotification
@@ -75,7 +75,7 @@ public:
   void fire(QString path, std::size_t fileSize);
 
 private:
-  void* m_cookie;
+  void* m_cookie{nullptr};
   QObject* m_object;
   std::set<QString> m_loaded;
   std::function<void(Module)> m_f;

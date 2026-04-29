@@ -48,7 +48,7 @@ protected:
 private:
   int m_column;
   int m_compactSize;
-  bool m_compact;
+  bool m_compact{false};
 };
 
 #endif  // ICONDELEGATE_H

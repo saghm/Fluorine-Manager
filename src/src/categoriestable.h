@@ -27,11 +27,11 @@ class CategoriesTable : public QTableWidget
 {
   Q_OBJECT
 public:
-  CategoriesTable(QWidget* parent = 0);
+  CategoriesTable(QWidget* parent = nullptr);
 
 protected:
-  virtual bool dropMimeData(int row, int column, const QMimeData* data,
-                            Qt::DropAction action);
+  bool dropMimeData(int row, int column, const QMimeData* data,
+                            Qt::DropAction action) override;
 };
 
 #endif  // CATEGORIESTABLE_H

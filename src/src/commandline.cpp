@@ -50,7 +50,7 @@ std::string table(const std::vector<std::pair<std::string, std::string>>& v,
   return s;
 }
 
-CommandLine::CommandLine() : m_command(nullptr)
+CommandLine::CommandLine()  
 {
   createOptions();
 
@@ -90,7 +90,7 @@ std::optional<int> CommandLine::process(const std::wstring& line)
     // collect options past the command name
     auto opts = po::collect_unrecognized(parsed.options, po::include_positional);
 
-    if (m_vm.count("command")) {
+    if (m_vm.contains("command")) {
       // there's a word as the first argument; this may be a command name or
       // an old style exe name/binary
 
@@ -122,7 +122,7 @@ std::optional<int> CommandLine::process(const std::wstring& line)
 
               po::store(parsed, m_vm);
 
-              if (m_vm.count("help")) {
+              if (m_vm.contains("help")) {
                 env::Console console;
                 std::cout << usage(c.get()) << "\n";
                 return 0;
@@ -153,7 +153,7 @@ std::optional<int> CommandLine::process(const std::wstring& line)
     // MOApplication::doOneRun()
 
     // look for help
-    if (m_vm.count("help")) {
+    if (m_vm.contains("help")) {
       env::Console console;
       std::cout << usage() << "\n";
       return 0;
@@ -219,7 +219,7 @@ bool CommandLine::forwardToPrimary(MOMultiProcess& multiProcess)
 
 std::optional<int> CommandLine::runEarly()
 {
-  if (m_vm.count("logs")) {
+  if (m_vm.contains("logs")) {
     // in loglist.h
     logToStdout(true);
   }
@@ -234,7 +234,7 @@ std::optional<int> CommandLine::runEarly()
 std::optional<int> CommandLine::runPostApplication(MOApplication& a)
 {
   // handle -i with no arguments
-  if (m_vm.count("instance") && m_vm["instance"].as<std::string>() == "") {
+  if (m_vm.contains("instance") && m_vm["instance"].as<std::string>().empty()) {
     env::Console c;
 
     if (auto i = InstanceManager::singleton().currentInstance()) {
@@ -391,17 +391,17 @@ std::string CommandLine::usage(const Command* c) const
 
 bool CommandLine::pick() const
 {
-  return (m_vm.count("pick") > 0);
+  return (m_vm.contains("pick"));
 }
 
 bool CommandLine::multiple() const
 {
-  return (m_vm.count("multiple") > 0);
+  return (m_vm.contains("multiple"));
 }
 
 std::optional<QString> CommandLine::profile() const
 {
-  if (m_vm.count("profile")) {
+  if (m_vm.contains("profile")) {
     return QString::fromStdString(m_vm["profile"].as<std::string>());
   }
 
@@ -414,7 +414,7 @@ std::optional<QString> CommandLine::instance() const
 
   if (m_shortcut.isValid() && m_shortcut.hasInstance()) {
     return m_shortcut.instanceName();
-  } else if (m_vm.count("instance")) {
+  } else if (m_vm.contains("instance")) {
     return QString::fromStdString(m_vm["instance"].as<std::string>());
   }
 
@@ -716,11 +716,11 @@ std::optional<int> RunCommand::runPostOrganizer(OrganizerCore& core)
       p.setFromFile(nullptr, QFileInfo(program));
     }
 
-    if (vm().count("arguments")) {
+    if (vm().contains("arguments")) {
       p.setArguments(QString::fromStdString(vm()["arguments"].as<std::string>()));
     }
 
-    if (vm().count("cwd")) {
+    if (vm().contains("cwd")) {
       p.setCurrentDirectory(QString::fromStdString(vm()["cwd"].as<std::string>()));
     }
 
@@ -924,10 +924,10 @@ std::optional<int> CreatePortableCommand::runEarly()
   {
     QSettings ini(QDir(instanceDir).filePath("ModOrganizer.ini"), QSettings::IniFormat);
 
-    if (vm().count("game")) {
+    if (vm().contains("game")) {
       ini.setValue("General/gameName", QString::fromStdString(vm()["game"].as<std::string>()));
     }
-    if (vm().count("game-path")) {
+    if (vm().contains("game-path")) {
       ini.setValue("General/gamePath", QString::fromStdString(vm()["game-path"].as<std::string>()));
     }
     ini.setValue("General/portable", true);
@@ -937,10 +937,10 @@ std::optional<int> CreatePortableCommand::runEarly()
     ini.setValue("Settings/overwrite_directory", "%BASE_DIR%/overwrite");
     ini.setValue("Settings/profile_local_inis", true);
 
-    if (vm().count("prefix")) {
+    if (vm().contains("prefix")) {
       ini.setValue("fluorine/prefix_path", QString::fromStdString(vm()["prefix"].as<std::string>()));
     }
-    if (vm().count("proton")) {
+    if (vm().contains("proton")) {
       ini.setValue("fluorine/proton_path", QString::fromStdString(vm()["proton"].as<std::string>()));
     }
     ini.sync();

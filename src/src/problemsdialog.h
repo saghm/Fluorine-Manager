@@ -17,8 +17,8 @@ class ProblemsDialog : public QDialog
   Q_OBJECT
 
 public:
-  explicit ProblemsDialog(PluginContainer const& pluginContainer, QWidget* parent = 0);
-  ~ProblemsDialog();
+  explicit ProblemsDialog(PluginContainer const& pluginContainer, QWidget* parent = nullptr);
+  ~ProblemsDialog() override;
 
   // also saves and restores geometry
   //

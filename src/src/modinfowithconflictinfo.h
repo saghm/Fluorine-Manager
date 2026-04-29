@@ -14,18 +14,18 @@ class ModInfoWithConflictInfo : public ModInfo
 
 public:
   std::vector<ModInfo::EConflictFlag> getConflictFlags() const override;
-  virtual std::vector<ModInfo::EFlag> getFlags() const override;
+  std::vector<ModInfo::EFlag> getFlags() const override;
 
   /**
    * @return true if this mod is considered "valid", that is: it contains data used by
    *the game
    **/
-  virtual bool isValid() const override;
+  bool isValid() const override;
 
   /**
    * @return a list of content types contained in a mod
    */
-  virtual const std::set<int>& getContents() const override;
+  const std::set<int>& getContents() const override;
 
   /**
    * @brief Test if the mod contains the specified content.
@@ -34,7 +34,7 @@ public:
    *
    * @return true if the content is there, false otherwise.
    */
-  virtual bool hasContent(int content) const override;
+  bool hasContent(int content) const override;
 
   /**
    * @brief Retrieve a file tree corresponding to the underlying disk content
@@ -83,7 +83,7 @@ public slots:
   /**
    * @brief Notify this mod that the content of the disk may have changed.
    */
-  virtual void diskContentModified();
+  void diskContentModified() override;
 
 protected:
   // check if the content of this mod is valid
@@ -141,7 +141,7 @@ protected:
    * or getContents(). This method will only be called when first creating the mod
    * using multiple threads for all the mods.
    */
-  virtual void prefetch() override;
+  void prefetch() override;
 
 private:
   struct Conflicts

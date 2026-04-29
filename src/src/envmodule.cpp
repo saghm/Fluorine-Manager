@@ -262,7 +262,7 @@ std::vector<Module> getLoadedModules()
 
     QString qpath = QString::fromStdString(path);
 
-    if (seen.count(qpath)) {
+    if (seen.contains(qpath)) {
       continue;
     }
     seen.insert(qpath);

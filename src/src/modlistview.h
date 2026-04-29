@@ -52,7 +52,7 @@ public:
   };
 
 public:
-  explicit ModListView(QWidget* parent = 0);
+  explicit ModListView(QWidget* parent = nullptr);
 
   void setup(OrganizerCore& core, CategoryFactory& factory, MainWindow* mw,
              Ui::MainWindow* mwui);
@@ -156,7 +156,7 @@ protected:
   // re-implemented to fake the return value to allow drag-and-drop on
   // itself for separators
   //
-  QModelIndexList selectedIndexes() const;
+  QModelIndexList selectedIndexes() const override;
 
   // drop from external folder
   //

@@ -11,7 +11,7 @@ class DownloadManagerProxy : public MOBase::IDownloadManager
 
 public:
   DownloadManagerProxy(OrganizerProxy* oproxy, DownloadManager* downloadManager);
-  virtual ~DownloadManagerProxy();
+  ~DownloadManagerProxy() override;
 
   int startDownloadURLs(const QStringList& urls) override;
   int startDownloadNexusFile(int modID, int fileID) override;

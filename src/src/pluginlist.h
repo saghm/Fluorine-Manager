@@ -117,7 +117,7 @@ public:
    **/
   PluginList(OrganizerCore& organizer);
 
-  ~PluginList();
+  ~PluginList() override;
 
   /**
    * @brief does a complete refresh of the list
@@ -259,20 +259,20 @@ public:
       const std::function<void(const std::map<QString, PluginStates>&)>& func);
 
 public:  // implementation of the QAbstractTableModel interface
-  virtual int rowCount(const QModelIndex& parent = QModelIndex()) const;
-  virtual int columnCount(const QModelIndex& parent = QModelIndex()) const;
-  virtual QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const;
-  virtual bool setData(const QModelIndex& index, const QVariant& value,
-                       int role = Qt::EditRole);
-  virtual QVariant headerData(int section, Qt::Orientation orientation,
-                              int role = Qt::DisplayRole) const;
-  virtual Qt::ItemFlags flags(const QModelIndex& index) const;
-  virtual Qt::DropActions supportedDropActions() const { return Qt::MoveAction; }
-  virtual bool dropMimeData(const QMimeData* data, Qt::DropAction action, int row,
-                            int column, const QModelIndex& parent);
-  virtual QModelIndex index(int row, int column,
-                            const QModelIndex& parent = QModelIndex()) const;
-  virtual QModelIndex parent(const QModelIndex& child) const;
+  int rowCount(const QModelIndex& parent = QModelIndex()) const override;
+  int columnCount(const QModelIndex& parent = QModelIndex()) const override;
+  QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
+  bool setData(const QModelIndex& index, const QVariant& value,
+                       int role = Qt::EditRole) override;
+  QVariant headerData(int section, Qt::Orientation orientation,
+                              int role = Qt::DisplayRole) const override;
+  Qt::ItemFlags flags(const QModelIndex& index) const override;
+  Qt::DropActions supportedDropActions() const override { return Qt::MoveAction; }
+  bool dropMimeData(const QMimeData* data, Qt::DropAction action, int row,
+                            int column, const QModelIndex& parent) override;
+  QModelIndex index(int row, int column,
+                            const QModelIndex& parent = QModelIndex()) const override;
+  QModelIndex parent(const QModelIndex& child) const override;
 
 public slots:
 

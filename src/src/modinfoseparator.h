@@ -10,56 +10,56 @@ class ModInfoSeparator : public ModInfoRegular
   friend class ModInfo;
 
 public:
-  virtual bool updateAvailable() const override { return false; }
-  virtual bool updateIgnored() const override { return false; }
-  virtual bool downgradeAvailable() const override { return false; }
-  virtual bool updateNXMInfo() override { return false; }
-  virtual bool isValid() const override { return true; }
+  bool updateAvailable() const override { return false; }
+  bool updateIgnored() const override { return false; }
+  bool downgradeAvailable() const override { return false; }
+  bool updateNXMInfo() override { return false; }
+  bool isValid() const override { return true; }
   // TODO: Fix renaming method to avoid priority reset
-  virtual bool setName(const QString& name);
+  bool setName(const QString& name) override;
 
-  virtual int nexusId() const override { return -1; }
-  virtual void setGameName(const QString& gameName) override {}
-  virtual void setNexusID(int /*modID*/) override {}
-  virtual void endorse(bool /*doEndorse*/) override {}
-  virtual void ignoreUpdate(bool /*ignore*/) override {}
-  virtual bool canBeUpdated() const override { return false; }
-  virtual QDateTime getExpires() const override { return QDateTime(); }
-  virtual bool canBeEnabled() const override { return false; }
-  virtual std::vector<QString> getIniTweaks() const override
+  int nexusId() const override { return -1; }
+  void setGameName(const QString& gameName) override {}
+  void setNexusID(int /*modID*/) override {}
+  void endorse(bool /*doEndorse*/) override {}
+  void ignoreUpdate(bool /*ignore*/) override {}
+  bool canBeUpdated() const override { return false; }
+  QDateTime getExpires() const override { return QDateTime(); }
+  bool canBeEnabled() const override { return false; }
+  std::vector<QString> getIniTweaks() const override
   {
     return std::vector<QString>();
   }
-  virtual std::vector<EFlag> getFlags() const override;
-  virtual int getHighlight() const override;
-  virtual QString getDescription() const override;
-  virtual QString name() const override;
-  virtual QString gameName() const override { return ""; }
-  virtual QString installationFile() const override { return ""; }
-  virtual QString repository() const override { return ""; }
-  virtual int getNexusFileStatus() const override { return 0; }
-  virtual void setNexusFileStatus(int) override {}
-  virtual QDateTime getLastNexusUpdate() const override { return QDateTime(); }
-  virtual void setLastNexusUpdate(QDateTime) override {}
-  virtual QDateTime getLastNexusQuery() const override { return QDateTime(); }
-  virtual void setLastNexusQuery(QDateTime) override {}
-  virtual QDateTime getNexusLastModified() const override { return QDateTime(); }
-  virtual void setNexusLastModified(QDateTime) override {}
-  virtual int getNexusCategory() const override { return 0; }
-  virtual void setNexusCategory(int) override {}
-  virtual QDateTime creationTime() const override { return QDateTime(); }
-  virtual QString getNexusDescription() const override { return QString(); }
-  virtual QString author() const override { return QString(); }
-  virtual void setAuthor(const QString&) override {}
-  virtual QString uploader() const override { return QString(); }
-  virtual void setUploader(const QString&) override {}
-  virtual QString uploaderUrl() const override { return QString(); }
-  virtual void setUploaderUrl(const QString&) override {}
-  virtual void addInstalledFile(int /*modId*/, int /*fileId*/) override {}
-  virtual bool isSeparator() const override { return true; }
+  std::vector<EFlag> getFlags() const override;
+  int getHighlight() const override;
+  QString getDescription() const override;
+  QString name() const override;
+  QString gameName() const override { return ""; }
+  QString installationFile() const override { return ""; }
+  QString repository() const override { return ""; }
+  int getNexusFileStatus() const override { return 0; }
+  void setNexusFileStatus(int) override {}
+  QDateTime getLastNexusUpdate() const override { return QDateTime(); }
+  void setLastNexusUpdate(QDateTime) override {}
+  QDateTime getLastNexusQuery() const override { return QDateTime(); }
+  void setLastNexusQuery(QDateTime) override {}
+  QDateTime getNexusLastModified() const override { return QDateTime(); }
+  void setNexusLastModified(QDateTime) override {}
+  int getNexusCategory() const override { return 0; }
+  void setNexusCategory(int) override {}
+  QDateTime creationTime() const override { return QDateTime(); }
+  QString getNexusDescription() const override { return QString(); }
+  QString author() const override { return QString(); }
+  void setAuthor(const QString&) override {}
+  QString uploader() const override { return QString(); }
+  void setUploader(const QString&) override {}
+  QString uploaderUrl() const override { return QString(); }
+  void setUploaderUrl(const QString&) override {}
+  void addInstalledFile(int /*modId*/, int /*fileId*/) override {}
+  bool isSeparator() const override { return true; }
 
 protected:
-  virtual bool doIsValid() const override { return true; }
+  bool doIsValid() const override { return true; }
 
 private:
   ModInfoSeparator(const QDir& path, OrganizerCore& core);

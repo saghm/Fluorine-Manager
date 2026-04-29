@@ -42,7 +42,7 @@ public:
   using QStyledItemDelegate::QStyledItemDelegate;
 
 protected:
-  void initStyleOption(QStyleOptionViewItem* o, const QModelIndex& i) const
+  void initStyleOption(QStyleOptionViewItem* o, const QModelIndex& i) const override
   {
     QStyledItemDelegate::initStyleOption(o, i);
     o->textElideMode = Qt::ElideLeft;

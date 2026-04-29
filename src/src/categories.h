@@ -91,7 +91,7 @@ public:
   {
     Category(int sortValue, int id, const QString name, int parentID,
              std::vector<NexusCategory> nexusCats)
-        : m_SortValue(sortValue), m_ID(id), m_Name(name), m_HasChildren(false),
+        : m_SortValue(sortValue), m_ID(id), m_Name(name), 
           m_ParentID(parentID), m_NexusCats(std::move(nexusCats))
     {}
 
@@ -113,7 +113,7 @@ public:
     int m_ParentID;
     QString m_Name;
     std::vector<NexusCategory> m_NexusCats;
-    bool m_HasChildren;
+    bool m_HasChildren{false};
   };
 
 public:

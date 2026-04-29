@@ -110,11 +110,11 @@ private:
 
     std::condition_variable cv;
     std::mutex mutex;
-    bool ready;
+    bool ready{false};
 
     std::atomic<bool> stop;
 
-    ThreadInfo() : busy(true), ready(false), stop(false)
+    ThreadInfo() : busy(true),  stop(false)
     {
       thread = MOShared::startSafeThread([&] {
         run();

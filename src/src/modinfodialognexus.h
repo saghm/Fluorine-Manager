@@ -34,7 +34,7 @@ class NexusTab : public ModInfoDialogTab
 public:
   NexusTab(ModInfoDialogTabContext cx);
 
-  ~NexusTab();
+  ~NexusTab() override;
 
   void clear() override;
   void update() override;
@@ -44,8 +44,8 @@ public:
 
 private:
   QMetaObject::Connection m_modConnection;
-  bool m_requestStarted;
-  bool m_loading;
+  bool m_requestStarted{false};
+  bool m_loading{false};
 
   void cleanup();
   void updateVersionColor();

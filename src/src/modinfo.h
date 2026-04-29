@@ -253,22 +253,22 @@ public:  // IModInterface implementations / Re-declaration
   /**
    * @return the name of the mod.
    */
-  virtual QString name() const = 0;
+  QString name() const override = 0;
 
   /**
    * @return the absolute path to the mod to be used in file system operations.
    */
-  virtual QString absolutePath() const = 0;
+  QString absolutePath() const override = 0;
 
   /**
    * @return the comments for this mod, if any.
    */
-  virtual QString comments() const = 0;
+  QString comments() const override = 0;
 
   /**
    * @return the notes for this mod, if any.
    */
-  virtual QString notes() const = 0;
+  QString notes() const override = 0;
 
   /**
    * @brief Retrieve the short name of the game associated with this mod. This may
@@ -277,41 +277,41 @@ public:  // IModInterface implementations / Re-declaration
    *
    * @return the name of the game associated with this mod.
    */
-  virtual QString gameName() const = 0;
+  QString gameName() const override = 0;
 
   /**
    * @return the name of the repository from which this mod was installed.
    */
-  virtual QString repository() const override { return ""; }
+  QString repository() const override { return ""; }
 
   /**
    * @return the nexus ID of this mod on the repository.
    */
-  virtual int nexusId() const = 0;
+  int nexusId() const override = 0;
 
   /**
    * @return the current version of this mod.
    */
-  virtual MOBase::VersionInfo version() const override { return m_Version; }
+  MOBase::VersionInfo version() const override { return m_Version; }
 
   /**
    * @return the newest version of thid mod (as known by MO2). If this matches
    * version(), then the mod is up-to-date.
    */
-  virtual MOBase::VersionInfo newestVersion() const = 0;
+  MOBase::VersionInfo newestVersion() const override = 0;
 
   /**
    * @return the ignored version of this mod (for update), or an invalid version if the
    * user did not ignore version for this mod.
    */
-  virtual MOBase::VersionInfo ignoredVersion() const = 0;
+  MOBase::VersionInfo ignoredVersion() const override = 0;
 
   /**
    * @return the absolute path to the file that was used to install this mod.
    */
-  virtual QString installationFile() const = 0;
+  QString installationFile() const override = 0;
 
-  virtual std::set<std::pair<int, int>> installedFiles() const = 0;
+  std::set<std::pair<int, int>> installedFiles() const override = 0;
 
   /**
    * @return true if this mod was marked as converted by the user.
@@ -319,7 +319,7 @@ public:  // IModInterface implementations / Re-declaration
    * @note When a mod is for a different game, a flag is shown to users to warn them,
    * but they can mark mods as converted to remove this flag.
    */
-  virtual bool converted() const = 0;
+  bool converted() const override = 0;
 
   /**
    * @return true if th is mod was marked as containing valid game data.
@@ -328,18 +328,18 @@ public:  // IModInterface implementations / Re-declaration
    * fail, in which case mods are incorrectly marked as 'not containing valid games
    * data'. Users can choose to mark these mods as valid to hide the warning / flag.
    */
-  virtual bool validated() const = 0;
+  bool validated() const override = 0;
 
   /**
    * @return the color of the 'Notes' column chosen by the user.
    */
-  virtual QColor color() const override { return QColor(); }
+  QColor color() const override { return QColor(); }
 
   /**
    * @return the URL of this mod, or an empty QString() if no URL is associated
    *     with this mod.
    */
-  virtual QString url() const override { return ""; }
+  QString url() const override { return ""; }
 
   /**
    * @return the ID of the primary category of this mod.
@@ -349,27 +349,27 @@ public:  // IModInterface implementations / Re-declaration
   /**
    * @return the list of categories this mod belongs to.
    */
-  virtual QStringList categories() const override;
+  QStringList categories() const override;
 
   /**
    * @return the author of the mod.
    */
-  virtual QString author() const = 0;
+  QString author() const override = 0;
 
   /**
    * @return the name of the uploader of this mod.
    */
-  virtual QString uploader() const = 0;
+  QString uploader() const override = 0;
 
   /**
    * @return the URL of the uploader of this mod's profile.
    */
-  virtual QString uploaderUrl() const = 0;
+  QString uploaderUrl() const override = 0;
 
   /**
    * @return the tracked state of this mod.
    */
-  virtual MOBase::TrackedState trackedState() const override
+  MOBase::TrackedState trackedState() const override
   {
     return MOBase::TrackedState::TRACKED_FALSE;
   }
@@ -377,7 +377,7 @@ public:  // IModInterface implementations / Re-declaration
   /**
    * @return the endorsement state of this mod.
    */
-  virtual MOBase::EndorsedState endorsedState() const override
+  MOBase::EndorsedState endorsedState() const override
   {
     return MOBase::EndorsedState::ENDORSED_NEVER;
   }
@@ -391,7 +391,7 @@ public:  // IModInterface implementations / Re-declaration
    *
    * @return a file tree representing the content of this mod.
    */
-  virtual std::shared_ptr<const MOBase::IFileTree> fileTree() const = 0;
+  std::shared_ptr<const MOBase::IFileTree> fileTree() const override = 0;
 
   /**
    * @return true if this object represents a regular mod.
@@ -401,22 +401,22 @@ public:  // IModInterface implementations / Re-declaration
   /**
    * @return true if this object represents the overwrite mod.
    */
-  virtual bool isOverwrite() const { return false; }
+  bool isOverwrite() const override { return false; }
 
   /**
    * @return true if this object represents a backup.
    */
-  virtual bool isBackup() const { return false; }
+  bool isBackup() const override { return false; }
 
   /**
    * @return true if this object represents a separator.
    */
-  virtual bool isSeparator() const { return false; }
+  bool isSeparator() const override { return false; }
 
   /**
    * @return true if this object represents a foreign mod.
    */
-  virtual bool isForeign() const { return false; }
+  bool isForeign() const override { return false; }
 
 public:  // Mutable operations:
   /**
@@ -424,35 +424,35 @@ public:  // Mutable operations:
    *
    * @param version New version of the mod.
    */
-  virtual void setVersion(const MOBase::VersionInfo& version) override;
+  void setVersion(const MOBase::VersionInfo& version) override;
 
   /**
    * @brief Sets the installation file for this mod.
    *
    * @param fileName archive file name.
    */
-  virtual void setInstallationFile(const QString& fileName) = 0;
+  void setInstallationFile(const QString& fileName) override = 0;
 
   /**
    * @brief Sets or changes the latest known version of this mod.
    *
    * @param version Newest known version of the mod.
    */
-  virtual void setNewestVersion(const MOBase::VersionInfo& version) = 0;
+  void setNewestVersion(const MOBase::VersionInfo& version) override = 0;
 
   /**
    * @brief Sets endorsement state of the mod.
    *
    * @param endorsed New endorsement state.
    */
-  virtual void setIsEndorsed(bool endorsed) = 0;
+  void setIsEndorsed(bool endorsed) override = 0;
 
   /**
    * @brief Sets the mod id on nexus for this mod.
    *
    * @param nexusID The new Nexus id to set.
    */
-  virtual void setNexusID(int nexusID) = 0;
+  void setNexusID(int nexusID) override = 0;
 
   /**
    * @brief Sets the category id from a nexus category id. Conversion to MO id happens
@@ -462,7 +462,7 @@ public:  // Mutable operations:
    *
    * @note If a mapping is not possible, the category is set to the default value.
    */
-  virtual void addNexusCategory(int categoryID) = 0;
+  void addNexusCategory(int categoryID) override = 0;
 
   /**
    * @brief Assigns a category to the mod. If the named category does not exist it is
@@ -470,7 +470,7 @@ public:  // Mutable operations:
    *
    * @param categoryName Name of the new category.
    */
-  virtual void addCategory(const QString& categoryName) override;
+  void addCategory(const QString& categoryName) override;
 
   /**
    * @brief Unassigns a category from this mod.
@@ -480,14 +480,14 @@ public:  // Mutable operations:
    * @return true if the category was removed successfully, false if no such category
    *    was assigned.
    */
-  virtual bool removeCategory(const QString& categoryName) override;
+  bool removeCategory(const QString& categoryName) override;
 
   /**
    * @brief Sets or changes the source game of this mod.
    *
    * @param gameName The source game short name.
    */
-  virtual void setGameName(const QString& gameName) = 0;
+  void setGameName(const QString& gameName) override = 0;
 
   /**
    * @brief Sets the name of this mod.
@@ -1010,7 +1010,7 @@ protected:
   // the index of the mod in s_Collection, only valid after updateIndices()
   int m_Index;
 
-  int m_PrimaryCategory;
+  int m_PrimaryCategory{-1};
   std::set<int> m_Categories;
   MOBase::VersionInfo m_Version;
   bool m_PluginSelected = false;

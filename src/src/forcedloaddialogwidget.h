@@ -16,7 +16,7 @@ class ForcedLoadDialogWidget : public QWidget
 public:
   explicit ForcedLoadDialogWidget(const MOBase::IPluginGame* game,
                                   QWidget* parent = nullptr);
-  ~ForcedLoadDialogWidget();
+  ~ForcedLoadDialogWidget() override;
 
   bool getEnabled();
   bool getForced();

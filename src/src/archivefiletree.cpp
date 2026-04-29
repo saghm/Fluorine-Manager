@@ -43,7 +43,7 @@ public:
       : FileTreeEntry(parent, name), m_Index(index)
   {}
 
-  virtual std::shared_ptr<FileTreeEntry> clone() const override
+  std::shared_ptr<FileTreeEntry> clone() const override
   {
     return std::make_shared<ArchiveFileEntry>(nullptr, name(), m_Index);
   }
@@ -65,20 +65,20 @@ public
     :  // Public for make_shared (but not accessible by other since not exposed in .h):
   ArchiveFileTreeImpl(std::shared_ptr<const IFileTree> parent, QString name, int index,
                       std::vector<File> files)
-      : FileTreeEntry(parent, name), ArchiveFileEntry(parent, name, index), IFileTree(),
+      : FileTreeEntry(parent, name), ArchiveFileEntry(parent, name, index), 
         m_Files(std::move(files))
   {}
 
 public:  // Override to avoid VS warnings:
-  virtual std::shared_ptr<IFileTree> astree() override { return IFileTree::astree(); }
+  std::shared_ptr<IFileTree> astree() override { return IFileTree::astree(); }
 
-  virtual std::shared_ptr<const IFileTree> astree() const override
+  std::shared_ptr<const IFileTree> astree() const override
   {
     return IFileTree::astree();
   }
 
 protected:
-  virtual std::shared_ptr<FileTreeEntry> clone() const override
+  std::shared_ptr<FileTreeEntry> clone() const override
   {
     return IFileTree::clone();
   }
@@ -135,19 +135,19 @@ protected:
    * -1.
    *
    */
-  virtual std::shared_ptr<IFileTree>
+  std::shared_ptr<IFileTree>
   makeDirectory(std::shared_ptr<const IFileTree> parent, QString name) const override
   {
     return std::make_shared<ArchiveFileTreeImpl>(parent, name, -1, std::vector<File>{});
   }
 
-  virtual std::shared_ptr<FileTreeEntry>
+  std::shared_ptr<FileTreeEntry>
   makeFile(std::shared_ptr<const IFileTree> parent, QString name) const override
   {
     return std::make_shared<ArchiveFileEntry>(parent, name, -1);
   }
 
-  virtual bool
+  bool
   doPopulate(std::shared_ptr<const IFileTree> parent,
              std::vector<std::shared_ptr<FileTreeEntry>>& entries) const override
   {
@@ -215,7 +215,7 @@ protected:
     return false;
   }
 
-  virtual std::shared_ptr<IFileTree> doClone() const override
+  std::shared_ptr<IFileTree> doClone() const override
   {
     return std::make_shared<ArchiveFileTreeImpl>(nullptr, name(), m_Index, m_Files);
   }

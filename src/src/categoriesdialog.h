@@ -38,8 +38,8 @@ class CategoriesDialog : public MOBase::TutorableDialog
   Q_OBJECT
 
 public:
-  explicit CategoriesDialog(QWidget* parent = 0);
-  ~CategoriesDialog();
+  explicit CategoriesDialog(QWidget* parent = nullptr);
+  ~CategoriesDialog() override;
 
   // also saves and restores geometry
   //

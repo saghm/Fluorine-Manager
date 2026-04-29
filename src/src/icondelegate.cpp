@@ -29,8 +29,8 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 using namespace MOBase;
 
 IconDelegate::IconDelegate(QTreeView* view, int column, int compactSize)
-    : QStyledItemDelegate(view), m_column(column), m_compactSize(compactSize),
-      m_compact(false)
+    : QStyledItemDelegate(view), m_column(column), m_compactSize(compactSize)
+      
 {
   if (view) {
     connect(view->header(), &QHeaderView::sectionResized,
@@ -48,7 +48,7 @@ void IconDelegate::paintIcons(QPainter* painter, const QStyleOptionViewItem& opt
   int x = 4;
   painter->save();
 
-  int iconWidth = icons.size() > 0 ? ((option.rect.width() / icons.size()) - 4) : 16;
+  int iconWidth = !icons.empty() ? ((option.rect.width() / icons.size()) - 4) : 16;
   // Clamp: narrow content columns can make the per-icon slot 0 or negative,
   // which causes QIcon::pixmap() to return null and log "failed to load icon"
   // spuriously.  Keep at least 8px so the pixmap call always succeeds; excess

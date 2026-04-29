@@ -46,7 +46,7 @@ public:
 
   explicit MessageDialog(const QString& text, QWidget* reference);
 
-  ~MessageDialog();
+  ~MessageDialog() override;
 
   /**
    * factory function for message dialogs. This can be used as a fire-and-forget. The
@@ -64,7 +64,7 @@ public:
                           bool bringToFront = true);
 
 protected:
-  virtual void resizeEvent(QResizeEvent* event);
+  void resizeEvent(QResizeEvent* event) override;
 
 private:
   Ui::MessageDialog* ui;

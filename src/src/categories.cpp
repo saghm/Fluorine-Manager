@@ -40,7 +40,7 @@ QString CategoryFactory::categoriesFilePath()
   return qApp->property("dataPath").toString() + "/categories.dat";
 }
 
-CategoryFactory::CategoryFactory() : QObject()
+CategoryFactory::CategoryFactory()  
 {
   atexit(&cleanup);
 }
@@ -241,7 +241,7 @@ int CategoryFactory::addCategory(const QString& name,
                                  int parentID)
 {
   int id = 1;
-  while (m_IDMap.find(id) != m_IDMap.end()) {
+  while (m_IDMap.contains(id)) {
     ++id;
   }
   addCategory(id, name, nexusCats, parentID);
@@ -360,7 +360,7 @@ int CategoryFactory::getParentID(unsigned int index) const
 
 bool CategoryFactory::categoryExists(int id) const
 {
-  return m_IDMap.find(id) != m_IDMap.end();
+  return m_IDMap.contains(id);
 }
 
 bool CategoryFactory::isDescendantOf(int id, int parentID) const
@@ -508,7 +508,7 @@ unsigned int CategoryFactory::resolveNexusID(int nexusID) const
 {
   auto result = m_NexusMap.find(nexusID);
   if (result != m_NexusMap.end()) {
-    if (m_IDMap.count(result->second.categoryID())) {
+    if (m_IDMap.contains(result->second.categoryID())) {
       log::debug(tr("nexus category id {0} maps to internal {1}"), nexusID,
                  m_IDMap.at(result->second.categoryID()));
       return m_IDMap.at(result->second.categoryID());

@@ -155,7 +155,7 @@ private:
   std::unique_ptr<MOShared::DirectoryEntry> m_Root;
   QMutex m_RefreshLock;
   std::size_t m_threadCount;
-  std::size_t m_lastFileCount;
+  std::size_t m_lastFileCount{0};
 
   void stealModFilesIntoStructure(MOShared::DirectoryEntry* directoryStructure,
                                   const QString& modName, int priority,
@@ -169,7 +169,7 @@ class DirectoryRefreshProgress : public QObject
 
 public:
   DirectoryRefreshProgress(DirectoryRefresher* r)
-      : QObject(r), m_refresher(r), m_modCount(0), m_modDone(0), m_finished(false)
+      : QObject(r), m_refresher(r),  m_modDone(0) 
   {}
 
   void start(std::size_t modCount)
@@ -203,9 +203,9 @@ public:
 
 private:
   DirectoryRefresher* m_refresher;
-  std::size_t m_modCount;
+  std::size_t m_modCount{0};
   std::atomic<std::size_t> m_modDone;
-  bool m_finished;
+  bool m_finished{false};
 };
 
 #endif  // DIRECTORYREFRESHER_H

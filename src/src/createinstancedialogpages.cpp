@@ -75,8 +75,8 @@ void PlaceholderLabel::setVisible(bool b)
 }
 
 Page::Page(CreateInstanceDialog& dlg)
-    : ui(dlg.getUI()), m_dlg(dlg), m_pc(dlg.pluginContainer()), m_skip(false),
-      m_firstActivation(true)
+    : ui(dlg.getUI()), m_dlg(dlg), m_pc(dlg.pluginContainer())
+      
 {}
 
 bool Page::ready() const
@@ -183,7 +183,7 @@ bool IntroPage::doSkip() const
 }
 
 TypePage::TypePage(CreateInstanceDialog& dlg)
-    : Page(dlg), m_type(CreateInstanceDialog::NoType)
+    : Page(dlg) 
 {
   // replace placeholders with actual paths
   ui->createGlobal->setDescription(ui->createGlobal->description().arg(
@@ -252,7 +252,7 @@ GamePage::Game::Game(IPluginGame* g) : game(g), installed(g->isInstalled())
   }
 }
 
-GamePage::GamePage(CreateInstanceDialog& dlg) : Page(dlg), m_selection(nullptr)
+GamePage::GamePage(CreateInstanceDialog& dlg) : Page(dlg) 
 {
   createGames();
   fillList();
@@ -770,7 +770,7 @@ IPluginGame* GamePage::confirmOtherGame(const QString& path, IPluginGame* select
 }
 
 VariantsPage::VariantsPage(CreateInstanceDialog& dlg)
-    : Page(dlg), m_previousGame(nullptr)
+    : Page(dlg) 
 {}
 
 bool VariantsPage::ready() const
@@ -868,7 +868,7 @@ void VariantsPage::fillList()
 }
 
 NamePage::NamePage(CreateInstanceDialog& dlg)
-    : Page(dlg), m_modified(false), m_okay(false), m_label(ui->instanceNameLabel),
+    : Page(dlg),  m_label(ui->instanceNameLabel),
       m_exists(ui->instanceNameExists), m_invalid(ui->instanceNameInvalid)
 {
   QObject::connect(ui->instanceName, &QLineEdit::textEdited, [&] {
@@ -990,10 +990,10 @@ CreateInstanceDialog::ProfileSettings ProfilePage::profileSettings() const
 }
 
 PathsPage::PathsPage(CreateInstanceDialog& dlg)
-    : Page(dlg), m_lastType(CreateInstanceDialog::NoType), m_label(ui->pathsLabel),
+    : Page(dlg),  m_label(ui->pathsLabel),
       m_simpleExists(ui->locationExists), m_simpleInvalid(ui->locationInvalid),
       m_advancedExists(ui->advancedDirExists),
-      m_advancedInvalid(ui->advancedDirInvalid), m_okay(false)
+      m_advancedInvalid(ui->advancedDirInvalid) 
 {
   auto setEdit = [&](QLineEdit* e) {
     QObject::connect(e, &QLineEdit::textEdited, [&] {
@@ -1245,7 +1245,7 @@ bool PathsPage::checkPath(QString path, PlaceholderLabel& existsLabel,
   return okay;
 }
 
-NexusPage::NexusPage(CreateInstanceDialog& dlg) : Page(dlg), m_skip(false)
+NexusPage::NexusPage(CreateInstanceDialog& dlg) : Page(dlg) 
 {
   m_connectionUI.reset(new NexusConnectionUI(&m_dlg, dlg.settings(), ui->nexusConnect,
                                              nullptr, ui->nexusManual, ui->nexusLog));

@@ -58,8 +58,8 @@ public:
    * @param parent parent widget
    **/
   explicit ProfilesDialog(const QString& profileName, OrganizerCore& organizer,
-                          QWidget* parent = 0);
-  ~ProfilesDialog();
+                          QWidget* parent = nullptr);
+  ~ProfilesDialog() override;
 
   // also saves and restores geometry
   //
@@ -94,7 +94,7 @@ signals:
   void profileRemoved(QString const& profileName);
 
 protected:
-  virtual void showEvent(QShowEvent* event);
+  void showEvent(QShowEvent* event) override;
 
 private slots:
   void on_localIniFilesBox_stateChanged(int state);

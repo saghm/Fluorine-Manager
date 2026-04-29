@@ -16,7 +16,7 @@ bool isValidModID(int id)
 }
 
 NexusTab::NexusTab(ModInfoDialogTabContext cx)
-    : ModInfoDialogTab(std::move(cx)), m_requestStarted(false), m_loading(false)
+    : ModInfoDialogTab(std::move(cx)) 
 {
   ui->modID->setValidator(new QIntValidator(ui->modID));
   ui->endorse->setVisible(core().settings().nexus().endorsementIntegration());
@@ -101,7 +101,7 @@ void NexusTab::update()
   ui->sourceGame->addItem(core().managedGame()->gameName(),
                           core().managedGame()->gameShortName());
 
-  if (core().managedGame()->validShortNames().size() == 0) {
+  if (core().managedGame()->validShortNames().empty()) {
     ui->sourceGame->setDisabled(true);
   } else {
     for (auto game : plugin().plugins<MOBase::IPluginGame>()) {

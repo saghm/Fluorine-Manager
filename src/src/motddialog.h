@@ -33,8 +33,8 @@ class MotDDialog : public QDialog
   Q_OBJECT
 
 public:
-  explicit MotDDialog(const QString& message, QWidget* parent = 0);
-  ~MotDDialog();
+  explicit MotDDialog(const QString& message, QWidget* parent = nullptr);
+  ~MotDDialog() override;
 
 private slots:
   void on_okButton_clicked();

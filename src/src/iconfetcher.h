@@ -45,7 +45,7 @@ private:
     bool m_queueAvailable = false;
   };
 
-  const int m_iconSize;
+  const int m_iconSize{16};
   QFileIconProvider m_provider;
   std::thread m_thread;
   std::atomic<bool> m_stop;

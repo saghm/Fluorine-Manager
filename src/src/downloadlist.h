@@ -51,7 +51,7 @@ public:
   };
 
 public:
-  explicit DownloadList(OrganizerCore& core, QObject* parent = 0);
+  explicit DownloadList(OrganizerCore& core, QObject* parent = nullptr);
 
   /**
    * @brief retrieve the number of rows to display. Invoked by Qt
@@ -59,15 +59,15 @@ public:
    * @param parent not relevant for this implementation
    * @return number of rows to display
    **/
-  virtual int rowCount(const QModelIndex& parent = QModelIndex()) const;
-  virtual int columnCount(const QModelIndex& parent) const;
+  int rowCount(const QModelIndex& parent = QModelIndex()) const override;
+  int columnCount(const QModelIndex& parent) const override;
 
-  QModelIndex index(int row, int column, const QModelIndex& parent) const;
-  QModelIndex parent(const QModelIndex& child) const;
+  QModelIndex index(int row, int column, const QModelIndex& parent) const override;
+  QModelIndex parent(const QModelIndex& child) const override;
   Qt::ItemFlags flags(const QModelIndex& idx) const override;
   QMimeData* mimeData(const QModelIndexList& indexes) const override;
 
-  virtual QVariant headerData(int section, Qt::Orientation orientation, int role) const;
+  QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
 
   /**
    * @brief retrieve the data to display in a specific row. Invoked by Qt
@@ -77,7 +77,7 @@ public:
    * @return this implementation only returns the row, the QItemDelegate implementation
    *is expected to fetch its information from the DownloadManager
    **/
-  virtual QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const;
+  QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
 
   // used in DownloadsTab as the sorting predicate for the filter widget
   //

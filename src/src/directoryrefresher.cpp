@@ -162,7 +162,7 @@ void dumpStats(std::vector<DirectoryStats>& stats)
 }
 
 DirectoryRefresher::DirectoryRefresher(OrganizerCore* core, std::size_t threadCount)
-    : m_Core(*core), m_threadCount(threadCount), m_lastFileCount(0)
+    : m_Core(*core), m_threadCount(threadCount) 
 {}
 
 DirectoryEntry* DirectoryRefresher::stealDirectoryStructure()
@@ -290,7 +290,7 @@ void DirectoryRefresher::addModFilesToStructure(DirectoryEntry* directoryStructu
   std::wstring directoryW = ToWString(QDir::toNativeSeparators(directory));
   DirectoryStats dummy;
 
-  if (stealFiles.length() > 0) {
+  if (!stealFiles.empty()) {
     stealModFilesIntoStructure(directoryStructure, modName, priority, directory,
                                stealFiles);
   } else {
@@ -308,7 +308,7 @@ void DirectoryRefresher::addModToStructure(DirectoryEntry* directoryStructure,
 
   DirectoryStats dummy;
 
-  if (stealFiles.length() > 0) {
+  if (!stealFiles.empty()) {
     stealModFilesIntoStructure(directoryStructure, modName, priority, directory,
                                stealFiles);
   } else {
@@ -415,7 +415,7 @@ void DirectoryRefresher::addMultipleModsFilesToStructure(
     }
 
     try {
-      if (e.stealFiles.length() > 0) {
+      if (!e.stealFiles.empty()) {
         stealModFilesIntoStructure(directoryStructure, e.modName, prio, e.absolutePath,
                                    e.stealFiles);
 

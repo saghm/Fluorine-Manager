@@ -20,7 +20,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "ui_listdialog.h"
 
 ListDialog::ListDialog(QWidget* parent)
-    : QDialog(parent), ui(new Ui::ListDialog), m_Choices()
+    : QDialog(parent), ui(new Ui::ListDialog) 
 {
   ui->setupUi(this);
   ui->filterEdit->setFocus();
@@ -47,7 +47,7 @@ void ListDialog::setChoices(QStringList choices)
 
 QString ListDialog::getChoice() const
 {
-  if (ui->choiceList->selectedItems().length()) {
+  if (!ui->choiceList->selectedItems().empty()) {
     return ui->choiceList->currentItem()->text();
   } else {
     return "";

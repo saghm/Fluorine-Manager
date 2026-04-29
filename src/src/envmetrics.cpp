@@ -9,7 +9,7 @@ namespace env
 
 Display::Display(QString adapter, QString monitorDevice, bool primary)
     : m_adapter(std::move(adapter)), m_monitorDevice(std::move(monitorDevice)),
-      m_primary(primary), m_resX(0), m_resY(0), m_dpi(0), m_refreshRate(0)
+      m_primary(primary) 
 {
   getSettings();
 }

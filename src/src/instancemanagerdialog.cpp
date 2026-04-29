@@ -159,8 +159,8 @@ QString getInstanceName(QWidget* parent, const QString& title, const QString& mo
 InstanceManagerDialog::~InstanceManagerDialog() = default;
 
 InstanceManagerDialog::InstanceManagerDialog(PluginContainer& pc, QWidget* parent)
-    : QDialog(parent), ui(new Ui::InstanceManagerDialog), m_pc(pc), m_model(nullptr),
-      m_restartOnSelect(true)
+    : QDialog(parent), ui(new Ui::InstanceManagerDialog), m_pc(pc)
+      
 {
   ui->setupUi(this);
 

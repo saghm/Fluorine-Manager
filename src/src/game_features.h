@@ -35,7 +35,7 @@ public:
    */
   GameFeatures(OrganizerCore* core, PluginContainer* plugins);
 
-  ~GameFeatures();
+  ~GameFeatures() override;
 
   // register game features
   //

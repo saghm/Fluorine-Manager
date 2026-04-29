@@ -118,8 +118,8 @@ protected:
   Ui::CreateInstanceDialog* ui;
   CreateInstanceDialog& m_dlg;
   const PluginContainer& m_pc;
-  bool m_skip;
-  bool m_firstActivation;
+  bool m_skip{false};
+  bool m_firstActivation{true};
 
   // called every time a page is shown in the screen; `firstTime` is true for
   // first activation
@@ -177,7 +177,7 @@ protected:
   void doActivated(bool firstTime) override;
 
 private:
-  CreateInstanceDialog::Types m_type;
+  CreateInstanceDialog::Types m_type{CreateInstanceDialog::NoType};
 };
 
 // game plugin page, displays a list of command buttons for each game, along
@@ -267,7 +267,7 @@ private:
   std::vector<std::unique_ptr<Game>> m_games;
 
   // current selection
-  Game* m_selection;
+  Game* m_selection{nullptr};
 
   // filter
   MOBase::FilterWidget m_filter;
@@ -393,7 +393,7 @@ protected:
 
 private:
   // game that was selected the last time this page was active
-  MOBase::IPluginGame* m_previousGame;
+  MOBase::IPluginGame* m_previousGame{nullptr};
 
   // buttons
   std::vector<QCommandLinkButton*> m_buttons;
@@ -447,10 +447,10 @@ private:
 
   // whether the user has modified the text, prevents auto generation when the
   // selected game changes
-  bool m_modified;
+  bool m_modified{false};
 
   // whether the instance name is valid
-  bool m_okay;
+  bool m_okay{false};
 
   // called when the user modifies the textbox, remember that it has changed and
   // calls verify()
@@ -496,7 +496,7 @@ private:
   QString m_lastInstanceName;
 
   // instance type the last time this page was active
-  CreateInstanceDialog::Types m_lastType;
+  CreateInstanceDialog::Types m_lastType{CreateInstanceDialog::NoType};
 
   // help label, replaces %1 by the game name
   PlaceholderLabel m_label;
@@ -510,7 +510,7 @@ private:
   PlaceholderLabel m_advancedExists, m_advancedInvalid;
 
   // whether the paths are valid
-  bool m_okay;
+  bool m_okay{false};
 
   // called when the user changes any textbox, checks the path and updates nav
   //
@@ -601,7 +601,7 @@ private:
   // set to true only if the api key was detected when opening the dialog, or
   // going back and forth would skip the page after the process is completed,
   // which would be unexpected
-  bool m_skip;
+  bool m_skip{false};
 };
 
 // shows a text log of all the creation parameters

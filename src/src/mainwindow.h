@@ -125,8 +125,8 @@ class MainWindow : public QMainWindow, public IUserInterface
 
 public:
   explicit MainWindow(Settings& settings, OrganizerCore& organizerCore,
-                      PluginContainer& pluginContainer, QWidget* parent = 0);
-  ~MainWindow();
+                      PluginContainer& pluginContainer, QWidget* parent = nullptr);
+  ~MainWindow() override;
 
   void processUpdates();
 
@@ -134,11 +134,11 @@ public:
 
   bool addProfile();
   void updateBSAList(const QStringList& defaultArchives,
-                     const QStringList& activeArchives);
+                     const QStringList& activeArchives) override;
 
   void saveArchiveList();
 
-  void installTranslator(const QString& name);
+  void installTranslator(const QString& name) override;
 
   void displayModInformation(ModInfo::Ptr modInfo, unsigned int modIndex,
                              ModInfoTabIDs tabID) override;
@@ -146,10 +146,10 @@ public:
   bool canExit();
   void onBeforeClose();
 
-  virtual bool closeWindow();
-  virtual void setWindowEnabled(bool enabled);
+  bool closeWindow() override;
+  void setWindowEnabled(bool enabled) override;
 
-  virtual MOBase::DelayedFileWriterBase& archivesWriter() override
+  MOBase::DelayedFileWriterBase& archivesWriter() override
   {
     return m_ArchiveListWriter;
   }
@@ -199,7 +199,7 @@ private:
   void setToolbarSize(const QSize& s);
   void setToolbarButtonStyle(Qt::ToolButtonStyle s);
 
-  void registerModPage(MOBase::IPluginModPage* modPage);
+  void registerModPage(MOBase::IPluginModPage* modPage) override;
   bool registerNexusPage(const QString& gameName);
   void registerPluginTool(MOBase::IPluginTool* tool, QString name = QString(),
                           QMenu* menu = nullptr);
@@ -259,12 +259,12 @@ private:
 private:
   Ui::MainWindow* ui;
 
-  bool m_WasVisible;
-  bool m_FirstPaint;
+  bool m_WasVisible{false};
+  bool m_FirstPaint{true};
 
   // last separator on the toolbar, used to add spacer for right-alignment and
   // as an insert point for executables
-  QAction* m_linksSeparator;
+  QAction* m_linksSeparator{nullptr};
 
   MOBase::TutorialControl m_Tutorial;
 
@@ -272,14 +272,14 @@ private:
   std::unique_ptr<DownloadsTab> m_DownloadsTab;
   std::unique_ptr<SavesTab> m_SavesTab;
 
-  int m_OldProfileIndex;
+  int m_OldProfileIndex{-1};
 
   std::vector<QString>
       m_ModNameList;  // the mod-list to go with the directory structure
 
   QStringList m_DefaultArchives;
 
-  int m_OldExecutableIndex;
+  int m_OldExecutableIndex{-1};
 
   QAction* m_ContextAction;
 
@@ -305,11 +305,11 @@ private:
 
   MOBase::DelayedFileWriter m_ArchiveListWriter;
 
-  QAction* m_LinkToolbar;
-  QAction* m_LinkDesktop;
-  QAction* m_LinkStartMenu;
+  QAction* m_LinkToolbar{nullptr};
+  QAction* m_LinkDesktop{nullptr};
+  QAction* m_LinkStartMenu{nullptr};
 
-  SystemTrayManager* m_SystemTrayManager;
+  SystemTrayManager* m_SystemTrayManager{nullptr};
 
   // icon set by the stylesheet, used to remember its original appearance
   // when painting the count

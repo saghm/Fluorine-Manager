@@ -32,7 +32,7 @@ public:
   };
 
   CriteriaItem(FilterList* list, QString name, CriteriaType type, int id)
-      : QTreeWidgetItem({"", name}), m_list(list), m_state(Inactive)
+      : QTreeWidgetItem({"", name}), m_list(list) 
   {
     setData(0, Qt::ToolTipRole, name);
     setData(0, TypeRole, type);
@@ -75,7 +75,7 @@ public:
     setState(s);
   }
 
-  QVariant data(int column, int role) const
+  QVariant data(int column, int role) const override
   {
     if (role == StateRole) {
       return m_state;
@@ -83,7 +83,7 @@ public:
     return QTreeWidgetItem::data(column, role);
   }
 
-  void setData(int column, int role, const QVariant& value)
+  void setData(int column, int role, const QVariant& value) override
   {
     if (role == StateRole) {
       setState(static_cast<States>(value.toInt()));
@@ -94,7 +94,7 @@ public:
 
 private:
   FilterList* m_list;
-  States m_state;
+  States m_state{Inactive};
 
   void updateState()
   {
@@ -279,7 +279,7 @@ void FilterList::addCategoryCriteria(QTreeWidgetItem* root,
   for (unsigned int i = 1; i < count; ++i) {
     if (m_factory.getParentID(i) == targetID) {
       int categoryID = m_factory.getCategoryID(i);
-      if (categoriesUsed.find(categoryID) != categoriesUsed.end()) {
+      if (categoriesUsed.contains(categoryID)) {
         QTreeWidgetItem* item =
             addCriteriaItem(root, m_factory.getCategoryName(i), categoryID,
                             ModListSortProxy::TypeCategory);

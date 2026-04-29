@@ -75,8 +75,8 @@ QString storeMetaPath(const QString& value)
 }  // namespace
 
 InstallationResult::InstallationResult(IPluginInstaller::EInstallResult result)
-    : m_result(result), m_name(), m_iniTweaks(false), m_backup(false), m_merged(false),
-      m_replaced(false)
+    : m_result(result)
+      
 {}
 
 template <typename T>
@@ -92,7 +92,7 @@ static T resolveFunction(QLibrary& lib, const char* name)
   return temp;
 }
 
-InstallationManager::InstallationManager() : m_ParentWidget(nullptr), m_IsRunning(false)
+InstallationManager::InstallationManager()  
 {
   m_ArchiveHandler = CreateArchive();
   if (!m_ArchiveHandler->isValid()) {
@@ -835,7 +835,7 @@ InstallationResult InstallationManager::install(const QString& fileName,
              ((filesTree == nullptr) &&
               installerCustom->isArchiveSupported(fileName)))) {
           std::set<QString> installerExt = installerCustom->supportedExtensions();
-          if (installerExt.find(fileInfo.suffix()) != installerExt.end()) {
+          if (installerExt.contains(fileInfo.suffix())) {
             installResult.m_result =
                 installerCustom->install(modName, gameName, fileName, version, modID);
             unsigned int idx = ModInfo::getIndex(modName);

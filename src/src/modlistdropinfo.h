@@ -77,7 +77,7 @@ private:
 private:
   // rows for drag&drop between views
   std::vector<int> m_rows;
-  int m_download;  // -1 if invalid
+  int m_download{-1};  // -1 if invalid
 
   // local URLs from the data (relative path + origin name)
   std::vector<RelativeUrl> m_localUrls;

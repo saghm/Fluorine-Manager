@@ -119,7 +119,7 @@ public:
   std::vector<Content> getAllContents() const override { return m_allContents; }
 
   std::vector<int>
-  getContentsFor(std::shared_ptr<const MOBase::IFileTree> fileTree) const
+  getContentsFor(std::shared_ptr<const MOBase::IFileTree> fileTree) const override
   {
     std::vector<int> contentsFor;
     for (const auto& modDataContent : m_modDataContents) {

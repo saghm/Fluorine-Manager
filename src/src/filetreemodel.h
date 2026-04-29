@@ -83,15 +83,15 @@ private:
   using DirectoryIterator = std::vector<MOShared::DirectoryEntry*>::const_iterator;
 
   OrganizerCore& m_core;
-  bool m_enabled;
+  bool m_enabled{true};
   mutable FileTreeItem::Ptr m_root;
   Flags m_flags;
   mutable IconFetcher m_iconFetcher;
   mutable std::vector<QModelIndex> m_iconPending;
   mutable QTimer m_iconPendingTimer;
   SortInfo m_sort;
-  bool m_fullyLoaded;
-  bool m_sortingEnabled;
+  bool m_fullyLoaded{false};
+  bool m_sortingEnabled{true};
 
   // see top of filetreemodel.cpp
   std::vector<FileTreeItem*> m_removeItems;

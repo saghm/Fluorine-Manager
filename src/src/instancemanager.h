@@ -193,7 +193,7 @@ private:
   QString m_dir;
   bool m_portable;
   QString m_gameName, m_gameDir, m_gameVariant, m_baseDir;
-  MOBase::IPluginGame* m_plugin;
+  MOBase::IPluginGame* m_plugin{nullptr};
   QString m_profile;
 
   // figures out the game plugin for this instance

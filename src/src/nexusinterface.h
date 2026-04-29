@@ -67,7 +67,7 @@ public:
    * @param userData user data to be returned with the result
    * @param url the url to request from
    **/
-  virtual void requestDescription(QString gameName, int modID, QVariant userData);
+  void requestDescription(QString gameName, int modID, QVariant userData) override;
 
   /**
    * @brief request a list of the files belonging to a mod
@@ -75,7 +75,7 @@ public:
    * @param modID id of the mod caller is interested in
    * @param userData user data to be returned with the result
    **/
-  virtual void requestFiles(QString gameName, int modID, QVariant userData);
+  void requestFiles(QString gameName, int modID, QVariant userData) override;
 
   /**
    * @brief request info about a single file of a mod
@@ -84,8 +84,8 @@ public:
    * @param fileID id of the file the caller is interested in
    * @param userData user data to be returned with the result
    **/
-  virtual void requestFileInfo(QString gameName, int modID, int fileID,
-                               QVariant userData);
+  void requestFileInfo(QString gameName, int modID, int fileID,
+                               QVariant userData) override;
 
   /**
    * @brief request the download url of a file
@@ -94,16 +94,16 @@ public:
    * @param fileID id of the file the caller is interested in
    * @param userData user data to be returned with the result
    **/
-  virtual void requestDownloadURL(QString gameName, int modID, int fileID,
-                                  QVariant userData);
+  void requestDownloadURL(QString gameName, int modID, int fileID,
+                                  QVariant userData) override;
 
   /**
    * @brief requestToggleEndorsement
    * @param modID id of the mod caller is interested in
    * @param userData user data to be returned with the result
    */
-  virtual void requestToggleEndorsement(QString gameName, int modID, QString modVersion,
-                                        bool endorse, QVariant userData);
+  void requestToggleEndorsement(QString gameName, int modID, QString modVersion,
+                                        bool endorse, QVariant userData) override;
 
   /**
    * @brief requestToggleTracking
@@ -189,7 +189,7 @@ public:
   static APILimits parseLimits(const QList<QNetworkReply::RawHeaderPair>& headers);
 
   NexusInterface(Settings* s);
-  ~NexusInterface();
+  ~NexusInterface() override;
 
   static NexusInterface& instance();
 

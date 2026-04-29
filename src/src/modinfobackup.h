@@ -11,44 +11,44 @@ class ModInfoBackup : public ModInfoRegular
   friend class ModInfo;
 
 public:
-  virtual bool updateAvailable() const override { return false; }
-  virtual bool updateIgnored() const override { return false; }
-  virtual bool downgradeAvailable() const override { return false; }
-  virtual bool updateNXMInfo() override { return false; }
-  virtual void setGameName(const QString& gameName) override {}
-  virtual void setNexusID(int) override {}
-  virtual void endorse(bool) override {}
-  virtual void ignoreUpdate(bool) override {}
-  virtual bool alwaysDisabled() const override { return true; }
-  virtual bool canBeUpdated() const override { return false; }
-  virtual QDateTime getExpires() const override { return QDateTime(); }
-  virtual bool canBeEnabled() const override { return false; }
-  virtual std::vector<QString> getIniTweaks() const override
+  bool updateAvailable() const override { return false; }
+  bool updateIgnored() const override { return false; }
+  bool downgradeAvailable() const override { return false; }
+  bool updateNXMInfo() override { return false; }
+  void setGameName(const QString& gameName) override {}
+  void setNexusID(int) override {}
+  void endorse(bool) override {}
+  void ignoreUpdate(bool) override {}
+  bool alwaysDisabled() const override { return true; }
+  bool canBeUpdated() const override { return false; }
+  QDateTime getExpires() const override { return QDateTime(); }
+  bool canBeEnabled() const override { return false; }
+  std::vector<QString> getIniTweaks() const override
   {
     return std::vector<QString>();
   }
-  virtual std::vector<EFlag> getFlags() const override;
-  virtual QString getDescription() const override;
-  virtual int getNexusFileStatus() const override { return 0; }
-  virtual void setNexusFileStatus(int) override {}
-  virtual QDateTime getLastNexusQuery() const override { return QDateTime(); }
-  virtual void setLastNexusQuery(QDateTime) override {}
-  virtual QDateTime getLastNexusUpdate() const override { return QDateTime(); }
-  virtual void setLastNexusUpdate(QDateTime) override {}
-  virtual QDateTime getNexusLastModified() const override { return QDateTime(); }
-  virtual void setNexusLastModified(QDateTime) override {}
-  virtual QString getNexusDescription() const override { return QString(); }
-  virtual void setNexusCategory(int) override {}
-  virtual int getNexusCategory() const override { return 0; }
-  virtual QString author() const override { return QString(); }
-  virtual void setAuthor(const QString&) override {}
-  virtual QString uploader() const override { return QString(); }
-  virtual void setUploader(const QString&) override {}
-  virtual QString uploaderUrl() const override { return QString(); }
-  virtual void setUploaderUrl(const QString&) override {}
-  virtual bool isBackup() const override { return true; }
+  std::vector<EFlag> getFlags() const override;
+  QString getDescription() const override;
+  int getNexusFileStatus() const override { return 0; }
+  void setNexusFileStatus(int) override {}
+  QDateTime getLastNexusQuery() const override { return QDateTime(); }
+  void setLastNexusQuery(QDateTime) override {}
+  QDateTime getLastNexusUpdate() const override { return QDateTime(); }
+  void setLastNexusUpdate(QDateTime) override {}
+  QDateTime getNexusLastModified() const override { return QDateTime(); }
+  void setNexusLastModified(QDateTime) override {}
+  QString getNexusDescription() const override { return QString(); }
+  void setNexusCategory(int) override {}
+  int getNexusCategory() const override { return 0; }
+  QString author() const override { return QString(); }
+  void setAuthor(const QString&) override {}
+  QString uploader() const override { return QString(); }
+  void setUploader(const QString&) override {}
+  QString uploaderUrl() const override { return QString(); }
+  void setUploaderUrl(const QString&) override {}
+  bool isBackup() const override { return true; }
 
-  virtual void addInstalledFile(int, int) override {}
+  void addInstalledFile(int, int) override {}
 
 private:
   ModInfoBackup(const QDir& path, OrganizerCore& core);

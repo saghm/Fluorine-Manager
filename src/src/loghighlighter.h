@@ -30,14 +30,14 @@ class LogHighlighter : public QSyntaxHighlighter
 {
   Q_OBJECT
 public:
-  explicit LogHighlighter(QObject* parent = 0);
+  explicit LogHighlighter(QObject* parent = nullptr);
 
 signals:
 
 public slots:
 
 protected:
-  virtual void highlightBlock(const QString& text);
+  void highlightBlock(const QString& text) override;
 };
 
 #endif  // LOGHIGHLIGHTER_H

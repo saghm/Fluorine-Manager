@@ -21,7 +21,7 @@ void IconFetcher::Waiter::wakeUp()
   m_wakeUp.notify_one();
 }
 
-IconFetcher::IconFetcher() : m_iconSize(16), m_stop(false)
+IconFetcher::IconFetcher() :  m_stop(false)
 {
   m_quickCache.file      = getPixmapIcon(QFileIconProvider::File);
   m_quickCache.directory = getPixmapIcon(QFileIconProvider::Folder);

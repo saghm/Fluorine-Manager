@@ -76,7 +76,7 @@ public:
   bool dropMimeData(const QMimeData* data, Qt::DropAction action, int row, int column,
                     const QModelIndex& parent) override;
 
-  virtual void setSourceModel(QAbstractItemModel* sourceModel) override;
+  void setSourceModel(QAbstractItemModel* sourceModel) override;
 
   /**
    * @brief tests if a filtere matches for a mod
@@ -102,7 +102,7 @@ public:
    * @param parent the node to test
    * @return true if there are child nodes
    */
-  virtual bool hasChildren(const QModelIndex& parent = QModelIndex()) const
+  bool hasChildren(const QModelIndex& parent = QModelIndex()) const override
   {
     return rowCount(parent) > 0;
   }
@@ -124,8 +124,8 @@ signals:
   void filterInvalidated();
 
 protected:
-  virtual bool lessThan(const QModelIndex& left, const QModelIndex& right) const;
-  virtual bool filterAcceptsRow(int row, const QModelIndex& parent) const;
+  bool lessThan(const QModelIndex& left, const QModelIndex& right) const override;
+  bool filterAcceptsRow(int row, const QModelIndex& parent) const override;
 
 private:
   void refreshFilter();

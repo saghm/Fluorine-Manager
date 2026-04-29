@@ -12,14 +12,14 @@
 class GitHubException : public std::exception
 {
 public:
-  GitHubException(const QJsonObject& errorObj) : std::exception()
+  GitHubException(const QJsonObject& errorObj)  
   {
     initMessage(errorObj);
   }
 
-  virtual ~GitHubException() throw() override {}
+  ~GitHubException() throw() override {}
 
-  virtual const char* what() const throw() { return m_Message.constData(); }
+  const char* what() const throw() override { return m_Message.constData(); }
 
 private:
   void initMessage(const QJsonObject& obj)
@@ -68,7 +68,7 @@ public:
 
 public:
   GitHub(const char* clientId = nullptr);
-  ~GitHub();
+  ~GitHub() override;
 
   QJsonArray releases(const Repository& repo);
   void releases(const Repository& repo,

@@ -76,7 +76,7 @@ public:
   QMenu* createMenu(QWidget* parent = nullptr);
 
 private:
-  OrganizerCore* m_core;
+  OrganizerCore* m_core{nullptr};
   QTimer m_timer;
   CopyEventFilter m_copyFilter;
 

@@ -147,7 +147,7 @@ public:
     {
       for (const auto& content : m_Contents) {
         if ((includeFilter || !content.isOnlyForFilter()) &&
-            ids.find(content.id()) != ids.end()) {
+            ids.contains(content.id())) {
           fn(content);
         }
       }
@@ -170,7 +170,7 @@ public:
     {
       for (const auto& content : m_Contents) {
         if ((includeFilter || !content.isOnlyForFilter())) {
-          if (ids.find(content.id()) != ids.end()) {
+          if (ids.contains(content.id())) {
             fnIn(content);
           } else {
             fnOut(content);
@@ -246,7 +246,7 @@ public:
 public:
   OrganizerCore(Settings& settings);
 
-  ~OrganizerCore();
+  ~OrganizerCore() override;
 
   void setUserInterface(IUserInterface* ui);
   void connectPlugins(PluginContainer* container);
@@ -440,11 +440,11 @@ public:
                                             RefreshCallbackMode mode);
 
 public:  // IPluginDiagnose interface
-  virtual std::vector<unsigned int> activeProblems() const;
-  virtual QString shortDescription(unsigned int key) const;
-  virtual QString fullDescription(unsigned int key) const;
-  virtual bool hasGuidedFix(unsigned int key) const;
-  virtual void startGuidedFix(unsigned int key) const;
+  std::vector<unsigned int> activeProblems() const override;
+  QString shortDescription(unsigned int key) const override;
+  QString fullDescription(unsigned int key) const override;
+  bool hasGuidedFix(unsigned int key) const override;
+  void startGuidedFix(unsigned int key) const override;
 
 public slots:
 

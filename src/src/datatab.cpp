@@ -30,8 +30,8 @@ DataTab::DataTab(OrganizerCore& core, PluginContainer& pc, QWidget* parent,
          mwui->dataTree,
          mwui->dataTabShowOnlyConflicts,
          mwui->dataTabShowFromArchives,
-         mwui->dataTabShowHiddenFiles},
-      m_needUpdate(true)
+         mwui->dataTabShowHiddenFiles}
+      
 {
   m_filetree.reset(new FileTree(core, m_pluginContainer, ui.tree));
   m_filter.setUseSourceSort(true);

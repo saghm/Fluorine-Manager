@@ -47,7 +47,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 using namespace MOBase;
 
 Instance::Instance(QString dir, bool portable, QString profileName)
-    : m_dir(std::move(dir)), m_portable(portable), m_plugin(nullptr),
+    : m_dir(std::move(dir)), m_portable(portable), 
       m_profile(std::move(profileName))
 {
   // Ensure portable instances have a ModOrganizer.sh launcher script.

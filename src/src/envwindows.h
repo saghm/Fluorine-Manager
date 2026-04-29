@@ -39,9 +39,9 @@ public:
     QString ID;
 
     // some sub-build number, may be empty
-    uint32_t UBR;
+    uint32_t UBR{0};
 
-    Release() : UBR(0) {}
+    Release()  {}
   };
 
   WindowsInfo();

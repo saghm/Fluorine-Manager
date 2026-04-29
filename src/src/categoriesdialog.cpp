@@ -35,13 +35,13 @@ class NewIDValidator : public QIntValidator
 {
 public:
   NewIDValidator(const std::set<int>& ids) : m_UsedIDs(ids) {}
-  virtual State validate(QString& input, int& pos) const
+  State validate(QString& input, int& pos) const override
   {
     State intRes = QIntValidator::validate(input, pos);
     if (intRes == Acceptable) {
       bool ok = false;
       int id  = input.toInt(&ok);
-      if (m_UsedIDs.find(id) != m_UsedIDs.end()) {
+      if (m_UsedIDs.contains(id)) {
         return QValidator::Intermediate;
       }
     }
@@ -56,13 +56,13 @@ class ExistingIDValidator : public QIntValidator
 {
 public:
   ExistingIDValidator(const std::set<int>& ids) : m_UsedIDs(ids) {}
-  virtual State validate(QString& input, int& pos) const
+  State validate(QString& input, int& pos) const override
   {
     State intRes = QIntValidator::validate(input, pos);
     if (intRes == Acceptable) {
       bool ok = false;
       int id  = input.toInt(&ok);
-      if ((id == 0) || (m_UsedIDs.find(id) != m_UsedIDs.end())) {
+      if ((id == 0) || (m_UsedIDs.contains(id))) {
         return QValidator::Acceptable;
       } else {
         return QValidator::Intermediate;
@@ -85,14 +85,14 @@ public:
   {}
 
   QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem&,
-                        const QModelIndex&) const
+                        const QModelIndex&) const override
   {
     QLineEdit* edit = new QLineEdit(parent);
     edit->setValidator(m_Validator);
     return edit;
   }
-  virtual void setModelData(QWidget* editor, QAbstractItemModel* model,
-                            const QModelIndex& index) const
+  void setModelData(QWidget* editor, QAbstractItemModel* model,
+                            const QModelIndex& index) const override
   {
     QLineEdit* edit  = qobject_cast<QLineEdit*>(editor);
     int pos          = 0;
@@ -325,7 +325,7 @@ void CategoriesDialog::nexusImport_clicked()
       nexusData.insert(nexusData.size(), data);
       auto nexusCatItem = std::make_unique<QTableWidgetItem>(nexusLabel.join(", "));
       nexusCatItem->setData(Qt::UserRole, nexusData);
-      if (!table->findItems(name, Qt::MatchExactly).size()) {
+      if (table->findItems(name, Qt::MatchExactly).empty()) {
         row = table->rowCount();
         table->insertRow(table->rowCount());
 

@@ -54,7 +54,7 @@ class NexusSettingsTab : public SettingsTab
 {
 public:
   NexusSettingsTab(Settings& settings, SettingsDialog& dialog);
-  void update();
+  void update() override;
 
 private:
   std::unique_ptr<NexusConnectionUI> m_connectionUI;

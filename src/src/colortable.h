@@ -26,7 +26,7 @@ public:
   void commitColors();
 
 private:
-  Settings* m_settings;
+  Settings* m_settings{nullptr};
 
   void addColor(const QString& text, const QColor& defaultColor,
                 std::function<QColor()> get, std::function<void(const QColor&)> commit);

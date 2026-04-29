@@ -75,7 +75,7 @@ public:
   ModInfoDialogTab& operator=(const ModInfoDialogTab&) = delete;
   ModInfoDialogTab(ModInfoDialogTab&&)                 = default;
   ModInfoDialogTab& operator=(ModInfoDialogTab&&)      = default;
-  virtual ~ModInfoDialogTab()                          = default;
+  ~ModInfoDialogTab()                          override = default;
 
   // called by ModInfoDialog every time this tab is selected; this will call
   // firstActivation() the first time it's called, until resetFirstActivation()
@@ -266,10 +266,10 @@ private:
   ModInfoTabIDs m_tabID;
 
   // whether the tab has data
-  bool m_hasData;
+  bool m_hasData{false};
 
   // true if the tab has never been selected for the current mod
-  bool m_firstActivation;
+  bool m_firstActivation{true};
 };
 
 // the Notes tab

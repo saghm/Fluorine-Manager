@@ -306,7 +306,7 @@ void ModInfo::updateIndices()
   }
 }
 
-ModInfo::ModInfo(OrganizerCore& core) : m_PrimaryCategory(-1), m_Core(core) {}
+ModInfo::ModInfo(OrganizerCore& core) :  m_Core(core) {}
 
 bool ModInfo::checkAllForUpdate(PluginContainer* pluginContainer, QObject* receiver)
 {
@@ -477,7 +477,7 @@ void ModInfo::manualUpdateCheck(QObject* receiver, std::multimap<QString, int> I
               return a->getLastNexusUpdate() < b->getLastNexusUpdate();
             });
 
-  if (mods.size()) {
+  if (!mods.empty()) {
     log::info("Checking updates for {} mods...", mods.size());
 
     for (auto mod : mods) {

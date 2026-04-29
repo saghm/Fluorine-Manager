@@ -22,6 +22,8 @@
 #     positives in plumbing code.
 #   - misc-include-cleaner / -no-recursion / -non-private-member-variables-
 #     in-classes: noisy and partly redundant with clangd.
+#   - readability-redundant-access-specifiers: confused by Qt's `private slots:`
+#     specifier — strips the `private:` that follows it, breaking MOC.
 Checks: >
   bugprone-*,
   performance-*,
@@ -43,6 +45,7 @@ Checks: >
   -readability-uppercase-literal-suffix,
   -readability-braces-around-statements,
   -readability-else-after-return,
+  -readability-redundant-access-specifiers,
   -bugprone-easily-swappable-parameters,
   -bugprone-branch-clone,
   -bugprone-narrowing-conversions,

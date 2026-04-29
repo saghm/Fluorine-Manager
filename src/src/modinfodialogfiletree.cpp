@@ -15,7 +15,7 @@ namespace shell = MOBase::shell;
 const int max_scan_for_context_menu = 50;
 
 FileTreeTab::FileTreeTab(ModInfoDialogTabContext cx)
-    : ModInfoDialogTab(std::move(cx)), m_fs(nullptr)
+    : ModInfoDialogTab(std::move(cx)) 
 {
   m_fs = new QFileSystemModel(this);
   m_fs->setReadOnly(false);
@@ -134,7 +134,7 @@ void FileTreeTab::onCreateDirectory()
 
   QModelIndex selection;
 
-  if (selectedRows.size() == 0) {
+  if (selectedRows.empty()) {
     selection = m_fs->index(m_fs->rootPath(), 0);
   } else {
     selection = selectedRows[0];
@@ -423,7 +423,7 @@ void FileTreeTab::onContextMenu(const QPoint& pos)
   bool enableHide      = false;
   bool enableUnhide    = false;
 
-  if (selection.size() == 0) {
+  if (selection.empty()) {
     // no selection, only new folder and explore
     enableNewFolder = true;
     enableExplore   = true;

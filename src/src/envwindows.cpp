@@ -36,7 +36,7 @@ WindowsInfo::Version WindowsInfo::getKernelVersion() const
   QString kver      = QString::fromUtf8(uts.release);
   QStringList parts = kver.split('.');
 
-  if (parts.size() >= 1)
+  if (!parts.empty())
     v.major = parts[0].toUInt();
   if (parts.size() >= 2)
     v.minor = parts[1].toUInt();

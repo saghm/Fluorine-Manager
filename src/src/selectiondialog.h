@@ -33,10 +33,10 @@ class SelectionDialog : public QDialog
   Q_OBJECT
 
 public:
-  explicit SelectionDialog(const QString& description, QWidget* parent = 0,
+  explicit SelectionDialog(const QString& description, QWidget* parent = nullptr,
                            const QSize& iconSize = QSize());
 
-  ~SelectionDialog();
+  ~SelectionDialog() override;
 
   /**
    * @brief add a choice to the dialog

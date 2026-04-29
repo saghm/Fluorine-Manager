@@ -32,8 +32,7 @@ QString dimensionString(const QSize& s)
 }
 
 ImagesTab::ImagesTab(ModInfoDialogTabContext cx)
-    : ModInfoDialogTab(std::move(cx)), m_image(new ScalableImage),
-      m_ddsAvailable(false), m_ddsEnabled(false)
+    : ModInfoDialogTab(std::move(cx)), m_image(new ScalableImage) 
 {
   getSupportedFormats();
 
@@ -135,7 +134,7 @@ void ImagesTab::update()
 
   ui->imagesThumbnails->update();
 
-  setHasData(m_files.size() > 0);
+  setHasData(!m_files.empty());
 }
 
 void ImagesTab::saveState(Settings& s)
@@ -602,7 +601,7 @@ void ImagesTab::onFilterChanged()
 
 void ImagesTab::updateScrollbar()
 {
-  if (m_files.size() == 0) {
+  if (m_files.empty()) {
     ui->imagesScrollerVBar->setRange(0, 0);
     ui->imagesScrollerVBar->setEnabled(false);
     return;
@@ -693,7 +692,7 @@ bool ThumbnailsWidget::event(QEvent* e)
   return QWidget::event(e);
 }
 
-ScalableImage::ScalableImage(QString path) : m_path(std::move(path)), m_border(1)
+ScalableImage::ScalableImage(QString path) : m_path(std::move(path)) 
 {
   auto sp = sizePolicy();
   sp.setHeightForWidth(true);
@@ -780,7 +779,7 @@ void ScalableImage::paintEvent(QPaintEvent* e)
 }
 
 Metrics::Metrics()
-    : margins(3), border(1), padding(0), spacing(5), textSpacing(2), textHeight(0)
+     
 {}
 
 Geometry::Geometry(QSize widgetSize, Metrics metrics)
@@ -882,7 +881,7 @@ QSize Geometry::scaledImageSize(const QSize& originalSize) const
   return resizeWithAspectRatio(originalSize, availableSize);
 }
 
-File::File(QString path) : m_path(std::move(path)), m_failed(false) {}
+File::File(QString path) : m_path(std::move(path)) {}
 
 void File::ensureOriginalLoaded()
 {
@@ -970,7 +969,7 @@ void File::load(const Geometry& geo)
   }
 }
 
-Files::Files() : m_selection(BadIndex), m_filtered(false) {}
+Files::Files() : m_selection(BadIndex) {}
 
 void Files::clear()
 {
@@ -1090,7 +1089,7 @@ bool Files::isFiltered() const
 }
 
 PaintContext::PaintContext(QWidget* w, Geometry geo)
-    : painter(w), geo(geo), file(nullptr), thumbIndex(0), fileIndex(0)
+    : painter(w), geo(geo) 
 {}
 
 }  // namespace ImagesTabHelpers

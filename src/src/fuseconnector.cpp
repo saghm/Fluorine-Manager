@@ -1208,10 +1208,10 @@ void FuseConnector::deployRootFiles(
       const auto relPath = fs::relative(entry.path(), rootDir, ec).string();
       const auto dst     = (fs::path(m_gameDir) / relPath).string();
 
-      if (deployedSet.count(dst)) continue;  // higher-priority mod already deployed
+      if (deployedSet.contains(dst)) continue;  // higher-priority mod already deployed
 
       // Backup existing file
-      if (fs::exists(dst, ec) && !deployedSet.count(dst)) {
+      if (fs::exists(dst, ec) && !deployedSet.contains(dst)) {
         const auto bak = (fs::path(backupDir) / relPath).string();
         fs::create_directories(fs::path(bak).parent_path(), ec);
         fs::copy_file(dst, bak, fs::copy_options::overwrite_existing, ec);

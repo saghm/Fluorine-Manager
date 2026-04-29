@@ -222,10 +222,10 @@ QModelIndex ModListByPriorityProxy::parent(const QModelIndex& child) const
 bool ModListByPriorityProxy::hasChildren(const QModelIndex& parent) const
 {
   if (!parent.isValid()) {
-    return m_Root.children.size() > 0;
+    return !m_Root.children.empty();
   }
   auto* item = static_cast<TreeItem*>(parent.internalPointer());
-  return item->children.size() > 0;
+  return !item->children.empty();
 }
 
 bool ModListByPriorityProxy::canDropMimeData(const QMimeData* data,

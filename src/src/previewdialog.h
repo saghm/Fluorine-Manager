@@ -13,8 +13,8 @@ class PreviewDialog : public QDialog
   Q_OBJECT
 
 public:
-  explicit PreviewDialog(const QString& fileName, QWidget* parent = 0);
-  ~PreviewDialog();
+  explicit PreviewDialog(const QString& fileName, QWidget* parent = nullptr);
+  ~PreviewDialog() override;
 
   // also saves and restores geometry
   //

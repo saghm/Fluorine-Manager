@@ -48,7 +48,7 @@ public:
   int order() const { return order_; }
   const std::wstring& name() const { return name_; }
 
-  bool isValid() const { return name_.size() > 0; }
+  bool isValid() const { return !name_.empty(); }
 
   DataArchiveOrigin(std::wstring name, int order)
       : name_(std::move(name)), order_(order)

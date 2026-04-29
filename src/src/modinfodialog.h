@@ -59,7 +59,7 @@ public:
   ModInfoDialog(OrganizerCore& core, PluginContainer& plugin, ModInfo::Ptr mod,
                 ModListView* view, QWidget* parent = nullptr);
 
-  ~ModInfoDialog();
+  ~ModInfoDialog() override;
 
   // switches to the tab with the given id
   //
@@ -82,7 +82,7 @@ signals:
 protected:
   // forwards to tryClose()
   //
-  void closeEvent(QCloseEvent* e);
+  void closeEvent(QCloseEvent* e) override;
 
 private:
   // represents a single tab
@@ -93,7 +93,7 @@ private:
     std::unique_ptr<ModInfoDialogTab> tab;
 
     // actual position in the tab bar, updated every time a tab is moved
-    int realPos;
+    int realPos{-1};
 
     // widget used by the QTabWidget for this tab
     //
@@ -106,7 +106,7 @@ private:
     //
     // `widget` is also used figure out which tab is where when they're
     // re-ordered
-    QWidget* widget;
+    QWidget* widget{nullptr};
 
     // caption for this tab, see `widget`
     QString caption;
@@ -130,7 +130,7 @@ private:
 
   // initial tab requested by the main window when the dialog is opened; whether
   // the request can be honoured depends on what tabs are present
-  ModInfoTabIDs m_initialTab;
+  ModInfoTabIDs m_initialTab{ModInfoTabIDs::None};
 
   // set to true when tabs are being removed and re-added while navigating
   // between mods; since the current index changes while this is happening,
@@ -138,7 +138,7 @@ private:
   //
   // however, it will check this flag and ignore the event so first activations
   // are not fired incorrectly
-  bool m_arrangingTabs;
+  bool m_arrangingTabs{false};
 
   // creates all the tabs and connects events
   //

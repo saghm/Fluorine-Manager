@@ -24,8 +24,8 @@ public:
   };
 
 public:
-  explicit CategoryImportDialog(QWidget* parent = 0);
-  ~CategoryImportDialog();
+  explicit CategoryImportDialog(QWidget* parent = nullptr);
+  ~CategoryImportDialog() override;
 
   ImportStrategy strategy();
   bool assign();

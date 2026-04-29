@@ -389,7 +389,7 @@ private:
   std::optional<QString> m_nxmLink;
   std::optional<QString> m_executable;
   QStringList m_untouched;
-  Command* m_command;
+  Command* m_command{nullptr};
   std::wstring m_originalLine;
 
   void createOptions();

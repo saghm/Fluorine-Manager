@@ -747,7 +747,7 @@ public:
   //                       singleton and asserts if it already exists
   //
   Settings(const QString& path, bool globalInstance = false);
-  ~Settings();
+  ~Settings() override;
 
   // throws if there is no global Settings instance
   //

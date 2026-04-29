@@ -133,7 +133,7 @@ public:
 
 private:
   QString m_key, m_id, m_name;
-  APIUserAccountTypes m_type;
+  APIUserAccountTypes m_type{APIUserAccountTypes::None};
   APILimits m_limits;
 };
 

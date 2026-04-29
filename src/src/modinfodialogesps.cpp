@@ -11,7 +11,7 @@ class ESPItem
 {
 public:
   ESPItem(QString rootPath, QString relativePath)
-      : m_rootPath(std::move(rootPath)), m_active(false)
+      : m_rootPath(std::move(rootPath)) 
   {
     if (relativePath.contains('/') || relativePath.contains('\\')) {
       m_inactivePath = relativePath;
@@ -85,7 +85,7 @@ private:
   QString m_inactivePath;
   QString m_filename;
   QFileInfo m_fileInfo;
-  bool m_active;
+  bool m_active{false};
 
   void pathChanged()
   {

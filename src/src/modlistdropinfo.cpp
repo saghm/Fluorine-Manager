@@ -3,7 +3,7 @@
 #include "organizercore.h"
 
 ModListDropInfo::ModListDropInfo(const QMimeData* mimeData, OrganizerCore& core)
-    : m_rows{}, m_download{-1}, m_localUrls{}, m_url{}
+     
 {
   // this only check if the drop is valid, not if the content of the drop
   // matches the target, a drop is valid if either

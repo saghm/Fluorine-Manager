@@ -18,7 +18,7 @@ class ForcedLoadDialog : public QDialog
 
 public:
   explicit ForcedLoadDialog(const MOBase::IPluginGame* game, QWidget* parent = nullptr);
-  ~ForcedLoadDialog();
+  ~ForcedLoadDialog() override;
 
   void setValues(QList<MOBase::ExecutableForcedLoadSetting>& values);
   QList<MOBase::ExecutableForcedLoadSetting> values();

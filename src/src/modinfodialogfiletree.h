@@ -12,8 +12,8 @@ public:
   FileTreeTab(ModInfoDialogTabContext cx);
 
   void clear() override;
-  void saveState(Settings& s);
-  void restoreState(const Settings& s);
+  void saveState(Settings& s) override;
+  void restoreState(const Settings& s) override;
   void update() override;
   bool deleteRequested() override;
 
@@ -31,7 +31,7 @@ private:
     QAction* unhide    = nullptr;
   };
 
-  QFileSystemModel* m_fs;
+  QFileSystemModel* m_fs{nullptr};
   Actions m_actions;
 
   void onCreateDirectory();

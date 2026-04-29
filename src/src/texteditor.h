@@ -155,7 +155,7 @@ signals:
   void editingFinished();
 
 protected:
-  void focusOutEvent(QFocusEvent* e);
+  void focusOutEvent(QFocusEvent* e) override;
 
 private:
 };

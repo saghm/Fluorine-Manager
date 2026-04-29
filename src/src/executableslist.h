@@ -76,11 +76,11 @@ public:
   Executable& workingDirectory(const QString& s);
   Executable& flags(Flags f);
 
-  bool isShownOnToolbar() const;
+  bool isShownOnToolbar() const override;
   void setShownOnToolbar(bool state);
-  bool usesOwnIcon() const;
-  bool minimizeToSystemTray() const;
-  bool hide() const;
+  bool usesOwnIcon() const override;
+  bool minimizeToSystemTray() const override;
+  bool hide() const override;
   bool useProton() const;
   bool useTerminal() const;
 

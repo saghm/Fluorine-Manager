@@ -71,8 +71,8 @@ class DownloadListView : public QTreeView
   Q_OBJECT
 
 public:
-  explicit DownloadListView(QWidget* parent = 0);
-  ~DownloadListView();
+  explicit DownloadListView(QWidget* parent = nullptr);
+  ~DownloadListView() override;
 
   void setManager(DownloadManager* manager);
   void setSourceModel(DownloadList* sourceModel);
@@ -125,9 +125,9 @@ private slots:
 
 private:
   DownloadManager* m_Manager;
-  DownloadList* m_SourceModel = 0;
+  DownloadList* m_SourceModel = nullptr;
 
-  void resizeEvent(QResizeEvent* event);
+  void resizeEvent(QResizeEvent* event) override;
 };
 
 #endif  // DOWNLOADLISTWIDGET_H

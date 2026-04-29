@@ -230,7 +230,7 @@ private:
   const QString m_file;
   const bool m_isDirectory;
 
-  int m_originID;
+  int m_originID{-1};
   QString m_realPath;
   std::wstring m_wsRealPath;
   Flags m_flags;
@@ -241,9 +241,9 @@ private:
   mutable Cached<QString> m_fileType;
   mutable Cached<uint64_t> m_compressedFileSize;
 
-  bool m_loaded;
-  bool m_expanded;
-  bool m_sortingStale;
+  bool m_loaded{false};
+  bool m_expanded{false};
+  bool m_sortingStale{true};
   Children m_children;
 
   FileTreeItem(FileTreeModel* model, FileTreeItem* parent,

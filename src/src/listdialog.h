@@ -14,7 +14,7 @@ class ListDialog : public QDialog
 
 public:
   explicit ListDialog(QWidget* parent = nullptr);
-  ~ListDialog();
+  ~ListDialog() override;
 
   // also saves and restores geometry
   //

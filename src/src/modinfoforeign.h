@@ -13,91 +13,91 @@ class ModInfoForeign : public ModInfoWithConflictInfo
   friend class ModInfo;
 
 public:
-  virtual bool updateAvailable() const override { return false; }
-  virtual bool updateIgnored() const override { return false; }
-  virtual bool downgradeAvailable() const override { return false; }
-  virtual bool updateNXMInfo() override { return false; }
-  virtual void setCategory(int, bool) override {}
-  virtual bool setName(const QString&) override { return false; }
-  virtual void setComments(const QString&) override {}
-  virtual void setNotes(const QString&) override {}
-  virtual void setGameName(const QString& gameName) override {}
-  virtual void setNexusID(int) override {}
-  virtual void setNewestVersion(const MOBase::VersionInfo&) override {}
-  virtual void ignoreUpdate(bool) override {}
-  virtual void setNexusDescription(const QString&) override {}
-  virtual void setInstallationFile(const QString&) override {}
-  virtual void addNexusCategory(int) override {}
-  virtual void setIsEndorsed(bool) override {}
-  virtual void setNeverEndorse() override {}
-  virtual void setIsTracked(bool) override {}
-  virtual void endorse(bool) override {}
-  virtual void track(bool) override {}
-  virtual bool isEmpty() const override { return false; }
-  virtual QString name() const override { return m_Name; }
-  virtual QString internalName() const override { return m_InternalName; }
-  virtual QString comments() const override { return ""; }
-  virtual QString notes() const override { return ""; }
-  virtual QDateTime creationTime() const override;
-  virtual QString absolutePath() const override { return m_BaseDirectory; }
-  virtual MOBase::VersionInfo newestVersion() const override { return QString(); }
-  virtual MOBase::VersionInfo ignoredVersion() const override { return QString(); }
-  virtual QString installationFile() const override { return ""; }
-  virtual bool converted() const override { return false; }
-  virtual bool validated() const override { return false; }
-  virtual QString gameName() const override { return ""; }
-  virtual int nexusId() const override { return -1; }
-  virtual bool isForeign() const override { return true; }
-  virtual QDateTime getExpires() const override { return QDateTime(); }
-  virtual std::vector<QString> getIniTweaks() const override
+  bool updateAvailable() const override { return false; }
+  bool updateIgnored() const override { return false; }
+  bool downgradeAvailable() const override { return false; }
+  bool updateNXMInfo() override { return false; }
+  void setCategory(int, bool) override {}
+  bool setName(const QString&) override { return false; }
+  void setComments(const QString&) override {}
+  void setNotes(const QString&) override {}
+  void setGameName(const QString& gameName) override {}
+  void setNexusID(int) override {}
+  void setNewestVersion(const MOBase::VersionInfo&) override {}
+  void ignoreUpdate(bool) override {}
+  void setNexusDescription(const QString&) override {}
+  void setInstallationFile(const QString&) override {}
+  void addNexusCategory(int) override {}
+  void setIsEndorsed(bool) override {}
+  void setNeverEndorse() override {}
+  void setIsTracked(bool) override {}
+  void endorse(bool) override {}
+  void track(bool) override {}
+  bool isEmpty() const override { return false; }
+  QString name() const override { return m_Name; }
+  QString internalName() const override { return m_InternalName; }
+  QString comments() const override { return ""; }
+  QString notes() const override { return ""; }
+  QDateTime creationTime() const override;
+  QString absolutePath() const override { return m_BaseDirectory; }
+  MOBase::VersionInfo newestVersion() const override { return QString(); }
+  MOBase::VersionInfo ignoredVersion() const override { return QString(); }
+  QString installationFile() const override { return ""; }
+  bool converted() const override { return false; }
+  bool validated() const override { return false; }
+  QString gameName() const override { return ""; }
+  int nexusId() const override { return -1; }
+  bool isForeign() const override { return true; }
+  QDateTime getExpires() const override { return QDateTime(); }
+  std::vector<QString> getIniTweaks() const override
   {
     return std::vector<QString>();
   }
-  virtual std::vector<ModInfo::EFlag> getFlags() const override;
-  virtual int getHighlight() const override;
-  virtual QString getDescription() const override;
-  virtual int getNexusFileStatus() const override { return 0; }
-  virtual void setNexusFileStatus(int) override {}
-  virtual QDateTime getLastNexusUpdate() const override { return QDateTime(); }
-  virtual void setLastNexusUpdate(QDateTime) override {}
-  virtual int getNexusCategory() const override { return 0; }
-  virtual void setNexusCategory(int) override {}
-  virtual QDateTime getLastNexusQuery() const override { return QDateTime(); }
-  virtual void setLastNexusQuery(QDateTime) override {}
-  virtual QDateTime getNexusLastModified() const override { return QDateTime(); }
-  virtual void setNexusLastModified(QDateTime) override {}
-  virtual QString getNexusDescription() const override { return QString(); }
-  virtual QString author() const override { return QString(); }
-  virtual void setAuthor(const QString&) override {}
-  virtual QString uploader() const override { return QString(); }
-  virtual void setUploader(const QString&) override {}
-  virtual QString uploaderUrl() const override { return QString(); }
-  virtual void setUploaderUrl(const QString&) override {}
-  virtual QStringList archives(bool = false) override { return m_Archives; }
-  virtual QStringList stealFiles() const override
+  std::vector<ModInfo::EFlag> getFlags() const override;
+  int getHighlight() const override;
+  QString getDescription() const override;
+  int getNexusFileStatus() const override { return 0; }
+  void setNexusFileStatus(int) override {}
+  QDateTime getLastNexusUpdate() const override { return QDateTime(); }
+  void setLastNexusUpdate(QDateTime) override {}
+  int getNexusCategory() const override { return 0; }
+  void setNexusCategory(int) override {}
+  QDateTime getLastNexusQuery() const override { return QDateTime(); }
+  void setLastNexusQuery(QDateTime) override {}
+  QDateTime getNexusLastModified() const override { return QDateTime(); }
+  void setNexusLastModified(QDateTime) override {}
+  QString getNexusDescription() const override { return QString(); }
+  QString author() const override { return QString(); }
+  void setAuthor(const QString&) override {}
+  QString uploader() const override { return QString(); }
+  void setUploader(const QString&) override {}
+  QString uploaderUrl() const override { return QString(); }
+  void setUploaderUrl(const QString&) override {}
+  QStringList archives(bool = false) override { return m_Archives; }
+  QStringList stealFiles() const override
   {
     return m_Archives + QStringList(m_ReferenceFile);
   }
-  virtual bool alwaysEnabled() const override { return true; }
-  virtual void addInstalledFile(int, int) override {}
-  virtual std::set<std::pair<int, int>> installedFiles() const override { return {}; }
+  bool alwaysEnabled() const override { return true; }
+  void addInstalledFile(int, int) override {}
+  std::set<std::pair<int, int>> installedFiles() const override { return {}; }
 
-  virtual QVariant pluginSetting(const QString& pluginName, const QString& key,
+  QVariant pluginSetting(const QString& pluginName, const QString& key,
                                  const QVariant& defaultValue) const override
   {
     return defaultValue;
   }
-  virtual std::map<QString, QVariant>
+  std::map<QString, QVariant>
   pluginSettings(const QString& pluginName) const override
   {
     return {};
   }
-  virtual bool setPluginSetting(const QString& pluginName, const QString& key,
+  bool setPluginSetting(const QString& pluginName, const QString& key,
                                 const QVariant& value) override
   {
     return false;
   }
-  virtual std::map<QString, QVariant>
+  std::map<QString, QVariant>
   clearPluginSettings(const QString& pluginName) override
   {
     return {};

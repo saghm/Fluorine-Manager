@@ -26,7 +26,7 @@ class ModListByPriorityProxy : public QAbstractProxyModel
 public:
   explicit ModListByPriorityProxy(Profile* profile, OrganizerCore& core,
                                   QObject* parent = nullptr);
-  ~ModListByPriorityProxy();
+  ~ModListByPriorityProxy() override;
 
   void setProfile(Profile* profile);
 

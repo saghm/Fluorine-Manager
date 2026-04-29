@@ -10,9 +10,9 @@ class CSVException : public std::exception
 {
 
 public:
-  CSVException(const QString& text) : std::exception(), m_Message(text.toLocal8Bit()) {}
+  CSVException(const QString& text) :  m_Message(text.toLocal8Bit()) {}
 
-  virtual const char* what() const throw() { return m_Message.constData(); }
+  const char* what() const throw() override { return m_Message.constData(); }
 
 private:
   QByteArray m_Message;
@@ -75,8 +75,8 @@ private:
 
 private:
   QTextStream m_Out;
-  char m_Separator;
-  ELineBreak m_LineBreak;
+  char m_Separator{','};
+  ELineBreak m_LineBreak{BREAK_CRLF};
   std::map<EFieldType, EQuoteMode> m_QuoteMode;
   std::vector<QString> m_Fields;
   std::map<QString, EFieldType> m_FieldTypes;
