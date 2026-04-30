@@ -376,6 +376,12 @@ export FLUORINE_ORIG_QT_PLUGIN_PATH="${QT_PLUGIN_PATH:-}"
 # Clear it for our process; game launches restore via FLUORINE_ORIG_LD_PRELOAD.
 unset LD_PRELOAD
 
+# Suppress Qt debug logging by default. Some plugins (e.g. BG3 file mapper)
+# qDebug() Path objects whose surrogate-escaped bytes crash Qt's logger with
+# "unicode category" errors. User can re-enable with QT_LOGGING_RULES override.
+: "${QT_LOGGING_RULES:=default.debug=false}"
+export QT_LOGGING_RULES
+
 # ── Sync entire app to ~/.local/share/fluorine/bin/ ──
 # This gives instances a stable symlink target that won't break if the user
 # moves or deletes the original tarball extraction directory.
@@ -709,6 +715,10 @@ export FLUORINE_ORIG_QT_PLUGIN_PATH="${QT_PLUGIN_PATH:-}"
 
 # Steam injects 32-bit gameoverlayrenderer.so via LD_PRELOAD — clear it.
 unset LD_PRELOAD
+
+# Suppress Qt debug logging by default (see comment in main launcher).
+: "${QT_LOGGING_RULES:=default.debug=false}"
+export QT_LOGGING_RULES
 
 export PATH="${BIN}:${PATH}"
 # Replace (not append) LD_LIBRARY_PATH — Steam game mode injects its runtime

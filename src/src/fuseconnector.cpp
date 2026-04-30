@@ -791,10 +791,35 @@ void FuseConnector::deployExternalMappings(const MappingType& mapping,
     // (running through Proton) can see the files.
     std::error_code ec;
 
+    // Helper: create a directory (and all missing parents) and record each
+    // segment we actually created so cleanup can remove it later.
+    auto createTrackedDirs = [&](const fs::path& dirPath) {
+      std::vector<fs::path> toCreate;
+      for (fs::path p = dirPath; !p.empty() && !fs::exists(p, ec);
+           p = p.parent_path()) {
+        toCreate.push_back(p);
+        if (p == p.root_path()) {
+          break;
+        }
+      }
+      // Build top-down so nested dirs succeed.
+      for (auto it = toCreate.rbegin(); it != toCreate.rend(); ++it) {
+        if (fs::create_directory(*it, ec) && !ec) {
+          m_externalDirs.push_back(it->string());
+        }
+      }
+    };
+
     if (map.isDirectory) {
       const fs::path srcPath(src.toStdString());
       if (!fs::exists(srcPath, ec)) {
         continue;
+      }
+
+      // Pre-create the createTarget root so an empty source still leaves
+      // the target tracked for removal.
+      if (map.createTarget) {
+        createTrackedDirs(fs::path(dst.toStdString()));
       }
 
       for (auto it = fs::recursive_directory_iterator(
@@ -808,9 +833,9 @@ void FuseConnector::deployExternalMappings(const MappingType& mapping,
 
         const fs::path destPath = fs::path(dst.toStdString()) / rel;
         if (entry.is_directory(ec)) {
-          fs::create_directories(destPath, ec);
+          createTrackedDirs(destPath);
         } else if (entry.is_regular_file(ec) || entry.is_symlink(ec)) {
-          fs::create_directories(destPath.parent_path(), ec);
+          createTrackedDirs(destPath.parent_path());
           if (fs::exists(destPath, ec) && !fs::is_symlink(destPath, ec)) {
             // Never overwrite real game files — only replace our own symlinks.
             continue;
@@ -832,7 +857,7 @@ void FuseConnector::deployExternalMappings(const MappingType& mapping,
     } else {
       // Single file symlink.
       const fs::path destPath(dst.toStdString());
-      fs::create_directories(destPath.parent_path(), ec);
+      createTrackedDirs(destPath.parent_path());
       if (fs::exists(destPath, ec) && !fs::is_symlink(destPath, ec)) {
         continue;
       }
@@ -861,7 +886,7 @@ void FuseConnector::deployExternalMappings(const MappingType& mapping,
 
 void FuseConnector::cleanupExternalMappings()
 {
-  if (m_externalSymlinks.empty()) {
+  if (m_externalSymlinks.empty() && m_externalDirs.empty()) {
     return;
   }
 
@@ -872,8 +897,27 @@ void FuseConnector::cleanupExternalMappings()
     }
   }
 
-  log::debug("Cleaned up {} external symlinks", m_externalSymlinks.size());
+  // Remove created dirs deepest-first so children are gone before parents.
+  // Only removes if empty — any user-placed file inside causes the dir (and
+  // its ancestors) to stay, which is the safe behavior.
+  std::sort(m_externalDirs.begin(), m_externalDirs.end(),
+            [](const std::string& a, const std::string& b) {
+              return a.size() > b.size();
+            });
+  std::size_t removedDirs = 0;
+  for (const auto& path : m_externalDirs) {
+    if (fs::is_directory(path, ec) && fs::is_empty(path, ec)) {
+      fs::remove(path, ec);
+      if (!ec) {
+        ++removedDirs;
+      }
+    }
+  }
+
+  log::debug("Cleaned up {} external symlinks, {} dirs",
+             m_externalSymlinks.size(), removedDirs);
   m_externalSymlinks.clear();
+  m_externalDirs.clear();
 }
 
 void FuseConnector::updateParams(MOBase::log::Levels /*logLevel*/,
@@ -1117,6 +1161,7 @@ static bool reflinkCopy(const std::string& src, const std::string& dst)
 
 static void loadRootManifest(const std::string& storageDir,
                              std::vector<std::string>& deployed,
+                             std::vector<std::string>& dirs,
                              std::map<std::string, std::string>& backups)
 {
   namespace fs = std::filesystem;
@@ -1127,8 +1172,6 @@ static void loadRootManifest(const std::string& storageDir,
   try {
     std::string const content((std::istreambuf_iterator<char>(in)),
                         std::istreambuf_iterator<char>());
-    // Simple JSON parsing — the manifest is { "deployed": [...], "backups": {...} }
-    // Use Qt's JSON for simplicity
     QJsonDocument const doc = QJsonDocument::fromJson(
         QByteArray::fromStdString(content));
     if (doc.isNull()) return;
@@ -1136,6 +1179,10 @@ static void loadRootManifest(const std::string& storageDir,
     const auto obj = doc.object();
     for (const auto& v : obj["deployed"].toArray()) {
       deployed.push_back(v.toString().toStdString());
+    }
+    // "dirs" was added later — older manifests won't have it, which is fine.
+    for (const auto& v : obj["dirs"].toArray()) {
+      dirs.push_back(v.toString().toStdString());
     }
     const auto bk = obj["backups"].toObject();
     for (auto it = bk.begin(); it != bk.end(); ++it) {
@@ -1146,6 +1193,7 @@ static void loadRootManifest(const std::string& storageDir,
 
 static void saveRootManifest(const std::string& storageDir,
                              const std::vector<std::string>& deployed,
+                             const std::vector<std::string>& dirs,
                              const std::map<std::string, std::string>& backups)
 {
   namespace fs = std::filesystem;
@@ -1157,6 +1205,11 @@ static void saveRootManifest(const std::string& storageDir,
     arr.append(QString::fromStdString(f));
   }
 
+  QJsonArray dirArr;
+  for (const auto& d : dirs) {
+    dirArr.append(QString::fromStdString(d));
+  }
+
   QJsonObject bk;
   for (const auto& [dst, bak] : backups) {
     bk[QString::fromStdString(dst)] = QString::fromStdString(bak);
@@ -1164,6 +1217,7 @@ static void saveRootManifest(const std::string& storageDir,
 
   QJsonObject obj;
   obj["deployed"] = arr;
+  obj["dirs"]     = dirArr;
   obj["backups"]  = bk;
 
   const auto manifestPath = fs::path(storageDir) / "manifest.json";
@@ -1187,10 +1241,32 @@ void FuseConnector::deployRootFiles(
   clearRootFiles();
 
   m_rootDeployedFiles.clear();
+  m_rootDeployedDirs.clear();
   m_rootBackups.clear();
 
+  const fs::path gameRoot(m_gameDir);
   const std::string backupDir = (fs::path(m_rootStorageDir) / "backup").string();
   std::set<std::string> deployedSet;
+
+  // Create dst.parent_path() one segment at a time, recording each segment
+  // we actually had to create (so it can be removed on cleanup if empty).
+  // Stops walking up once it hits an existing dir or the gameRoot itself —
+  // we never want to remove the game root or any pre-existing user dir.
+  auto trackedCreateParents = [&](const fs::path& filePath) {
+    std::error_code ec2;
+    std::vector<fs::path> toCreate;
+    for (fs::path p = filePath.parent_path();
+         !p.empty() && p != gameRoot && !fs::exists(p, ec2);
+         p = p.parent_path()) {
+      toCreate.push_back(p);
+      if (p == p.root_path()) break;
+    }
+    for (auto it = toCreate.rbegin(); it != toCreate.rend(); ++it) {
+      if (fs::create_directory(*it, ec2) && !ec2) {
+        m_rootDeployedDirs.push_back(it->string());
+      }
+    }
+  };
 
   for (const auto& [modName, modPath] : mods) {
     const auto rootDir = findRootDir(modPath);
@@ -1218,7 +1294,7 @@ void FuseConnector::deployRootFiles(
       if (fs::exists(dst, ec) || fs::is_symlink(dst, ec)) {
         fs::remove(dst, ec);
       }
-      fs::create_directories(fs::path(dst).parent_path(), ec);
+      trackedCreateParents(fs::path(dst));
 
       if (!reflinkCopy(entry.path().string(), dst)) {
         std::fprintf(stderr, "[RootBuilder] failed to copy '%s' -> '%s'\n",
@@ -1231,7 +1307,8 @@ void FuseConnector::deployRootFiles(
     }
   }
 
-  saveRootManifest(m_rootStorageDir, m_rootDeployedFiles, m_rootBackups);
+  saveRootManifest(m_rootStorageDir, m_rootDeployedFiles, m_rootDeployedDirs,
+                   m_rootBackups);
 
   const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::steady_clock::now() - t0).count();
@@ -1248,11 +1325,12 @@ void FuseConnector::clearRootFiles()
   std::error_code ec;
 
   // Load manifest if we don't have in-memory state
-  if (m_rootDeployedFiles.empty()) {
-    loadRootManifest(m_rootStorageDir, m_rootDeployedFiles, m_rootBackups);
+  if (m_rootDeployedFiles.empty() && m_rootDeployedDirs.empty()) {
+    loadRootManifest(m_rootStorageDir, m_rootDeployedFiles, m_rootDeployedDirs,
+                     m_rootBackups);
   }
 
-  if (m_rootDeployedFiles.empty()) return;
+  if (m_rootDeployedFiles.empty() && m_rootDeployedDirs.empty()) return;
 
   int removed = 0;
   for (const auto& dst : m_rootDeployedFiles) {
@@ -1270,14 +1348,30 @@ void FuseConnector::clearRootFiles()
     }
   }
 
+  // Remove dirs we created in game root, deepest-first, only if empty.
+  // A non-empty dir means the user (or game) put something there — leave it.
+  std::sort(m_rootDeployedDirs.begin(), m_rootDeployedDirs.end(),
+            [](const std::string& a, const std::string& b) {
+              return a.size() > b.size();
+            });
+  std::size_t removedDirs = 0;
+  for (const auto& d : m_rootDeployedDirs) {
+    if (fs::is_directory(d, ec) && fs::is_empty(d, ec)) {
+      fs::remove(d, ec);
+      if (!ec) ++removedDirs;
+    }
+  }
+
   // Clean up backup directory and manifest
   const auto backupDir = fs::path(m_rootStorageDir) / "backup";
   fs::remove_all(backupDir, ec);
   fs::remove(fs::path(m_rootStorageDir) / "manifest.json", ec);
 
-  std::fprintf(stderr, "[RootBuilder] cleared %d deployed files, restored %zu backups\n",
-               removed, m_rootBackups.size());
+  std::fprintf(stderr,
+               "[RootBuilder] cleared %d deployed files, %zu dirs, restored %zu backups\n",
+               removed, removedDirs, m_rootBackups.size());
 
   m_rootDeployedFiles.clear();
+  m_rootDeployedDirs.clear();
   m_rootBackups.clear();
 }

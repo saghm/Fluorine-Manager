@@ -90,6 +90,10 @@ private:
 
   // Symlinks created for non-data-dir mappings (e.g. Paks, OBSE, UE4SS).
   std::vector<std::string> m_externalSymlinks;
+  // Directories we created for non-data-dir mappings — removed (only if
+  // empty) on cleanup. Stored deepest-first so reverse-iteration unwinds
+  // child dirs before their parents.
+  std::vector<std::string> m_externalDirs;
   // File-level mappings targeting the data directory (e.g. plugins.txt).
   // Injected into the VFS tree after building.  (relPath, absRealPath)
   std::vector<std::pair<std::string, std::string>> m_extraVfsFiles;
@@ -107,6 +111,7 @@ private:
   bool m_rootBuilderEnabled = false;
   std::string m_rootStorageDir;
   std::vector<std::string> m_rootDeployedFiles;
+  std::vector<std::string> m_rootDeployedDirs;  // dirs we created in game root
   std::map<std::string, std::string> m_rootBackups;  // dst -> backup path
 };
 

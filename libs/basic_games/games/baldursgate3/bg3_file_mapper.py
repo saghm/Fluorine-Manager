@@ -4,7 +4,7 @@ import platform
 from pathlib import Path
 from typing import Callable, Optional
 
-from PyQt6.QtCore import QDir, QLoggingCategory, qDebug, qInfo, qWarning
+from PyQt6.QtCore import QDir, qDebug, qInfo, qWarning
 from PyQt6.QtWidgets import QApplication
 
 import mobase
@@ -71,11 +71,6 @@ class BG3FileMapper(mobase.IPluginFileMapper):
         progress.setValue(len(active_mods) + 1)
         QApplication.processEvents()
         progress.close()
-        cat = QLoggingCategory.defaultCategory()
-        if cat is not None and cat.isDebugEnabled():
-            qDebug(
-                f"resolved mappings: { {m.source: m.destination for m in self.current_mappings} }"
-            )
         return self.current_mappings
 
     def map_files(
