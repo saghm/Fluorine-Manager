@@ -396,16 +396,16 @@ namespace shell
     }
   }
 
-  // Launch an external host process with AppImage environment variables
-  // cleaned up, so tools like xdg-open/kde-open use the host's own
-  // libraries and Qt plugins instead of the bundled ones.
+  // Launch an external host process with bundled-runtime environment
+  // variables cleaned up, so tools like xdg-open/kde-open use the host's
+  // own libraries and Qt plugins instead of the ones we ship.
   static bool startDetachedHostProcess(const QString& program,
                                        const QStringList& args)
   {
     QProcess proc;
     auto env = QProcessEnvironment::systemEnvironment();
 
-    // Restore original LD_LIBRARY_PATH (saved by AppRun.sh)
+    // Restore original LD_LIBRARY_PATH (saved by the fluorine-manager launcher).
     if (env.contains(QStringLiteral("FLUORINE_ORIG_LD_LIBRARY_PATH"))) {
       const auto orig = env.value(QStringLiteral("FLUORINE_ORIG_LD_LIBRARY_PATH"));
       if (orig.isEmpty())
@@ -414,7 +414,8 @@ namespace shell
         env.insert(QStringLiteral("LD_LIBRARY_PATH"), orig);
     }
 
-    // Remove AppImage-specific Qt/path variables that would confuse host apps
+    // Remove Qt/path variables pointing at our bundled runtime that would
+    // confuse host apps.
     env.remove(QStringLiteral("QT_PLUGIN_PATH"));
     env.remove(QStringLiteral("QT_QPA_PLATFORM_PLUGIN_PATH"));
     env.remove(QStringLiteral("QTWEBENGINEPROCESS_PATH"));

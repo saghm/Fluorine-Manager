@@ -167,9 +167,10 @@ bool ProxyPython::init(IOrganizer* moInfo)
             std::filesystem::path{IOrganizer::getPluginDataPath().toStdWString()}};
         m_Runner->initialize(paths);
 #else
-        // On Linux, rely on the unpacked stdlib from PYTHONHOME (AppRun sets
-        // MO2_PYTHON_DIR/PYTHONHOME). Do not prepend pythoncore.zip here:
-        // forcing zipimport can fail when zlib is unavailable in embedded mode.
+        // On Linux, rely on the unpacked stdlib from PYTHONHOME (the
+        // fluorine-manager launcher sets MO2_PYTHON_DIR/PYTHONHOME). Do not
+        // prepend pythoncore.zip here: forcing zipimport can fail when zlib
+        // is unavailable in embedded mode.
         std::vector<fs::path> paths{
             libpath,
             std::filesystem::path{IOrganizer::getPluginDataPath().toStdWString()}};
@@ -184,9 +185,9 @@ bool ProxyPython::init(IOrganizer* moInfo)
             }
         }
 
-        // Allow portable/AppImage builds to ship Python packages next to the app.
-        // MO2_PYTHON_DIR (set by AppRun) points to the writable python/ dir
-        // next to the AppImage; fall back to <exe_dir>/python.
+        // Allow portable builds to ship Python packages next to the app.
+        // MO2_PYTHON_DIR (set by the fluorine-manager launcher) points to the
+        // writable python/ dir; fall back to <exe_dir>/python.
         fs::path pythonDir;
         const char* envPy = std::getenv("MO2_PYTHON_DIR");
         if (envPy && envPy[0] != '\0') {

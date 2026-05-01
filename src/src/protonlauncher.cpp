@@ -14,32 +14,22 @@
 
 namespace
 {
-// Restore the pre-AppImage environment for child processes (Proton, Wine).
-// The AppRun script saves FLUORINE_ORIG_* vars before
-// modifying PATH, LD_LIBRARY_PATH, etc.  We restore from those saved values
-// so game processes get a clean host environment without AppImage library paths.
-void cleanAppImageEnv(QProcessEnvironment& env)
+// Restore the pre-launcher environment for child processes (Proton, Wine).
+// The fluorine-manager launcher script saves FLUORINE_ORIG_* before
+// modifying PATH, LD_LIBRARY_PATH, etc., so game processes get a clean
+// host environment without the bundled-library paths leaking through.
+void cleanFluorineEnv(QProcessEnvironment& env)
 {
-  // Remove Fluorine/AppImage-specific vars that should never leak to game processes.
+  // Remove Fluorine-specific vars that should never leak to game processes.
   env.remove("QT_QPA_PLATFORM_PLUGIN_PATH");
   env.remove("MO2_PLUGINS_DIR");
   env.remove("MO2_LIBS_DIR");
   env.remove("MO2_PYTHON_DIR");
   env.remove("MO2_BASE_DIR");
 
-  // AppImage runtime injects these — they can confuse Proton/Wine.
-  env.remove("APPIMAGE");
-  env.remove("APPDIR");
-  env.remove("OWD");
-  env.remove("ARGV0");
-  env.remove("APPIMAGE_ORIGINAL_EXEC");
-
-  env.remove("DESKTOPINTEGRATION");
-
-  // Restore saved pre-AppImage values.  AppRun sets FLUORINE_ORIG_* before
-  // modifying PATH, LD_LIBRARY_PATH, etc.  If those vars exist, use them to
-  // restore the original host environment.  If not (standalone/non-AppImage),
-  // fall back to stripping known AppImage patterns.
+  // Restore saved pre-launcher values from FLUORINE_ORIG_*. If those
+  // vars are missing (e.g. someone invoked ModOrganizer-core directly),
+  // fall back to stripping bundled-runtime paths by pattern.
   auto restoreOrStrip = [](const QString& var, const QString& origVar,
                            QProcessEnvironment& e) {
     if (e.contains(origVar)) {
@@ -51,12 +41,11 @@ void cleanAppImageEnv(QProcessEnvironment& env)
       }
       e.remove(origVar);
     } else {
-      // Fallback: strip AppImage mount paths by pattern.
       const QString value = e.value(var);
       if (value.isEmpty()) return;
       QStringList kept;
       for (const QString& p : value.split(':')) {
-        if (p.contains(".mount_Fluori") || p.contains("/fluorine/python")) {
+        if (p.contains("/fluorine/python")) {
           continue;
         }
         kept.append(p);
@@ -76,7 +65,7 @@ void cleanAppImageEnv(QProcessEnvironment& env)
   restoreOrStrip("XDG_DATA_DIRS", "FLUORINE_ORIG_XDG_DATA_DIRS", env);
   restoreOrStrip("QT_PLUGIN_PATH", "FLUORINE_ORIG_QT_PLUGIN_PATH", env);
 
-  MOBase::log::debug("cleanAppImageEnv: {} (LD_LIBRARY_PATH='{}')",
+  MOBase::log::debug("cleanFluorineEnv: {} (LD_LIBRARY_PATH='{}')",
                      hasOrigVars ? "restored from FLUORINE_ORIG_*" : "pattern-strip fallback",
                      env.value("LD_LIBRARY_PATH", "<unset>"));
 }
@@ -577,7 +566,7 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
 
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
   env.remove("PYTHONHOME");
-  cleanAppImageEnv(env);
+  cleanFluorineEnv(env);
 
   // Prepend fluorine's bin dir to PATH so the container sees our injected
   // xrandr (steamrt4 ships without it; Proton-GE protonfixes require it).
@@ -819,7 +808,7 @@ bool ProtonLauncher::launchDirect(qint64& pid) const
 
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
   env.remove("PYTHONHOME");
-  cleanAppImageEnv(env);
+  cleanFluorineEnv(env);
   for (auto it = m_wrapperEnvVars.cbegin(); it != m_wrapperEnvVars.cend(); ++it) {
     env.insert(it.key(), it.value());
   }

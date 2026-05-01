@@ -17,17 +17,11 @@
 namespace env
 {
 
-// Returns the path to the AppImage file itself, or falls back to the
-// running binary if not running from an AppImage.
-static QString appImageOrBinary()
+// Prefer the fluorine-manager launcher script over the bare ModOrganizer-core
+// binary — the launcher sets up bundled library paths, Qt plugin paths, etc.
+// Without it, shortcuts fail on systems that don't have all deps in PATH.
+static QString launcherOrBinary()
 {
-  QString appImage = QProcessEnvironment::systemEnvironment().value("APPIMAGE");
-  if (!appImage.isEmpty() && QFile::exists(appImage)) {
-    return appImage;
-  }
-  // Prefer the fluorine-manager launcher script over the bare ModOrganizer-core
-  // binary — the launcher sets up bundled library paths, Qt plugin paths, etc.
-  // Without it, shortcuts fail on systems that don't have all deps in PATH.
   const QString appDir = QCoreApplication::applicationDirPath();
   const QString launcher = appDir + "/fluorine-manager";
   if (QFile::exists(launcher)) {
@@ -281,16 +275,10 @@ static QImage extractIconFromExe(const QString& exePath)
   return img;
 }
 
-// Return the path to the bundled Fluorine icon inside the AppImage,
-// or the installed hicolor copy.  Empty string if neither exists.
+// Return the path to the installed hicolor copy of the Fluorine icon.
+// Empty string if not present.
 static QString bundledFluorineIcon()
 {
-  QString const appDir = QProcessEnvironment::systemEnvironment().value("APPDIR");
-  if (!appDir.isEmpty()) {
-    QString bundled = appDir + "/usr/share/icons/hicolor/256x256/apps/com.fluorine.manager.png";
-    if (QFile::exists(bundled))
-      return bundled;
-  }
   QString hicolor = QDir::homePath() +
       "/.local/share/icons/hicolor/256x256/apps/com.fluorine.manager.png";
   if (QFile::exists(hicolor))
@@ -362,7 +350,7 @@ Shortcut::Shortcut(const Executable& exe) : Shortcut()
 
   m_name         = exe.title();
   m_instanceName = i.displayName();
-  m_target       = appImageOrBinary();
+  m_target       = launcherOrBinary();
 
   // For portable instances, use the absolute directory path so MO2 can
   // find it (line 595 in instancemanager.cpp handles abs path lookup).

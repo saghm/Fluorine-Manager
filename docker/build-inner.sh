@@ -523,7 +523,7 @@ cp -f /src/data/icons/com.fluorine.manager.metainfo.xml "${OUT_DIR}/icons/"
 echo "Wrote manifest: $(wc -l < "${OUT_DIR}/fluorine-manifest.txt") entries"
 
 # ── Determine build mode ──
-# BUILD_MODE is passed from build.sh: tarball (default), installer, appimage, all
+# BUILD_MODE is passed from build.sh: tarball (default), installer, all
 BUILD_MODE="${BUILD_MODE:-tarball}"
 
 # ── Build portable distribution (directory) ──
@@ -657,126 +657,6 @@ INSTALLER_HEADER
     ls -lh "/src/build/${TARBALL_NAME}.bin"
 }
 
-# ── Build AppImage (legacy, optional) ──
-build_appimage() {
-    echo ""
-    echo "=== Building AppImage ==="
-
-    if [ ! -d /opt/linuxdeploy ]; then
-        echo "ERROR: linuxdeploy not available. Rebuild Docker image with --build-arg BUILD_APPIMAGE=1"
-        return 1
-    fi
-
-    APPDIR="/src/build/AppDir"
-    rm -rf "${APPDIR}"
-    mkdir -p "${APPDIR}/usr/bin" "${APPDIR}/usr/lib" "${APPDIR}/usr/share/applications" \
-             "${APPDIR}/usr/plugins" \
-             "${APPDIR}/usr/share/icons/hicolor/256x256/apps" \
-             "${APPDIR}/usr/share/metainfo"
-
-    cp -a "${OUT_DIR}"/. "${APPDIR}/usr/bin/"
-    mv "${APPDIR}/usr/bin/lib"/* "${APPDIR}/usr/lib/" 2>/dev/null || true
-    rmdir "${APPDIR}/usr/bin/lib" 2>/dev/null || true
-    if [ -d "${APPDIR}/usr/bin/qt6plugins" ]; then
-        cp -a "${APPDIR}/usr/bin/qt6plugins"/. "${APPDIR}/usr/plugins/"
-    fi
-
-    cp -f "${OUT_DIR}/icons/com.fluorine.manager.desktop" "${APPDIR}/usr/share/applications/"
-    cp -f "${OUT_DIR}/icons/com.fluorine.manager.png" "${APPDIR}/usr/share/icons/hicolor/256x256/apps/"
-    cp -f "${OUT_DIR}/icons/com.fluorine.manager.metainfo.xml" "${APPDIR}/usr/share/metainfo/"
-
-    mkdir -p "${APPDIR}/usr/share/icons"
-    for theme_dir in /usr/share/icons/*; do
-        [ -d "${theme_dir}" ] || continue
-        cp -a "${theme_dir}" "${APPDIR}/usr/share/icons/"
-    done
-    if [ -f "/usr/share/icons/default/index.theme" ]; then
-        mkdir -p "${APPDIR}/usr/share/icons/default"
-        cp -f "/usr/share/icons/default/index.theme" "${APPDIR}/usr/share/icons/default/"
-    fi
-
-    patchelf --force-rpath --set-rpath '$ORIGIN/../lib' "${APPDIR}/usr/bin/ModOrganizer-core"
-    find "${APPDIR}/usr/bin/plugins" -name "*.so" -exec patchelf --force-rpath --set-rpath '$ORIGIN/../../lib' {} \; 2>/dev/null || true
-    find "${APPDIR}/usr/lib" -name "*.so" -exec patchelf --force-rpath --set-rpath '$ORIGIN' {} \; 2>/dev/null || true
-
-    cat > "${APPDIR}/AppRun" <<'APPRUN'
-#!/usr/bin/env bash
-set -euo pipefail
-SELF="$(readlink -f "$0")"
-HERE="$(cd "$(dirname "$SELF")" && pwd)"
-BIN="${HERE}/usr/bin"
-APPIMAGE_DIR="$(dirname "$(readlink -f "${APPIMAGE:-$0}")")"
-
-export FLUORINE_ORIG_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
-export FLUORINE_ORIG_LD_PRELOAD="${LD_PRELOAD:-}"
-export FLUORINE_ORIG_PATH="${PATH}"
-export FLUORINE_ORIG_XDG_DATA_DIRS="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
-export FLUORINE_ORIG_QT_PLUGIN_PATH="${QT_PLUGIN_PATH:-}"
-
-# Steam injects 32-bit gameoverlayrenderer.so via LD_PRELOAD — clear it.
-unset LD_PRELOAD
-
-# Suppress Qt debug logging by default (see comment in main launcher).
-: "${QT_LOGGING_RULES:=default.debug=false}"
-export QT_LOGGING_RULES
-
-export PATH="${BIN}:${PATH}"
-# Replace (not append) LD_LIBRARY_PATH — Steam game mode injects its runtime
-# libs which break Python/Qt.  RPATH handles the binary's own deps.
-export LD_LIBRARY_PATH="${HERE}/usr/lib"
-
-export MO2_BASE_DIR="${APPIMAGE_DIR}"
-export MO2_PLUGINS_DIR="${BIN}/plugins"
-export MO2_LIBS_DIR="${BIN}/lib"
-
-unset PYTHONPATH PYTHONNOUSERSITE PYTHONHOME MO2_PYTHON_DIR
-
-export QT_PLUGIN_PATH="${HERE}/usr/plugins"
-export QT_QPA_PLATFORM_PLUGIN_PATH="${HERE}/usr/plugins/platforms"
-export XDG_DATA_DIRS="${HERE}/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
-export QT_ICON_THEME_NAME="${QT_ICON_THEME_NAME:-breeze}"
-export QT_STYLE_OVERRIDE="${QT_STYLE_OVERRIDE:-Breeze}"
-export XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-KDE}"
-
-# Raise open file descriptor limit — large modlists with FUSE VFS
-# can easily exceed the default 1024
-ulimit -n 65536 2>/dev/null
-
-cd "${APPIMAGE_DIR}"
-exec "${BIN}/ModOrganizer-core" "$@"
-APPRUN
-    chmod +x "${APPDIR}/AppRun"
-
-    ln -sf usr/share/applications/com.fluorine.manager.desktop "${APPDIR}/com.fluorine.manager.desktop"
-    ln -sf usr/share/icons/hicolor/256x256/apps/com.fluorine.manager.png "${APPDIR}/com.fluorine.manager.png"
-    ln -sf usr/share/icons/hicolor/256x256/apps/com.fluorine.manager.png "${APPDIR}/.DirIcon"
-
-    DEPLOY_DIR="/tmp/linuxdeploy-extract"
-    if [ ! -d "${DEPLOY_DIR}" ]; then
-        cd /opt/linuxdeploy
-        ./linuxdeploy-x86_64.AppImage --appimage-extract >/dev/null
-        mv squashfs-root "${DEPLOY_DIR}"
-        chmod +x "${DEPLOY_DIR}/AppRun"
-    fi
-
-    export ARCH=x86_64
-    "${DEPLOY_DIR}/AppRun" \
-        --appdir "${APPDIR}" \
-        --output appimage \
-        --desktop-file "${APPDIR}/usr/share/applications/com.fluorine.manager.desktop" \
-        --icon-file "${APPDIR}/usr/share/icons/hicolor/256x256/apps/com.fluorine.manager.png" \
-        2>&1 || {
-        echo "WARNING: linuxdeploy AppImage generation failed"
-    }
-
-    APPIMAGE_FILE=$(ls -1 Fluorine*.AppImage 2>/dev/null || ls -1 *.AppImage 2>/dev/null || true)
-    if [ -n "${APPIMAGE_FILE}" ]; then
-        mv "${APPIMAGE_FILE}" "/src/build/"
-        echo "AppImage: /src/build/${APPIMAGE_FILE}"
-        ls -lh "/src/build/"*.AppImage
-    fi
-}
-
 # ── Execute requested build mode ──
 case "${BUILD_MODE}" in
     tarball)
@@ -785,17 +665,12 @@ case "${BUILD_MODE}" in
     installer)
         build_installer
         ;;
-    appimage)
-        build_appimage
-        ;;
     all)
         build_tarball
-        if [ -d /opt/linuxdeploy ]; then
-            build_appimage
-        fi
+        build_installer
         ;;
     *)
-        echo "ERROR: Unknown BUILD_MODE '${BUILD_MODE}'. Use: tarball, installer, appimage, all"
+        echo "ERROR: Unknown BUILD_MODE '${BUILD_MODE}'. Use: tarball, installer, all"
         exit 1
         ;;
 esac
@@ -805,4 +680,4 @@ echo "=== Build Summary ==="
 du -sh "${OUT_DIR}"/*/ "${OUT_DIR}"/ModOrganizer-core 2>/dev/null | sort -rh
 echo ""
 echo "Build outputs:"
-ls -dh /src/build/fluorine-manager/ /src/build/fluorine-manager.bin /src/build/*.AppImage 2>/dev/null || echo "  (none found)"
+ls -dh /src/build/fluorine-manager/ /src/build/fluorine-manager.bin 2>/dev/null || echo "  (none found)"

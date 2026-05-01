@@ -198,13 +198,7 @@ void NxmHandlerLinux::registerHandler()
   const QString wrapperPath = localBin + "/mo2-nxm-handler";
 
   // Determine a stable executable path for the wrapper script.
-  // QCoreApplication::applicationFilePath() returns the temp FUSE mount for
-  // AppImages (/tmp/.mount_XXXXX/...) which changes every launch.  Use the
-  // APPIMAGE env var (the actual .AppImage file) when available.
-  QString executable = qEnvironmentVariable("APPIMAGE");
-  if (executable.isEmpty()) {
-    executable = QCoreApplication::applicationFilePath();
-  }
+  const QString executable = QCoreApplication::applicationFilePath();
 
   const QString wrapper =
       QString("#!/bin/sh\nexec \"%1\" nxm-handle \"$@\"\n").arg(executable);

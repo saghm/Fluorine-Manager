@@ -7,8 +7,7 @@ set -euo pipefail
 #   ./build.sh              # Build portable .tar.gz (default)
 #   ./build.sh tarball      # Build portable .tar.gz only
 #   ./build.sh installer    # Build self-extracting .bin installer only
-#   ./build.sh appimage     # Build AppImage (legacy)
-#   ./build.sh all          # Build tarball + AppImage (if available)
+#   ./build.sh all          # Build tarball + installer
 #   ./build.sh shell        # Drop into the build container for debugging
 #
 # Prerequisites: Docker or Podman
@@ -32,27 +31,20 @@ cd "${SCRIPT_DIR}"
 # Determine build mode from first argument
 BUILD_MODE="${1:-tarball}"
 case "${BUILD_MODE}" in
-    tarball|installer|appimage|all|shell) ;;
+    tarball|installer|all|shell) ;;
     *)
-        echo "Usage: ./build.sh [tarball|installer|appimage|all|shell]"
+        echo "Usage: ./build.sh [tarball|installer|all|shell]"
         echo ""
         echo "  tarball    Build portable .tar.gz"
         echo "  installer  Build self-extracting .bin installer"
-        echo "  appimage   Build AppImage (legacy)"
-        echo "  all        Build tarball (+ AppImage if available)"
+        echo "  all        Build tarball + installer"
         echo "  shell      Drop into build container"
         exit 1
         ;;
 esac
 
-# Build the Docker image if it doesn't exist or Dockerfile changed.
-# Pass BUILD_APPIMAGE=1 only when AppImage builds are requested.
 echo "=== Ensuring build image is up to date ==="
-DOCKER_BUILD_ARGS=()
-if [ "${BUILD_MODE}" = "appimage" ] || [ "${BUILD_MODE}" = "all" ]; then
-    DOCKER_BUILD_ARGS+=(--build-arg BUILD_APPIMAGE=1)
-fi
-${DOCKER} build "${DOCKER_BUILD_ARGS[@]}" -t "${IMAGE_NAME}" docker/
+${DOCKER} build -t "${IMAGE_NAME}" docker/
 
 # Persistent ccache directory for faster rebuilds.
 CCACHE_DIR="${HOME}/.cache/fluorine-ccache"
@@ -92,5 +84,5 @@ ${DOCKER} run --rm \
 echo ""
 echo "=== Done ==="
 echo "Build outputs:"
-ls -lh build/fluorine-manager.tar.gz build/fluorine-manager.bin build/*.AppImage 2>/dev/null || echo "  (none found)"
+ls -ldh build/fluorine-manager build/fluorine-manager.bin 2>/dev/null || echo "  (none found)"
 echo "Staging: build/staging/"

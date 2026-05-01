@@ -564,18 +564,16 @@ QProcess* PrefixSetupRunner::buildWrappedProcess(
 {
   auto* proc = new QProcess(this);
 
-  // Start from the system environment and clean AppImage vars.
+  // Start from the system environment and clean Fluorine bundling vars.
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
 
-  // Remove AppImage/Fluorine vars that can confuse Wine.
+  // Remove Fluorine vars that can confuse Wine.
   for (const char* var : {"QT_QPA_PLATFORM_PLUGIN_PATH", "MO2_PLUGINS_DIR",
-       "MO2_LIBS_DIR", "MO2_PYTHON_DIR", "MO2_BASE_DIR",
-       "APPIMAGE", "APPDIR", "OWD", "ARGV0",
-       "APPIMAGE_ORIGINAL_EXEC", "DESKTOPINTEGRATION"}) {
+       "MO2_LIBS_DIR", "MO2_PYTHON_DIR", "MO2_BASE_DIR"}) {
     env.remove(var);
   }
 
-  // Restore pre-AppImage environment if available.
+  // Restore pre-launcher environment if available.
   auto restoreOrStrip = [&env](const QString& var, const QString& origVar) {
     if (env.contains(origVar)) {
       const QString orig = env.value(origVar);
@@ -719,7 +717,7 @@ int PrefixSetupRunner::runHostProcess(const QString& exe,
   proc.setArguments(args);
   proc.setProcessChannelMode(QProcess::MergedChannels);
 
-  // Clean AppImage/Fluorine env so host tools find their system libraries.
+  // Clean Fluorine env so host tools find their system libraries.
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
   auto restoreOrStrip = [&env](const QString& var, const QString& origVar) {
     if (env.contains(origVar)) {

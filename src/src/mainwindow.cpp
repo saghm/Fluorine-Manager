@@ -636,8 +636,8 @@ void MainWindow::resetActionIcons()
 
 void MainWindow::resetButtonIcons()
 {
-  // Some icon-only QPushButtons can lose their icons after stylesheet repolish on
-  // Linux/AppImage. Re-apply explicit resource icons to keep these controls visible.
+  // Some icon-only QPushButtons can lose their icons after stylesheet repolish
+  // on Linux. Re-apply explicit resource icons to keep these controls visible.
   ui->listOptionsBtn->setIcon(QIcon::fromTheme(
       "preferences-system", QIcon(":/MO/gui/settings")));
   ui->openFolderMenu->setIcon(

@@ -74,27 +74,4 @@ RUN /opt/python-bundled/bin/pip3 install --no-cache-dir \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
     sh -s -- -y --default-toolchain stable --profile minimal
 
-# ── Pre-download linuxdeploy tooling (optional, only for AppImage builds) ──
-# Set BUILD_APPIMAGE=1 to include linuxdeploy in the image.
-# Without it, only tarball and installer builds are available.
-ARG BUILD_APPIMAGE=0
-RUN if [ "${BUILD_APPIMAGE}" = "1" ]; then \
-        mkdir -p /opt/linuxdeploy && \
-        curl -L --retry 3 -o /opt/linuxdeploy/linuxdeploy-x86_64.AppImage \
-          https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage && \
-        curl -L --retry 3 -o /opt/linuxdeploy/linuxdeploy-plugin-qt-x86_64.AppImage \
-          https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage && \
-        chmod +x /opt/linuxdeploy/linuxdeploy-x86_64.AppImage \
-                 /opt/linuxdeploy/linuxdeploy-plugin-qt-x86_64.AppImage && \
-        cd /opt/linuxdeploy && \
-        ./linuxdeploy-plugin-qt-x86_64.AppImage --appimage-extract >/dev/null && \
-        mv squashfs-root linuxdeploy-plugin-qt.AppDir && \
-        chmod +x linuxdeploy-plugin-qt.AppDir/AppRun && \
-        ln -sf /opt/linuxdeploy/linuxdeploy-plugin-qt.AppDir/AppRun \
-               /opt/linuxdeploy/linuxdeploy-plugin-qt && \
-        chmod -x /opt/linuxdeploy/linuxdeploy-plugin-qt-x86_64.AppImage; \
-    else \
-        echo "Skipping linuxdeploy (BUILD_APPIMAGE not set)"; \
-    fi
-
 WORKDIR /build

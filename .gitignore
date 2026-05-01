@@ -7,9 +7,6 @@ build-container-2404-gcc14/
 # Rust build artifacts
 target/
 
-# AppImage build artifacts
-*.AppImage
-
 # Logs
 *.log
 
@@ -23,11 +20,8 @@ compile_commands.json
 .DS_Store
 Thumbs.db
 
-# AppImage extraction/build leftovers
-squashfs-root/
+# Build leftovers
 build-source/
-flatpak-repo/
-*.flatpak
 
 # Python bytecode
 __pycache__/

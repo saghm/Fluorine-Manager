@@ -190,7 +190,7 @@ MOApplication::MOApplication(int& argc, char** argv) : QApplication(argc, argv)
   TimeThis const tt("MOApplication()");
 
   // Ensure the app name is always "ModOrganizer" regardless of the binary
-  // filename (e.g. "ModOrganizer.bin" inside an AppImage).
+  // filename (settings/profile lookups key off this).
   setApplicationName("ModOrganizer");
   setDesktopFileName(QStringLiteral("com.fluorine.manager"));
   setWindowIcon(QIcon(":/MO/gui/app_icon"));

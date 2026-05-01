@@ -31,15 +31,13 @@ namespace AppConfig
 #define APPPARAM(partype, parid, value) partype parid();
 #include "appconfig.inc"
 
-// Returns the application base directory.  On Linux, if the MO2_BASE_DIR
-// environment variable is set (e.g. by an AppImage wrapper) that value is
-// returned; otherwise falls back to QCoreApplication::applicationDirPath().
+// Returns the application base directory.  Respects MO2_BASE_DIR if set
+// (the fluorine-manager launcher exports it), otherwise falls back to
+// QCoreApplication::applicationDirPath().
 QString basePath();
 
-// Returns the directory containing MO2 plugins.  On Linux, if the
-// MO2_PLUGINS_DIR environment variable is set (e.g. when plugins live
-// inside a read-only AppImage squashfs) that value is used; otherwise
-// falls back to basePath() + "/plugins".
+// Returns the directory containing MO2 plugins.  Respects MO2_PLUGINS_DIR
+// if set, otherwise falls back to basePath() + "/plugins".
 QString pluginsPath();
 
 // Returns the directory containing bundled Linux libraries (7z.so, etc.).

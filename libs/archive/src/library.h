@@ -94,7 +94,7 @@ private:
         exeDir = exeDir.substr(0, slash);
     }
 
-    // AppImage: check MO2_LIBS_DIR env var first (writable dir next to AppImage)
+    // Honor MO2_LIBS_DIR (set by the fluorine-manager launcher) first.
     std::string envLibs;
     const char* envVal = std::getenv("MO2_LIBS_DIR");
     if (envVal && envVal[0] != '\0') {
