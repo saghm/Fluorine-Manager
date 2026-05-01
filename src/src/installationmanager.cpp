@@ -549,8 +549,8 @@ InstallationResult InstallationManager::doInstall(GuessedValue<QString>& modName
 
   // overwrite settings only if they are actually are available or haven't been set
   // before
-  if ((gameName != "") || !settingsFile.contains("gameName")) {
-    settingsFile.setValue("gameName", gameName);
+  if ((gameName != "") || !settingsFile.contains("gamename")) {
+    settingsFile.setValue("gamename", gameName);
   }
   if ((modID != 0) || !settingsFile.contains("modid")) {
     settingsFile.setValue("modid", modID);
@@ -561,15 +561,15 @@ InstallationResult InstallationManager::doInstall(GuessedValue<QString>& modName
                    VersionInfo(settingsFile.value("version").toString()))))) {
     settingsFile.setValue("version", version);
   }
-  if (!newestVersion.isEmpty() || !settingsFile.contains("newestVersion")) {
-    settingsFile.setValue("newestVersion", newestVersion);
+  if (!newestVersion.isEmpty() || !settingsFile.contains("newestversion")) {
+    settingsFile.setValue("newestversion", newestVersion);
   }
   // issue #51 used to overwrite the manually set categories
   if (!settingsFile.contains("category")) {
     settingsFile.setValue("category", QString::number(categoryID));
   }
-  settingsFile.setValue("nexusFileStatus", fileCategoryID);
-  settingsFile.setValue("installationFile", storeMetaPath(m_CurrentFile));
+  settingsFile.setValue("nexusfilestatus", fileCategoryID);
+  settingsFile.setValue("installationfile", storeMetaPath(m_CurrentFile));
   settingsFile.setValue("repository", repository);
 
   if (!merge) {
