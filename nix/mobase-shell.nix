@@ -25,6 +25,7 @@ pkgs.mkShell {
     qt6.qtwebsockets
     qt6.qtsvg
     qt6.qtwayland
+    qt6.qtnetworkauth
 
     # Python (withPackages for runtime, base python313 for dev headers/libpython)
     pythonWithPkgs
@@ -60,6 +61,6 @@ pkgs.mkShell {
     fi
     export PATH="$PWD/.nix-venv/bin:$PATH"
     export PYTHONPATH="$PWD/.nix-venv/lib/python3.13/site-packages:$PYTHONPATH"
-    export CMAKE_PREFIX_PATH="${pkgs.qt6.qtbase}:${pkgs.qt6.qtwebengine}:${pkgs.qt6.qtwebsockets}:${pkgs.qt6.qtsvg}:$CMAKE_PREFIX_PATH"
+    export CMAKE_PREFIX_PATH="${pkgs.qt6.qtbase}:${pkgs.qt6.qtwebengine}:${pkgs.qt6.qtwebsockets}:${pkgs.qt6.qtsvg}:${pkgs.qt6.qtnetworkauth}:$CMAKE_PREFIX_PATH"
   '';
 }
