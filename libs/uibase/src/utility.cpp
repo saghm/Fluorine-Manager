@@ -563,17 +563,24 @@ namespace shell
     }
 #endif
 
+    const QString renameError = QString::fromStdString(ec.message());
+
     if (copyAllowed) {
-      if (QFile::copy(srcPath, destPath)) {
+      QFile copyFile(srcPath);
+      if (copyFile.copy(destPath)) {
         QFile::remove(srcPath);
         return Result::makeSuccess();
       }
+      return Result::makeFailure(
+          ERROR_ACCESS_DENIED,
+          QObject::tr("Rename failed: %1. Copy fallback failed: %2")
+              .arg(renameError, copyFile.errorString()));
     }
 
     // Propagate the real errno text rather than a generic Windows code so the
     // log line actually reflects what failed.
     const int err = ec.value();
-    QString msg = QString::fromStdString(ec.message());
+    QString msg   = renameError;
     if (msg.isEmpty()) {
       msg = QString("rename failed: errno=%1").arg(err);
     }
@@ -1083,8 +1090,13 @@ std::wstring formatSystemMessage(DWORD id)
   std::wstring getMessage(DWORD id, HMODULE mod);
   return formatMessage(id, getMessage(id, 0));
 #else
-  // On Linux, map common error codes to strings or use strerror for errno values
-  if (id == 0) {
+  // The codebase uses Windows error macros (ERROR_ACCESS_DENIED, etc.) as
+  // internal error representation. On Linux, strerror(id) would interpret
+  // these as POSIX errno values — which overlap numerically but mean
+  // completely different things (e.g. Windows error 5 = ACCESS_DENIED,
+  // Linux errno 5 = EIO). Map known Windows codes explicitly instead.
+  switch (id) {
+  case 0:  // ERROR_SUCCESS
     return L"Success";
   }
 
