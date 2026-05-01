@@ -812,14 +812,64 @@ void FuseConnector::deployExternalMappings(const MappingType& mapping,
 
     if (map.isDirectory) {
       const fs::path srcPath(src.toStdString());
+      const fs::path dstPath(dst.toStdString());
+
+      // For createTarget directory mappings (e.g. SKSE Log Redirector
+      // pointing My Games/Skyrim → Skyrim Special Edition), publish a single
+      // directory symlink so any new file the game writes under the dest
+      // path is also redirected — not just the files that exist in source
+      // at deploy time. Falls back to per-file symlinks when the dest dir
+      // already contains real content we mustn't clobber.
+      if (map.createTarget) {
+        if (!fs::exists(srcPath, ec)) {
+          fs::create_directories(srcPath, ec);
+          if (ec) {
+            ec.clear();
+          }
+        }
+        const bool dstExists  = fs::exists(dstPath, ec);
+        ec.clear();
+        const bool dstIsLink  = dstExists && fs::is_symlink(dstPath, ec);
+        ec.clear();
+        const bool dstIsEmpty = dstExists && fs::is_directory(dstPath, ec) &&
+                                fs::is_empty(dstPath, ec);
+        ec.clear();
+
+        if (!dstExists || dstIsLink || dstIsEmpty) {
+          createTrackedDirs(dstPath.parent_path());
+          if (dstIsLink) {
+            fs::remove(dstPath, ec);
+            ec.clear();
+          } else if (dstIsEmpty) {
+            fs::remove(dstPath, ec);
+            ec.clear();
+          }
+          fs::create_directory_symlink(srcPath, dstPath, ec);
+          if (!ec) {
+            m_externalSymlinks.push_back(dstPath.string());
+            log::debug("Deployed directory symlink {} -> {}", dst, src);
+            continue;
+          }
+          log::warn("Failed to symlink directory {} -> {}: {}", dst, src,
+                    QString::fromStdString(ec.message()));
+          ec.clear();
+        } else {
+          log::warn(
+              "Mapped folder {} contains real files; falling back to per-file "
+              "symlinks. Move existing contents into {} and restart to fully "
+              "redirect new writes.",
+              dst, src);
+        }
+      }
+
       if (!fs::exists(srcPath, ec)) {
         continue;
       }
 
-      // Pre-create the createTarget root so an empty source still leaves
-      // the target tracked for removal.
       if (map.createTarget) {
-        createTrackedDirs(fs::path(dst.toStdString()));
+        // Pre-create the dst root so an empty source still leaves it tracked
+        // for removal on cleanup.
+        createTrackedDirs(dstPath);
       }
 
       for (auto it = fs::recursive_directory_iterator(

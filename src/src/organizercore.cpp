@@ -15,6 +15,7 @@
 #include "iplugingame.h"
 #include "iuserinterface.h"
 #include "messagedialog.h"
+#include "metainiutils.h"
 #include "modlistsortproxy.h"
 #include "modrepositoryfileinfo.h"
 #include "nexusinterface.h"
@@ -956,7 +957,9 @@ MOBase::IModInterface* OrganizerCore::createMod(GuessedValue<QString>& name)
   QString const targetDirectory =
       QDir::fromNativeSeparators(m_Settings.paths().mods()).append("/").append(name);
 
-  QSettings settingsFile(targetDirectory + "/meta.ini", QSettings::IniFormat);
+  const QString metaPath = targetDirectory + "/meta.ini";
+  MetaIniUtils::normalizeMetaIniCase(metaPath);
+  QSettings settingsFile(metaPath, QSettings::IniFormat);
 
   if (!result.merged()) {
     settingsFile.setValue("modid", 0);

@@ -2,6 +2,7 @@
 
 #include "categories.h"
 #include "messagedialog.h"
+#include "metainiutils.h"
 #include "moddatacontent.h"
 #include "organizercore.h"
 #include "plugincontainer.h"
@@ -107,7 +108,9 @@ bool ModInfoRegular::isEmpty() const
 
 void ModInfoRegular::readMeta()
 {
-  QSettings metaFile(m_Path + "/meta.ini", QSettings::IniFormat);
+  const QString metaPath = m_Path + "/meta.ini";
+  MetaIniUtils::normalizeMetaIniCase(metaPath);
+  QSettings metaFile(metaPath, QSettings::IniFormat);
   m_Comments           = metaFile.value("comments", "").toString();
   m_Notes              = metaFile.value("notes", "").toString();
   QString const tempGameName = metaFile.value("gameName", m_GameName).toString();
@@ -274,7 +277,9 @@ void ModInfoRegular::saveMeta()
 {
   // only write meta data if the mod directory exists
   if (m_MetaInfoChanged && QFile::exists(absolutePath())) {
-    QSettings metaFile(absolutePath().append("/meta.ini"), QSettings::IniFormat);
+    const QString metaPath = absolutePath().append("/meta.ini");
+    MetaIniUtils::normalizeMetaIniCase(metaPath);
+    QSettings metaFile(metaPath, QSettings::IniFormat);
     if (metaFile.status() == QSettings::NoError) {
       std::set<int> temp = m_Categories;
       temp.erase(m_PrimaryCategory);

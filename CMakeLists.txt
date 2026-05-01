@@ -285,3 +285,8 @@ endif()
 
 # Main organizer executable
 add_subdirectory(src/src)
+
+if (BUILD_TESTING)
+    enable_testing()
+    add_subdirectory(src/tests)
+endif()

@@ -26,6 +26,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "iplugininstallercustom.h"
 #include "iplugininstallersimple.h"
 #include "messagedialog.h"
+#include "metainiutils.h"
 #include "modinfo.h"
 #include "nexusinterface.h"
 #include "queryoverwritedialog.h"
@@ -542,7 +543,9 @@ InstallationResult InstallationManager::doInstall(GuessedValue<QString>& modName
     QFile::copy(p.second, destPath);
   }
 
-  QSettings settingsFile(targetDirectory + "/meta.ini", QSettings::IniFormat);
+  const QString metaPath = targetDirectory + "/meta.ini";
+  MetaIniUtils::normalizeMetaIniCase(metaPath);
+  QSettings settingsFile(metaPath, QSettings::IniFormat);
 
   // overwrite settings only if they are actually are available or haven't been set
   // before
