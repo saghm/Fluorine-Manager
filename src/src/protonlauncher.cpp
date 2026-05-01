@@ -9,6 +9,7 @@
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QStandardPaths>
+#include <QSet>
 #include <log.h>
 
 
@@ -68,6 +69,232 @@ void cleanFluorineEnv(QProcessEnvironment& env)
   MOBase::log::debug("cleanFluorineEnv: {} (LD_LIBRARY_PATH='{}')",
                      hasOrigVars ? "restored from FLUORINE_ORIG_*" : "pattern-strip fallback",
                      env.value("LD_LIBRARY_PATH", "<unset>"));
+}
+
+QString decodeMountInfoPath(const QByteArray& encoded)
+{
+  QByteArray decoded;
+  decoded.reserve(encoded.size());
+
+  for (int i = 0; i < encoded.size(); ++i) {
+    if (encoded[i] == '\\' && i + 3 < encoded.size() &&
+        encoded[i + 1] >= '0' && encoded[i + 1] <= '7' &&
+        encoded[i + 2] >= '0' && encoded[i + 2] <= '7' &&
+        encoded[i + 3] >= '0' && encoded[i + 3] <= '7') {
+      const char c = static_cast<char>(((encoded[i + 1] - '0') << 6) |
+                                       ((encoded[i + 2] - '0') << 3) |
+                                       (encoded[i + 3] - '0'));
+      decoded.append(c);
+      i += 3;
+    } else {
+      decoded.append(encoded[i]);
+    }
+  }
+
+  return QString::fromUtf8(decoded);
+}
+
+QString canonicalPathForPressureVessel(const QString& path)
+{
+  const QFileInfo info(path);
+  const QString canonical = info.canonicalFilePath();
+  if (!canonical.isEmpty()) {
+    return QDir::cleanPath(canonical);
+  }
+
+  const QString absolute = info.absoluteFilePath();
+  return absolute.isEmpty() ? QString{} : QDir::cleanPath(absolute);
+}
+
+bool pressureVesselSharesByDefault(const QString& path)
+{
+  static const QStringList defaultRoots = {
+      QDir::homePath(),
+      QStringLiteral("/home"),
+      QStringLiteral("/media"),
+      QStringLiteral("/mnt"),
+      QStringLiteral("/opt"),
+      QStringLiteral("/run/media"),
+      QStringLiteral("/srv"),
+  };
+
+  const QString clean = QDir::cleanPath(path);
+  for (const QString& root : defaultRoots) {
+    const QString cleanRoot = QDir::cleanPath(root);
+    if (clean == cleanRoot || clean.startsWith(cleanRoot + '/')) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool isSystemRootPath(const QString& path)
+{
+  static const QStringList systemRootPrefixes = {
+      QStringLiteral("/bin"),
+      QStringLiteral("/boot"),
+      QStringLiteral("/dev"),
+      QStringLiteral("/efi"),
+      QStringLiteral("/etc"),
+      QStringLiteral("/lib"),
+      QStringLiteral("/lib32"),
+      QStringLiteral("/lib64"),
+      QStringLiteral("/lost+found"),
+      QStringLiteral("/nix"),
+      QStringLiteral("/proc"),
+      QStringLiteral("/root"),
+      QStringLiteral("/run"),
+      QStringLiteral("/sbin"),
+      QStringLiteral("/snap"),
+      QStringLiteral("/sys"),
+      QStringLiteral("/tmp"),
+      QStringLiteral("/usr"),
+      QStringLiteral("/var"),
+  };
+
+  const QString clean = QDir::cleanPath(path);
+  for (const QString& prefix : systemRootPrefixes) {
+    if (clean == prefix || clean.startsWith(prefix + '/')) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool shouldExposeMountPointToPressureVessel(const QString& mountPoint,
+                                            const QString& fsType,
+                                            const QString& source)
+{
+  if (mountPoint.isEmpty() || mountPoint == "/" ||
+      pressureVesselSharesByDefault(mountPoint) ||
+      isSystemRootPath(mountPoint)) {
+    return false;
+  }
+
+  static const QSet<QString> ignoredFsTypes = {
+      QStringLiteral("autofs"),     QStringLiteral("bdev"),
+      QStringLiteral("binfmt_misc"), QStringLiteral("bpf"),
+      QStringLiteral("cgroup"),     QStringLiteral("cgroup2"),
+      QStringLiteral("configfs"),   QStringLiteral("debugfs"),
+      QStringLiteral("devpts"),     QStringLiteral("devtmpfs"),
+      QStringLiteral("efivarfs"),   QStringLiteral("fusectl"),
+      QStringLiteral("hugetlbfs"),  QStringLiteral("mqueue"),
+      QStringLiteral("nsfs"),       QStringLiteral("overlay"),
+      QStringLiteral("proc"),       QStringLiteral("pstore"),
+      QStringLiteral("ramfs"),      QStringLiteral("securityfs"),
+      QStringLiteral("squashfs"),   QStringLiteral("sysfs"),
+      QStringLiteral("tmpfs"),      QStringLiteral("tracefs"),
+  };
+
+  if (ignoredFsTypes.contains(fsType)) {
+    return false;
+  }
+
+  return source.startsWith(QStringLiteral("/dev/")) ||
+         source.startsWith(QStringLiteral("UUID=")) ||
+         source.startsWith(QStringLiteral("LABEL=")) ||
+         fsType.startsWith(QStringLiteral("fuse.")) ||
+         fsType == QStringLiteral("fuseblk") ||
+         fsType == QStringLiteral("ntfs3") ||
+         fsType == QStringLiteral("zfs") ||
+         fsType == QStringLiteral("btrfs") ||
+         fsType == QStringLiteral("ext4") ||
+         fsType == QStringLiteral("xfs");
+}
+
+void addPressureVesselPath(QSet<QString>& paths, const QString& path)
+{
+  const QString clean = canonicalPathForPressureVessel(path);
+  if (!clean.isEmpty() && QFileInfo(clean).exists()) {
+    paths.insert(clean);
+  }
+}
+
+void addTopLevelRootDirectoriesToPressureVessel(QSet<QString>& paths)
+{
+  const QFileInfoList entries =
+      QDir(QStringLiteral("/")).entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
+
+  for (const QFileInfo& entry : entries) {
+    const QString path = QDir::cleanPath(entry.absoluteFilePath());
+    if (pressureVesselSharesByDefault(path) || isSystemRootPath(path) ||
+        entry.isSymLink()) {
+      continue;
+    }
+
+    addPressureVesselPath(paths, path);
+  }
+}
+
+void addPressureVesselStorageRootForPath(QSet<QString>& paths, const QString& path)
+{
+  const QString clean = canonicalPathForPressureVessel(path);
+  if (clean.isEmpty() || pressureVesselSharesByDefault(clean)) {
+    return;
+  }
+
+  const QStringList parts = clean.split('/', Qt::SkipEmptyParts);
+  if (parts.isEmpty()) {
+    return;
+  }
+
+  addPressureVesselPath(paths, QStringLiteral("/") + parts.first());
+}
+
+QStringList extraPressureVesselFilesystems(const QStringList& importantPaths)
+{
+  QSet<QString> paths;
+
+  addTopLevelRootDirectoriesToPressureVessel(paths);
+
+  for (const QString& path : importantPaths) {
+    addPressureVesselStorageRootForPath(paths, path);
+  }
+
+  QFile mountInfo(QStringLiteral("/proc/self/mountinfo"));
+  if (mountInfo.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    while (!mountInfo.atEnd()) {
+      const QByteArray line = mountInfo.readLine().trimmed();
+      const QList<QByteArray> fields = line.split(' ');
+      const int sep = fields.indexOf("-");
+      if (sep < 0 || sep + 2 >= fields.size() || fields.size() < 5) {
+        continue;
+      }
+
+      const QString mountPoint = decodeMountInfoPath(fields[4]);
+      const QString fsType = QString::fromUtf8(fields[sep + 1]);
+      const QString source = QString::fromUtf8(fields[sep + 2]);
+      if (shouldExposeMountPointToPressureVessel(mountPoint, fsType, source)) {
+        addPressureVesselPath(paths, mountPoint);
+      }
+    }
+  }
+
+  QStringList result = paths.values();
+  result.sort();
+  return result;
+}
+
+void appendPressureVesselFilesystems(QProcessEnvironment& env,
+                                     const QStringList& paths)
+{
+  if (paths.isEmpty()) {
+    return;
+  }
+
+  QStringList merged;
+  const QString existing = env.value("PRESSURE_VESSEL_FILESYSTEMS_RW");
+  if (!existing.isEmpty()) {
+    merged.append(existing.split(':', Qt::SkipEmptyParts));
+  }
+  merged.append(paths);
+  merged.removeDuplicates();
+
+  env.insert("PRESSURE_VESSEL_FILESYSTEMS_RW", merged.join(':'));
+  MOBase::log::info("SLR extra filesystem access: {}",
+                    paths.join(':').toStdString());
 }
 
 // GE-Proton crashes in update_builtin_libs() if tracked_files doesn't exist
@@ -493,6 +720,9 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
   // what umu-launcher uses and ensures the previous session is fully cleaned up
   // before starting a new one.
   const QStringList protonArgs = QStringList() << "waitforexitandrun" << m_binary << m_arguments;
+  QStringList pressureVesselImportantPaths;
+  pressureVesselImportantPaths << m_binary << m_workingDir << m_prefixPath
+                               << m_bindMountSource << m_bindMountTarget;
 
   // If SLR is enabled, wrap the whole proton invocation inside the
   // pressure-vessel container provided by SteamLinuxRuntime_sniper.
@@ -511,7 +741,15 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
       // Without --filesystem= flags, the container's mount namespace
       // may not see FUSE mounts or system-installed Proton paths.
       if (!m_binary.isEmpty()) {
-        const QString gameDir = QFileInfo(m_binary).absolutePath();
+        QString gameDir = QFileInfo(m_binary).absolutePath();
+        const QFileInfo gameDirInfo(gameDir);
+        if (gameDirInfo.fileName().compare(QStringLiteral("bin"),
+                                           Qt::CaseInsensitive) == 0) {
+          const QString gameRoot = gameDirInfo.dir().absolutePath();
+          if (QFileInfo(gameRoot).exists()) {
+            gameDir = gameRoot;
+          }
+        }
         slrArgs << QStringLiteral("--filesystem=%1").arg(gameDir);
       }
       if (!m_prefixPath.isEmpty()) {
@@ -523,6 +761,7 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
       {
         const QString protonDir = QFileInfo(protonScript).absolutePath();
         slrArgs << QStringLiteral("--filesystem=%1").arg(protonDir);
+        pressureVesselImportantPaths << protonDir;
       }
 
       // Steam overlay needs gameoverlayrenderer.so visible inside the
@@ -750,6 +989,11 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
 
   for (auto it = m_envVars.cbegin(); it != m_envVars.cend(); ++it) {
     env.insert(it.key(), it.value());
+  }
+
+  if (m_useSLR) {
+    appendPressureVesselFilesystems(
+        env, extraPressureVesselFilesystems(pressureVesselImportantPaths));
   }
 
   // If a saves bind mount was requested (and the kernel supports
