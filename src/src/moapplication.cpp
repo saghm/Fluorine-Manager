@@ -218,6 +218,13 @@ MOApplication::MOApplication(int& argc, char** argv) : QApplication(argc, argv)
 #ifdef MO2_WEBENGINE
   configureQtWebEngineProcessPath();
 #endif
+
+  // When MO2 is launched by the nxm handler from a browser, CWD is whatever
+  // the browser inherited (often /, $HOME, or the user's Desktop). Reset it
+  // to the application directory so that any code path relying on CWD
+  // (Qt resource lookup, relative QFile paths, QtWebEngine sandbox helper)
+  // behaves the same as a normal launch. Upstream PR #2379.
+  QDir::setCurrent(QCoreApplication::applicationDirPath());
 }
 
 OrganizerCore& MOApplication::core()
