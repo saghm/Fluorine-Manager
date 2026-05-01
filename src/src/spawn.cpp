@@ -50,6 +50,8 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <csignal>
 #include <sys/types.h>
 
+class QMessageBox;
+
 using namespace MOBase;
 using namespace MOShared;
 

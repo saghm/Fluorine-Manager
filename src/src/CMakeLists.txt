@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 find_package(Qt6 REQUIRED COMPONENTS
-    Widgets WebSockets Network Concurrent)
+    Widgets WebSockets Network NetworkAuth Concurrent)
 option(MO2_ENABLE_WEBENGINE "Build optional Qt WebEngine browser support" OFF)
 if(MO2_ENABLE_WEBENGINE)
     find_package(Qt6 QUIET COMPONENTS WebEngineWidgets)
@@ -108,6 +108,7 @@ target_link_libraries(organizer PRIVATE
     $<$<TARGET_EXISTS:Qt6::WebEngineWidgets>:Qt6::WebEngineWidgets>
     Qt6::WebSockets
     Qt6::Network
+    Qt6::NetworkAuth
     # Boost
     Boost::program_options
     # spdlog

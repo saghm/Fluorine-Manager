@@ -43,7 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ── Qt 6.10 via aqtinstall ──
 RUN pip3 install --break-system-packages aqtinstall && \
     aqt install-qt linux desktop 6.10.2 linux_gcc_64 \
-      -m qtwebsockets qtwaylandcompositor \
+      -m qtwebsockets qtwaylandcompositor qtnetworkauth \
       --outputdir /opt/qt6 && \
     ls /opt/qt6/6.10.2/gcc_64/bin/qmake && \
     (pip3 uninstall -y aqtinstall --break-system-packages 2>/dev/null || true)
