@@ -2,6 +2,7 @@
 #include "categoriesdialog.h"
 #include "credentialsdialog.h"
 #include "fluorineupdater.h"
+#include "slrmanager.h"
 #include "delayedfilewriter.h"
 #include "directoryrefresher.h"
 #include "env.h"
@@ -48,6 +49,7 @@
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
+#include <thread>
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDialog>
@@ -393,7 +395,34 @@ void OrganizerCore::checkForUpdates()
   if (m_UserInterface != nullptr) {
     m_Updater.testForUpdate(m_Settings);
     checkForFluorineUpdates();
+    checkForSlrUpdates();
   }
+}
+
+void OrganizerCore::checkForSlrUpdates()
+{
+  // SLR auto-update: only relevant if SLR is already installed. The first-
+  // install case is handled at game launch in MainWindow, where the user gets
+  // a progress dialog. Here we silently background-fetch a newer steamrt4
+  // image when one exists; downloadSlr() short-circuits on BUILD_ID match so
+  // the cost is one HTTP GET when already up-to-date.
+  if (!m_Settings.checkForUpdates()) {
+    return;
+  }
+  if (m_Settings.network().offlineMode()) {
+    return;
+  }
+  if (!isSlrInstalled()) {
+    return;
+  }
+
+  // Fire and forget on a detached thread. No UI; result is logged.
+  std::thread([]() {
+    const QString err = downloadSlr(nullptr, nullptr, nullptr);
+    if (!err.isEmpty()) {
+      MOBase::log::warn("SLR update check failed: {}", err);
+    }
+  }).detach();
 }
 
 void OrganizerCore::checkForFluorineUpdates()

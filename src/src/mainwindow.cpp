@@ -39,6 +39,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "executableslist.h"
 #include "filedialogmemory.h"
 #include "filterlist.h"
+#include "fluorineupdater.h"
 #include "guessedvalue.h"
 #include "imodinterface.h"
 #include "installationmanager.h"
@@ -495,6 +496,17 @@ MainWindow::MainWindow(Settings& settings, OrganizerCore& organizerCore,
       m_SystemTrayManager->restoreFromSystemTray();
     }
   });
+
+  // Fluorine self-updater is constructed during setUserInterface() above
+  // (lazily by checkForFluorineUpdates()). The bare MO2 self-updater is
+  // no-op'd, so this is what actually drives the statusbar update badge.
+  if (auto* fu = m_OrganizerCore.fluorineUpdater()) {
+    connect(fu, &FluorineUpdater::updateAvailable, this,
+            [this](const FluorineUpdater::ReleaseInfo&) {
+              m_FluorineUpdatePending = true;
+              updateAvailable();
+            });
+  }
 
   connect(m_OrganizerCore.modList(), &ModList::showMessage, [=, this](auto&& message) {
     showMessage(message);
@@ -2381,7 +2393,10 @@ void MainWindow::on_startButton_clicked()
   });
 
   // Pre-check: if this executable uses Proton and the current instance has SLR
-  // enabled, download SLR before launching if it isn't installed yet.
+  // enabled, ensure SLR is installed (and up-to-date with the latest steamrt4
+  // BUILD_ID) before launching. downloadSlr() short-circuits on BUILD_ID match
+  // so once SLR is current this is a single HTTP GET; no UI is shown unless
+  // the runtime actually needs (re)downloading.
   if (selectedExecutable->useProton()) {
     const auto* s = Settings::maybeInstance();
     bool useSLR = true;
@@ -2389,43 +2404,49 @@ void MainWindow::on_startButton_clicked()
       QSettings const instanceIni(s->filename(), QSettings::IniFormat);
       useSLR = instanceIni.value("fluorine/use_slr", true).toBool();
     }
-    if (useSLR && !isSlrInstalled()) {
-      auto* progress = new QProgressDialog(
-          tr("Downloading Steam Linux Runtime (~200 MB)...\n"
-             "This is required to launch games. Check the MO2 log for details."),
-          tr("Cancel"), 0, 0, this);
-      progress->setWindowTitle(tr("Steam Linux Runtime"));
-      progress->setWindowModality(Qt::WindowModal);
-      progress->setAttribute(Qt::WA_ShowWithoutActivating);
-      progress->setMinimumDuration(0);
+    if (useSLR) {
+      const bool freshInstall = !isSlrInstalled();
+      // Only show the heavyweight progress dialog on a fresh install.
+      // Up-to-date checks happen quietly in the background here so we don't
+      // block launch on a remote BUILD_ID fetch — the up-to-date case is
+      // handled at startup by OrganizerCore::checkForSlrUpdates().
+      if (freshInstall) {
+        auto* progress = new QProgressDialog(
+            tr("Downloading Steam Linux Runtime (~200 MB)...\n"
+               "This is required to launch games. Check the MO2 log for details."),
+            tr("Cancel"), 0, 0, this);
+        progress->setWindowTitle(tr("Steam Linux Runtime"));
+        progress->setWindowModality(Qt::WindowModal);
+        progress->setAttribute(Qt::WA_ShowWithoutActivating);
+        progress->setMinimumDuration(0);
 
-      int cancelFlag = 0;
-      connect(progress, &QProgressDialog::canceled, this, [&cancelFlag] {
-        cancelFlag = 1;
-      });
+        int cancelFlag = 0;
+        connect(progress, &QProgressDialog::canceled, this, [&cancelFlag] {
+          cancelFlag = 1;
+        });
 
-      // Run download synchronously using an event loop so the dialog stays responsive.
-      QFutureWatcher<QString> watcher;
-      QEventLoop loop;
-      connect(&watcher, &QFutureWatcher<QString>::finished, &loop, &QEventLoop::quit);
-      watcher.setFuture(QtConcurrent::run([&cancelFlag]() -> QString {
-        return downloadSlr(nullptr, nullptr, &cancelFlag);
-      }));
-      progress->show();
-      loop.exec();
-      progress->close();
-      progress->deleteLater();
+        QFutureWatcher<QString> watcher;
+        QEventLoop loop;
+        connect(&watcher, &QFutureWatcher<QString>::finished, &loop, &QEventLoop::quit);
+        watcher.setFuture(QtConcurrent::run([&cancelFlag]() -> QString {
+          return downloadSlr(nullptr, nullptr, &cancelFlag);
+        }));
+        progress->show();
+        loop.exec();
+        progress->close();
+        progress->deleteLater();
 
-      const QString err = watcher.result();
-      if (cancelFlag) {
-        return; // user cancelled, don't launch
-      }
-      if (!err.isEmpty()) {
-        log::error("[SLR] Download failed: {}", err);
-        QMessageBox::warning(this, tr("Steam Linux Runtime"),
-            tr("Steam Linux Runtime download failed:\n%1\n\n"
-               "You can disable SLR in the Instance Manager and try again.").arg(err));
-        return;
+        const QString err = watcher.result();
+        if (cancelFlag) {
+          return; // user cancelled, don't launch
+        }
+        if (!err.isEmpty()) {
+          log::error("[SLR] Download failed: {}", err);
+          QMessageBox::warning(this, tr("Steam Linux Runtime"),
+              tr("Steam Linux Runtime download failed:\n%1\n\n"
+                 "You can disable SLR in the Instance Manager and try again.").arg(err));
+          return;
+        }
       }
     }
   }
@@ -3144,6 +3165,16 @@ void MainWindow::motdReceived(const QString& motd)
 
 void MainWindow::on_actionUpdate_triggered()
 {
+  // Fluorine has its own updater (Settings → Updates). The MO2 self-updater
+  // is no-op'd (see SelfUpdater::testForUpdate). Open the Updates tab so
+  // the user can see the release info and trigger Install & restart.
+  if (m_FluorineUpdatePending) {
+    Settings& settings = m_OrganizerCore.settings();
+    SettingsDialog dialog(&m_PluginContainer, settings, this);
+    dialog.selectTabByLabel(tr("Updates"));
+    dialog.exec();
+    return;
+  }
   m_OrganizerCore.startMOUpdate();
 }
 

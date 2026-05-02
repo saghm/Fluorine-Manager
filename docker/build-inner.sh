@@ -454,6 +454,11 @@ if [ "${HERE_REAL}" != "${DST_REAL}" ]; then
         cp -af "${MANIFEST}" "${BIN_DST}/fluorine-manifest.txt"
         echo "${CURRENT_VER}" > "${MARKER}"
         echo "Sync complete." >&2
+
+        # Clean up the in-app updater's staging directory once the new bundle
+        # is live. Untouched if the user didn't go through the in-app updater.
+        STAGING_DIR="${FLUORINE_DATA}/update-staging"
+        [ -d "${STAGING_DIR}" ] && rm -rf "${STAGING_DIR}" 2>/dev/null || true
     fi
 fi
 

@@ -293,6 +293,11 @@ private:
 
   QTime m_StartTime;
 
+  // Set when FluorineUpdater reports a new release; consumed by
+  // on_actionUpdate_triggered() to route to Settings → Updates instead of
+  // the (no-op'd) MO2 self-updater.
+  bool m_FluorineUpdatePending = false;
+
   OrganizerCore& m_OrganizerCore;
   PluginContainer& m_PluginContainer;
 

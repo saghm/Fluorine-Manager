@@ -258,10 +258,12 @@ public:
 
   void checkForUpdates();
   void checkForFluorineUpdates();
+  void checkForSlrUpdates();
   void startMOUpdate();
 
   Settings& settings();
   SelfUpdater* updater() { return &m_Updater; }
+  class FluorineUpdater* fluorineUpdater() const { return m_FluorineUpdater; }
   InstallationManager* installationManager();
   MOShared::DirectoryEntry* directoryStructure() { return m_DirectoryStructure; }
   DirectoryRefresher* directoryRefresher() { return m_DirectoryRefresher.get(); }
