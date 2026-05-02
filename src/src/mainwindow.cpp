@@ -698,14 +698,16 @@ void MainWindow::updateWindowTitle(const APIUserAccount& user)
 {
   //"\xe2\x80\x93" is an "em dash", a longer "-"
 #if FLUORINE_IS_BETA_BUILD
-  // Beta builds mutate on every CI run, so a fixed semver is misleading —
-  // show the short commit hash instead so users can tell exactly which
-  // build they're on at a glance.
+  // Beta builds: "<semver>-beta @ <hash>" so users can see both the line
+  // they're on (e.g. 0.2.0) and the exact commit. Plain "beta @ <hash>"
+  // hid the version, making it impossible to tell at a glance whether a
+  // user was running 0.1.x or 0.2.x betas.
   const QString commitShort = QStringLiteral(FLUORINE_BUILD_COMMIT);
-  const QString versionLabel =
-      commitShort.isEmpty()
-          ? QStringLiteral("beta")
-          : (QStringLiteral("beta @ ") + commitShort);
+  QString versionLabel = QStringLiteral(FLUORINE_VERSION_STRING) +
+                         QStringLiteral("-beta");
+  if (!commitShort.isEmpty()) {
+    versionLabel += QStringLiteral(" @ ") + commitShort;
+  }
 #else
   const QString versionLabel =
       m_OrganizerCore.getVersion().string(Version::FormatCondensed);
