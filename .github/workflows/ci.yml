@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -48,9 +49,19 @@ jobs:
       - name: Determine build metadata
         id: channel
         run: |
-          # CI only publishes beta rolling builds. Stable releases are cut
-          # manually against a tag — see CHANGELOG.md for the process.
-          echo "channel=beta" >> "$GITHUB_OUTPUT"
+          # Tag push (refs/tags/v*) → stable release.
+          # Branch push / PR / workflow_dispatch → beta rolling build.
+          # Stable releases are CI-built (not local) so AVX-512 / host CPU
+          # flags can never leak into the binary that users download.
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            CHANNEL=stable
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            CHANNEL=beta
+            VERSION=""
+          fi
+          echo "channel=${CHANNEL}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "timestamp=$(date -u +%Y%m%d%H%M)" >> "$GITHUB_OUTPUT"
           echo "commit=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
@@ -81,7 +92,11 @@ jobs:
           # regular runner user.
           sudo chown -R "$(id -u):$(id -g)" build
           cd build
-          ARCHIVE_NAME="fluorine-manager-beta.tar.gz"
+          if [[ "${{ steps.channel.outputs.channel }}" == "stable" ]]; then
+            ARCHIVE_NAME="fluorine-manager-${{ steps.channel.outputs.version }}.tar.gz"
+          else
+            ARCHIVE_NAME="fluorine-manager-beta.tar.gz"
+          fi
           tar czf "${ARCHIVE_NAME}" fluorine-manager/
           echo "archive=${ARCHIVE_NAME}" >> "$GITHUB_ENV"
           echo "archive_path=build/${ARCHIVE_NAME}" >> "$GITHUB_ENV"
@@ -100,7 +115,7 @@ jobs:
       # without cluttering the release history with new tags.
       # -------------------------------------------------------------------
       - name: Publish beta rolling release
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.channel.outputs.channel == 'beta'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -148,6 +163,45 @@ jobs:
               --title "${TITLE}" \
               --notes-file "${NOTES_FILE}" \
               --prerelease
+          fi
+
+      # -------------------------------------------------------------------
+      # Stable release: triggered by pushing a v* tag. Uses CI's generic
+      # x86-64 toolchain so AVX-512 (or other host-CPU flags) from the
+      # maintainer's local box never leak into the binary users download.
+      # -------------------------------------------------------------------
+      - name: Publish stable release
+        if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push' && steps.channel.outputs.channel == 'stable'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${{ steps.channel.outputs.version }}"
+          COMMIT="${GITHUB_SHA}"
+          SHORT="${COMMIT:0:7}"
+          TITLE="Fluorine Manager ${VERSION}"
+          NOTES_FILE="$(mktemp)"
+          {
+            echo "Stable release ${VERSION} built from ${TAG} @ ${SHORT}."
+            echo ""
+            echo "- Channel: stable"
+            echo "- Commit: ${COMMIT}"
+            echo ""
+            echo "See CHANGELOG.md for the full list of changes."
+          } > "${NOTES_FILE}"
+
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release edit "${TAG}" \
+              --title "${TITLE}" \
+              --notes-file "${NOTES_FILE}" \
+              --latest
+            gh release upload "${TAG}" "${archive_path}" --clobber
+          else
+            gh release create "${TAG}" "${archive_path}" \
+              --title "${TITLE}" \
+              --notes-file "${NOTES_FILE}" \
+              --latest
           fi
 
   build-nixos-mobase:
