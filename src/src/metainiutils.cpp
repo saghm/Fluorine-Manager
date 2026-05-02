@@ -24,6 +24,54 @@ bool endsInOddBackslashes(const QByteArray& line)
   return (n % 2) == 1;
 }
 
+// Canonical case for keys that appear in per-mod meta.ini, taken from
+// upstream MO2's setValue/value calls in modinforegular.cpp,
+// installationmanager.cpp, and organizercore.cpp.
+const QHash<QByteArray, QByteArray>& canonicalKeyMap()
+{
+  static const QHash<QByteArray, QByteArray> map = {
+      {"author", "author"},
+      {"category", "category"},
+      {"color", "color"},
+      {"comments", "comments"},
+      {"converted", "converted"},
+      {"endorsed", "endorsed"},
+      {"fileid", "fileid"},
+      {"gamename", "gameName"},
+      {"hascustomurl", "hasCustomURL"},
+      {"ignoredversion", "ignoredVersion"},
+      {"installationfile", "installationFile"},
+      {"lastnexusquery", "lastNexusQuery"},
+      {"lastnexusupdate", "lastNexusUpdate"},
+      {"modid", "modid"},
+      {"newestversion", "newestVersion"},
+      {"nexuscategory", "nexusCategory"},
+      {"nexusdescription", "nexusDescription"},
+      {"nexusfilestatus", "nexusFileStatus"},
+      {"nexuslastmodified", "nexusLastModified"},
+      {"notes", "notes"},
+      {"repository", "repository"},
+      {"tracked", "tracked"},
+      {"uploader", "uploader"},
+      {"uploaderurl", "uploaderUrl"},
+      {"url", "url"},
+      {"validated", "validated"},
+      {"version", "version"},
+  };
+  return map;
+}
+
+// Returns the canonical case for `key` if known, otherwise `key` unchanged.
+QByteArray canonicalize(const QByteArray& key)
+{
+  const auto& map = canonicalKeyMap();
+  const auto it   = map.find(key.toLower());
+  if (it != map.end()) {
+    return it.value();
+  }
+  return key;
+}
+
 }  // namespace
 
 bool normalizeMetaIniCase(const QString& path)
@@ -52,7 +100,6 @@ bool normalizeMetaIniCase(const QString& path)
   struct Entry
   {
     bool isKey = false;
-    QByteArray key;          // lowercased
     QByteArray rawLine;      // for non-key lines
     QByteArray fullKeyLine;  // for key lines, possibly multi-line via \\\n
   };
@@ -61,7 +108,7 @@ bool normalizeMetaIniCase(const QString& path)
   {
     QByteArray header;  // [Name] line, empty for the implicit pre-header section
     QList<Entry> entries;
-    QHash<QByteArray, qsizetype> indexByKey;
+    QHash<QByteArray, qsizetype> indexByLowerKey;
   };
 
   QList<Section> sections;
@@ -104,21 +151,21 @@ bool normalizeMetaIniCase(const QString& path)
       full.append(rawLines[i]);
     }
 
-    const int fullEq           = full.indexOf('=');
-    const QByteArray rawKey    = full.left(fullEq).trimmed();
-    const QByteArray valuePart = full.mid(fullEq);  // includes '='
-    const QByteArray lowerKey  = rawKey.toLower();
-    if (rawKey != lowerKey) {
+    const int fullEq             = full.indexOf('=');
+    const QByteArray rawKey      = full.left(fullEq).trimmed();
+    const QByteArray valuePart   = full.mid(fullEq);  // includes '='
+    const QByteArray lowerKey    = rawKey.toLower();
+    const QByteArray canonicalKey = canonicalize(rawKey);
+    if (rawKey != canonicalKey) {
       changed = true;
     }
 
     Entry e;
     e.isKey       = true;
-    e.key         = lowerKey;
-    e.fullKeyLine = lowerKey + valuePart;
+    e.fullKeyLine = canonicalKey + valuePart;
 
-    auto it = cur.indexByKey.find(lowerKey);
-    if (it != cur.indexByKey.end()) {
+    auto it = cur.indexByLowerKey.find(lowerKey);
+    if (it != cur.indexByLowerKey.end()) {
       Entry& prev = cur.entries[it.value()];
       const QByteArray newVal =
           valuePart.size() > 1 ? valuePart.mid(1).trimmed() : QByteArray();
@@ -135,7 +182,7 @@ bool normalizeMetaIniCase(const QString& path)
       changed = true;
     } else {
       cur.entries.push_back(std::move(e));
-      cur.indexByKey.insert(lowerKey, cur.entries.size() - 1);
+      cur.indexByLowerKey.insert(lowerKey, cur.entries.size() - 1);
     }
   }
   sections.push_back(std::move(cur));

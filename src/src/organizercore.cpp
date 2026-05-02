@@ -964,9 +964,9 @@ MOBase::IModInterface* OrganizerCore::createMod(GuessedValue<QString>& name)
   if (!result.merged()) {
     settingsFile.setValue("modid", 0);
     settingsFile.setValue("version", "");
-    settingsFile.setValue("newestversion", "");
+    settingsFile.setValue("newestVersion", "");
     settingsFile.setValue("category", 0);
-    settingsFile.setValue("installationfile", "");
+    settingsFile.setValue("installationFile", "");
 
     settingsFile.remove("installedFiles");
     settingsFile.beginWriteArray("installedFiles", 0);

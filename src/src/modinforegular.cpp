@@ -113,21 +113,21 @@ void ModInfoRegular::readMeta()
   QSettings metaFile(metaPath, QSettings::IniFormat);
   m_Comments           = metaFile.value("comments", "").toString();
   m_Notes              = metaFile.value("notes", "").toString();
-  QString const tempGameName = metaFile.value("gamename", m_GameName).toString();
+  QString const tempGameName = metaFile.value("gameName", m_GameName).toString();
   if (tempGameName.size())
     m_GameName = tempGameName;
   m_NexusID = metaFile.value("modid", -1).toInt();
   m_Version.parse(metaFile.value("version", "").toString());
-  m_NewestVersion    = metaFile.value("newestversion", "").toString();
-  m_IgnoredVersion   = metaFile.value("ignoredversion", "").toString();
+  m_NewestVersion    = metaFile.value("newestVersion", "").toString();
+  m_IgnoredVersion   = metaFile.value("ignoredVersion", "").toString();
   m_InstallationFile =
-      loadMetaPath(metaFile.value("installationfile", "").toString());
-  m_NexusDescription = metaFile.value("nexusdescription", "").toString();
-  m_NexusFileStatus  = metaFile.value("nexusfilestatus", "1").toInt();
-  m_NexusCategory    = metaFile.value("nexuscategory", 0).toInt();
+      loadMetaPath(metaFile.value("installationFile", "").toString());
+  m_NexusDescription = metaFile.value("nexusDescription", "").toString();
+  m_NexusFileStatus  = metaFile.value("nexusFileStatus", "1").toInt();
+  m_NexusCategory    = metaFile.value("nexusCategory", 0).toInt();
   m_Author           = metaFile.value("author", "").toString();
   m_Uploader         = metaFile.value("uploader", "").toString();
-  m_UploaderUrl      = metaFile.value("uploaderurl", "").toString();
+  m_UploaderUrl      = metaFile.value("uploaderUrl", "").toString();
   m_Repository       = metaFile.value("repository", "Nexus").toString();
   m_Converted        = metaFile.value("converted", false).toBool();
   m_Validated        = metaFile.value("validated", false).toBool();
@@ -181,8 +181,8 @@ void ModInfoRegular::readMeta()
   // always read the url
   m_CustomURL = metaFile.value("url").toString();
 
-  if (metaFile.contains("hascustomurl")) {
-    m_HasCustomURL = metaFile.value("hascustomurl").toBool();
+  if (metaFile.contains("hasCustomURL")) {
+    m_HasCustomURL = metaFile.value("hasCustomURL").toBool();
   } else {
     if (m_NexusID > 0) {
       // the mod id is valid, disable the custom url
@@ -196,13 +196,13 @@ void ModInfoRegular::readMeta()
   }
 
   m_LastNexusQuery = QDateTime::fromString(
-      metaFile.value("lastnexusquery", "").toString(), Qt::ISODate);
+      metaFile.value("lastNexusQuery", "").toString(), Qt::ISODate);
   m_LastNexusUpdate = QDateTime::fromString(
-      metaFile.value("lastnexusupdate", "").toString(), Qt::ISODate);
+      metaFile.value("lastNexusUpdate", "").toString(), Qt::ISODate);
   m_NexusLastModified = QDateTime::fromString(
-      metaFile.value("nexuslastmodified", QDateTime::currentDateTimeUtc()).toString(),
+      metaFile.value("nexusLastModified", QDateTime::currentDateTimeUtc()).toString(),
       Qt::ISODate);
-  m_NexusCategory = metaFile.value("nexuscategory", 0).toInt();
+  m_NexusCategory = metaFile.value("nexusCategory", 0).toInt();
   m_Color         = metaFile.value("color", QColor()).value<QColor>();
   m_TrackedState  = metaFile.value("tracked", false).toBool()
                         ? TrackedState::TRACKED_TRUE
@@ -285,26 +285,26 @@ void ModInfoRegular::saveMeta()
       temp.erase(m_PrimaryCategory);
       metaFile.setValue("category", QString("%1").arg(m_PrimaryCategory) + "," +
                                         SetJoin(temp, ","));
-      metaFile.setValue("newestversion", m_NewestVersion.canonicalString());
-      metaFile.setValue("ignoredversion", m_IgnoredVersion.canonicalString());
+      metaFile.setValue("newestVersion", m_NewestVersion.canonicalString());
+      metaFile.setValue("ignoredVersion", m_IgnoredVersion.canonicalString());
       metaFile.setValue("version", m_Version.canonicalString());
-      metaFile.setValue("installationfile", storeMetaPath(m_InstallationFile));
+      metaFile.setValue("installationFile", storeMetaPath(m_InstallationFile));
       metaFile.setValue("repository", m_Repository);
-      metaFile.setValue("gamename", m_GameName);
+      metaFile.setValue("gameName", m_GameName);
       metaFile.setValue("modid", m_NexusID);
       metaFile.setValue("comments", m_Comments);
       metaFile.setValue("notes", m_Notes);
-      metaFile.setValue("nexusdescription", m_NexusDescription);
+      metaFile.setValue("nexusDescription", m_NexusDescription);
       metaFile.setValue("url", m_CustomURL);
-      metaFile.setValue("hascustomurl", m_HasCustomURL);
-      metaFile.setValue("nexusfilestatus", m_NexusFileStatus);
-      metaFile.setValue("lastnexusquery", m_LastNexusQuery.toString(Qt::ISODate));
-      metaFile.setValue("lastnexusupdate", m_LastNexusUpdate.toString(Qt::ISODate));
-      metaFile.setValue("nexuslastmodified", m_NexusLastModified.toString(Qt::ISODate));
-      metaFile.setValue("nexuscategory", m_NexusCategory);
+      metaFile.setValue("hasCustomURL", m_HasCustomURL);
+      metaFile.setValue("nexusFileStatus", m_NexusFileStatus);
+      metaFile.setValue("lastNexusQuery", m_LastNexusQuery.toString(Qt::ISODate));
+      metaFile.setValue("lastNexusUpdate", m_LastNexusUpdate.toString(Qt::ISODate));
+      metaFile.setValue("nexusLastModified", m_NexusLastModified.toString(Qt::ISODate));
+      metaFile.setValue("nexusCategory", m_NexusCategory);
       metaFile.setValue("author", m_Author);
       metaFile.setValue("uploader", m_Uploader);
-      metaFile.setValue("uploaderurl", m_UploaderUrl);
+      metaFile.setValue("uploaderUrl", m_UploaderUrl);
       metaFile.setValue("converted", m_Converted);
       metaFile.setValue("validated", m_Validated);
       metaFile.setValue("color", m_Color);

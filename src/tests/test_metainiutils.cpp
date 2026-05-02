@@ -40,96 +40,99 @@ TEST(MetaIniUtils, NoOpOnMissingFile)
   EXPECT_FALSE(MetaIniUtils::normalizeMetaIniCase(path));
 }
 
-// Sanity: file with only lowercase keys is left untouched.
-TEST(MetaIniUtils, NoOpOnAlreadyLowercase)
+// Sanity: file with only canonical-case keys is left untouched.
+TEST(MetaIniUtils, NoOpOnAlreadyCanonical)
 {
   QTemporaryDir dir;
   ASSERT_TRUE(dir.isValid());
   const auto* contents = "[General]\n"
                          "author=Aether\n"
-                         "category=\"11,\"\n";
+                         "category=\"11,\"\n"
+                         "gameName=Skyrim\n"
+                         "installationFile=Foo.7z\n";
   const QString path = writeIni(dir, contents);
   EXPECT_FALSE(MetaIniUtils::normalizeMetaIniCase(path));
   EXPECT_EQ(QByteArray(contents), readAll(path));
 }
 
-// The reported bug: pre-existing CamelCase keys + lowercase setValue() leaves
-// duplicates on Linux/Qt6. Normalize must fold case-only duplicates.
-TEST(MetaIniUtils, DedupesCaseOnlyDuplicates)
+// The reported bug: pre-existing CamelCase keys + a lowercased duplicate
+// (left over from the 5d1fb29 era) coexist on Linux/Qt6. Normalize must fold
+// them back to the upstream MO2 case.
+TEST(MetaIniUtils, FoldsLowercaseDuplicatesToUpstreamCase)
 {
   QTemporaryDir dir;
   ASSERT_TRUE(dir.isValid());
-  // Mirrors what ModInfoRegular::saveMeta() leaves behind when meta.ini
-  // already had CamelCase keys: both casings coexist, and the lowercase
-  // copy may even be empty because readMeta() couldn't see the original.
+  // Mirrors the dirty meta.ini in the bug report: CamelCase keys with
+  // empty/default values from the broken saveMeta(), and lowercase keys
+  // carrying the real preserved values.
   const auto* contents =
       "[General]\n"
-      "Author=Aether\n"
-      "Category=11\n"
-      "Color=@Variant(\\0\\0\\0\\x43\\x1\\xff\\xff\\x43\\x43\\xff\\xff\\xff\\xff\\0\\0)\n"
-      "Comments=keep me\n"
-      "Converted=false\n"
-      "author=\n"
-      "category=\"11,\"\n"
-      "comments=\n"
-      "converted=true\n";
+      "gameName=SkyrimSE\n"
+      "gamename=Skyrim\n"
+      "installationFile=\n"
+      "installationfile=Sweet Mother HD-4947-2-0.7z\n"
+      "newestVersion=\n"
+      "newestversion=2.0.0.0\n"
+      "lastNexusQuery=2026-05-01T17:28:22Z\n"
+      "lastnexusquery=2026-05-01T17:27:42Z\n";
   const QString path = writeIni(dir, contents);
   EXPECT_TRUE(MetaIniUtils::normalizeMetaIniCase(path));
 
-  // Open via QSettings and verify exactly one canonical lowercase key per
-  // logical setting.
+  // Open via QSettings using the upstream CamelCase keys.
   QSettings s(path, QSettings::IniFormat);
-  EXPECT_EQ(QStringList({"author", "category", "color", "comments", "converted"}),
-            s.allKeys());
+  // Each logical setting collapses to a single canonical-case key.
+  QStringList keys = s.allKeys();
+  std::sort(keys.begin(), keys.end());
+  EXPECT_EQ(QStringList({"gameName", "installationFile", "lastNexusQuery",
+                         "newestVersion"}),
+            keys);
 
-  // Empty lowercase duplicate should NOT clobber the non-empty CamelCase
-  // value — `Comments=keep me` survives over `comments=`.
-  EXPECT_EQ("Aether", s.value("author").toString());
-  EXPECT_EQ("keep me", s.value("comments").toString());
+  // Empty CamelCase line dropped in favor of the non-empty lowercase value.
+  EXPECT_EQ("Sweet Mother HD-4947-2-0.7z",
+            s.value("installationFile").toString());
+  EXPECT_EQ("2.0.0.0", s.value("newestVersion").toString());
 
-  // For non-empty duplicates the latest write wins, mirroring last-writer
-  // semantics so QSettings doesn't reintroduce stale data.
-  EXPECT_EQ("11,", s.value("category").toString());
-  EXPECT_TRUE(s.value("converted").toBool());
+  // Both halves were non-empty for gameName and lastNexusQuery — last writer
+  // wins, mirroring saveMeta()'s order-of-writes.
+  EXPECT_EQ("Skyrim", s.value("gameName").toString());
+  EXPECT_EQ("2026-05-01T17:27:42Z", s.value("lastNexusQuery").toString());
 
-  // Color value (containing escaped binary) round-trips intact.
   const QByteArray after = readAll(path);
-  EXPECT_TRUE(after.contains(
-      "color=@Variant(\\0\\0\\0\\x43\\x1\\xff\\xff\\x43\\x43\\xff\\xff\\xff\\xff\\0\\0)"))
-      << after.toStdString();
-  EXPECT_FALSE(after.contains("Author="));
-  EXPECT_FALSE(after.contains("Color="));
+  EXPECT_FALSE(after.contains("gamename="));
+  EXPECT_FALSE(after.contains("installationfile="));
+  EXPECT_FALSE(after.contains("newestversion="));
+  EXPECT_FALSE(after.contains("lastnexusquery="));
 }
 
 // QSettings IniFormat supports multi-line values via trailing-`\` line
-// continuation. Continuation lines must travel with their key when the key is
-// renamed to lowercase, otherwise the value gets corrupted.
+// continuation. Continuation lines must travel with their key when the key
+// is canonicalized, otherwise the value gets corrupted.
 TEST(MetaIniUtils, PreservesLineContinuations)
 {
   QTemporaryDir dir;
   ASSERT_TRUE(dir.isValid());
   const auto* contents = "[General]\n"
-                         "NotesField=line one\\\n"
+                         "nexusdescription=line one\\\n"
                          "  continued line two\n"
-                         "Author=Aether\n";
+                         "author=Aether\n";
   const QString path = writeIni(dir, contents);
   EXPECT_TRUE(MetaIniUtils::normalizeMetaIniCase(path));
 
   const QByteArray after = readAll(path);
-  EXPECT_TRUE(after.contains("notesfield=line one\\\n"));
+  EXPECT_TRUE(after.contains("nexusDescription=line one\\\n"));
   EXPECT_TRUE(after.contains("  continued line two"));
-  EXPECT_FALSE(after.contains("NotesField="));
+  EXPECT_FALSE(after.contains("nexusdescription="));
 }
 
 // Plugin settings live in nested `[Plugins\<name>]` sections. The dedupe
-// logic must scope per-section — `Foo=` under [General] must not collide
-// with `foo=` under [Plugins\Whatever].
+// logic must scope per-section — a key under [General] must not collide
+// with the same lowercase key under [Plugins\Whatever].
 TEST(MetaIniUtils, DedupesPerSection)
 {
   QTemporaryDir dir;
   ASSERT_TRUE(dir.isValid());
   const auto* contents = "[General]\n"
-                         "Foo=top\n"
+                         "gameName=Skyrim\n"
                          "[Plugins\\Sample]\n"
                          "Foo=plugin\n"
                          "foo=plugin-dup\n";
@@ -137,54 +140,41 @@ TEST(MetaIniUtils, DedupesPerSection)
   EXPECT_TRUE(MetaIniUtils::normalizeMetaIniCase(path));
 
   QSettings s(path, QSettings::IniFormat);
-  EXPECT_EQ("top", s.value("foo").toString());
+  EXPECT_EQ("Skyrim", s.value("gameName").toString());
   s.beginGroup("Plugins/Sample");
-  EXPECT_EQ("plugin-dup", s.value("foo").toString());
+  // Unknown plugin key keeps its first-seen case, last-writer wins on value.
+  EXPECT_EQ("plugin-dup", s.value("Foo").toString());
   s.endGroup();
 }
 
-// End-to-end: reproduce the exact symptom from the bug report — install
-// path opens QSettings, writes lowercase keys; without normalization the
-// resulting file ends up with CamelCase + lowercase duplicates.
-TEST(MetaIniUtils, FixesQSettingsDuplicationOnLinux)
+// End-to-end: an upstream-style saveMeta sequence over a normalized file
+// updates in place — no second case-mismatched key appears.
+TEST(MetaIniUtils, UpstreamSaveMetaProducesNoDupes)
 {
   QTemporaryDir dir;
   ASSERT_TRUE(dir.isValid());
-  // Pre-existing meta.ini in CamelCase (e.g. shipped inside the mod
-  // archive, or migrated from MO2 Windows).
+  // Dirty file from the 5d1fb29 era — CamelCase + lowercase coexist.
   const auto* preexisting = "[General]\n"
-                            "Author=Aether\n"
-                            "Category=11\n"
-                            "Comments=keep me\n";
+                            "gameName=SkyrimSE\n"
+                            "gamename=Skyrim\n"
+                            "installationFile=\n"
+                            "installationfile=Foo.7z\n";
   const QString path = writeIni(dir, preexisting);
 
-  // Without normalization, lowercase setValue adds NEW keys alongside the
-  // CamelCase ones — confirm the bug exists in the bare QSettings flow.
-  {
-    QSettings s(path, QSettings::IniFormat);
-    s.setValue("author", "Aether");
-    s.setValue("category", "11,");
-    s.setValue("comments", "");
-  }
-  const QByteArray dirty = readAll(path);
-  EXPECT_TRUE(dirty.contains("Author=Aether"));
-  EXPECT_TRUE(dirty.contains("author=Aether"));
-
-  // Normalize and re-run the same install-style writes. After this the
-  // file must have exactly one casing per key.
+  // Normalize folds lowercase dupes back into the upstream CamelCase keys.
   EXPECT_TRUE(MetaIniUtils::normalizeMetaIniCase(path));
+
+  // Upstream-style saveMeta: CamelCase setValue on every key.
   {
     QSettings s(path, QSettings::IniFormat);
-    s.setValue("author", "Aether");
-    s.setValue("category", "11,");
+    s.setValue("gameName", s.value("gameName"));
+    s.setValue("installationFile", s.value("installationFile"));
   }
 
   const QByteArray clean = readAll(path);
-  EXPECT_FALSE(clean.contains("Author="));
-  EXPECT_FALSE(clean.contains("Category="));
-  EXPECT_FALSE(clean.contains("Comments="));
-  EXPECT_TRUE(clean.contains("author=Aether"));
-  EXPECT_TRUE(clean.contains("category=\"11,\""));
-  // The non-empty original Comments value survived the empty duplicate.
-  EXPECT_TRUE(clean.contains("comments=keep me"));
+  EXPECT_TRUE(clean.contains("gameName=Skyrim"));
+  EXPECT_TRUE(clean.contains("installationFile=Foo.7z"));
+  // No lowercase dupes resurrected.
+  EXPECT_FALSE(clean.contains("gamename="));
+  EXPECT_FALSE(clean.contains("installationfile="));
 }
