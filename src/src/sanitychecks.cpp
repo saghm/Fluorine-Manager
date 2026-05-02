@@ -7,6 +7,8 @@
 #include <log.h>
 #include <utility.h>
 
+#include <dlfcn.h>
+
 namespace sanity
 {
 
@@ -17,22 +19,43 @@ int checkMissingFiles()
   log::debug("  . checking Linux dependencies");
   int n = 0;
 
-  // Check for FUSE (check both unversioned .so and versioned .so.3 — on
-  // Debian/Ubuntu the unversioned symlink is only in libfuse3-dev).
-  static const char* fusePaths[] = {
-      "/usr/lib/libfuse3.so",
-      "/usr/lib/libfuse3.so.3",
-      "/usr/lib64/libfuse3.so",
-      "/usr/lib64/libfuse3.so.3",
-      "/usr/lib/x86_64-linux-gnu/libfuse3.so",
-      "/usr/lib/x86_64-linux-gnu/libfuse3.so.3",
-      nullptr};
-
+  // Check for FUSE. Try the dynamic loader first (resolves via the
+  // ld.so cache, so any SOVERSION the distro ships is picked up — Fedora
+  // 44+ and Arch ship libfuse3.so.4, older distros .so.3, Debian/Ubuntu
+  // hide the unversioned .so behind the -dev package). Fall back to a
+  // static path list for sandboxes that block dlopen.
+  static const char* fuseSonames[] = {"libfuse3.so.4", "libfuse3.so.3",
+                                      "libfuse3.so", nullptr};
   bool fuseFound = false;
-  for (int i = 0; fusePaths[i]; ++i) {
-    if (QFileInfo::exists(fusePaths[i])) {
+  for (int i = 0; fuseSonames[i]; ++i) {
+    if (void* h = dlopen(fuseSonames[i], RTLD_LAZY | RTLD_NOLOAD)) {
+      dlclose(h);
       fuseFound = true;
       break;
+    }
+    if (void* h = dlopen(fuseSonames[i], RTLD_LAZY)) {
+      dlclose(h);
+      fuseFound = true;
+      break;
+    }
+  }
+  if (!fuseFound) {
+    static const char* fusePaths[] = {
+        "/usr/lib/libfuse3.so",
+        "/usr/lib/libfuse3.so.3",
+        "/usr/lib/libfuse3.so.4",
+        "/usr/lib64/libfuse3.so",
+        "/usr/lib64/libfuse3.so.3",
+        "/usr/lib64/libfuse3.so.4",
+        "/usr/lib/x86_64-linux-gnu/libfuse3.so",
+        "/usr/lib/x86_64-linux-gnu/libfuse3.so.3",
+        "/usr/lib/x86_64-linux-gnu/libfuse3.so.4",
+        nullptr};
+    for (int i = 0; fusePaths[i]; ++i) {
+      if (QFileInfo::exists(fusePaths[i])) {
+        fuseFound = true;
+        break;
+      }
     }
   }
   if (!fuseFound) {
