@@ -681,7 +681,7 @@ NXMAccessManager::NXMAccessManager(QObject* parent, Settings* s,
   // Migrate users who only have an OAuth token but no legacy API key — some
   // plugins still read only the legacy field. Defer to the event loop so
   // startup isn't blocked on the network.
-  if (!m_Tokens.accessToken.isEmpty() && m_Tokens.apiKey.isEmpty()) {
+  if (m_Tokens && !m_Tokens->accessToken.isEmpty() && m_Tokens->apiKey.isEmpty()) {
     QMetaObject::invokeMethod(
         this, [this]() { fetchAndStoreLegacyApiKey(); }, Qt::QueuedConnection);
   }
@@ -799,17 +799,20 @@ void NXMAccessManager::notifyTokens()
 
 void NXMAccessManager::fetchAndStoreLegacyApiKey()
 {
-  if (!m_Tokens.apiKey.isEmpty()) {
+  if (!m_Tokens) {
+    return;
+  }
+  if (!m_Tokens->apiKey.isEmpty()) {
     // already have one (manually entered or carried over)
     return;
   }
-  if (m_Tokens.accessToken.isEmpty()) {
+  if (m_Tokens->accessToken.isEmpty()) {
     return;
   }
 
   QNetworkRequest request(NexusV1BaseUrl + "users/validate.json");
   request.setRawHeader("Authorization",
-                       ("Bearer " + m_Tokens.accessToken).toUtf8());
+                       ("Bearer " + m_Tokens->accessToken).toUtf8());
   addAPIHeaders(request);
   QNetworkReply* reply = get(request);
   if (!reply) {
@@ -836,7 +839,9 @@ void NXMAccessManager::fetchAndStoreLegacyApiKey()
     }
 
     if (GlobalSettings::setNexusApiKey(key)) {
-      m_Tokens.apiKey = key;
+      if (m_Tokens) {
+        m_Tokens->apiKey = key;
+      }
       log::info("nexus: stored legacy API key derived from OAuth session");
     }
   });
