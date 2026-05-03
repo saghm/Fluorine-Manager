@@ -518,7 +518,8 @@ void InstanceManagerDialog::rename()
   }
 
   // renaming
-  const QString src = i->directory();
+  const QString src      = i->directory();
+  const bool wasPortable = i->isPortable();
   const QString dest =
       QDir::toNativeSeparators(QFileInfo(src).dir().path() + "/" + newName);
 
@@ -536,8 +537,15 @@ void InstanceManagerDialog::rename()
     return;
   }
 
+  // portable instances are tracked by absolute path in GlobalSettings; update
+  // the registry so the renamed dir keeps showing up in the list.
+  if (wasPortable) {
+    InstanceManager::unregisterPortableInstance(src);
+    InstanceManager::registerPortableInstance(dest);
+  }
+
   // updating ui
-  auto newInstance = std::make_unique<Instance>(dest, false);
+  auto newInstance = std::make_unique<Instance>(dest, wasPortable);
   i                = newInstance.get();
 
   m_model->item(selIndex)->setText(newName);
@@ -864,7 +872,7 @@ void InstanceManagerDialog::fillData(const Instance& ii)
 
   const auto& m = InstanceManager::singleton();
 
-  ui->rename->setEnabled(!ii.isPortable());
+  ui->rename->setEnabled(!ii.isActive());
 
   if (ii.isPortable()) {
     ui->convertToPortable->setVisible(false);

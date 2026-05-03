@@ -41,6 +41,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "thread_utils.h"
 #include "tutorialmanager.h"
 #include <QDebug>
+#include <QDesktopServices>
 #include <QFile>
 #include <QPainter>
 #include <QProxyStyle>
@@ -48,6 +49,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <QStringList>
 #include <QStyleFactory>
 #include <QStyleOption>
+#include <QUrl>
 #include <iplugingame.h>
 #include <log.h>
 #include <report.h>
@@ -57,6 +59,19 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 
 using namespace MOBase;
 using namespace MOShared;
+
+// Forward QDesktopServices::openUrl() (used by QLabel::setOpenExternalLinks
+// and QTextBrowser auto-open) through shell::Open, which scrubs our bundled
+// LD_LIBRARY_PATH / QT_PLUGIN_PATH before forking xdg-open. Without this the
+// child inherits our runtime env and silently fails to launch a browser.
+class UrlHandlerProxy : public QObject
+{
+  Q_OBJECT
+public:
+  using QObject::QObject;
+public slots:
+  void open(const QUrl& url) { MOBase::shell::Open(url); }
+};
 
 // style proxy that changes the appearance of drop indicators
 //
@@ -225,6 +240,13 @@ MOApplication::MOApplication(int& argc, char** argv) : QApplication(argc, argv)
   // (Qt resource lookup, relative QFile paths, QtWebEngine sandbox helper)
   // behaves the same as a normal launch. Upstream PR #2379.
   QDir::setCurrent(QCoreApplication::applicationDirPath());
+
+  auto* urlProxy = new UrlHandlerProxy(this);
+  for (const auto& scheme :
+       {QStringLiteral("http"), QStringLiteral("https"),
+        QStringLiteral("file"), QStringLiteral("mailto")}) {
+    QDesktopServices::setUrlHandler(scheme, urlProxy, "open");
+  }
 }
 
 OrganizerCore& MOApplication::core()
@@ -956,3 +978,5 @@ QString MOSplash::getSplashPath(const Settings& settings, const QString& dataPat
 
   return splashPath;
 }
+
+#include "moapplication.moc"
