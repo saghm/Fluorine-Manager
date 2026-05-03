@@ -3,9 +3,12 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <future>
+#include <istream>
 #include <mutex>
+#include <ostream>
 
 namespace
 {
@@ -544,6 +547,138 @@ void injectExtraFiles(
                          /*is_backing=*/false);
     ++tree.file_count;
   }
+}
+
+namespace
+{
+// Binary I/O helpers — fixed-size little-endian, raw memcpy.
+// Host is x86_64 little-endian; cache files are not portable across endian.
+template <typename T>
+bool writePod(std::ostream& out, const T& v)
+{
+  out.write(reinterpret_cast<const char*>(&v), sizeof(T));
+  return out.good();
+}
+
+template <typename T>
+bool readPod(std::istream& in, T& v)
+{
+  in.read(reinterpret_cast<char*>(&v), sizeof(T));
+  return in.good();
+}
+
+bool writeStr(std::ostream& out, const std::string& s)
+{
+  if (s.size() > 0xFFFF) {
+    return false;  // length capped at u16
+  }
+  uint16_t len = static_cast<uint16_t>(s.size());
+  if (!writePod(out, len)) return false;
+  if (len > 0) {
+    out.write(s.data(), len);
+  }
+  return out.good();
+}
+
+bool readStr(std::istream& in, std::string& s)
+{
+  uint16_t len = 0;
+  if (!readPod(in, len)) return false;
+  s.resize(len);
+  if (len > 0) {
+    in.read(s.data(), len);
+  }
+  return in.good();
+}
+
+int64_t timeToNs(std::chrono::system_clock::time_point t)
+{
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(
+      t.time_since_epoch()).count();
+}
+
+std::chrono::system_clock::time_point nsToTime(int64_t ns)
+{
+  return std::chrono::system_clock::time_point(
+      std::chrono::duration_cast<std::chrono::system_clock::duration>(
+          std::chrono::nanoseconds(ns)));
+}
+}  // namespace
+
+bool serializeNode(std::ostream& out, const VfsNode& node)
+{
+  uint8_t isDir = node.is_directory ? 1 : 0;
+  if (!writePod(out, isDir)) return false;
+
+  if (!node.is_directory) {
+    if (!writeStr(out, node.file_info.real_path)) return false;
+    if (!writePod(out, node.file_info.size)) return false;
+    int64_t ns = timeToNs(node.file_info.mtime);
+    if (!writePod(out, ns)) return false;
+    if (!writeStr(out, node.file_info.origin)) return false;
+    uint8_t backing = node.file_info.is_backing ? 1 : 0;
+    if (!writePod(out, backing)) return false;
+    uint32_t mode = node.file_info.cached_mode;
+    if (!writePod(out, mode)) return false;
+    return true;
+  }
+
+  uint32_t childCount = static_cast<uint32_t>(node.dir_info.children.size());
+  if (!writePod(out, childCount)) return false;
+
+  for (const auto& [key, child] : node.dir_info.children) {
+    if (!writeStr(out, key)) return false;
+    auto it = node.dir_info.display_names.find(key);
+    const std::string& display = (it != node.dir_info.display_names.end())
+                                     ? it->second
+                                     : key;
+    if (!writeStr(out, display)) return false;
+    if (!serializeNode(out, *child)) return false;
+  }
+  return true;
+}
+
+bool deserializeNode(std::istream& in, VfsNode& node)
+{
+  uint8_t isDir = 0;
+  if (!readPod(in, isDir)) return false;
+  node.is_directory = (isDir != 0);
+
+  if (!node.is_directory) {
+    if (!readStr(in, node.file_info.real_path)) return false;
+    if (!readPod(in, node.file_info.size)) return false;
+    int64_t ns = 0;
+    if (!readPod(in, ns)) return false;
+    node.file_info.mtime = nsToTime(ns);
+    if (!readStr(in, node.file_info.origin)) return false;
+    uint8_t backing = 0;
+    if (!readPod(in, backing)) return false;
+    node.file_info.is_backing = (backing != 0);
+    uint32_t mode = 0;
+    if (!readPod(in, mode)) return false;
+    node.file_info.cached_mode = static_cast<mode_t>(mode);
+    return true;
+  }
+
+  uint32_t childCount = 0;
+  if (!readPod(in, childCount)) return false;
+
+  // Sanity bound — refuse absurd counts so corrupt files do not OOM us.
+  // 16M children per dir is far beyond any real modlist.
+  if (childCount > 16u * 1024u * 1024u) return false;
+
+  node.dir_info.children.reserve(childCount);
+  node.dir_info.display_names.reserve(childCount);
+  for (uint32_t i = 0; i < childCount; ++i) {
+    std::string key, display;
+    if (!readStr(in, key)) return false;
+    if (!readStr(in, display)) return false;
+    auto child = std::make_unique<VfsNode>();
+    if (!deserializeNode(in, *child)) return false;
+    node.dir_info.display_names.emplace(key, std::move(display));
+    node.dir_info.children.emplace(std::move(key), std::move(child));
+  }
+  return true;
 }
 
 void stampPluginTimestamps(VfsTree& tree,

@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <iosfwd>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -84,6 +85,12 @@ VfsTree buildDataDirVfs(const std::vector<CachedBaseFile>& cached_files,
 void injectExtraFiles(
     VfsTree& tree,
     const std::vector<std::pair<std::string, std::string>>& extra_files);
+
+// Binary serialize/deserialize a VfsNode subtree (depth-first).
+// Returns true on success. Used by ScanCache to persist the merged
+// tree to disk and skip the full mod walk on warm boot.
+bool serializeNode(std::ostream& out, const VfsNode& node);
+bool deserializeNode(std::istream& in, VfsNode& node);
 
 // Stamp plugin files (.esp/.esm/.esl) in the VFS with incrementing
 // timestamps matching their position in the load order.  This ensures

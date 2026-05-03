@@ -1,6 +1,7 @@
 #include "fuseconnector.h"
 
 #include "settings.h"
+#include "vfs/scancache.h"
 #include "vfs/vfstree.h"
 
 #include <QCoreApplication>
@@ -406,15 +407,41 @@ bool FuseConnector::mount(
             .arg(QString::fromStdString(m_dataDirPath)));
   }
 
-  // Build tree using cached base files + mods + overwrite
+  // Build tree using cached base files + mods + overwrite.
+  // Try the persistent scan cache first — on a hit we skip the parallel
+  // mod walk entirely, which is the dominant cost on heavy modlists.
   const auto treeStart = std::chrono::steady_clock::now();
-  auto tree = std::make_shared<VfsTree>(
-      buildDataDirVfs(m_baseFileCache, m_dataDirPath, mods, m_overwriteDir));
+  ScanCacheKey cacheKey;
+  cacheKey.data_dir      = m_dataDirPath;
+  cacheKey.overwrite_dir = m_overwriteDir;
+  cacheKey.mods          = mods;  // priority order matches buildDataDirVfs
+  ScanCache scanCache(ScanCache::cacheFilePath(cacheKey));
 
-  // Inject file-level data-dir mappings (e.g. plugins.txt, loadorder.txt)
+  std::shared_ptr<VfsTree> tree;
+  bool cacheHit = false;
+  if (auto cached = scanCache.tryLoad(cacheKey)) {
+    tree     = std::move(cached);
+    cacheHit = true;
+    std::fprintf(stderr,
+                 "[VFS] [scancache] hit (%zu files, %zu dirs)\n",
+                 tree->file_count, tree->dir_count);
+  } else {
+    tree = std::make_shared<VfsTree>(
+        buildDataDirVfs(m_baseFileCache, m_dataDirPath, mods, m_overwriteDir));
+    if (!scanCache.save(cacheKey, *tree)) {
+      std::fprintf(stderr, "[VFS] [scancache] save failed (non-fatal)\n");
+    } else {
+      std::fprintf(stderr, "[VFS] [scancache] miss; persisted (%zu files, %zu dirs)\n",
+                   tree->file_count, tree->dir_count);
+    }
+  }
+
+  // Inject file-level data-dir mappings (e.g. plugins.txt, loadorder.txt).
+  // Always re-applied after load — these are session-scoped, not cached.
   injectExtraFiles(*tree, m_extraVfsFiles);
 
-  // Stamp plugin timestamps to match load order so LOOT sees unambiguous ordering
+  // Stamp plugin timestamps to match load order so LOOT sees unambiguous ordering.
+  // Also session-scoped; load order can change between launches.
   if (!m_pluginLoadOrder.empty()) {
     stampPluginTimestamps(*tree, m_pluginLoadOrder);
   }
@@ -422,8 +449,10 @@ bool FuseConnector::mount(
   {
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - treeStart).count();
-    std::fprintf(stderr, "[VFS] built tree (%zu files, %zu dirs) in %lldms\n",
-                 tree->file_count, tree->dir_count, static_cast<long long>(ms));
+    std::fprintf(stderr, "[VFS] built tree (%zu files, %zu dirs) in %lldms (%s)\n",
+                 tree->file_count, tree->dir_count,
+                 static_cast<long long>(ms),
+                 cacheHit ? "cache" : "fresh");
   }
 
   // Load tracked writes (files user moved from Overwrite to a mod)
@@ -642,6 +671,17 @@ void FuseConnector::rebuild(
   // Use cached base files - can't re-scan the data dir since it's behind our mount
   auto newTree = std::make_shared<VfsTree>(
       buildDataDirVfs(m_baseFileCache, m_dataDirPath, mods, m_overwriteDir));
+
+  // Refresh persistent scan cache so the next cold mount gets a hit.
+  // Save before injection/stamping for the same reason as mount(): those
+  // are session-scoped and re-applied on every load.
+  {
+    ScanCacheKey rebuildKey;
+    rebuildKey.data_dir      = m_dataDirPath;
+    rebuildKey.overwrite_dir = m_overwriteDir;
+    rebuildKey.mods          = mods;
+    ScanCache(ScanCache::cacheFilePath(rebuildKey)).save(rebuildKey, *newTree);
+  }
 
   // Inject file-level data-dir mappings (e.g. plugins.txt, loadorder.txt)
   injectExtraFiles(*newTree, m_extraVfsFiles);

@@ -17,6 +17,11 @@ QString fluorineDataDir()
   return QDir::homePath() + "/.local/share/fluorine";
 }
 
+QString fluorineVfsCacheDir()
+{
+  return fluorineDataDir() + "/vfs_cache";
+}
+
 void fluorineMigrateDataDir()
 {
   const QString oldRoot = OldFlatpakRoot;
