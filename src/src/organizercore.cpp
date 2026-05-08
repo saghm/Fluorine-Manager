@@ -2879,7 +2879,24 @@ void OrganizerCore::afterRun(const QFileInfo& binary, DWORD exitCode)
           break;
         }
         const QString profilePluginsPath = m_CurrentProfile->getPluginsFileName();
-        if (!prefix.syncPluginsBack(profilePluginsPath, dataDirName, wineMech)) {
+        // Only sync the prefix Plugins.txt back to the profile when the game
+        // exited cleanly. Bethesda's engine rewrites Plugins.txt as part of
+        // its shutdown sequence, and on a crash it can serialize a partially
+        // cleared "active" set (file lists every plugin but only a handful
+        // still carry the leading '*'). Trusting that file would propagate
+        // the damage into the profile via refreshESPList + savePluginList.
+        // A non-zero exit code is a strong "do not trust the prefix file"
+        // signal. The active-count guard inside syncPluginsBack is a
+        // belt-and-suspenders backstop for cases where the engine catches
+        // its own crash and exits 0 anyway.
+        if (exitCode != 0) {
+          log::warn(
+              "Skipping plugins.txt sync-back: game exited with code {} "
+              "(non-zero / abnormal). Prefix Plugins.txt may have been "
+              "rewritten with a crash-time active set; profile preserved.",
+              exitCode);
+        } else if (!prefix.syncPluginsBack(profilePluginsPath, dataDirName,
+                                            wineMech)) {
           log::warn("Failed to sync plugins.txt back from prefix '{}'",
                     prefixPathStr);
         }

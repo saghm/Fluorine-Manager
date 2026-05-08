@@ -663,6 +663,53 @@ bool WinePrefix::syncPluginsBack(const QString& profilePluginsPath,
     }
   }
 
+  // Active-plugin count guard.  Bethesda games rewrite Plugins.txt as part
+  // of normal shutdown, but on a crash (e.g. a buggy SKSE plugin going down
+  // mid-frame) the engine can write the file with the active set partially
+  // cleared — every plugin name still listed, but most without their leading
+  // '*'.  A naive copy-back propagates that damage into the profile, where
+  // refreshESPList re-derives state from disk and savePluginList persists
+  // the broken active list.  External edits (LOOT reordering) never drop the
+  // active count materially, so a large drop is a strong signal that this
+  // is a crash artifact, not a legitimate user-edit.  Refuse the copy in
+  // that case and let the profile's existing list stand.
+  auto countStarredLines = [](const QString& path) -> int {
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly)) {
+      return -1;
+    }
+    int count = 0;
+    while (!f.atEnd()) {
+      const QByteArray line = f.readLine();
+      // Skip leading whitespace to be tolerant of formatting quirks.
+      int i = 0;
+      while (i < line.size() &&
+             (line[i] == ' ' || line[i] == '\t')) {
+        ++i;
+      }
+      if (i < line.size() && line[i] == '*') {
+        ++count;
+      }
+    }
+    return count;
+  };
+
+  const int profileStars = countStarredLines(profilePluginsPath);
+  const int candidateStars = countStarredLines(newest);
+  if (profileStars > 10 && candidateStars >= 0) {
+    const int absDrop = profileStars - candidateStars;
+    const double relDrop =
+        static_cast<double>(absDrop) / static_cast<double>(profileStars);
+    if (absDrop > 10 && relDrop > 0.30) {
+      MOBase::log::warn(
+          "syncPluginsBack: refusing copy — active plugin count would drop "
+          "from {} to {} ({:.0f}% loss). Likely a game-crash artifact, not "
+          "a real edit. Profile preserved; prefix file left in place at '{}'.",
+          profileStars, candidateStars, relDrop * 100.0, newest);
+      return true;
+    }
+  }
+
   MOBase::log::info("syncPluginsBack: '{}' <- '{}'", profilePluginsPath, newest);
   if (!copyFileWithParents(newest, profilePluginsPath)) {
     MOBase::log::error("syncPluginsBack: failed to copy plugins.txt back to '{}'",
