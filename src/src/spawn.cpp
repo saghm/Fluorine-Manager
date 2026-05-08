@@ -476,14 +476,20 @@ int spawn(const SpawnParameters& sp, pid_t& processId)
     MOBase::log::info("Proton disabled for this executable, launching directly");
   }
 
-  if (!sp.vfsBridgeIndexPath.isEmpty()) {
-    launcher.addEnvVar("FLUORINE_VFS_INDEX", sp.vfsBridgeIndexPath);
-  }
-  if (!sp.vfsBridgeDataDir.isEmpty()) {
-    launcher.addEnvVar("FLUORINE_VFS_DATA_DIR", sp.vfsBridgeDataDir);
-  }
-  if (!sp.vfsBridgeMountPoint.isEmpty()) {
-    launcher.addEnvVar("FLUORINE_VFS_MOUNT", sp.vfsBridgeMountPoint);
+  // PE-side VFS bridge is per-executable opt-in. Without these env
+  // vars the staged fluorine_vfs.dll loads but its hook_worker bails
+  // out at load_index() (FLUORINE_VFS_INDEX unset) and installs zero
+  // hooks — equivalent to the bridge being disabled.
+  if (sp.useVfsBridge) {
+    if (!sp.vfsBridgeIndexPath.isEmpty()) {
+      launcher.addEnvVar("FLUORINE_VFS_INDEX", sp.vfsBridgeIndexPath);
+    }
+    if (!sp.vfsBridgeDataDir.isEmpty()) {
+      launcher.addEnvVar("FLUORINE_VFS_DATA_DIR", sp.vfsBridgeDataDir);
+    }
+    if (!sp.vfsBridgeMountPoint.isEmpty()) {
+      launcher.addEnvVar("FLUORINE_VFS_MOUNT", sp.vfsBridgeMountPoint);
+    }
   }
 
   launcher.setUseTerminal(sp.useTerminal);

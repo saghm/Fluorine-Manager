@@ -488,6 +488,19 @@ Right now the only case I know of where this needs to be overwritten is for the 
               </widget>
              </item>
              <item>
+              <widget class="QCheckBox" name="useVfsBridge">
+               <property name="toolTip">
+                <string>Inject the PE-side VFS bridge (fluorine_vfs.dll) so file lookups in the game's data dir hit a static index instead of going through Wine + FUSE every time. Saves several seconds on first boot for large modlists. Off by default — some modlists crash with the bridge enabled until indexer/negcache work is finished.</string>
+               </property>
+               <property name="text">
+                <string>Use VFS bridge (experimental)</string>
+               </property>
+               <property name="checked">
+                <bool>false</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
               <widget class="QLabel" name="label_5">
                <property name="text">
                 <string>(*) Profile specific</string>

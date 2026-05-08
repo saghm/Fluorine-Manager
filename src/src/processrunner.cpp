@@ -911,8 +911,9 @@ ProcessRunner& ProcessRunner::setFromExecutable(const Executable& exe)
   setCustomOverwrite(customOverwrite);
   setForcedLibraries(forcedLibraries);
 
-  m_sp.useProton   = exe.useProton();
-  m_sp.useTerminal = exe.useTerminal();
+  m_sp.useProton    = exe.useProton();
+  m_sp.useTerminal  = exe.useTerminal();
+  m_sp.useVfsBridge = exe.useVfsBridge();
 
   return *this;
 }

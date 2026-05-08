@@ -50,7 +50,8 @@ public:
     Hide                 = 0x08,
     MinimizeToSystemTray = 0x16,
     UseProton            = 0x20,
-    UseTerminal          = 0x40
+    UseTerminal          = 0x40,
+    UseVfsBridge         = 0x80
   };
 
   Q_DECLARE_FLAGS(Flags, Flag);
@@ -83,6 +84,7 @@ public:
   bool hide() const override;
   bool useProton() const;
   bool useTerminal() const;
+  bool useVfsBridge() const;
 
   void mergeFrom(const Executable& other);
 
