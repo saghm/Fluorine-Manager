@@ -62,6 +62,9 @@ struct SpawnParameters
   // without symlinks, which Wine can accidentally replace.
   QString saveBindMountSource;
   QString saveBindMountTarget;
+  QString vfsBridgeIndexPath;
+  QString vfsBridgeDataDir;
+  QString vfsBridgeMountPoint;
 };
 
 bool checkSteam(QWidget* parent, const SpawnParameters& sp, const QDir& gameDirectory,

@@ -476,6 +476,16 @@ int spawn(const SpawnParameters& sp, pid_t& processId)
     MOBase::log::info("Proton disabled for this executable, launching directly");
   }
 
+  if (!sp.vfsBridgeIndexPath.isEmpty()) {
+    launcher.addEnvVar("FLUORINE_VFS_INDEX", sp.vfsBridgeIndexPath);
+  }
+  if (!sp.vfsBridgeDataDir.isEmpty()) {
+    launcher.addEnvVar("FLUORINE_VFS_DATA_DIR", sp.vfsBridgeDataDir);
+  }
+  if (!sp.vfsBridgeMountPoint.isEmpty()) {
+    launcher.addEnvVar("FLUORINE_VFS_MOUNT", sp.vfsBridgeMountPoint);
+  }
+
   launcher.setUseTerminal(sp.useTerminal);
 
   const auto [ok, pid] = launcher.launch();

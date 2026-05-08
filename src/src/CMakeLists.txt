@@ -74,6 +74,87 @@ add_executable(organizer
     ${ORGANIZER_UI}
     ${ORGANIZER_QRC})
 
+add_library(fluorine_vfs_preload SHARED
+    ${CMAKE_CURRENT_SOURCE_DIR}/vfs/vfsbridgepreload.c)
+
+set_target_properties(fluorine_vfs_preload PROPERTIES
+    OUTPUT_NAME "fluorine_vfs_preload")
+
+target_link_libraries(fluorine_vfs_preload PRIVATE dl)
+
+# ── PE-side VFS injector (fluorine_vfs.dll) ──────────────────────────────
+# Cross-compiled with mingw-w64 and loaded into Wine PE processes via the
+# AppInit_DLLs registry mechanism set up at prefix init.  A game-directory
+# hid.dll proxy is also built for Wine paths that do not honor AppInit_DLLs.
+find_program(MINGW_CC NAMES x86_64-w64-mingw32-gcc-posix x86_64-w64-mingw32-gcc)
+if(MINGW_CC)
+    set(FL_VFS_DLL_SRC ${CMAKE_CURRENT_SOURCE_DIR}/vfs/fluorine_vfs_inject.c)
+    set(FL_VFS_HOOKS_SRC ${CMAKE_CURRENT_SOURCE_DIR}/vfs/fluorine_vfs_hooks.c)
+    set(FL_VFS_MINHOOK_SRC
+        ${CMAKE_SOURCE_DIR}/third_party/minhook/src/buffer.c
+        ${CMAKE_SOURCE_DIR}/third_party/minhook/src/hook.c
+        ${CMAKE_SOURCE_DIR}/third_party/minhook/src/trampoline.c
+        ${CMAKE_SOURCE_DIR}/third_party/minhook/src/hde/hde64.c)
+    set(FL_VFS_MINGW_INCLUDES
+        -I${CMAKE_SOURCE_DIR}/third_party/minhook/include
+        -I${CMAKE_SOURCE_DIR}/third_party/minhook/src
+        -I${CMAKE_SOURCE_DIR}/third_party/minhook/src/hde)
+    set(FL_VFS_DLL ${CMAKE_CURRENT_BINARY_DIR}/fluorine_vfs.dll)
+    set(FL_VFS_HID_DLL ${CMAKE_CURRENT_BINARY_DIR}/fluorine_vfs_hid.dll)
+    add_custom_command(
+        OUTPUT ${FL_VFS_DLL}
+        COMMAND ${MINGW_CC}
+            -O2 -Wall -Wextra
+            ${FL_VFS_MINGW_INCLUDES}
+            -shared -fno-asynchronous-unwind-tables
+            -static -static-libgcc
+            -Wl,--subsystem,windows -Wl,--enable-stdcall-fixup
+            -Wl,--exclude-all-symbols
+            -o ${FL_VFS_DLL}
+            ${FL_VFS_DLL_SRC}
+            ${FL_VFS_HOOKS_SRC}
+            ${FL_VFS_MINHOOK_SRC}
+            # kernel32 only.  AppInit_DLLs DLLs run inside user32's
+            # DllMain under the loader lock — calling into user32 (or any
+            # other DLL whose DllMain hasn't run yet) wedges every PE
+            # process in the prefix.
+            -lkernel32
+        DEPENDS ${FL_VFS_DLL_SRC}
+                ${FL_VFS_HOOKS_SRC}
+                ${FL_VFS_MINHOOK_SRC}
+        COMMENT "[mingw] fluorine_vfs.dll"
+        VERBATIM)
+    add_custom_command(
+        OUTPUT ${FL_VFS_HID_DLL}
+        COMMAND ${MINGW_CC}
+            -O2 -Wall -Wextra -Wno-cast-function-type
+            ${FL_VFS_MINGW_INCLUDES}
+            -shared -fno-asynchronous-unwind-tables
+            -static -static-libgcc
+            -DFLUORINE_VFS_PROXY_HID
+            -Wl,--subsystem,windows -Wl,--enable-stdcall-fixup
+            -Wl,--exclude-all-symbols
+            -o ${FL_VFS_HID_DLL}
+            ${FL_VFS_DLL_SRC}
+            ${FL_VFS_HOOKS_SRC}
+            ${FL_VFS_MINHOOK_SRC}
+            # Game-dir proxy fallback for Wine builds that ignore
+            # AppInit_DLLs.  DllMain still stays kernel32-only; the
+            # hid exports forward to the real system DLL after load.
+            -lkernel32
+        DEPENDS ${FL_VFS_DLL_SRC}
+                ${FL_VFS_HOOKS_SRC}
+                ${FL_VFS_MINHOOK_SRC}
+        COMMENT "[mingw] fluorine_vfs_hid.dll"
+        VERBATIM)
+    add_custom_target(fluorine_vfs_dll ALL DEPENDS ${FL_VFS_DLL} ${FL_VFS_HID_DLL})
+    message(STATUS "[Fluorine] mingw-w64 found at ${MINGW_CC} - building fluorine_vfs.dll")
+else()
+    message(WARNING
+        "[Fluorine] mingw-w64 (x86_64-w64-mingw32-gcc) not found - "
+        "skipping fluorine_vfs.dll. PE-side VFS injection will be unavailable.")
+endif()
+
 set_target_properties(organizer PROPERTIES
     OUTPUT_NAME "ModOrganizer"
     AUTOMOC ON

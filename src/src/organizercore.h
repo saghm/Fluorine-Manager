@@ -315,7 +315,10 @@ public:
                  const QString& profileName, const QString& customOverwrite,
                  const QList<MOBase::ExecutableForcedLoadSetting>& forcedLibraries,
                  QString* saveBindMountSource = nullptr,
-                 QString* saveBindMountTarget = nullptr);
+                 QString* saveBindMountTarget = nullptr,
+                 QString* vfsBridgeIndexPath = nullptr,
+                 QString* vfsBridgeDataDir = nullptr,
+                 QString* vfsBridgeMountPoint = nullptr);
 
   bool checkGameRegistryKey();
 

@@ -149,6 +149,18 @@ cp -f build/libs/uibase/src/libuibase.so "${OUT_DIR}/lib/"
 cp -f build/libs/libbsarch/liblibbsarch.so "${OUT_DIR}/lib/"
 cp -f build/libs/archive/src/libarchive.so "${OUT_DIR}/lib/"
 cp -f build/libs/plugin_python/src/runner/librunner.so "${OUT_DIR}/lib/"
+[ -f build/src/src/libfluorine_vfs_preload.so ] && \
+    cp -f build/src/src/libfluorine_vfs_preload.so "${OUT_DIR}/lib/"
+# PE-side VFS injector: cross-built with mingw, copied into wine/ where
+# Fluorine picks it up at prefix init and stages into c:\\windows\\system32\\.
+if [ -f build/src/src/fluorine_vfs.dll ]; then
+    mkdir -p "${OUT_DIR}/wine"
+    cp -f build/src/src/fluorine_vfs.dll "${OUT_DIR}/wine/"
+fi
+if [ -f build/src/src/fluorine_vfs_hid.dll ]; then
+    mkdir -p "${OUT_DIR}/wine"
+    cp -f build/src/src/fluorine_vfs_hid.dll "${OUT_DIR}/wine/"
+fi
 if [ -f "libs/bsa_ffi/target/release/libbsa_ffi.so" ]; then
     cp -f libs/bsa_ffi/target/release/libbsa_ffi.so "${OUT_DIR}/lib/"
 fi

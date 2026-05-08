@@ -104,6 +104,7 @@ private:
   bool stepWineRegistry();
   bool stepWin11Mode();
   bool stepPostSetup();
+  bool stepVfsInject();
 
   // -- DirectX cab extraction helpers ----------------------------------------
   bool ensureDirectXRedist(QString& redistPath);

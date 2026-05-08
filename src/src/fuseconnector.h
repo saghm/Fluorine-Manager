@@ -43,6 +43,9 @@ public:
   void setPluginLoadOrder(const std::vector<std::string>& load_order);
   void setTrackingFilePath(const std::string& path);
   std::shared_ptr<TrackedWrites> trackedWrites() const;
+  QString vfsBridgeIndexPath() const;
+  QString vfsBridgeDataDir() const;
+  QString vfsBridgeMountPoint() const;
 
   void unmount();
   void discardStagingOnUnmount();
@@ -70,6 +73,7 @@ public:
   void clearRootFiles();
 
 private:
+  void exportVfsBridgeIndex(const VfsTree& tree);
   void flushStaging();
   void deployExternalMappings(const MappingType& mapping, const QString& dataDir);
   void cleanupExternalMappings();
@@ -81,6 +85,7 @@ private:
   std::string m_gameDir;
   std::string m_dataDirName;
   std::string m_dataDirPath;
+  std::string m_vfsBridgeIndexPath;
   int m_backingFd = -1;
   std::vector<CachedBaseFile> m_baseFileCache;
   std::string m_cachedDataDirPath;

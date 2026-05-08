@@ -38,6 +38,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zip unzip \
     # Static analysis
     clang-tidy \
+    # mingw-w64 cross-toolchain for fluorine_vfs.dll (PE-side VFS injector,
+    # loaded into Wine processes via AppInit_DLLs).
+    gcc-mingw-w64-x86-64-posix \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Qt 6.10 via aqtinstall ──

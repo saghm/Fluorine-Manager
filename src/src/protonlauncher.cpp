@@ -1,9 +1,14 @@
 #include "protonlauncher.h"
 
+#include "fluorinepaths.h"
 #include "steamdetection.h"
 #include "slrmanager.h"
 #include <cstdio>
+#include <QByteArray>
+#include <QCoreApplication>
 #include <QDir>
+#include <QDirIterator>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QProcess>
@@ -12,6 +17,8 @@
 #include <QSet>
 #include <log.h>
 
+#include <fcntl.h>
+#include <unistd.h>
 
 namespace
 {
@@ -69,6 +76,355 @@ void cleanFluorineEnv(QProcessEnvironment& env)
   MOBase::log::debug("cleanFluorineEnv: {} (LD_LIBRARY_PATH='{}')",
                      hasOrigVars ? "restored from FLUORINE_ORIG_*" : "pattern-strip fallback",
                      env.value("LD_LIBRARY_PATH", "<unset>"));
+}
+
+QString fluorineVfsPreloadPath()
+{
+  const QString libName = QStringLiteral("libfluorine_vfs_preload.so");
+  const QString envLibDir = qEnvironmentVariable("MO2_LIBS_DIR");
+  if (!envLibDir.isEmpty()) {
+    const QString candidate = QDir(envLibDir).filePath(libName);
+    if (QFileInfo::exists(candidate)) {
+      return candidate;
+    }
+  }
+
+  const QString candidate =
+      QDir(QCoreApplication::applicationDirPath()).filePath(
+          QStringLiteral("lib/") + libName);
+  return QFileInfo::exists(candidate) ? candidate : QString();
+}
+
+void prependLdPreload(QProcessEnvironment& env, const QString& library)
+{
+  if (library.isEmpty()) {
+    return;
+  }
+
+  const QString existing = env.value("LD_PRELOAD");
+  env.insert("LD_PRELOAD", existing.isEmpty() ? library : library + ":" + existing);
+}
+
+void prependWineDllOverride(QProcessEnvironment& env, const QString& override)
+{
+  if (override.isEmpty()) {
+    return;
+  }
+
+  const QString existing = env.value("WINEDLLOVERRIDES");
+  if (existing.split(';').contains(override)) {
+    return;
+  }
+  env.insert("WINEDLLOVERRIDES",
+             existing.isEmpty() ? override : override + ";" + existing);
+}
+
+bool vfsBridgeIndexPresent(const QMap<QString, QString>& envVars)
+{
+  return envVars.contains("FLUORINE_VFS_INDEX") &&
+         !envVars.value("FLUORINE_VFS_INDEX").isEmpty();
+}
+
+struct StagedProxy
+{
+  QString path;
+  QByteArray expectedBytes;
+
+  explicit operator bool() const
+  {
+    return !path.isEmpty() && !expectedBytes.isEmpty();
+  }
+};
+
+QByteArray readSmallFile(const QString& path)
+{
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly)) {
+    return {};
+  }
+  return file.readAll();
+}
+
+void cleanupStagedProxy(const StagedProxy& proxy)
+{
+  if (!proxy) {
+    return;
+  }
+
+  const QByteArray current = readSmallFile(proxy.path);
+  if (!current.isEmpty() && current == proxy.expectedBytes) {
+    if (QFile::remove(proxy.path)) {
+      MOBase::log::info("VFS HID proxy removed: {}", proxy.path);
+    } else {
+      MOBase::log::warn("VFS HID proxy cleanup failed: {}", proxy.path);
+    }
+  }
+}
+
+StagedProxy stageVfsHidProxy(const QString& binary)
+{
+  const QString src = fluorineVfsHidProxyDllPath();
+  const QByteArray srcBytes = readSmallFile(src);
+  if (src.isEmpty() || binary.isEmpty()) {
+    return {};
+  }
+  if (srcBytes.isEmpty()) {
+    MOBase::log::warn("VFS HID proxy not staged: failed to read '{}'", src);
+    return {};
+  }
+
+  const QString gameDir = QFileInfo(binary).absolutePath();
+  const QString dst = QDir(gameDir).filePath(QStringLiteral("hid.dll"));
+  const QFileInfo dstInfo(dst);
+  if (dstInfo.exists()) {
+    const QByteArray dstBytes = readSmallFile(dst);
+    if (srcBytes == dstBytes) {
+      return {dst, srcBytes};
+    }
+    if (dstBytes.contains("fluorine_vfs")) {
+      if (!QFile::remove(dst)) {
+        MOBase::log::warn("VFS HID proxy update failed: could not remove '{}'", dst);
+        return {};
+      }
+    } else {
+      MOBase::log::warn("VFS HID proxy not staged: '{}' already exists", dst);
+      return {};
+    }
+  }
+
+  if (!QFile::copy(src, dst)) {
+    MOBase::log::warn("VFS HID proxy copy failed: '{}' -> '{}'", src, dst);
+    return {};
+  }
+
+  MOBase::log::info("VFS HID proxy staged: {}", dst);
+  return {dst, srcBytes};
+}
+
+bool vfsBridgePreloadRequested()
+{
+  // Default OFF.  The libc-side LD_PRELOAD bridge cannot intercept Wine
+  // NTDLL's directory reads (Wine emits inline `syscall` instructions or
+  // routes via ntdll-internal vDSO thunks; neither path resolves through
+  // glibc symbols).  When dir synthesis was on it caused empty-dir hangs
+  // (>60s) and the canonicalizer overhead made even file-only redirect
+  // net-negative versus baseline (~43s vs ~25s).  The replacement is a
+  // PE-side `fluorine_vfs.dll` injected via AppInit_DLLs (in progress).
+  // Set FLUORINE_ENABLE_VFS_PRELOAD=1 to opt back in for diagnostics.
+  const QString enable = qEnvironmentVariable("FLUORINE_ENABLE_VFS_PRELOAD").trimmed();
+  return enable == "1" ||
+         enable.compare(QStringLiteral("true"), Qt::CaseInsensitive) == 0 ||
+         enable.compare(QStringLiteral("yes"), Qt::CaseInsensitive) == 0;
+}
+
+bool wineLoaderTraceRequested()
+{
+  const QString enable = qEnvironmentVariable("FLUORINE_WINE_LOADER_TRACE").trimmed();
+  return enable == "1" ||
+         enable.compare(QStringLiteral("true"), Qt::CaseInsensitive) == 0 ||
+         enable.compare(QStringLiteral("yes"), Qt::CaseInsensitive) == 0 ||
+         QFileInfo::exists(QStringLiteral("/tmp/fluorine_enable_wine_loader_trace"));
+}
+
+bool vfsPrewarmRequested(const QMap<QString, QString>& envVars)
+{
+  QString enable = envVars.value(QStringLiteral("FLUORINE_VFS_PREWARM")).trimmed();
+  if (enable.isEmpty()) {
+    enable = qEnvironmentVariable("FLUORINE_VFS_PREWARM").trimmed();
+  }
+
+  if (enable.isEmpty()) {
+    return true;
+  }
+
+  return !(enable == "0" ||
+           enable.compare(QStringLiteral("false"), Qt::CaseInsensitive) == 0 ||
+           enable.compare(QStringLiteral("no"), Qt::CaseInsensitive) == 0);
+}
+
+bool isBethesdaPrewarmPath(const QString& path)
+{
+  const QString lower = path.toLower();
+  return lower.endsWith(QStringLiteral(".dll")) ||
+         lower.endsWith(QStringLiteral(".esp")) ||
+         lower.endsWith(QStringLiteral(".esm")) ||
+         lower.endsWith(QStringLiteral(".esl")) ||
+         lower.endsWith(QStringLiteral(".bsa")) ||
+         lower.endsWith(QStringLiteral(".ba2"));
+}
+
+void addPrewarmPath(QStringList& paths, QSet<QString>& seen, const QString& path)
+{
+  if (path.isEmpty() || !isBethesdaPrewarmPath(path)) {
+    return;
+  }
+
+  const QFileInfo info(path);
+  if (!info.exists() || !info.isFile()) {
+    return;
+  }
+
+  const QString clean = QDir::cleanPath(info.absoluteFilePath());
+  if (!seen.contains(clean)) {
+    seen.insert(clean);
+    paths.append(clean);
+  }
+}
+
+QString jsonStringField(const QByteArray& line, const char* name)
+{
+  const QByteArray needle = QByteArray("\"") + name + "\":\"";
+  const int start = line.indexOf(needle);
+  if (start < 0) {
+    return {};
+  }
+
+  QByteArray out;
+  bool escaped = false;
+  for (int i = start + needle.size(); i < line.size(); ++i) {
+    const char c = line.at(i);
+    if (escaped) {
+      switch (c) {
+      case '"':
+      case '\\':
+      case '/':
+        out.append(c);
+        break;
+      case 'b':
+        out.append('\b');
+        break;
+      case 'f':
+        out.append('\f');
+        break;
+      case 'n':
+        out.append('\n');
+        break;
+      case 'r':
+        out.append('\r');
+        break;
+      case 't':
+        out.append('\t');
+        break;
+      default:
+        out.append(c);
+        break;
+      }
+      escaped = false;
+      continue;
+    }
+    if (c == '\\') {
+      escaped = true;
+      continue;
+    }
+    if (c == '"') {
+      return QString::fromUtf8(out);
+    }
+    out.append(c);
+  }
+
+  return {};
+}
+
+void collectStockPrewarmPaths(QStringList& paths, QSet<QString>& seen,
+                              const QString& binary)
+{
+  const QString gameDir = QFileInfo(binary).absolutePath();
+  if (gameDir.isEmpty() || !QFileInfo(gameDir).isDir()) {
+    return;
+  }
+
+  QDirIterator it(gameDir, QDir::Files | QDir::NoDotAndDotDot,
+                  QDirIterator::Subdirectories);
+  while (it.hasNext()) {
+    addPrewarmPath(paths, seen, it.next());
+  }
+}
+
+void collectIndexPrewarmPaths(QStringList& paths, QSet<QString>& seen,
+                              const QString& indexPath)
+{
+  QFile file(indexPath);
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    MOBase::log::warn("VFS prewarm skipped index paths: failed to open '{}'",
+                      indexPath);
+    return;
+  }
+
+  while (!file.atEnd()) {
+    const QByteArray line = file.readLine();
+    if (!line.contains("\"record\":\"entry\"") ||
+        !line.contains("\"type\":\"file\"")) {
+      continue;
+    }
+
+    const QString realPath = jsonStringField(line, "real_path");
+    if (realPath.startsWith('/')) {
+      addPrewarmPath(paths, seen, realPath);
+    }
+  }
+}
+
+struct PrewarmStats
+{
+  int files = 0;
+  int failed = 0;
+  qint64 bytes = 0;
+};
+
+PrewarmStats prewarmFiles(const QStringList& paths, int begin, int end)
+{
+  PrewarmStats stats;
+  for (int i = begin; i < end; ++i) {
+    const QFileInfo info(paths.at(i));
+    const QByteArray nativePath = QFile::encodeName(info.absoluteFilePath());
+    const int fd = ::open(nativePath.constData(), O_RDONLY | O_CLOEXEC);
+    if (fd < 0) {
+      ++stats.failed;
+      continue;
+    }
+
+#ifdef POSIX_FADV_WILLNEED
+    if (::posix_fadvise(fd, 0, 0, POSIX_FADV_WILLNEED) != 0) {
+      ++stats.failed;
+      ::close(fd);
+      continue;
+    }
+#endif
+
+    ++stats.files;
+    stats.bytes += info.size();
+    ::close(fd);
+  }
+  return stats;
+}
+
+void prewarmVfsBridgeFiles(const QString& binary, const QString& indexPath)
+{
+  QElapsedTimer timer;
+  timer.start();
+
+  QStringList paths;
+  QSet<QString> seen;
+  collectStockPrewarmPaths(paths, seen, binary);
+  const int stockEnd = paths.size();
+  collectIndexPrewarmPaths(paths, seen, indexPath);
+
+  const PrewarmStats stock = prewarmFiles(paths, 0, stockEnd);
+  const PrewarmStats indexed = prewarmFiles(paths, stockEnd, paths.size());
+
+  const qint64 elapsedMs = timer.elapsed();
+  MOBase::log::info(
+      "VFS prewarm: stock_files={} stock_bytes={} index_files={} "
+      "index_bytes={} failed={} elapsed_ms={}",
+      stock.files, stock.bytes, indexed.files, indexed.bytes,
+      stock.failed + indexed.failed, elapsedMs);
+  std::fprintf(stderr,
+               "[Fluorine] VFS prewarm: stock_files=%d stock_bytes=%lld "
+               "index_files=%d index_bytes=%lld failed=%d elapsed_ms=%lld\n",
+               stock.files, static_cast<long long>(stock.bytes),
+               indexed.files, static_cast<long long>(indexed.bytes),
+               stock.failed + indexed.failed,
+               static_cast<long long>(elapsedMs));
 }
 
 QString decodeMountInfoPath(const QByteArray& encoded)
@@ -455,7 +811,8 @@ void wrapInTerminal(QString& program, QStringList& arguments)
 
 bool startWithEnv(const QString& program, const QStringList& arguments,
                   const QString& workingDir,
-                  const QProcessEnvironment& environment, qint64& pid)
+                  const QProcessEnvironment& environment, qint64& pid,
+                  const StagedProxy& stagedProxy)
 {
   auto* process = new QProcess();
   process->setProgram(program);
@@ -468,10 +825,28 @@ bool startWithEnv(const QString& program, const QStringList& arguments,
   process->setProcessEnvironment(environment);
   process->setProcessChannelMode(QProcess::ForwardedOutputChannel);
 
+  QFile* wineTraceLog = nullptr;
+  const QString wineTracePath =
+      environment.value(QStringLiteral("FLUORINE_WINE_LOADER_TRACE_LOG"));
+  if (!wineTracePath.isEmpty()) {
+    wineTraceLog = new QFile(wineTracePath, process);
+    if (!wineTraceLog->open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+      MOBase::log::warn("Wine loader trace log could not be opened: {}",
+                        wineTracePath);
+      wineTraceLog = nullptr;
+    } else {
+      MOBase::log::info("Wine loader trace log: {}", wineTracePath);
+    }
+  }
+
   // Filter noisy Wine/Proton stderr (GStreamer warnings, etc.) while
   // forwarding everything else to our stderr.
-  QObject::connect(process, &QProcess::readyReadStandardError, process, [process]() {
+  QObject::connect(process, &QProcess::readyReadStandardError, process, [process, wineTraceLog]() {
     const QByteArray data = process->readAllStandardError();
+    if (wineTraceLog != nullptr && wineTraceLog->isOpen()) {
+      wineTraceLog->write(data);
+      wineTraceLog->flush();
+    }
     for (const QByteArray& line : data.split('\n')) {
       if (line.isEmpty())
         continue;
@@ -487,6 +862,9 @@ bool startWithEnv(const QString& program, const QStringList& arguments,
   QObject::connect(process,
                    QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
                    process, &QProcess::deleteLater);
+  QObject::connect(process,
+                   QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+                   process, [stagedProxy]() { cleanupStagedProxy(stagedProxy); });
 
   process->start();
   if (!process->waitForStarted(5000)) {
@@ -723,6 +1101,16 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
   QStringList pressureVesselImportantPaths;
   pressureVesselImportantPaths << m_binary << m_workingDir << m_prefixPath
                                << m_bindMountSource << m_bindMountTarget;
+  const bool useVfsBridgeIndex = vfsBridgeIndexPresent(m_envVars);
+  const StagedProxy vfsHidProxy =
+      useVfsBridgeIndex ? stageVfsHidProxy(m_binary) : StagedProxy{};
+  const bool useVfsBridgePreload =
+      vfsBridgePreloadRequested() && useVfsBridgeIndex;
+  const QString vfsBridgePreload =
+      useVfsBridgePreload ? fluorineVfsPreloadPath() : QString();
+  if (!vfsBridgePreload.isEmpty()) {
+    pressureVesselImportantPaths << vfsBridgePreload;
+  }
 
   // If SLR is enabled, wrap the whole proton invocation inside the
   // pressure-vessel container provided by SteamLinuxRuntime_sniper.
@@ -990,6 +1378,26 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
   for (auto it = m_envVars.cbegin(); it != m_envVars.cend(); ++it) {
     env.insert(it.key(), it.value());
   }
+  if (useVfsBridgeIndex && wineLoaderTraceRequested()) {
+    const QString tracePath =
+        QStringLiteral("/tmp/fluorine_wine_loader_trace.log");
+    QFile::remove(tracePath);
+    env.insert("WINEDEBUG", "+timestamp,+pid,+tid,+loaddll");
+    env.insert("FLUORINE_WINE_LOADER_TRACE_LOG", tracePath);
+    MOBase::log::info("Wine loader tracing enabled: WINEDEBUG='{}', log='{}'",
+                      env.value("WINEDEBUG"), tracePath);
+  }
+  if (vfsHidProxy) {
+    prependWineDllOverride(env, QStringLiteral("hid=n,b"));
+  }
+  if (useVfsBridgePreload && !vfsBridgePreload.isEmpty()) {
+    prependLdPreload(env, vfsBridgePreload);
+    env.insert("FLUORINE_VFS_PRELOAD_STATS", "1");
+    MOBase::log::info("VFS bridge preload enabled: {}", vfsBridgePreload);
+  } else if (useVfsBridgePreload) {
+    MOBase::log::warn("VFS bridge index is present but libfluorine_vfs_preload.so "
+                      "was not found; launching without preload acceleration");
+  }
 
   if (m_useSLR) {
     appendPressureVesselFilesystems(
@@ -1033,11 +1441,15 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
     env.insert("PWD", m_workingDir);
   }
 
+  if (useVfsBridgeIndex && vfsPrewarmRequested(m_envVars)) {
+    prewarmVfsBridgeFiles(m_binary, m_envVars.value("FLUORINE_VFS_INDEX"));
+  }
+
   if (m_useTerminal) {
     wrapInTerminal(program, arguments);
   }
 
-  return startWithEnv(program, arguments, m_workingDir, env, pid);
+  return startWithEnv(program, arguments, m_workingDir, env, pid, vfsHidProxy);
 }
 
 bool ProtonLauncher::launchDirect(qint64& pid) const
@@ -1059,12 +1471,42 @@ bool ProtonLauncher::launchDirect(qint64& pid) const
   for (auto it = m_envVars.cbegin(); it != m_envVars.cend(); ++it) {
     env.insert(it.key(), it.value());
   }
+  const bool useVfsBridgeIndex = vfsBridgeIndexPresent(m_envVars);
+  const StagedProxy vfsHidProxy =
+      useVfsBridgeIndex ? stageVfsHidProxy(m_binary) : StagedProxy{};
+  if (useVfsBridgeIndex && wineLoaderTraceRequested()) {
+    const QString tracePath =
+        QStringLiteral("/tmp/fluorine_wine_loader_trace.log");
+    QFile::remove(tracePath);
+    env.insert("WINEDEBUG", "+timestamp,+pid,+tid,+loaddll");
+    env.insert("FLUORINE_WINE_LOADER_TRACE_LOG", tracePath);
+    MOBase::log::info("Wine loader tracing enabled: WINEDEBUG='{}', log='{}'",
+                      env.value("WINEDEBUG"), tracePath);
+  }
+  if (vfsHidProxy) {
+    prependWineDllOverride(env, QStringLiteral("hid=n,b"));
+  }
+  if (vfsBridgePreloadRequested() && useVfsBridgeIndex) {
+    const QString vfsBridgePreload = fluorineVfsPreloadPath();
+    if (!vfsBridgePreload.isEmpty()) {
+      prependLdPreload(env, vfsBridgePreload);
+      env.insert("FLUORINE_VFS_PRELOAD_STATS", "1");
+      MOBase::log::info("VFS bridge preload enabled: {}", vfsBridgePreload);
+    } else {
+      MOBase::log::warn("VFS bridge index is present but libfluorine_vfs_preload.so "
+                        "was not found; launching without preload acceleration");
+    }
+  }
+
+  if (useVfsBridgeIndex && vfsPrewarmRequested(m_envVars)) {
+    prewarmVfsBridgeFiles(m_binary, m_envVars.value("FLUORINE_VFS_INDEX"));
+  }
 
   if (m_useTerminal) {
     wrapInTerminal(program, arguments);
   }
 
-  return startWithEnv(program, arguments, m_workingDir, env, pid);
+  return startWithEnv(program, arguments, m_workingDir, env, pid, vfsHidProxy);
 }
 
 bool ProtonLauncher::ensureSteamRunning()
