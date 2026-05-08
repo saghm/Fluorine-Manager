@@ -11,8 +11,22 @@ static const int s_Timeout = 5000;
 
 using MOBase::reportError;
 
+// Liveness probe: a real primary owns a QLocalServer listening on s_Key.
+// If we can connect, a primary exists. If not, the shm/socket is stale
+// (prior crash left SysV segment + unix socket file behind on Linux).
+static bool primaryAlive()
+{
+  QLocalSocket probe;
+  probe.connectToServer(s_Key, QIODevice::WriteOnly);
+  const bool alive = probe.waitForConnected(500);
+  if (alive) {
+    probe.disconnectFromServer();
+  }
+  return alive;
+}
+
 MOMultiProcess::MOMultiProcess(bool allowMultiple, QObject* parent)
-    : QObject(parent) 
+    : QObject(parent)
 {
   m_SharedMem.setKey(s_Key);
 
@@ -24,7 +38,42 @@ MOMultiProcess::MOMultiProcess(bool allowMultiple, QObject* parent)
     if (error == QSharedMemory::AlreadyExists && !allowMultiple) {
       // Primary instance likely exists. Try to attach as ephemeral process.
       if (m_SharedMem.attach()) {
-        m_Ephemeral = true;
+        // Verify a primary is actually listening. Stale SysV shm on Linux
+        // survives crashes — attach succeeds against a dead segment.
+        if (primaryAlive()) {
+          m_Ephemeral = true;
+        } else {
+          MOBase::log::debug(
+              "stale shared memory detected (no primary listener), "
+              "claiming ownership");
+          m_SharedMem.detach();
+          if (m_SharedMem.create(1)) {
+            m_OwnsSM = true;
+            error    = QSharedMemory::NoError;
+          } else {
+            // Another attached client keeps refcount > 0; on Linux Qt only
+            // frees the segment when the last attacher detaches. Re-attach
+            // as a secondary so the constructor returns in a usable state
+            // and sendMessage() can still try to deliver the request via
+            // the unix socket — it would otherwise leave both ownership
+            // flags clear and silently no-op every later call.
+            const QString reclaimError = m_SharedMem.errorString();
+            if (m_SharedMem.attach()) {
+              MOBase::log::warn(
+                  "could not reclaim stale shared memory ({}), "
+                  "running as secondary",
+                  reclaimError);
+              m_Ephemeral = true;
+              error       = QSharedMemory::NoError;
+            } else {
+              MOBase::log::warn(
+                  "could not reclaim or re-attach stale shared memory "
+                  "(reclaim: {}, reattach: {})",
+                  reclaimError, m_SharedMem.errorString());
+              error = m_SharedMem.error();
+            }
+          }
+        }
       } else {
         // Handle races with stale shared memory state:
         // between create() and attach(), the owner may have disappeared.
@@ -60,9 +109,15 @@ MOMultiProcess::MOMultiProcess(bool allowMultiple, QObject* parent)
   if (m_OwnsSM) {
     connect(&m_Server, SIGNAL(newConnection()), this, SLOT(receiveMessage()),
             Qt::QueuedConnection);
+    // Clear any stale unix socket file from a prior crashed primary,
+    // otherwise listen() fails with AddressInUseError on Linux.
+    QLocalServer::removeServer(s_Key);
     // has to be called before listen
     m_Server.setSocketOptions(QLocalServer::WorldAccessOption);
-    m_Server.listen(s_Key);
+    if (!m_Server.listen(s_Key)) {
+      MOBase::log::warn("QLocalServer listen failed: {}",
+                           m_Server.errorString().toStdString());
+    }
   }
 }
 
