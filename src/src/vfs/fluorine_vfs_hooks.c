@@ -331,6 +331,21 @@ static CRITICAL_SECTION g_dir_lock;
 static int g_dir_lock_ready = 0;
 static HANDLE g_dummy_dir = INVALID_HANDLE_VALUE;
 static char* g_mount = NULL;
+/* Precomputed mount prefixes for the fast scope gate. Built once in
+ * load_index() after g_mount is normalized. The gate keeps the bridge from
+ * touching any file outside the game's data dir: every probe to a system
+ * DLL, registry-backed object, or unrelated drive bypasses the hook entirely
+ * and goes straight to the real syscall. */
+static WCHAR* g_mount_w_nt = NULL;       /* "\\??\\Z:\\<mount>" lowercase */
+static size_t g_mount_w_nt_chars = 0;
+static WCHAR* g_mount_w_dosq = NULL;     /* "\\\\?\\Z:\\<mount>" lowercase */
+static size_t g_mount_w_dosq_chars = 0;
+static WCHAR* g_mount_w_bare = NULL;     /* "Z:\\<mount>" lowercase */
+static size_t g_mount_w_bare_chars = 0;
+static char*  g_mount_a_bare = NULL;     /* "z:\\<mount>" lowercase ANSI */
+static size_t g_mount_a_bare_len = 0;
+static char*  g_mount_a_dosq = NULL;     /* "\\\\?\\z:\\<mount>" lowercase ANSI */
+static size_t g_mount_a_dosq_len = 0;
 static volatile LONG g_index_ready = 0;
 static __thread int t_inside_redirect = 0;
 static __thread WCHAR t_redirect_path[32768];
@@ -447,6 +462,160 @@ static WCHAR* unix_path_to_nt_wide(const char* path)
   MultiByteToWideChar(CP_UTF8, 0, nt, -1, out, wlen);
   free(nt);
   return out;
+}
+
+/* --- Mount-scope fast gate --------------------------------------------------
+ *
+ * The bridge only ever has knowledge of files inside the FUSE mount (i.e. the
+ * game's Data dir). Any probe to a path outside that subtree must be invisible
+ * to our hooks: pass straight through to Wine, no normalization, no cache
+ * lookup, no possible chance of a wrong answer.
+ *
+ * To make that cheap, we precompute the mount prefix in the three forms that
+ * Wine/games commonly produce, lowercased, and do a byte/wide prefix compare
+ * directly on the input the kernel/k32 hook receives. Out-of-mount paths fail
+ * the compare in a handful of characters and pass through without any of the
+ * UTF-8/slash/lowercase machinery in nt_path_to_key().
+ */
+
+static WCHAR ascii_lower_w(WCHAR c)
+{
+  return (c >= L'A' && c <= L'Z') ? (WCHAR)(c + 32) : c;
+}
+
+static int wide_match_prefix(const WCHAR* path, size_t path_chars,
+                             const WCHAR* prefix, size_t prefix_chars)
+{
+  if (prefix == NULL || prefix_chars == 0) return 0;
+  if (path_chars < prefix_chars) return 0;
+  for (size_t i = 0; i < prefix_chars; ++i) {
+    if (ascii_lower_w(path[i]) != prefix[i]) return 0;
+  }
+  if (path_chars == prefix_chars) return 1;
+  WCHAR n = path[prefix_chars];
+  return n == L'\\' || n == L'/';
+}
+
+static int byte_match_prefix(const char* path, size_t path_len,
+                             const char* prefix, size_t prefix_len)
+{
+  if (prefix == NULL || prefix_len == 0) return 0;
+  if (path_len < prefix_len) return 0;
+  for (size_t i = 0; i < prefix_len; ++i) {
+    if (ascii_lower(path[i]) != prefix[i]) return 0;
+  }
+  if (path_len == prefix_len) return 1;
+  char n = path[prefix_len];
+  return n == '\\' || n == '/';
+}
+
+static void build_mount_prefixes(void)
+{
+  if (g_mount == NULL) return;
+  size_t mlen = strlen(g_mount);
+  if (mlen == 0) return;
+
+  /* g_mount is lowercase, forward-slash, no leading or trailing slash.
+   * Build "z:\\<mount-with-backslashes>" in ANSI lowercase first. */
+  size_t bare_len = 3 + mlen;            /* "z:\\" + mlen */
+  char* a_bare = (char*)malloc(bare_len + 1);
+  if (a_bare == NULL) return;
+  a_bare[0] = 'z';
+  a_bare[1] = ':';
+  a_bare[2] = '\\';
+  for (size_t i = 0; i < mlen; ++i) {
+    char c = g_mount[i];
+    a_bare[3 + i] = (c == '/') ? '\\' : c;
+  }
+  a_bare[bare_len] = '\0';
+  g_mount_a_bare = a_bare;
+  g_mount_a_bare_len = bare_len;
+
+  /* "\\\\?\\z:\\<...>" */
+  size_t dosq_len = 4 + bare_len;
+  char* a_dosq = (char*)malloc(dosq_len + 1);
+  if (a_dosq != NULL) {
+    a_dosq[0] = '\\';
+    a_dosq[1] = '\\';
+    a_dosq[2] = '?';
+    a_dosq[3] = '\\';
+    memcpy(a_dosq + 4, a_bare, bare_len);
+    a_dosq[dosq_len] = '\0';
+    g_mount_a_dosq = a_dosq;
+    g_mount_a_dosq_len = dosq_len;
+  }
+
+  /* Wide bare. */
+  WCHAR* w_bare = (WCHAR*)malloc((bare_len + 1) * sizeof(WCHAR));
+  if (w_bare == NULL) return;
+  for (size_t i = 0; i < bare_len; ++i) {
+    w_bare[i] = (WCHAR)(unsigned char)a_bare[i];
+  }
+  w_bare[bare_len] = 0;
+  g_mount_w_bare = w_bare;
+  g_mount_w_bare_chars = bare_len;
+
+  /* "\\??\\Z:\\<...>" wide */
+  size_t nt_chars = 4 + bare_len;
+  WCHAR* w_nt = (WCHAR*)malloc((nt_chars + 1) * sizeof(WCHAR));
+  if (w_nt != NULL) {
+    w_nt[0] = L'\\';
+    w_nt[1] = L'?';
+    w_nt[2] = L'?';
+    w_nt[3] = L'\\';
+    for (size_t i = 0; i < bare_len; ++i) w_nt[4 + i] = w_bare[i];
+    w_nt[nt_chars] = 0;
+    g_mount_w_nt = w_nt;
+    g_mount_w_nt_chars = nt_chars;
+  }
+
+  /* "\\\\?\\Z:\\<...>" wide */
+  size_t dosq_chars = 4 + bare_len;
+  WCHAR* w_dosq = (WCHAR*)malloc((dosq_chars + 1) * sizeof(WCHAR));
+  if (w_dosq != NULL) {
+    w_dosq[0] = L'\\';
+    w_dosq[1] = L'\\';
+    w_dosq[2] = L'?';
+    w_dosq[3] = L'\\';
+    for (size_t i = 0; i < bare_len; ++i) w_dosq[4 + i] = w_bare[i];
+    w_dosq[dosq_chars] = 0;
+    g_mount_w_dosq = w_dosq;
+    g_mount_w_dosq_chars = dosq_chars;
+  }
+}
+
+static int us_under_mount(PUNICODE_STRING_FL us)
+{
+  if (us == NULL || us->Buffer == NULL) return 0;
+  size_t chars = (size_t)(us->Length / sizeof(WCHAR));
+  return wide_match_prefix(us->Buffer, chars, g_mount_w_nt,
+                           g_mount_w_nt_chars) ||
+         wide_match_prefix(us->Buffer, chars, g_mount_w_dosq,
+                           g_mount_w_dosq_chars) ||
+         wide_match_prefix(us->Buffer, chars, g_mount_w_bare,
+                           g_mount_w_bare_chars);
+}
+
+static int wide_under_mount(LPCWSTR path)
+{
+  if (path == NULL) return 0;
+  size_t chars = 0;
+  while (path[chars] != 0) ++chars;
+  return wide_match_prefix(path, chars, g_mount_w_nt, g_mount_w_nt_chars) ||
+         wide_match_prefix(path, chars, g_mount_w_dosq,
+                           g_mount_w_dosq_chars) ||
+         wide_match_prefix(path, chars, g_mount_w_bare,
+                           g_mount_w_bare_chars);
+}
+
+static int ansi_under_mount(LPCSTR path)
+{
+  if (path == NULL) return 0;
+  size_t plen = strlen(path);
+  return byte_match_prefix(path, plen, g_mount_a_bare,
+                           g_mount_a_bare_len) ||
+         byte_match_prefix(path, plen, g_mount_a_dosq,
+                           g_mount_a_dosq_len);
 }
 
 static WCHAR* utf8_to_wide_n(const char* s, size_t n)
@@ -944,6 +1113,7 @@ static int load_index(void)
   g_mount = heap_strndup(mount, strlen(mount));
   if (g_mount == NULL) return 0;
   normalize_utf8_path(g_mount);
+  build_mount_prefixes();
 
   char* file = NULL;
   size_t file_len = 0;
@@ -962,14 +1132,23 @@ static int load_index(void)
       if (type != NULL && ascii_eq_ci(type, "file")) {
         char* vp = json_string_field(line, "virtual_path");
         char* rp = json_string_field(line, "real_path");
-        if (vp != NULL && rp != NULL && rp[0] == '/') {
+        /* Accept both absolute (mod / Overwrite) and backing-relative
+         * (vanilla data dir) entries. Backing entries get real_nt=NULL
+         * — they exist for query_index_attrs_key and the negcache
+         * decision, but Hook_NtCreateFile skips redirect for them and
+         * falls through to Real_, which serves them via the FUSE
+         * mount path. Without this, every base-game file open without
+         * a preceding GetFileAttributes would hit the negcache and
+         * return STATUS_OBJECT_NAME_NOT_FOUND. */
+        if (vp != NULL && rp != NULL) {
           unsigned long long size = json_u64_field(line, "size");
           FILETIME mtime =
               filetime_from_unix_ns(json_u64_field(line, "mtime_ns"));
           add_path_to_dirs(vp, size, mtime);
           normalize_utf8_path(vp);
-          WCHAR* real_nt = unix_path_to_nt_wide(rp);
-          if (real_nt == NULL ||
+          WCHAR* real_nt = (rp[0] == '/') ? unix_path_to_nt_wide(rp) : NULL;
+          int unix_alloc_failed = (rp[0] == '/' && real_nt == NULL);
+          if (unix_alloc_failed ||
               !append_entry(vp, real_nt, FILE_ATTRIBUTE_ARCHIVE, size,
                             mtime)) {
             free(vp);
@@ -1473,9 +1652,10 @@ static int should_neg_attr_miss(const char* key)
  * path skip the Real_ syscall entirely. Game-agnostic — no subtree
  * carve-outs needed because we always real-probe before answering.
  *
- * Negatives are cached too. Mid-boot writes that would invalidate a
- * negative cache entry are caught by attr_cache_invalidate() called
- * from Hook_NtCreateFile on create-success. */
+ * Negatives are cached too. Mid-boot writes that would flip a
+ * negative entry to positive are caught by attr_cache_mark_exists(),
+ * called from Hook_NtCreateFile after a successful write/create —
+ * attr_cache_insert() overwrites any prior entry for the same key. */
 
 typedef struct AttrCacheEntry
 {
@@ -1992,6 +2172,14 @@ static NTSTATUS NTAPI Hook_NtCreateFile(PHANDLE out, ACCESS_MASK access,
                                         ULONG ea_len)
 {
   InterlockedIncrement64(&g_nt_create);
+  /* Mount-scope gate: anything outside the FUSE mount is invisible to the
+   * bridge. Pass through immediately, no normalization, no cache. */
+  if (g_index_ready && t_inside_redirect == 0 && oa != NULL &&
+      oa->ObjectName != NULL && oa->RootDirectory == NULL &&
+      !us_under_mount(oa->ObjectName)) {
+    return Real_NtCreateFile(out, access, oa, iosb, alloc_sz, file_attrs,
+                             share, disp, opts, ea, ea_len);
+  }
   char key[2048];
   key[0] = '\0';
   int have_key = 0;
@@ -2036,19 +2224,22 @@ static NTSTATUS NTAPI Hook_NtCreateFile(PHANDLE out, ACCESS_MASK access,
             }
             return st;
           }
-        } else {
+        } else if (e == NULL) {
+          /* Index miss. Only return STATUS_OBJECT_NAME_NOT_FOUND when
+           * attr_cache has a *confirmed* negative for this key — that
+           * is, a previous Real_NtQueryAttributesFile probe returned
+           * ENOENT. A pure cache miss falls through to Real_, because
+           * the bridge index is not authoritative: backing-relative
+           * entries can carry real_nt=NULL, runtime-created files
+           * never reach the index, and other-process writes bypass
+           * our hooks entirely. Mirrors try_kernel32_attr_hit. */
           InterlockedIncrement64(&g_redirect_miss);
-          /* Aggressive open negcache: index is authoritative for the
-           * VFS mount tree (it walks FUSE which already composes mods +
-           * Overwrite). If the path is not in the index and not
-           * recently created via our hooks (attr_cache positive), it
-           * does not exist. Skip the Real_ -> Wine -> FUSE round-trip. */
           ULONG cattrs = 0;
           unsigned long long csize = 0;
           FILETIME cmtime;
           int cexists = 0;
-          if (!attr_cache_lookup(key, &cattrs, &csize, &cmtime, &cexists)
-              || !cexists) {
+          if (attr_cache_lookup(key, &cattrs, &csize, &cmtime, &cexists)
+              && !cexists) {
             if (iosb != NULL) {
               iosb->u.Status = STATUS_OBJECT_NAME_NOT_FOUND;
               iosb->Information = 0;
@@ -2057,6 +2248,8 @@ static NTSTATUS NTAPI Hook_NtCreateFile(PHANDLE out, ACCESS_MASK access,
             return STATUS_OBJECT_NAME_NOT_FOUND;
           }
         }
+        /* else: entry in index but real_nt==NULL (backing file). Fall
+         * through to Real_NtCreateFile so Wine + FUSE serve it. */
       } else {
         InterlockedIncrement64(&g_redirect_skip);
       }
@@ -2084,6 +2277,11 @@ static NTSTATUS NTAPI Hook_NtOpenFile(PHANDLE out, ACCESS_MASK access,
                                       ULONG opts)
 {
   InterlockedIncrement64(&g_nt_open);
+  if (g_index_ready && t_inside_redirect == 0 && oa != NULL &&
+      oa->ObjectName != NULL && oa->RootDirectory == NULL &&
+      !us_under_mount(oa->ObjectName)) {
+    return Real_NtOpenFile(out, access, oa, iosb, share, opts);
+  }
   char ofkey[2048];
   ofkey[0] = '\0';
   int of_have_key = 0;
@@ -2127,14 +2325,16 @@ static NTSTATUS NTAPI Hook_NtOpenFile(PHANDLE out, ACCESS_MASK access,
             }
             return st;
           }
-        } else {
+        } else if (e == NULL) {
+          /* Index miss — only ENOENT on confirmed-negative attr_cache.
+           * See Hook_NtCreateFile for the full rationale. */
           InterlockedIncrement64(&g_redirect_miss);
           ULONG cattrs = 0;
           unsigned long long csize = 0;
           FILETIME cmtime;
           int cexists = 0;
-          if (!attr_cache_lookup(key, &cattrs, &csize, &cmtime, &cexists)
-              || !cexists) {
+          if (attr_cache_lookup(key, &cattrs, &csize, &cmtime, &cexists)
+              && !cexists) {
             if (iosb != NULL) {
               iosb->u.Status = STATUS_OBJECT_NAME_NOT_FOUND;
               iosb->Information = 0;
@@ -2143,6 +2343,8 @@ static NTSTATUS NTAPI Hook_NtOpenFile(PHANDLE out, ACCESS_MASK access,
             return STATUS_OBJECT_NAME_NOT_FOUND;
           }
         }
+        /* else: entry in index, real_nt==NULL (backing file). Fall
+         * through to Real_NtOpenFile. */
       } else {
         InterlockedIncrement64(&g_redirect_skip);
       }
@@ -2220,6 +2422,11 @@ static NTSTATUS NTAPI Hook_NtQueryAttributesFile(POBJECT_ATTRIBUTES_FL oa,
                                                  PVOID info)
 {
   InterlockedIncrement64(&g_nt_qattr);
+  if (g_index_ready && t_inside_redirect == 0 && oa != NULL &&
+      oa->ObjectName != NULL && oa->RootDirectory == NULL &&
+      !us_under_mount(oa->ObjectName)) {
+    return Real_NtQueryAttributesFile(oa, info);
+  }
   if (info != NULL && t_inside_redirect == 0) {
     ULONG attrs = 0;
     unsigned long long size = 0;
@@ -2276,6 +2483,11 @@ static NTSTATUS NTAPI Hook_NtQueryFullAttributesFile(POBJECT_ATTRIBUTES_FL oa,
                                                      PVOID info)
 {
   InterlockedIncrement64(&g_nt_qfullattr);
+  if (g_index_ready && t_inside_redirect == 0 && oa != NULL &&
+      oa->ObjectName != NULL && oa->RootDirectory == NULL &&
+      !us_under_mount(oa->ObjectName)) {
+    return Real_NtQueryFullAttributesFile(oa, info);
+  }
   if (info != NULL && t_inside_redirect == 0) {
     ULONG attrs = 0;
     unsigned long long size = 0;
@@ -2379,6 +2591,11 @@ static BOOL WINAPI Hook_GetFileAttributesExW(LPCWSTR path,
                                              LPVOID info)
 {
   InterlockedIncrement64(&g_k32_gfaexw);
+  if (g_index_ready && t_inside_redirect == 0 && path != NULL &&
+      !wide_under_mount(path)) {
+    InterlockedIncrement64(&g_k32_passthru);
+    return Real_GetFileAttributesExW(path, level, info);
+  }
   int hit = try_kernel32_attr_hit(path, level, info);
   if (hit > 0) return TRUE;
   if (hit < 0) return FALSE;
@@ -2391,6 +2608,11 @@ static BOOL WINAPI Hook_GetFileAttributesExA(LPCSTR path,
                                              LPVOID info)
 {
   InterlockedIncrement64(&g_k32_gfaexa);
+  if (g_index_ready && t_inside_redirect == 0 && path != NULL &&
+      !ansi_under_mount(path)) {
+    InterlockedIncrement64(&g_k32_passthru);
+    return Real_GetFileAttributesExA(path, level, info);
+  }
   if (path != NULL && info != NULL && level == GetFileExInfoStandard &&
       t_inside_redirect == 0 && g_index_ready) {
     int wlen = MultiByteToWideChar(CP_ACP, 0, path, -1, NULL, 0);
