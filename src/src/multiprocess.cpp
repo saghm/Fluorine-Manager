@@ -172,11 +172,22 @@ void MOMultiProcess::receiveMessage()
     const auto av = socket->bytesAvailable();
 
     if (av <= 0) {
-      MOBase::log::error("failed to receive data from secondary process: {}",
-                         socket->errorString());
+      // primaryAlive() liveness probes connect then disconnect without sending
+      // any data — these are expected, not errors. A real secondary that
+      // failed to deliver its payload will leave a non-PeerClosed error.
+      const auto err = socket->error();
+      const bool isProbe = err == QLocalSocket::PeerClosedError ||
+                           err == QLocalSocket::UnknownSocketError;
+      if (isProbe) {
+        MOBase::log::debug(
+            "secondary closed without sending data (liveness probe)");
+      } else {
+        MOBase::log::error("failed to receive data from secondary process: {}",
+                           socket->errorString());
 
-      reportError(tr("failed to receive data from secondary process: %1")
-                      .arg(socket->errorString()));
+        reportError(tr("failed to receive data from secondary process: %1")
+                        .arg(socket->errorString()));
+      }
       return;
     }
   }
