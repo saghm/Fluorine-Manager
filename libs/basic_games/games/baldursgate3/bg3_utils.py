@@ -73,9 +73,8 @@ class BG3Utils:
     def __init__(self, name: str):
         self.main_window = None
         self._name = name
-        from . import lslib_retriever, pak_parser
+        from . import pak_parser
 
-        self.lslib_retriever = lslib_retriever.LSLibRetriever(self)
         self._pak_parser = pak_parser.BG3PakParser(self)
 
     def init(self, organizer: mobase.IOrganizer):
@@ -197,10 +196,7 @@ class BG3Utils:
         args: str = "",
         force_reparse_metadata: bool = False,
     ) -> bool:
-        if (
-            "bin/bg3" not in exec_path
-            or not self.lslib_retriever.download_lslib_if_missing()
-        ):
+        if "bin/bg3" not in exec_path:
             return True
         active_mods = self.active_mods()
         progress = self.create_progress_window(
@@ -262,8 +258,7 @@ class BG3Utils:
         return True
 
     def on_mod_installed(self, mod: mobase.IModInterface) -> None:
-        if self.lslib_retriever.download_lslib_if_missing():
-            self._pak_parser.get_metadata_for_files_in_mod(mod, True)
+        self._pak_parser.get_metadata_for_files_in_mod(mod, True)
 
 
 def create_dir_if_needed(path: Path) -> Path:
