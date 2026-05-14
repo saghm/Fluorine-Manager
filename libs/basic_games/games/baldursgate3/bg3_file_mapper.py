@@ -13,6 +13,21 @@ from . import bg3_utils
 
 _IS_LINUX = platform.system() != "Windows"
 
+# Top-level subdirectories of MO2's overwrite that should be redirected into
+# the game's Documents folder. Each is published as a single directory
+# mapping so the parent symlink covers everything underneath — recursing
+# into overwrite/ produces nested mappings whose destinations resolve back
+# through the parent symlink to the source, corrupting the tree into
+# self-pointing symlinks on the next launch.
+_OVERWRITE_REDIRECTED_DIRS = (
+    "Script Extender",
+    "Stats",
+    "Temp",
+    "LevelCache",
+    "Mods",
+    "GMCampaigns",
+)
+
 
 class BG3FileMapper(mobase.IPluginFileMapper):
     current_mappings: list[mobase.Mapping] = []
@@ -51,16 +66,17 @@ class BG3FileMapper(mobase.IPluginFileMapper):
             if progress.wasCanceled():
                 qWarning("mapping canceled by user")
                 return self.current_mappings
-        (self._utils.overwrite_path / "Script Extender").mkdir(
-            parents=True, exist_ok=True
-        )
-        (self._utils.overwrite_path / "Stats").mkdir(parents=True, exist_ok=True)
-        (self._utils.overwrite_path / "Temp").mkdir(parents=True, exist_ok=True)
-        (self._utils.overwrite_path / "LevelCache").mkdir(parents=True, exist_ok=True)
-        (self._utils.overwrite_path / "Stats").mkdir(parents=True, exist_ok=True)
-        (self._utils.overwrite_path / "Mods").mkdir(parents=True, exist_ok=True)
-        (self._utils.overwrite_path / "GMCampaigns").mkdir(parents=True, exist_ok=True)
-        self.map_files(self._utils.overwrite_path)
+        for name in _OVERWRITE_REDIRECTED_DIRS:
+            src = self._utils.overwrite_path / name
+            src.mkdir(parents=True, exist_ok=True)
+            self.current_mappings.append(
+                mobase.Mapping(
+                    source=str(src),
+                    destination=str(self.doc_path / name),
+                    is_directory=True,
+                    create_target=True,
+                )
+            )
         self.create_mapping(
             self._utils.modsettings_path,
             self.doc_path
