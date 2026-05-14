@@ -301,12 +301,20 @@ void NxmHandlerLinux::onNewConnection()
 
 void NxmHandlerLinux::processSocketData(QLocalSocket* socket)
 {
+  // Drain all available lines before emitting anything. Slot handlers for
+  // nxmReceived/directDownloadReceived can show modal dialogs (e.g. the
+  // "Wrong Game" warning) that spin the event loop. That re-entry would
+  // process the disconnected → deleteLater queued for this socket and free
+  // it, leaving the canReadLine() loop iterating on a dangling pointer.
+  QStringList lines;
   while (socket->canReadLine()) {
     const QString line = QString::fromUtf8(socket->readLine()).trimmed();
-    if (line.isEmpty()) {
-      continue;
+    if (!line.isEmpty()) {
+      lines.append(line);
     }
+  }
 
+  for (const QString& line : lines) {
     log::info("received link on socket: {}", line);
 
     // Try NXM-style parse first (nxm:// or modl:// with /mods/ID/files/ID path).
