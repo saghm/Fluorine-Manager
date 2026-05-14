@@ -4,6 +4,8 @@
 #include <log.h>
 
 #include <QCoreApplication>
+#include <QDBusConnection>
+#include <QDBusMessage>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -37,6 +39,27 @@ bool writeTextFile(const QString& path, const QString& content)
   QTextStream stream(&file);
   stream << content;
   return stream.status() == QTextStream::Ok;
+}
+
+// xdg-desktop-portal remembers chooser picks in its permission store. An
+// earlier build registered both com.fluorine.manager.desktop and
+// mo2-nxm-handler.desktop for nxm:// — anyone who picked Fluorine Manager
+// from the chooser had it persisted as their always-use app, which kept
+// routing nxm:// to the wrong handler (full MO2 launch with no URL) even
+// after the bad MimeType was removed. Strip the stale com.fluorine.manager
+// entry so existing users self-heal on next launch.
+void clearStalePortalChoice(const QString& mimeType)
+{
+  QDBusMessage msg = QDBusMessage::createMethodCall(
+      "org.freedesktop.impl.portal.PermissionStore",
+      "/org/freedesktop/impl/portal/PermissionStore",
+      "org.freedesktop.impl.portal.PermissionStore", "DeletePermission");
+  msg << QStringLiteral("desktop-used-apps") << mimeType
+      << QStringLiteral("com.fluorine.manager");
+
+  // Fire-and-forget on the session bus. The reply is uninteresting: a missing
+  // entry returns an error and we don't want to log on every clean startup.
+  QDBusConnection::sessionBus().call(msg, QDBus::NoBlock);
 }
 
 void updateMimeAppsList(const QString& path, const QString& mimeType,
@@ -245,6 +268,9 @@ void NxmHandlerLinux::registerHandler()
   if (result != 0) {
     log::warn("update-desktop-database exited with code {}", result);
   }
+
+  clearStalePortalChoice("x-scheme-handler/nxm");
+  clearStalePortalChoice("x-scheme-handler/modl");
 }
 
 bool NxmHandlerLinux::startListener()

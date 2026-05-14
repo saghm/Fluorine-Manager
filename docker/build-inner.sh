@@ -618,7 +618,6 @@ Icon=com.fluorine.manager
 Terminal=false
 Categories=Game;Utility;
 StartupWMClass=ModOrganizer
-MimeType=x-scheme-handler/nxm;x-scheme-handler/nxm-hierarchical;
 DESKTOP_EOF
         chmod +x "${DESKTOP_DIR}/com.fluorine.manager.desktop"
 
