@@ -51,27 +51,17 @@ MOMultiProcess::MOMultiProcess(bool allowMultiple, QObject* parent)
             m_OwnsSM = true;
             error    = QSharedMemory::NoError;
           } else {
-            // Another attached client keeps refcount > 0; on Linux Qt only
-            // frees the segment when the last attacher detaches. Re-attach
-            // as a secondary so the constructor returns in a usable state
-            // and sendMessage() can still try to deliver the request via
-            // the unix socket — it would otherwise leave both ownership
-            // flags clear and silently no-op every later call.
-            const QString reclaimError = m_SharedMem.errorString();
-            if (m_SharedMem.attach()) {
-              MOBase::log::warn(
-                  "could not reclaim stale shared memory ({}), "
-                  "running as secondary",
-                  reclaimError);
-              m_Ephemeral = true;
-              error       = QSharedMemory::NoError;
-            } else {
-              MOBase::log::warn(
-                  "could not reclaim or re-attach stale shared memory "
-                  "(reclaim: {}, reattach: {})",
-                  reclaimError, m_SharedMem.errorString());
-              error = m_SharedMem.error();
-            }
+            // SHM reclaim failed — the SysV segment is orphaned because the
+            // previous primary died without IPC_RMID, and only the creator
+            // can remove it. The unix socket is the real liveness signal
+            // and we already proved no listener exists, so claim primary
+            // anyway. The orphan segment is harmless once we own the socket.
+            MOBase::log::warn(
+                "stale shared memory could not be reclaimed ({}), "
+                "claiming primary via socket listener",
+                m_SharedMem.errorString());
+            m_OwnsSM = true;
+            error    = QSharedMemory::NoError;
           }
         }
       } else {
@@ -117,6 +107,15 @@ MOMultiProcess::MOMultiProcess(bool allowMultiple, QObject* parent)
     if (!m_Server.listen(s_Key)) {
       MOBase::log::warn("QLocalServer listen failed: {}",
                            m_Server.errorString().toStdString());
+      // Another process may have started a listener between our probe and
+      // listen() (race during concurrent startup). Re-probe and demote
+      // ourselves to ephemeral if a real primary is now alive.
+      if (primaryAlive()) {
+        MOBase::log::info(
+            "another primary started concurrently, running as ephemeral");
+        m_OwnsSM    = false;
+        m_Ephemeral = true;
+      }
     }
   }
 }
