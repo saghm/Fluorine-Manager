@@ -7,6 +7,7 @@ ENV CARGO_HOME=/opt/rust/cargo
 ENV PATH="/opt/rust/cargo/bin:${PATH}"
 
 # ── System build tools + all library dependencies ──
+# Python comes from uv (python-build-standalone), not apt.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Build essentials
     build-essential cmake ninja-build ccache \
@@ -32,45 +33,44 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxcb-render-util0-dev libxcb-xinerama0-dev \
     libxcb-xkb-dev libxkbcommon-x11-dev libatspi2.0-dev \
     libwayland-dev \
-    # Python
-    python3 python3-pip python3-pyqt6 \
     # Misc
     zip unzip \
     # Static analysis
     clang-tidy \
-    # mingw-w64 cross-toolchain for fluorine_vfs.dll (PE-side VFS injector,
-    # loaded into Wine processes via AppInit_DLLs).
-    gcc-mingw-w64-x86-64-posix \
     && rm -rf /var/lib/apt/lists/*
 
-# ── Qt 6.10 via aqtinstall ──
-RUN pip3 install --break-system-packages aqtinstall && \
-    aqt install-qt linux desktop 6.10.2 linux_gcc_64 \
+# ── uv (Astral) ──
+# Single static binary; manages Python interpreters and packages.
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# ── python-build-standalone 3.12 via uv (build-time + bundled runtime) ──
+# uv pulls the same PBS tarballs we used to curl by hand.  We install into
+# a scratch dir and `mv` the cpython-* tree to /opt/python-bundled so the
+# downstream build can rely on a stable, non-symlink path.
+ARG PYTHON_VERSION=3.12.13
+RUN uv python install --install-dir /opt/uv-tmp "${PYTHON_VERSION}" && \
+    PY_DIR="$(find /opt/uv-tmp -maxdepth 1 -type d -name 'cpython-*' | head -n1)" && \
+    test -n "${PY_DIR}" && \
+    mv "${PY_DIR}" /opt/python-bundled && \
+    rm -rf /opt/uv-tmp && \
+    /opt/python-bundled/bin/python3 --version
+ENV BUILD_PYTHON=/opt/python-bundled/bin/python3
+ENV PATH="/opt/python-bundled/bin:${PATH}"
+
+# ── Qt 6.10 via aqtinstall (one-off via uv tool run) ──
+RUN uv tool run --from aqtinstall aqt install-qt linux desktop 6.10.2 linux_gcc_64 \
       -m qtwebsockets qtwaylandcompositor qtnetworkauth \
       --outputdir /opt/qt6 && \
-    ls /opt/qt6/6.10.2/gcc_64/bin/qmake && \
-    (pip3 uninstall -y aqtinstall --break-system-packages 2>/dev/null || true)
+    ls /opt/qt6/6.10.2/gcc_64/bin/qmake
 ENV Qt6_DIR=/opt/qt6/6.10.2/gcc_64
 ENV CMAKE_PREFIX_PATH="/opt/qt6/6.10.2/gcc_64:${CMAKE_PREFIX_PATH}"
 ENV PATH="/opt/qt6/6.10.2/gcc_64/bin:${PATH}"
 ENV LD_LIBRARY_PATH="/opt/qt6/6.10.2/gcc_64/lib:${LD_LIBRARY_PATH}"
 
-# ── python-build-standalone 3.12 (build-time + bundled runtime) ──
-# Single Python for both compiling pybind11 modules and shipping in the tarball.
-# The install_only_stripped tarball is ~28MB; we strip it further in build-inner.sh.
-ARG PBS_VERSION=3.12.13
-ARG PBS_DATE=20260310
-RUN curl -fL --retry 3 -o /tmp/pbs-python.tar.gz \
-      "https://github.com/astral-sh/python-build-standalone/releases/download/${PBS_DATE}/cpython-${PBS_VERSION}%2B${PBS_DATE}-x86_64-unknown-linux-gnu-install_only.tar.gz" && \
-    tar xzf /tmp/pbs-python.tar.gz -C /opt/ && \
-    mv /opt/python /opt/python-bundled && \
-    rm /tmp/pbs-python.tar.gz
-ENV BUILD_PYTHON=/opt/python-bundled/bin/python3
-ENV PATH="/opt/python-bundled/bin:${PATH}"
-
 # ── Build-time Python packages ──
 # pybind11/sip/etc. for compiling mobase.so; PyQt6 is staged into the distribution.
-RUN /opt/python-bundled/bin/pip3 install --no-cache-dir \
+RUN uv pip install --system --break-system-packages \
+      --python /opt/python-bundled/bin/python3 --no-cache \
       pybind11==2.13.6 sip psutil larian-formats==0.8.1 vdf "PyQt6>=6.10,<6.11"
 
 # ── Rust toolchain ──
