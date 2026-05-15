@@ -130,8 +130,8 @@ class BG3PakParser:
                         build_pak = False
                 if build_pak:
                     pak_path.unlink(missing_ok=True)
-                    larian_formats.pack_loose_files(file, pak_path)
 
+                    larian_formats.pack_loose_files(file.parent, pak_path)
                     output = ""
 
                     try:
