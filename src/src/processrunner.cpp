@@ -977,7 +977,6 @@ ProcessRunner& ProcessRunner::setFromExecutable(const Executable& exe)
 
   m_sp.useProton    = exe.useProton();
   m_sp.useTerminal  = exe.useTerminal();
-  m_sp.useVfsBridge = exe.useVfsBridge();
 
   return *this;
 }
@@ -1166,9 +1165,7 @@ std::optional<ProcessRunner::Results> ProcessRunner::runBinary()
   // if a plugin doesn't want the program to run.
   if (!m_core.beforeRun(m_sp.binary, m_sp.currentDirectory, m_sp.arguments,
                         m_profileName, m_customOverwrite, m_forcedLibraries,
-                        &m_sp.saveBindMountSource, &m_sp.saveBindMountTarget,
-                        &m_sp.vfsBridgeIndexPath, &m_sp.vfsBridgeDataDir,
-                        &m_sp.vfsBridgeMountPoint)) {
+                        &m_sp.saveBindMountSource, &m_sp.saveBindMountTarget)) {
     return Error;
   }
 

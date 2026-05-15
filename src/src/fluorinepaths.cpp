@@ -24,52 +24,6 @@ QString fluorineVfsCacheDir()
   return fluorineDataDir() + "/vfs_cache";
 }
 
-QString fluorineVfsBridgeDir()
-{
-  return fluorineDataDir() + "/vfs_bridge";
-}
-
-QString fluorineVfsInjectDllPath()
-{
-  static const QString filename = QStringLiteral("fluorine_vfs.dll");
-
-  // Allow MO2_LIBS_DIR override for ad-hoc test builds; mirrors the
-  // logic in fluorineVfsPreloadPath().  Falls back to the bundled
-  // location next to the binary.
-  if (const char* env = std::getenv("MO2_LIBS_DIR")) {
-    if (env[0] != '\0') {
-      const QString candidate = QDir(QString::fromLocal8Bit(env)).filePath(filename);
-      if (QFileInfo::exists(candidate)) {
-        return candidate;
-      }
-    }
-  }
-
-  const QString candidate =
-      QDir(QCoreApplication::applicationDirPath()).filePath(
-          QStringLiteral("wine/") + filename);
-  return QFileInfo::exists(candidate) ? candidate : QString();
-}
-
-QString fluorineVfsHidProxyDllPath()
-{
-  static const QString filename = QStringLiteral("fluorine_vfs_hid.dll");
-
-  if (const char* env = std::getenv("MO2_LIBS_DIR")) {
-    if (env[0] != '\0') {
-      const QString candidate = QDir(QString::fromLocal8Bit(env)).filePath(filename);
-      if (QFileInfo::exists(candidate)) {
-        return candidate;
-      }
-    }
-  }
-
-  const QString candidate =
-      QDir(QCoreApplication::applicationDirPath()).filePath(
-          QStringLiteral("wine/") + filename);
-  return QFileInfo::exists(candidate) ? candidate : QString();
-}
-
 void fluorineMigrateDataDir()
 {
   const QString oldRoot = OldFlatpakRoot;

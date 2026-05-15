@@ -96,12 +96,6 @@ void ExecutablesList::load(const MOBase::IPluginGame* game, const Settings& s)
     if (map["useTerminal"].toBool())
       flags |= Executable::UseTerminal;
 
-    // Default to UseVfsBridge=false. The PE-side bridge is opt-in
-    // because some modlists (notably ones with NPCWaterAIFix) crash
-    // with it enabled until the indexer/negcache work is finished.
-    if (map.contains("useVfsBridge") && map["useVfsBridge"].toBool())
-      flags |= Executable::UseVfsBridge;
-
     if (map.contains("custom")) {
       // the "custom" setting only exists in older versions
       needsUpgrade = true;
@@ -142,7 +136,6 @@ void ExecutablesList::store(Settings& s)
     map["minimizeToSystemTray"] = item.minimizeToSystemTray();
     map["useProton"]            = item.useProton();
     map["useTerminal"]          = item.useTerminal();
-    map["useVfsBridge"]         = item.useVfsBridge();
 
     v.push_back(std::move(map));
   }
@@ -516,11 +509,6 @@ bool Executable::useProton() const
 bool Executable::useTerminal() const
 {
   return m_flags.testFlag(UseTerminal);
-}
-
-bool Executable::useVfsBridge() const
-{
-  return m_flags.testFlag(UseVfsBridge);
 }
 
 void Executable::mergeFrom(const Executable& other)

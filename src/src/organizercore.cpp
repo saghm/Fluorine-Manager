@@ -2473,16 +2473,11 @@ bool OrganizerCore::beforeRun(
     const QFileInfo& binary, const QDir& cwd, const QString& arguments,
     const QString& profileName, const QString& customOverwrite,
     const QList<MOBase::ExecutableForcedLoadSetting>& forcedLibraries,
-    QString* saveBindMountSource, QString* saveBindMountTarget,
-    QString* vfsBridgeIndexPath, QString* vfsBridgeDataDir,
-    QString* vfsBridgeMountPoint)
+    QString* saveBindMountSource, QString* saveBindMountTarget)
 {
   saveCurrentProfile();
   if (saveBindMountSource) saveBindMountSource->clear();
   if (saveBindMountTarget) saveBindMountTarget->clear();
-  if (vfsBridgeIndexPath) vfsBridgeIndexPath->clear();
-  if (vfsBridgeDataDir) vfsBridgeDataDir->clear();
-  if (vfsBridgeMountPoint) vfsBridgeMountPoint->clear();
 
   // need to wait until directory structure is ready
   if (m_DirectoryUpdate) {
@@ -2522,15 +2517,6 @@ bool OrganizerCore::beforeRun(
   try {
     m_USVFS.updateMapping(fileMapping(profileName, customOverwrite));
     m_USVFS.updateForcedLibraries(forcedLibraries);
-    if (vfsBridgeIndexPath) {
-      *vfsBridgeIndexPath = m_USVFS.vfsBridgeIndexPath();
-    }
-    if (vfsBridgeDataDir) {
-      *vfsBridgeDataDir = m_USVFS.vfsBridgeDataDir();
-    }
-    if (vfsBridgeMountPoint) {
-      *vfsBridgeMountPoint = m_USVFS.vfsBridgeMountPoint();
-    }
   } catch (const FuseConnectorException& e) {
     log::error("VFS mount failed: {}", e.what());
     return false;

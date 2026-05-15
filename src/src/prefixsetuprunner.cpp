@@ -455,13 +455,6 @@ void PrefixSetupRunner::buildStepList()
 
   addStep("post_setup", "Post-Setup (symlinks, dxvk)",
           [this] { return stepPostSetup(); });
-
-  // PE-side VFS injector: stage fluorine_vfs.dll into system32 and
-  // register it in AppInit_DLLs so every Wine PE process loads it.
-  // Skipped silently when the DLL is not bundled (mingw missing in
-  // build image).
-  addStep("vfs_inject", "PE-side VFS Injector",
-          [this] { return stepVfsInject(); });
 }
 
 // ============================================================================
@@ -1529,89 +1522,6 @@ bool PrefixSetupRunner::stepPostSetup()
   createGameSymlinksAuto(m_prefixPath);
 
   emit logMessage("Post-setup complete");
-  return true;
-}
-
-bool PrefixSetupRunner::stepVfsInject()
-{
-  // Stage fluorine_vfs.dll into c:\windows\system32 and register it in
-  // AppInit_DLLs so every PE process in this prefix loads it.  Replaces
-  // the old libfluorine_vfs_preload.so LD_PRELOAD path, which couldn't
-  // intercept Wine's NTDLL syscall path.
-  const QString srcDll = fluorineVfsInjectDllPath();
-  if (srcDll.isEmpty()) {
-    emit logMessage("fluorine_vfs.dll not bundled (mingw missing in build "
-                    "image); skipping AppInit_DLLs registration");
-    m_steps.last().status = SetupStep::Skipped;
-    return true;
-  }
-
-  const QString system32 = m_prefixPath + "/drive_c/windows/system32";
-  if (!QDir(system32).exists()) {
-    m_steps.last().errorMessage =
-        QStringLiteral("system32 not found at '%1'").arg(system32);
-    return false;
-  }
-
-  const QString dstDll = system32 + "/fluorine_vfs.dll";
-  QFile::remove(dstDll);
-  if (!QFile::copy(srcDll, dstDll)) {
-    m_steps.last().errorMessage =
-        QStringLiteral("failed to copy fluorine_vfs.dll into '%1'").arg(system32);
-    return false;
-  }
-  emit logMessage(QStringLiteral("Staged fluorine_vfs.dll -> %1").arg(dstDll));
-
-  // AppInit_DLLs is read by user32 on init.  REG_SZ of the DLL basename;
-  // LoadAppInit_DLLs=1 enables the mechanism; RequireSignedAppInit_DLLs=0
-  // disables Vista+ signing requirement (Wine ignores it, but set it
-  // anyway for defence-in-depth).
-  const QString tmpDir = fluorineTmpDir();
-  QDir().mkpath(tmpDir);
-  const QString regFile = tmpDir + "/fluorine_vfs_appinit.reg";
-  {
-    QFile f(regFile);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
-      m_steps.last().errorMessage = "failed to write registry import file";
-      return false;
-    }
-    // Register only in the 64-bit hive.  fluorine_vfs.dll is built as
-    // 64-bit PE; if Wow6432Node also pointed at it, 32-bit Wine helpers
-    // (services.exe, winedevice.exe, etc.) would attempt to LoadLibrary
-    // the missing syswow64\fluorine_vfs.dll and the loader would abort
-    // EXE init, killing every 32-bit process in the prefix.  Also
-    // explicitly delete any pre-existing Wow6432Node values left over
-    // from older Fluorine builds that registered both views.
-    f.write(
-        "Windows Registry Editor Version 5.00\n\n"
-        "[HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows NT"
-        "\\CurrentVersion\\Windows]\n"
-        "\"AppInit_DLLs\"=\"fluorine_vfs.dll\"\n"
-        "\"LoadAppInit_DLLs\"=dword:00000001\n"
-        "\"RequireSignedAppInit_DLLs\"=dword:00000000\n\n"
-        "[HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Microsoft\\Windows NT"
-        "\\CurrentVersion\\Windows]\n"
-        "\"AppInit_DLLs\"=-\n"
-        "\"LoadAppInit_DLLs\"=-\n"
-        "\"RequireSignedAppInit_DLLs\"=-\n");
-    f.close();
-  }
-
-  QMap<QString, QString> env = baseWineEnv();
-  env["WINEDLLOVERRIDES"] = "mshtml=d";
-  env["PROTON_USE_XALIA"] = "0";
-  // Don't load our own DLL into regedit during the registration call.
-  env["FLUORINE_DISABLE_VFS_INJECT"] = "1";
-
-  const int rc = runProcess(m_wineBin, {"regedit", regFile}, env);
-  QFile::remove(regFile);
-  if (rc != 0) {
-    m_steps.last().errorMessage =
-        QStringLiteral("wine regedit failed for AppInit_DLLs (exit %1)").arg(rc);
-    return false;
-  }
-
-  emit logMessage("AppInit_DLLs registered: fluorine_vfs.dll");
   return true;
 }
 

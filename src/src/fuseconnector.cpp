@@ -2,7 +2,6 @@
 
 #include "settings.h"
 #include "vfs/scancache.h"
-#include "vfs/vfsbridge.h"
 #include "vfs/vfstree.h"
 
 #include <QCoreApplication>
@@ -55,19 +54,6 @@ const char* getFuseMountPointForCrashCleanup()
 namespace
 {
 namespace fs = std::filesystem;
-
-bool envFlagEnabled(const char* name)
-{
-  const QString value = qEnvironmentVariable(name).trimmed();
-  return value == "1" || value.compare(QStringLiteral("true"), Qt::CaseInsensitive) == 0 ||
-         value.compare(QStringLiteral("yes"), Qt::CaseInsensitive) == 0;
-}
-
-bool vfsBridgeExportRequested()
-{
-  return !envFlagEnabled("FLUORINE_DISABLE_VFS_BRIDGE") &&
-         !envFlagEnabled("FLUORINE_DISABLE_VFS_PRELOAD");
-}
 
 std::string decodeProcMountField(const std::string& in)
 {
@@ -460,8 +446,6 @@ bool FuseConnector::mount(
     stampPluginTimestamps(*tree, m_pluginLoadOrder);
   }
 
-  exportVfsBridgeIndex(*tree);
-
   {
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - treeStart).count();
@@ -668,48 +652,6 @@ std::shared_ptr<TrackedWrites> FuseConnector::trackedWrites() const
   return m_trackedWrites;
 }
 
-QString FuseConnector::vfsBridgeIndexPath() const
-{
-  return QString::fromStdString(m_vfsBridgeIndexPath);
-}
-
-QString FuseConnector::vfsBridgeDataDir() const
-{
-  return QString::fromStdString(m_dataDirPath);
-}
-
-QString FuseConnector::vfsBridgeMountPoint() const
-{
-  return QString::fromStdString(m_mountPoint);
-}
-
-void FuseConnector::exportVfsBridgeIndex(const VfsTree& tree)
-{
-  if (!vfsBridgeExportRequested()) {
-    m_vfsBridgeIndexPath.clear();
-    return;
-  }
-
-  const auto exportStart = std::chrono::steady_clock::now();
-  const auto path = ::vfsBridgeIndexPath(m_dataDirPath, m_overwriteDir, m_lastMods);
-  auto result = ::exportVfsBridgeIndex(tree, path, m_dataDirPath, m_overwriteDir,
-                                      m_mountPoint);
-
-  const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-      std::chrono::steady_clock::now() - exportStart).count();
-  if (result.ok) {
-    m_vfsBridgeIndexPath = result.path.string();
-    std::fprintf(stderr,
-                 "[VFS] [bridge] exported %zu records to '%s' in %lldms\n",
-                 result.records_written, m_vfsBridgeIndexPath.c_str(),
-                 static_cast<long long>(ms));
-  } else {
-    m_vfsBridgeIndexPath.clear();
-    std::fprintf(stderr, "[VFS] [bridge] export failed for '%s': %s\n",
-                 result.path.string().c_str(), result.error.c_str());
-  }
-}
-
 void FuseConnector::rebuild(
     const std::vector<std::pair<std::string, std::string>>& mods,
     const QString& overwrite_dir, const QString& data_dir_name)
@@ -748,8 +690,6 @@ void FuseConnector::rebuild(
   if (!m_pluginLoadOrder.empty()) {
     stampPluginTimestamps(*newTree, m_pluginLoadOrder);
   }
-
-  exportVfsBridgeIndex(*newTree);
 
   {
     std::unique_lock const lock(m_context->tree_mutex);

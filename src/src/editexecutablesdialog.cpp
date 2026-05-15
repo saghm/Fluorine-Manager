@@ -129,9 +129,6 @@ EditExecutablesDialog::EditExecutablesDialog(OrganizerCore& oc, int sel,
   connect(ui->useTerminal, &QCheckBox::toggled, [&] {
     save();
   });
-  connect(ui->useVfsBridge, &QCheckBox::toggled, [&] {
-    save();
-  });
   connect(ui->list->model(), &QAbstractItemModel::rowsMoved, [&] {
     saveOrder();
   });
@@ -401,8 +398,6 @@ void EditExecutablesDialog::clearEdits()
   ui->useProton->setChecked(true);
   ui->useTerminal->setEnabled(false);
   ui->useTerminal->setChecked(false);
-  ui->useVfsBridge->setEnabled(false);
-  ui->useVfsBridge->setChecked(false);
 
   m_lastGoodTitle = "";
 }
@@ -421,7 +416,6 @@ void EditExecutablesDialog::setEdits(const Executable& e)
   ui->hide->setChecked(e.hide());
   ui->useProton->setChecked(e.useProton());
   ui->useTerminal->setChecked(e.useTerminal());
-  ui->useVfsBridge->setChecked(e.useVfsBridge());
 
   m_lastGoodTitle = e.title();
 
@@ -470,7 +464,6 @@ void EditExecutablesDialog::setEdits(const Executable& e)
   ui->hide->setEnabled(true);
   ui->useProton->setEnabled(true);
   ui->useTerminal->setEnabled(true);
-  ui->useVfsBridge->setEnabled(true);
 }
 
 void EditExecutablesDialog::save()
@@ -552,12 +545,6 @@ void EditExecutablesDialog::save()
     e->flags(e->flags() | Executable::UseTerminal);
   } else {
     e->flags(e->flags() & (~Executable::UseTerminal));
-  }
-
-  if (ui->useVfsBridge->isChecked()) {
-    e->flags(e->flags() | Executable::UseVfsBridge);
-  } else {
-    e->flags(e->flags() & (~Executable::UseVfsBridge));
   }
 
   setDirty(true);
