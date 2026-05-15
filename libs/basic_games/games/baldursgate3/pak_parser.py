@@ -132,12 +132,19 @@ class BG3PakParser:
                     pak_path.unlink(missing_ok=True)
                     larian_formats.pack_loose_files(file, pak_path)
 
-                return self.metadata_to_ini(
-                    config,
-                    pak_path,
-                    mod,
-                    meta_ini,
-                )
+                    output = ""
+
+                    try:
+                        output = self.metadata_to_ini(
+                            config,
+                            pak_path,
+                            mod,
+                            meta_ini,
+                        )
+                    except:
+                        pass
+
+                return output
             else:
                 return ""
         except Exception:
