@@ -1265,16 +1265,10 @@ ProcessRunner::Results ProcessRunner::postRun()
     m_lockReason = UILocker::LockUI;
   }
 
-  const bool lockEnabled                 = m_core.settings().interface().lockGUI();
   const QStringList expectedExecutables  =
       buildExpectedExecutables(m_sp.binary, m_sp.arguments);
 
-  if (mustWait) {
-    if (!lockEnabled) {
-      log::debug("locking is disabled, but the output of the application is required; "
-                 "overriding this setting and locking the ui");
-    }
-  } else {
+  if (!mustWait) {
     if (m_lockReason == UILocker::NoReason) {
       // Main window launches typically use TriggerRefresh without
       // waiting/locking. In that mode we still need post-run refresh/sync once
@@ -1327,28 +1321,12 @@ ProcessRunner::Results ProcessRunner::postRun()
       }
       return Running;
     }
-
-    if (!lockEnabled) {
-      log::debug("process runner: not waiting for process because "
-                 "locking is disabled");
-
-      return ForceUnlocked;
-    }
   }
 
   auto r = Error;
-
-  if (mustWait && m_lockReason == UILocker::PreventExit && !lockEnabled) {
-    // This happens when running shortcuts and locking is disabled. MO must
-    // stay alive until all processes are dead or child processes may not get
-    // hooked properly, but the user has disabled locking the ui — so allow
-    // them to do that. MO runs in the background with no visual feedback.
-    r = waitForProcess(m_handle.get(), &m_exitCode, nullptr, expectedExecutables);
-  } else {
-    withLock([&](auto& ls) {
-      r = waitForProcess(m_handle.get(), &m_exitCode, &ls, expectedExecutables);
-    });
-  }
+  withLock([&](auto& ls) {
+    r = waitForProcess(m_handle.get(), &m_exitCode, &ls, expectedExecutables);
+  });
 
   if (shouldRefresh(r)) {
     QEventLoop loop;

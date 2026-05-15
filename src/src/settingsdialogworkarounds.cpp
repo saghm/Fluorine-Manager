@@ -11,7 +11,6 @@ WorkaroundsSettingsTab::WorkaroundsSettingsTab(Settings& s, SettingsDialog& d)
 {
   // options
   ui->forceEnableBox->setChecked(settings().game().forceEnableCoreFiles());
-  ui->lockGUIBox->setChecked(settings().interface().lockGUI());
   ui->enableArchiveParsingBox->setChecked(settings().archiveParsing());
 
   // steam
@@ -59,7 +58,6 @@ void WorkaroundsSettingsTab::update()
 {
   // options
   settings().game().setForceEnableCoreFiles(ui->forceEnableBox->isChecked());
-  settings().interface().setLockGUI(ui->lockGUIBox->isChecked());
   settings().setArchiveParsing(ui->enableArchiveParsingBox->isChecked());
 
   // steam

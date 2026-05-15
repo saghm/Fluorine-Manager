@@ -584,11 +584,6 @@ class InterfaceSettings
 public:
   InterfaceSettings(QSettings& settings);
 
-  // whether the GUI should be locked when running executables
-  //
-  bool lockGUI() const;
-  void setLockGUI(bool b);
-
   // filename of the theme
   //
   std::optional<QString> styleName() const;

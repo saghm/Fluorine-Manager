@@ -2171,16 +2171,6 @@ void SteamSettings::setLogin(QString username, QString password)
 
 InterfaceSettings::InterfaceSettings(QSettings& settings) : m_Settings(settings) {}
 
-bool InterfaceSettings::lockGUI() const
-{
-  return get<bool>(m_Settings, "Settings", "lock_gui", true);
-}
-
-void InterfaceSettings::setLockGUI(bool b)
-{
-  set(m_Settings, "Settings", "lock_gui", b);
-}
-
 std::optional<QString> InterfaceSettings::styleName() const
 {
   return getOptional<QString>(m_Settings, "Settings", "style");

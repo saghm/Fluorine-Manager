@@ -1993,22 +1993,6 @@ Uncheck this if you want to use Mod Organizer with total conversions (like Nehri
                 </property>
                </widget>
               </item>
-              <item>
-               <widget class="QCheckBox" name="lockGUIBox">
-                <property name="toolTip">
-                 <string>Disable this to prevent the GUI from being locked when running an executable.  This may result in abnormal behavior.</string>
-                </property>
-                <property name="whatsThis">
-                 <string>Disable this to prevent the GUI from being locked when running an executable.  This may result in abnormal behavior.</string>
-                </property>
-                <property name="text">
-                 <string>Lock GUI when running executable</string>
-                </property>
-                <property name="checked">
-                 <bool>true</bool>
-                </property>
-               </widget>
-              </item>
              </layout>
             </widget>
            </item>
@@ -2513,7 +2497,6 @@ programs you are intentionally running.</string>
   <tabstop>managedGameDirEdit</tabstop>
   <tabstop>browseGameDirBtn</tabstop>
   <tabstop>pluginSettingsList</tabstop>
-  <tabstop>lockGUIBox</tabstop>
  </tabstops>
  <resources>
   <include location="resources.qrc"/>
