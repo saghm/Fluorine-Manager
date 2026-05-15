@@ -149,18 +149,6 @@ cp -f build/libs/uibase/src/libuibase.so "${OUT_DIR}/lib/"
 cp -f build/libs/libbsarch/liblibbsarch.so "${OUT_DIR}/lib/"
 cp -f build/libs/archive/src/libarchive.so "${OUT_DIR}/lib/"
 cp -f build/libs/plugin_python/src/runner/librunner.so "${OUT_DIR}/lib/"
-[ -f build/src/src/libfluorine_vfs_preload.so ] && \
-    cp -f build/src/src/libfluorine_vfs_preload.so "${OUT_DIR}/lib/"
-# PE-side VFS injector: cross-built with mingw, copied into wine/ where
-# Fluorine picks it up at prefix init and stages into c:\\windows\\system32\\.
-if [ -f build/src/src/fluorine_vfs.dll ]; then
-    mkdir -p "${OUT_DIR}/wine"
-    cp -f build/src/src/fluorine_vfs.dll "${OUT_DIR}/wine/"
-fi
-if [ -f build/src/src/fluorine_vfs_hid.dll ]; then
-    mkdir -p "${OUT_DIR}/wine"
-    cp -f build/src/src/fluorine_vfs_hid.dll "${OUT_DIR}/wine/"
-fi
 if [ -f "libs/bsa_ffi/target/release/libbsa_ffi.so" ]; then
     cp -f libs/bsa_ffi/target/release/libbsa_ffi.so "${OUT_DIR}/lib/"
 fi
@@ -323,6 +311,37 @@ mkdir -p "${PYQT6_OUT}"
 cp -a "${PYQT6_SRC}/." "${PYQT6_OUT}/"
 # Remove PyQt6's bundled Qt — we already have Qt in lib/
 rm -rf "${PYQT6_OUT}/Qt6"
+
+# Prune unused PyQt6 modules. Full-repo grep of libs/ + src/ confirms shipped
+# Python plugins only import the five modules below. Pruning happens BEFORE
+# the deps-scan loop further down so libQt6Designer/Help/Sql/Test/SvgWidgets/
+# Bluetooth/... stop getting copied into lib/ as a side effect.
+PYQT6_KEEP_MODULES="QtCore QtGui QtWidgets QtOpenGL QtOpenGLWidgets"
+rm -rf "${PYQT6_OUT}/bindings" "${PYQT6_OUT}/uic" "${PYQT6_OUT}/lupdate"
+find "${PYQT6_OUT}" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+find "${PYQT6_OUT}" -type f -name '*.pyi' -delete 2>/dev/null || true
+for entry in "${PYQT6_OUT}"/*; do
+    [ -e "${entry}" ] || continue
+    base="$(basename "${entry}")"
+    case "${base}" in
+        __init__.py|py.typed)   continue ;;
+        sip.cpython-*.so)       continue ;;
+        Qt6)                    continue ;;  # already removed; defensive
+        *.abi3.so)
+            mod="${base%.abi3.so}"
+            keep=0
+            for k in ${PYQT6_KEEP_MODULES}; do
+                [ "${mod}" = "${k}" ] && keep=1 && break
+            done
+            [ ${keep} -eq 0 ] && rm -f "${entry}"
+            ;;
+        *)
+            rm -rf "${entry}"
+            ;;
+    esac
+done
+echo "PyQt6 pruned to: ${PYQT6_KEEP_MODULES}"
+
 # Patchelf all PyQt6 binding .so files to reach our lib/ via RPATH
 # Path: plugins/libs/PyQt6/*.so → ../../.. = staging root → lib/
 find "${PYQT6_OUT}" -name "*.so" -exec \
@@ -345,6 +364,55 @@ find "${PYQT6_OUT}" -name "*.so" | while read -r pyqt_so; do
         cp -Lf "${dep}" "${OUT_DIR}/lib/" 2>/dev/null && echo "  + ${dep_name}" || true
     done
 done
+
+# ── Dedupe identical files in lib/ via symlinks ──
+# Source-side `cp -Lf` resolves symlinks, so unversioned (foo.so) and versioned
+# (foo.so.X.Y.Z) get staged as identical real files. Replace the unversioned
+# (or shorter-versioned) twin with a symlink to the longest real file.
+# MUST run after both the main dep-collection loop and the PyQt6 ldd scan
+# above; do not reorder.
+echo "Deduping lib/ via symlinks..."
+(
+    cd "${OUT_DIR}/lib" || exit 0
+    # Pass A: foo.so → foo.so.X[.Y[.Z]]
+    for f in *.so; do
+        [ -L "${f}" ] && continue
+        [ -f "${f}" ] || continue
+        target=""
+        for v in $(ls -1 "${f}".* 2>/dev/null | sort -r); do
+            [ -L "${v}" ] && continue
+            [ -f "${v}" ] || continue
+            if cmp -s "${f}" "${v}"; then
+                target="${v}"
+                break
+            fi
+        done
+        if [ -n "${target}" ]; then
+            rm -f "${f}"
+            ln -s "${target}" "${f}"
+            echo "  link ${f} -> ${target}"
+        fi
+    done
+    # Pass B: foo.so.N → foo.so.N.M[.P] (handles e.g. libxcb-cursor.so.0 → .so.0.0.0)
+    for f in *.so.[0-9]*; do
+        [ -L "${f}" ] && continue
+        [ -f "${f}" ] || continue
+        target=""
+        for v in $(ls -1 "${f}".* 2>/dev/null | sort -r); do
+            [ -L "${v}" ] && continue
+            [ -f "${v}" ] || continue
+            if cmp -s "${f}" "${v}"; then
+                target="${v}"
+                break
+            fi
+        done
+        if [ -n "${target}" ]; then
+            rm -f "${f}"
+            ln -s "${target}" "${f}"
+            echo "  link ${f} -> ${target}"
+        fi
+    done
+)
 
 # ── Strip all MO2 binaries ──
 echo "Stripping MO2 binaries..."
