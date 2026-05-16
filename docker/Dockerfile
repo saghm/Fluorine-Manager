@@ -71,7 +71,7 @@ ENV PATH="/opt/python-bundled/bin:${PATH}"
 # ── Build-time Python packages ──
 # pybind11/sip/etc. for compiling mobase.so; PyQt6 is staged into the distribution.
 RUN /opt/python-bundled/bin/pip3 install --no-cache-dir \
-      pybind11==2.13.6 sip psutil larian-formats==0.2.0 vdf "PyQt6>=6.10,<6.11"
+      pybind11==2.13.6 sip psutil larian-formats==0.8.1 vdf "PyQt6>=6.10,<6.11"
 
 # ── Rust toolchain ──
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
