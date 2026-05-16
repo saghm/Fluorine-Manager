@@ -23,6 +23,8 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <QAbstractButton>
 #include <QDialog>
 
+#include <functional>
+
 namespace Ui
 {
 class SelectionDialog;
@@ -52,6 +54,16 @@ public:
 
   void addChoice(const QIcon& icon, const QString& buttonText,
                  const QString& description, const QVariant& data);
+
+  /**
+   * @brief add a choice with an inline delete button. The trash icon prompts
+   * for confirmation, then invokes |onDelete|; if the callback returns true,
+   * the row is removed from the dialog (so the user can keep deleting other
+   * entries without dismissing the dialog).
+   */
+  void addChoice(const QString& buttonText, const QString& description,
+                 const QVariant& data,
+                 std::function<bool()> onDelete);
 
   int numChoices() const;
 

@@ -21,6 +21,12 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "ui_selectiondialog.h"
 
 #include <QCommandLinkButton>
+#include <QHBoxLayout>
+#include <QIcon>
+#include <QMessageBox>
+#include <QStyle>
+#include <QToolButton>
+#include <QWidget>
 
 SelectionDialog::SelectionDialog(const QString& description, QWidget* parent,
                                  const QSize& iconSize)
@@ -65,9 +71,110 @@ void SelectionDialog::addChoice(const QIcon& icon, const QString& buttonText,
     m_ValidateByData = true;
 }
 
+void SelectionDialog::addChoice(const QString& buttonText,
+                                const QString& description,
+                                const QVariant& data,
+                                std::function<bool()> onDelete)
+{
+  // Custom row: [QCommandLinkButton (stretch)] [trash QToolButton]. Added
+  // directly to the same vertical layout the button box sits in, so it
+  // visually matches the rows produced by the standard addChoice().
+  auto* row    = new QWidget(ui->scrollAreaWidgetContents);
+  auto* layout = new QHBoxLayout(row);
+  layout->setContentsMargins(0, 0, 0, 0);
+  layout->setSpacing(4);
+
+  auto* choice = new QCommandLinkButton(buttonText, description, row);
+  if (m_IconSize.isValid()) {
+    choice->setIconSize(m_IconSize);
+  }
+  choice->setProperty("data", data);
+
+  auto* trash = new QToolButton(row);
+  trash->setAutoRaise(true);
+  QIcon trashIcon = QIcon::fromTheme(QStringLiteral("user-trash"));
+  if (trashIcon.isNull()) {
+    trashIcon = QIcon::fromTheme(QStringLiteral("edit-delete"));
+  }
+  if (trashIcon.isNull()) {
+    trashIcon = style()->standardIcon(QStyle::SP_TrashIcon);
+  }
+  trash->setIcon(trashIcon);
+  trash->setToolTip(tr("Delete this backup"));
+  trash->setAccessibleName(tr("Delete backup '%1'").arg(buttonText));
+
+  layout->addWidget(choice, /*stretch=*/1);
+  layout->addWidget(trash, /*stretch=*/0);
+
+  // Insert ABOVE the (empty) buttonBox so visual order matches insertion
+  // order regardless of how many standard rows have been added.
+  auto* parentLayout =
+      qobject_cast<QVBoxLayout*>(ui->scrollAreaWidgetContents->layout());
+  if (parentLayout) {
+    const int idx = parentLayout->indexOf(ui->buttonBox);
+    if (idx >= 0) {
+      parentLayout->insertWidget(idx, row);
+    } else {
+      parentLayout->addWidget(row);
+    }
+  }
+
+  if (data.isValid()) {
+    m_ValidateByData = true;
+  }
+
+  connect(choice, &QAbstractButton::clicked, this, [this, choice]() {
+    m_Choice = choice;
+    if (!m_ValidateByData || m_Choice->property("data").isValid()) {
+      accept();
+    } else {
+      reject();
+    }
+  });
+
+  connect(trash, &QToolButton::clicked, this,
+          [this, row, choice, buttonText, onDelete]() {
+            const auto ans = QMessageBox::question(
+                this, tr("Delete backup?"),
+                tr("Delete backup '%1'? This cannot be undone.").arg(buttonText),
+                QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+            if (ans != QMessageBox::Yes) {
+              return;
+            }
+            if (!onDelete) {
+              row->setEnabled(false);
+              return;
+            }
+            if (onDelete()) {
+              if (m_Choice == choice) {
+                m_Choice = nullptr;
+              }
+              row->setVisible(false);
+              row->deleteLater();
+            } else {
+              QMessageBox::warning(
+                  this, tr("Delete failed"),
+                  tr("Failed to delete backup '%1'. Check the log for details.")
+                      .arg(buttonText));
+            }
+          });
+}
+
 int SelectionDialog::numChoices() const
 {
-  return ui->buttonBox->findChildren<QCommandLinkButton*>(QString()).count();
+  // Count standard rows (inside buttonBox) plus delete-enabled rows (whose
+  // QCommandLinkButton lives in a custom row widget under
+  // scrollAreaWidgetContents). Visibility check excludes rows the user has
+  // already deleted via the trash button.
+  int n = 0;
+  const auto buttons =
+      ui->scrollAreaWidgetContents->findChildren<QCommandLinkButton*>();
+  for (const auto* b : buttons) {
+    if (b->isVisibleTo(ui->scrollAreaWidgetContents)) {
+      ++n;
+    }
+  }
+  return n;
 }
 
 QVariant SelectionDialog::getChoiceData()

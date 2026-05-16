@@ -4003,20 +4003,50 @@ QString MainWindow::queryRestore(const QString& filePath)
       pluginFileInfo.fileName() + "\\.([A-Za-z]{6})"));
   QRegularExpression const exp3(
       QRegularExpression::anchoredPattern(pluginFileInfo.fileName() + "\\.(.*)"));
+  // Each restore button gets a sibling trash button that deletes the backup
+  // companion files (Plugins.txt.<ts>, loadorder.txt.<ts>, lockedorder.txt.<ts>).
+  const QString loadOrderName =
+      m_OrganizerCore.currentProfile()->getLoadOrderFileName();
+  const QString lockedName =
+      m_OrganizerCore.currentProfile()->getLockedOrderFileName();
+  auto deleteBackupSet = [filePath, loadOrderName, lockedName](
+                             const QString& suffix) -> bool {
+    bool ok = true;
+    for (const QString& base : {filePath, loadOrderName, lockedName}) {
+      const QString candidate = base + "." + suffix;
+      if (QFile::exists(candidate) && !QFile::remove(candidate)) {
+        MOBase::log::warn("failed to delete backup file '{}'",
+                          candidate.toStdString());
+        ok = false;
+      }
+    }
+    return ok;
+  };
   for (const QFileInfo& info : boost::adaptors::reverse(files)) {
     auto match  = exp.match(info.fileName());
     auto match2 = exp2.match(info.fileName());
     auto match3 = exp3.match(info.fileName());
     if (match.hasMatch()) {
       QDateTime const time = QDateTime::fromString(match.captured(1), PATTERN_BACKUP_DATE);
-      dialog.addChoice(time.toString(), "", match.captured(1));
+      const QString suffix = match.captured(1);
+      dialog.addChoice(time.toString(), "", suffix,
+                       [deleteBackupSet, suffix]() {
+                         return deleteBackupSet(suffix);
+                       });
     } else if (match2.hasMatch()) {
-      dialog.addChoice(match2.captured(1),
+      const QString suffix = match2.captured(1);
+      dialog.addChoice(suffix,
                        tr("This file might be left over following a crash or power "
                           "loss event. Check its contents before restoring."),
-                       match2.captured(1));
+                       suffix, [deleteBackupSet, suffix]() {
+                         return deleteBackupSet(suffix);
+                       });
     } else if (match3.hasMatch()) {
-      dialog.addChoice(match3.captured(1), "", match3.captured(1));
+      const QString suffix = match3.captured(1);
+      dialog.addChoice(suffix, "", suffix,
+                       [deleteBackupSet, suffix]() {
+                         return deleteBackupSet(suffix);
+                       });
     }
   }
 
