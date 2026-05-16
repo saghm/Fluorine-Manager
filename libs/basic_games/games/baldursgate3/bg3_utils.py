@@ -1,4 +1,5 @@
 import functools
+import os
 import shutil
 import typing
 from pathlib import Path
@@ -262,8 +263,26 @@ class BG3Utils:
 
 
 def create_dir_if_needed(path: Path) -> Path:
-    if "." not in path.name[1:]:
-        path.mkdir(parents=True, exist_ok=True)
-    else:
-        path.parent.mkdir(parents=True, exist_ok=True)
+    target = path if "." not in path.name[1:] else path.parent
+    _mkdir_resolving_symlinks(target)
     return path
+
+
+def _mkdir_resolving_symlinks(target: Path) -> None:
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        return
+    except FileExistsError:
+        pass
+    # A component along the chain exists but is not a directory — typically a
+    # dangling symlink left over from a Wine prefix that points at a Steam
+    # compatdata path that doesn't exist yet. Walk top-down, materialize each
+    # dangling-symlink target as a real directory, then retry.
+    for component in list(reversed(target.parents)) + [target]:
+        if component.is_dir():
+            continue
+        if component.is_symlink():
+            real = Path(os.path.realpath(component))
+            real.mkdir(parents=True, exist_ok=True)
+            continue
+        component.mkdir(exist_ok=True)
