@@ -36,6 +36,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <cerrno>
 #include <filesystem>
+#include <sys/stat.h>
 #include "shared/appconfig.h"
 #include "shared/util.h"
 #include "thread_utils.h"
@@ -745,16 +746,39 @@ bool MOApplication::notify(QObject* receiver, QEvent* event)
                receiver->objectName(), event->type(), fe.what());
 
     // ENOTCONN = stale FUSE mount. Attempt recovery so MO2 can continue.
+    // If we manage to clear the wedged mount, suppress the user-facing
+    // dialog — the iteration that failed will be retried by whatever
+    // workflow triggered it (refresh, restore, etc.) and showing a hard
+    // error on a state we just recovered from is just noise.
     if (fe.code().value() == ENOTCONN) {
-      const auto& p1 = fe.path1();
-      if (!p1.empty()) {
-        log::warn("ENOTCONN on '{}' — attempting stale mount cleanup", p1.string());
-        FuseConnector::tryCleanupStaleMount(QString::fromStdString(p1.string()));
-      }
-      const auto& p2 = fe.path2();
-      if (!p2.empty()) {
-        log::warn("ENOTCONN on '{}' — attempting stale mount cleanup", p2.string());
-        FuseConnector::tryCleanupStaleMount(QString::fromStdString(p2.string()));
+      bool recovered = false;
+      auto attemptCleanup = [&recovered](const std::filesystem::path& p) {
+        if (p.empty()) {
+          return;
+        }
+        const QString qpath = QString::fromStdString(p.string());
+        log::warn("ENOTCONN on '{}' — attempting stale mount cleanup",
+                  p.string());
+        FuseConnector::tryCleanupStaleMount(qpath);
+        // Probe the path: if stat() no longer returns ENOTCONN, we cleared
+        // it. Even if the path is now missing (ENOENT), that's recovery
+        // from MO2's perspective — the iterator can succeed (or skip).
+        struct stat st;
+        const bool stillWedged =
+            ::stat(qpath.toLocal8Bit().constData(), &st) != 0 &&
+            errno == ENOTCONN;
+        if (!stillWedged) {
+          recovered = true;
+        }
+      };
+      attemptCleanup(fe.path1());
+      attemptCleanup(fe.path2());
+
+      if (recovered) {
+        log::info(
+            "stale FUSE mount recovered; suppressing error dialog. "
+            "The triggering operation will need to be retried.");
+        return false;
       }
     }
 

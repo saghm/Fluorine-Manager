@@ -2760,17 +2760,37 @@ void OrganizerCore::afterRun(const QFileInfo& binary, DWORD exitCode)
   // Restore write permissions on the game directory.  In rare cases
   // (crashes, unclean Wine shutdown) file permissions can be changed to
   // read-only, preventing subsequent launches from working.
+  //
+  // Use error_code-based iteration: a previous run may have left a stale
+  // FUSE mount under the game dir (zombie Wine process holding open
+  // handles), and the throwing iterator would unwind out of afterRun()
+  // leaving the rest of the post-run sync untouched.
   {
     const auto t0 = std::chrono::steady_clock::now();
     const QString gameDir = managedGame()->gameDirectory().absolutePath();
     namespace fs = std::filesystem;
-    std::error_code ec;
+    std::error_code permsEc;
+    std::error_code iterEc;
     for (auto it = fs::recursive_directory_iterator(
-             gameDir.toStdString(), fs::directory_options::skip_permission_denied);
-         it != fs::recursive_directory_iterator(); ++it) {
+             gameDir.toStdString(),
+             fs::directory_options::skip_permission_denied, iterEc);
+         !iterEc && it != fs::recursive_directory_iterator();
+         it.increment(iterEc)) {
       fs::permissions(it->path(),
                       fs::perms::owner_read | fs::perms::owner_write | fs::perms::owner_exec,
-                      fs::perm_options::add, ec);
+                      fs::perm_options::add, permsEc);
+    }
+    if (iterEc) {
+      if (iterEc.value() == ENOTCONN) {
+        log::warn(
+            "afterRun: stale FUSE mount encountered under '{}' "
+            "(errno={}); skipping remaining permission restoration",
+            gameDir.toStdString(), iterEc.value());
+        FuseConnector::tryCleanupStaleMount(gameDir);
+      } else {
+        log::warn("afterRun: directory iteration aborted at error: {}",
+                  iterEc.message());
+      }
     }
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - t0).count();
