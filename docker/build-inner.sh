@@ -289,7 +289,7 @@ rm -f  "${PYTHON_OUT}/lib/python3.12/turtle.py"
 rm -rf "${PYTHON_OUT}/lib/python3.12/site-packages"
 mkdir -p "${PYTHON_OUT}/lib/python3.12/site-packages"
 # Copy runtime-required packages back in
-for pkg in psutil vdf; do
+for pkg in psutil vdf larian_formats; do
     pkg_dir="$("${PBS_SRC}/bin/python3" -c "import importlib.util; s=importlib.util.find_spec('${pkg}'); print(s.submodule_search_locations[0] if s and s.submodule_search_locations else (s.origin if s else ''))" 2>/dev/null || true)"
     if [ -d "${pkg_dir}" ]; then
         cp -a "${pkg_dir}" "${PYTHON_OUT}/lib/python3.12/site-packages/"

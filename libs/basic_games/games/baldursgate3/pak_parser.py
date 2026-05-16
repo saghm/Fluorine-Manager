@@ -14,6 +14,7 @@ from typing import Callable
 from xml.etree import ElementTree
 from xml.etree.ElementTree import Element
 
+import larian_formats
 from PyQt6.QtCore import (
     qDebug,
     qInfo,
@@ -38,42 +39,6 @@ class BG3PakParser:
         "UUID": "",
         "Version64": "0",
     }
-
-    @cached_property
-    def _divine_command(self):
-        divine_exe = self._utils.tools_dir / "Divine.exe"
-        if platform.system() != "Windows":
-            wine = self._find_proton_wine()
-            if wine:
-                return f'"{wine}" "{divine_exe}" -g bg3 -l info'
-            qWarning(
-                "BG3: could not find Proton/Wine to run Divine.exe. "
-                "Ensure a Proton version is configured in Settings > Proton."
-            )
-        return f'"{divine_exe}" -g bg3 -l info'
-
-    def _find_proton_wine(self) -> str | None:
-        """Locate the wine binary from the configured Proton installation."""
-        try:
-            config_dir = os.environ.get(
-                "XDG_CONFIG_HOME", os.path.join(Path.home(), ".config")
-            )
-            cfg_path = os.path.join(config_dir, "fluorine", "config.json")
-            if not os.path.isfile(cfg_path):
-                return None
-            import json as _json
-            with open(cfg_path, "r") as f:
-                cfg = _json.load(f)
-            proton_path = cfg.get("proton_path", "")
-            if not proton_path:
-                return None
-            for subdir in ("files/bin/wine", "dist/bin/wine"):
-                candidate = os.path.join(proton_path, subdir)
-                if os.path.isfile(candidate):
-                    return candidate
-        except Exception as e:
-            qDebug(f"BG3: failed to read Fluorine config for Proton wine: {e}")
-        return None
 
     @cached_property
     def _folder_pattern(self):
@@ -113,66 +78,17 @@ class BG3PakParser:
         config.read(meta_ini, encoding="utf-8")
         try:
             if file.name.endswith("pak"):
-                meta_file = (
-                    self._utils.plugin_data_path
-                    / "temp"
-                    / "extracted_metadata"
-                    / f"{file.name[: int(len(file.name) / 2)]}-{hashlib.md5(str(file).encode(), usedforsecurity=False).hexdigest()[:5]}.lsx"
-                )
-                try:
-                    if (
-                        not force_reparse_metadata
-                        and config.has_section(file.name)
-                        and (
-                            "override" in config[file.name].keys()
-                            or "Folder" in config[file.name].keys()
-                        )
-                    ):
-                        return get_module_short_desc(config, file)
-                    meta_file.parent.mkdir(parents=True, exist_ok=True)
-                    meta_file.unlink(missing_ok=True)
-                    out_dir = (
-                        str(meta_file)[:-4] if self._utils.extract_full_package else ""
+                if (
+                    not force_reparse_metadata
+                    and config.has_section(file.name)
+                    and (
+                        "override" in config[file.name].keys()
+                        or "Folder" in config[file.name].keys()
                     )
-                    can_continue = True
-                    if self.run_divine(
-                        f'{"extract-package" if self._utils.extract_full_package else "extract-single-file -f meta.lsx"} -d "{meta_file if not self._utils.extract_full_package else out_dir}"',
-                        file,
-                    ).returncode:
-                        can_continue = False
-                    if can_continue and self._utils.extract_full_package:
-                        qDebug(f"archive {file} extracted to {out_dir}")
-                        if self.run_divine(
-                            f'convert-resources -d "{out_dir}" -i lsf -o lsx -x "*.lsf"',
-                            out_dir,
-                        ).returncode:
-                            qDebug(
-                                f"failed to convert lsf files in {out_dir} to readable lsx"
-                            )
-                        extracted_meta_files = list(Path(out_dir).rglob("meta.lsx"))
-                        if len(extracted_meta_files) == 0:
-                            qInfo(
-                                f"No meta.lsx files found in {file.name}, {file.name} determined to be an override mod"
-                            )
-                            can_continue = False
-                        else:
-                            shutil.copyfile(
-                                extracted_meta_files[0],
-                                meta_file,
-                            )
-                    elif can_continue and not meta_file.exists():
-                        qInfo(
-                            f"No meta.lsx files found in {file.name}, {file.name} determined to be an override mod"
-                        )
-                        can_continue = False
-                    return self.metadata_to_ini(
-                        config, file, mod, meta_ini, can_continue, lambda: meta_file
-                    )
-                finally:
-                    if self._utils.remove_extracted_metadata:
-                        meta_file.unlink(missing_ok=True)
-                        if self._utils.extract_full_package:
-                            Path(str(meta_file)[:-4]).unlink(missing_ok=True)
+                ):
+                    return get_module_short_desc(config, file)
+
+                return self.metadata_to_ini(config, file, mod, meta_ini)
             elif file.is_dir():
                 if self._folder_pattern.search(file.name):
                     return ""
@@ -214,86 +130,26 @@ class BG3PakParser:
                         build_pak = False
                 if build_pak:
                     pak_path.unlink(missing_ok=True)
-                    if self.run_divine(
-                        f'create-package -d "{pak_path}"', file
-                    ).returncode:
-                        return ""
-                meta_files = list(file.glob("Mods/*/meta.lsx"))
-                return self.metadata_to_ini(
-                    config,
-                    file,
-                    mod,
-                    meta_ini,
-                    len(meta_files) > 0,
-                    lambda: meta_files[0],
-                )
+
+                    larian_formats.pack_loose_files(file.parent, pak_path)
+                    output = ""
+
+                    try:
+                        output = self.metadata_to_ini(
+                            config,
+                            pak_path,
+                            mod,
+                            meta_ini,
+                        )
+                    except:
+                        pass
+
+                return output
             else:
                 return ""
         except Exception:
             qWarning(traceback.format_exc())
             return ""
-
-    @staticmethod
-    def _to_wine_path(path: str) -> str:
-        """Convert a Linux absolute path to a Wine Z: drive path."""
-        if path.startswith("/"):
-            return "Z:" + path.replace("/", "\\")
-        return path
-
-    def run_divine(
-        self, action: str, source: Path | str
-    ) -> subprocess.CompletedProcess[str]:
-        if platform.system() != "Windows":
-            # Divine.exe is a .NET Windows app — it needs Windows-style paths.
-            # Wine maps Z:\ to the Linux root, so /home/... becomes Z:\home\...
-            wine_source = self._to_wine_path(str(source))
-            wine_action = re.sub(
-                r'"(/[^"]*)"',
-                lambda m: '"' + self._to_wine_path(m.group(1)) + '"',
-                action,
-            )
-            command = f'{self._divine_command} -a {wine_action} -s "{wine_source}"'
-        else:
-            command = f'{self._divine_command} -a {action} -s "{source}"'
-        kwargs: dict = dict(
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        if platform.system() == "Windows":
-            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
-            kwargs["shell"] = True
-            result = subprocess.run(command, **kwargs)
-        else:
-            # Set WINEPREFIX so Proton's wine uses the game's prefix.
-            wine_prefix = ""
-            try:
-                config_dir = os.environ.get(
-                    "XDG_CONFIG_HOME", os.path.join(Path.home(), ".config")
-                )
-                cfg_path = os.path.join(config_dir, "fluorine", "config.json")
-                if os.path.isfile(cfg_path):
-                    import json as _json
-                    with open(cfg_path, "r") as f:
-                        cfg = _json.load(f)
-                    wine_prefix = cfg.get("prefix_path", "")
-            except Exception:
-                pass
-
-            env = os.environ.copy()
-            if wine_prefix:
-                env["WINEPREFIX"] = wine_prefix
-            kwargs["env"] = env
-            kwargs["shell"] = True
-            result = subprocess.run(command, **kwargs)
-
-        if result.returncode:
-            qWarning(
-                f"{command.replace(str(Path.home()), '~', 1).replace(str(Path.home()), '$HOME')}"
-                f" returned stdout: {result.stdout}, stderr: {result.stderr}, code {result.returncode}"
-            )
-        return result
 
     def get_attr_value(self, root: Element, attr_id: str) -> str:
         default_val = self._types.get(attr_id) or ""
@@ -306,49 +162,12 @@ class BG3PakParser:
         file: Path,
         mod: mobase.IModInterface,
         meta_ini: Path,
-        condition: bool,
-        to_parse: Callable[[], Path],
     ):
         config[file.name] = {}
-        if condition:
-            root = (
-                ElementTree.parse(to_parse())
-                .getroot()
-                .find(".//node[@id='ModuleInfo']")
-            )
-            if root is None:
-                qInfo(f"No ModuleInfo node found in meta.lsx for {mod.name()} ")
-            else:
-                section = config[file.name]
-                folder_name = self.get_attr_value(root, "Folder")
-                if file.is_dir():
-                    self._mod_cache[file] = (
-                        len(list(file.glob(f"*/{folder_name}/**"))) > 1
-                        or len(
-                            list(file.glob("Public/Engine/Timeline/MaterialGroups/*"))
-                        )
-                        > 0
-                    )
-                elif file not in self._mod_cache:
-                    # a mod which has a meta.lsx and is not an override mod meets at least one of three conditions:
-                    # 1. it has files in Public/Engine/Timeline/MaterialGroups, or
-                    # 2. it has files in Mods/<folder_name>/ other than the meta.lsx file, or
-                    # 3. it has files in Public/<folder_name>
-                    result = self.run_divine(
-                        f'list-package --use-regex -x "(/{re.escape(folder_name)}/(?!meta\\.lsx))|(Public/Engine/Timeline/MaterialGroups)"',
-                        file,
-                    )
-                    self._mod_cache[file] = (
-                        result.returncode == 0 and result.stdout.strip() != ""
-                    )
-                if self._mod_cache[file]:
-                    for key in self._types:
-                        section[key] = self.get_attr_value(root, key)
-                else:
-                    qInfo(f"pak {file.name} determined to be an override mod")
-                    section["override"] = "True"
-                    section["Folder"] = folder_name
-        else:
+        metadata = larian_formats.get_metadata_for_file(file)
+        config[file.name].update({k: str(v) for k, v in metadata.items()})
+
+        if larian_formats.is_override(file):
             config[file.name]["override"] = "True"
         with open(meta_ini, "w+", encoding="utf-8") as f:
             config.write(f)

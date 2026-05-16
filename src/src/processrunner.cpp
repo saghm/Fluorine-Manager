@@ -511,6 +511,7 @@ pid_t findGameProcessInPrefix(const QStringList& expected, const QString& winePr
 void killWineserverForPrefix(const QString& winePrefix)
 {
   if (winePrefix.isEmpty()) {
+    log::debug("killWineserverForPrefix: skipping (no WINEPREFIX resolved)");
     return;
   }
 
@@ -536,6 +537,48 @@ void killWineserverForPrefix(const QString& winePrefix)
   } else {
     log::debug("killWineserverForPrefix: no wineserver found for '{}'",
                winePrefix.toStdString());
+  }
+}
+
+// SIGTERM every descendant of |root| (and root itself), wait briefly, then
+// SIGKILL any survivor. Used on force-unlock so launcher .exe grandchildren
+// (skse_loader → SkyrimSE.exe → audio/physics workers) all go down even when
+// wineserver wasn't reachable.
+void killProcessTree(pid_t root)
+{
+  if (root <= 0) {
+    return;
+  }
+
+  const auto children    = buildProcChildrenMap();
+  auto descendants       = collectDescendants(root, children);
+  descendants.insert(root);
+
+  for (pid_t p : descendants) {
+    if (::kill(p, SIGTERM) != 0 && errno != ESRCH) {
+      log::debug("SIGTERM on {} failed, errno={}", p, errno);
+    }
+  }
+
+  for (int i = 0; i < 5; ++i) {
+    bool anyAlive = false;
+    for (pid_t p : descendants) {
+      if (::kill(p, 0) == 0) {
+        anyAlive = true;
+        break;
+      }
+    }
+    if (!anyAlive) {
+      return;
+    }
+    QThread::msleep(100);
+  }
+
+  for (pid_t p : descendants) {
+    if (::kill(p, 0) == 0) {
+      log::warn("process {} did not exit on SIGTERM, sending SIGKILL", p);
+      ::kill(p, SIGKILL);
+    }
   }
 }
 
@@ -732,20 +775,41 @@ ProcessRunner::Results waitForPid(pid_t pid, LPDWORD exitCode,
         break;
 
       case UILocker::ForceUnlocked:
-        log::debug("waiting for {} force unlocked by user", pid);
-        return ProcessRunner::ForceUnlocked;
+      case UILocker::Cancelled: {
+        const bool cancelled = (UILocker::Session::result() == UILocker::Cancelled);
+        log::debug("waiting for {} {} by user, terminating", displayPid,
+                   cancelled ? "cancelled" : "force unlocked");
 
-      case UILocker::Cancelled:
-        log::debug("waiting for {} cancelled by user, terminating", displayPid);
-        if (::kill(displayPid, SIGTERM) != 0 && errno != ESRCH) {
-          log::warn("failed to terminate {}, errno={}", displayPid, errno);
+        // The root pid (Proton wrapper) often doesn't carry WINEPREFIX in
+        // its environ even though the actual game process below it does.
+        // Fall through the known PIDs until we find one that has it set.
+        QString effectivePrefix = winePrefix;
+        for (pid_t candidate : {displayPid, lastTrackedPid, pid}) {
+          if (!effectivePrefix.isEmpty()) {
+            break;
+          }
+          if (candidate > 0) {
+            effectivePrefix = readProcEnvVar(candidate, "WINEPREFIX");
+          }
         }
-        // User clicked Unlock — they're asking us to stop waiting on the
-        // prefix, so also hard-kill the wineserver. Otherwise Proton's
-        // session manager keeps it alive for its idle timeout and the next
-        // launch inherits a dirty prefix.
-        killWineserverForPrefix(winePrefix);
-        return ProcessRunner::Cancelled;
+
+        // Take down the whole descendant tree first — launcher .exe's
+        // (skse_loader, nvse_loader, f4se_loader) often exit before the real
+        // game does, leaving grandchildren that a single SIGTERM on
+        // displayPid wouldn't reach. Then SIGKILL wineserver so Proton's
+        // session manager can't keep the prefix open and the next launch
+        // starts from a clean state.
+        killProcessTree(pid);
+        killWineserverForPrefix(effectivePrefix);
+
+        // Signal abnormal termination so afterRun()'s plugin-sync gate
+        // skips the prefix (we may have killed the game mid-write).
+        if (exitCode != nullptr) {
+          *exitCode = 1;
+        }
+        return cancelled ? ProcessRunner::Cancelled
+                         : ProcessRunner::ForceUnlocked;
+      }
 
       case UILocker::NoResult:
       default:
@@ -1169,10 +1233,15 @@ bool ProcessRunner::shouldRefresh(Results r) const
   }
 
   case ForceUnlocked: {
-    // The process may still be running when the user force-unlocks. Refreshing
-    // in that state can race with file updates.
-    log::debug("process runner: not refreshing because the ui was force unlocked");
-    return false;
+    // The ForceUnlocked branch in waitForPid has already taken down the
+    // game's process tree and wineserver, so by the time we're here no
+    // Wine process is still writing under the prefix. Run afterRun() so
+    // the FUSE VFS is unmounted, game-dir permissions are restored, and
+    // local saves are synced back. The exit code is set non-zero in that
+    // branch, which gates plugin sync-back (Plugins.txt may have been
+    // half-written when we killed the game).
+    log::debug("process runner: running afterRun to unmount VFS after force unlock");
+    return true;
   }
 
   case Error:
