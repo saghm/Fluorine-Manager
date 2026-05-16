@@ -16,6 +16,8 @@
 #include <uibase/ipluginpreview.h>
 #include <uibase/iplugintool.h>
 
+#include <log.h>
+
 // these needs to be defined in a header file for automoc - this file is included only
 // in pyplugins.cpp
 namespace mo2::python {
@@ -35,7 +37,50 @@ namespace mo2::python {
 
         bool init(IOrganizer* organizer) override
         {
-            PYBIND11_OVERRIDE_PURE(bool, PluginBase, init, organizer);
+            // Wrap the override manually so we can surface diagnostics when a
+            // Python plugin's init() silently returns False (the common case
+            // when a plugin's own try/except eats the exception) or raises
+            // an exception that would otherwise bubble up as a cryptic
+            // "plugin failed to initialize" in plugincontainer.
+            try {
+                pybind11::gil_scoped_acquire gil;
+                pybind11::function override_fn = pybind11::get_override(
+                    static_cast<const PluginBase*>(this), "init");
+                if (!override_fn) {
+                    pybind11::pybind11_fail(
+                        "Tried to call pure virtual function \"PluginBase::init\"");
+                }
+                pybind11::object result = override_fn(organizer);
+                const bool ok = pybind11::cast<bool>(result);
+                if (!ok) {
+                    QString pluginName;
+                    try {
+                        pluginName = this->name();
+                    } catch (...) {
+                    }
+                    MOBase::log::warn(
+                        "Python plugin init() returned False (plugin: '{}'). "
+                        "The plugin is probably swallowing an exception in "
+                        "its own try/except — check the plugin source for "
+                        "details.",
+                        pluginName.isEmpty() ? std::string("<unknown>")
+                                             : pluginName.toStdString());
+                }
+                return ok;
+            } catch (const pybind11::error_already_set& e) {
+                QString pluginName;
+                try {
+                    pluginName = this->name();
+                } catch (...) {
+                }
+                MOBase::log::error(
+                    "Python plugin init() raised an exception (plugin: '{}'): "
+                    "{}",
+                    pluginName.isEmpty() ? std::string("<unknown>")
+                                         : pluginName.toStdString(),
+                    e.what());
+                return false;
+            }
         }
         QString name() const override
         {

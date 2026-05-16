@@ -485,7 +485,14 @@ bool PluginContainer::initPlugin(IPlugin* plugin, IPluginProxy* pluginProxy,
   }
 
   if (!plugin->init(proxy)) {
-    log::warn("plugin failed to initialize");
+    QString pluginName;
+    try {
+      pluginName = plugin->name();
+    } catch (...) {
+    }
+    log::warn("plugin failed to initialize: {}",
+              pluginName.isEmpty() ? std::string("<unnamed>")
+                                   : pluginName.toStdString());
     return false;
   }
 
