@@ -165,26 +165,34 @@ buildModsFromMapping(const MappingType& mapping, const QString& dataDir,
 namespace
 {
 
-void replyExceptionError(fuse_req_t req, const char* op, const std::exception* e) noexcept
+void replyExceptionError(fuse_req_t req, const char* op,
+                         unsigned long long ino, const std::exception* e) noexcept
 {
   // fuse_reply_err itself shouldn't allocate but log first in case it does.
   if (e != nullptr) {
-    std::fprintf(stderr, "[VFS] %s: caught exception: %s\n", op, e->what());
+    std::fprintf(stderr, "[VFS] %s(ino=%llu): caught exception: %s\n", op, ino,
+                 e->what());
   } else {
-    std::fprintf(stderr, "[VFS] %s: caught unknown exception\n", op);
+    std::fprintf(stderr, "[VFS] %s(ino=%llu): caught unknown exception\n", op, ino);
   }
   // ENOMEM for bad_alloc, EIO otherwise — distinguished at call site.
 }
 
-#define MO2_TRY_REPLY(req, op, errno_) \
+// The handlers below capture the inode (or parent inode for lookup) so a
+// std::bad_alloc / std::exception log line identifies which path was being
+// processed — essential for diagnosing cache/tree corruption (e.g. #210).
+#define MO2_TRY_REPLY(req, op, ino, errno_) \
   catch (const std::bad_alloc& e) { \
-    replyExceptionError((req), (op), &e); \
+    replyExceptionError((req), (op), \
+                        static_cast<unsigned long long>(ino), &e); \
     fuse_reply_err((req), ENOMEM); \
   } catch (const std::exception& e) { \
-    replyExceptionError((req), (op), &e); \
+    replyExceptionError((req), (op), \
+                        static_cast<unsigned long long>(ino), &e); \
     fuse_reply_err((req), (errno_)); \
   } catch (...) { \
-    replyExceptionError((req), (op), nullptr); \
+    replyExceptionError((req), (op), \
+                        static_cast<unsigned long long>(ino), nullptr); \
     fuse_reply_err((req), (errno_)); \
   }
 
@@ -201,104 +209,104 @@ void wrap_init(void* userdata, struct fuse_conn_info* conn) noexcept
 void wrap_lookup(fuse_req_t req, fuse_ino_t parent, const char* name) noexcept
 {
   try { mo2_lookup(req, parent, name); }
-  MO2_TRY_REPLY(req, "lookup", EIO)
+  MO2_TRY_REPLY(req, "lookup", parent, EIO)
 }
 
 void wrap_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) noexcept
 {
   try { mo2_getattr(req, ino, fi); }
-  MO2_TRY_REPLY(req, "getattr", EIO)
+  MO2_TRY_REPLY(req, "getattr", ino, EIO)
 }
 
 void wrap_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) noexcept
 {
   try { mo2_opendir(req, ino, fi); }
-  MO2_TRY_REPLY(req, "opendir", EIO)
+  MO2_TRY_REPLY(req, "opendir", ino, EIO)
 }
 
 void wrap_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                   struct fuse_file_info* fi) noexcept
 {
   try { mo2_readdir(req, ino, size, off, fi); }
-  MO2_TRY_REPLY(req, "readdir", EIO)
+  MO2_TRY_REPLY(req, "readdir", ino, EIO)
 }
 
 void wrap_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                       struct fuse_file_info* fi) noexcept
 {
   try { mo2_readdirplus(req, ino, size, off, fi); }
-  MO2_TRY_REPLY(req, "readdirplus", EIO)
+  MO2_TRY_REPLY(req, "readdirplus", ino, EIO)
 }
 
 void wrap_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) noexcept
 {
   try { mo2_open(req, ino, fi); }
-  MO2_TRY_REPLY(req, "open", EIO)
+  MO2_TRY_REPLY(req, "open", ino, EIO)
 }
 
 void wrap_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                struct fuse_file_info* fi) noexcept
 {
   try { mo2_read(req, ino, size, off, fi); }
-  MO2_TRY_REPLY(req, "read", EIO)
+  MO2_TRY_REPLY(req, "read", ino, EIO)
 }
 
 void wrap_write(fuse_req_t req, fuse_ino_t ino, const char* buf, size_t size,
                 off_t off, struct fuse_file_info* fi) noexcept
 {
   try { mo2_write(req, ino, buf, size, off, fi); }
-  MO2_TRY_REPLY(req, "write", EIO)
+  MO2_TRY_REPLY(req, "write", ino, EIO)
 }
 
 void wrap_create(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t mode,
                  struct fuse_file_info* fi) noexcept
 {
   try { mo2_create(req, parent, name, mode, fi); }
-  MO2_TRY_REPLY(req, "create", EIO)
+  MO2_TRY_REPLY(req, "create", parent, EIO)
 }
 
 void wrap_rename(fuse_req_t req, fuse_ino_t parent, const char* name,
                  fuse_ino_t newparent, const char* newname, unsigned int flags) noexcept
 {
   try { mo2_rename(req, parent, name, newparent, newname, flags); }
-  MO2_TRY_REPLY(req, "rename", EIO)
+  MO2_TRY_REPLY(req, "rename", parent, EIO)
 }
 
 void wrap_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
                   struct fuse_file_info* fi) noexcept
 {
   try { mo2_setattr(req, ino, attr, to_set, fi); }
-  MO2_TRY_REPLY(req, "setattr", EIO)
+  MO2_TRY_REPLY(req, "setattr", ino, EIO)
 }
 
 void wrap_unlink(fuse_req_t req, fuse_ino_t parent, const char* name) noexcept
 {
   try { mo2_unlink(req, parent, name); }
-  MO2_TRY_REPLY(req, "unlink", EIO)
+  MO2_TRY_REPLY(req, "unlink", parent, EIO)
 }
 
 void wrap_mkdir(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t mode) noexcept
 {
   try { mo2_mkdir(req, parent, name, mode); }
-  MO2_TRY_REPLY(req, "mkdir", EIO)
+  MO2_TRY_REPLY(req, "mkdir", parent, EIO)
 }
 
 void wrap_rmdir(fuse_req_t req, fuse_ino_t parent, const char* name) noexcept
 {
   try { mo2_rmdir(req, parent, name); }
-  MO2_TRY_REPLY(req, "rmdir", EIO)
+  MO2_TRY_REPLY(req, "rmdir", parent, EIO)
 }
 
 void wrap_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) noexcept
 {
   try { mo2_release(req, ino, fi); }
-  MO2_TRY_REPLY(req, "release", EIO)
+  MO2_TRY_REPLY(req, "release", ino, EIO)
 }
 
 void wrap_releasedir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) noexcept
 {
   try { mo2_releasedir(req, ino, fi); }
-  MO2_TRY_REPLY(req, "releasedir", EIO)
+  MO2_TRY_REPLY(req, "releasedir", ino, EIO)
 }
 
 #undef MO2_TRY_REPLY

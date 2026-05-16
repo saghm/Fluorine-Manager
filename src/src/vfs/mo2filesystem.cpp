@@ -234,36 +234,57 @@ void invalidateLookupCache(Mo2FsContext* ctx, const std::string& dirPath)
   }
 }
 
-// Clear all node_cache entries whose path starts with the given prefix.
-// Must be called while tree_mutex is held exclusively (during mutations).
+// Clear all node_cache entries whose path is |path| or any descendant
+// under |path|/.  Must be called while tree_mutex is held exclusively (during
+// mutations).  The parent of |path| is also invalidated because its
+// children-map has changed.
+//
+// SUBTREE invalidation matters for any mutation that destroys VfsNodes
+// (removeFromTree on a directory, rename of a directory): every descendant
+// VfsNode is destroyed too, so every cached pointer into that subtree is
+// now dangling.  The original implementation only cleared the exact path
+// and its parent — that left dangling pointers for descendants, which the
+// next getattr/readdir would dereference and crash with bad_alloc /
+// SIGSEGV (manifesting as F4SE "couldn't load plugin (0000007E)" in #210).
 void invalidateNodeCache(Mo2FsContext* ctx, const std::string& path)
 {
   if (ctx == nullptr) {
     return;
   }
 
-  // Look up inode for this path and remove its cache entry.
-  fuse_ino_t ino = 0;
-  {
-    std::shared_lock lock(ctx->inode_mutex);
-    ino = ctx->inodes->get(path);
+  // Lock order is tree (exclusive, held by caller) → inode (shared) →
+  // node_cache (exclusive).  Keep that order consistent everywhere.
+  std::shared_lock ilock(ctx->inode_mutex);
+  std::scoped_lock nlock(ctx->node_cache_mutex);
+
+  // Sweep node_cache for any entry whose path is the prefix or a descendant.
+  // O(N) over the cache, but each ino→path lookup is O(1) and N is bounded
+  // by the cache size; mutations are infrequent compared to reads.
+  const std::string prefixSlash = path + "/";
+  for (auto it = ctx->node_cache.begin(); it != ctx->node_cache.end();) {
+    const std::string entryPath = ctx->inodes->getPath(it->first);
+    const bool inSubtree =
+        entryPath == path ||
+        (entryPath.size() > prefixSlash.size() &&
+         entryPath.compare(0, prefixSlash.size(), prefixSlash) == 0);
+    if (inSubtree) {
+      it = ctx->node_cache.erase(it);
+    } else {
+      ++it;
+    }
   }
-  fuse_ino_t parentIno = 0;
+
+  // Invalidate the parent's cache entry too (its children map changed).
   const auto slash = path.rfind('/');
   if (slash != std::string::npos) {
     const std::string parentPath = path.substr(0, slash);
-    std::shared_lock lock(ctx->inode_mutex);
-    parentIno = ctx->inodes->get(parentPath);
-  }
-
-  std::scoped_lock nlock(ctx->node_cache_mutex);
-  if (ino != 0) {
-    ctx->node_cache.erase(ino);
-  }
-  // Also invalidate the parent directory's cache entry since its children
-  // map has changed (new/removed child).
-  if (parentIno != 0) {
-    ctx->node_cache.erase(parentIno);
+    const fuse_ino_t parentIno   = ctx->inodes->get(parentPath);
+    if (parentIno != 0) {
+      ctx->node_cache.erase(parentIno);
+    }
+  } else {
+    // Top-level entry — parent is root (inode 1).
+    ctx->node_cache.erase(1);
   }
 }
 
