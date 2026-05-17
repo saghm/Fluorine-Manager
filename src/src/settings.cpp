@@ -335,64 +335,32 @@ void Settings::setFirstStart(bool b)
 
 QString Settings::executablesBlacklist() const
 {
-  static const QString def = (QStringList() << "Chrome.exe"
-                                            << "Firefox.exe"
-                                            << "TSVNCache.exe"
-                                            << "TGitCache.exe"
-                                            << "Steam.exe"
-                                            << "GameOverlayUI.exe"
-                                            << "Discord.exe"
-                                            << "GalaxyClient.exe"
-                                            << "Spotify.exe"
-                                            << "Brave.exe")
-                                 .join(";");
-
-  return get<QString>(m_Settings, "Settings", "executable_blacklist", def);
+  // USVFS-era setting; FUSE VFS on Linux doesn't hook executables per-process.
+  return "";
 }
 
-bool Settings::isExecutableBlacklisted(const QString& s) const
+bool Settings::isExecutableBlacklisted(const QString&) const
 {
-  for (auto exec : executablesBlacklist().split(";")) {
-    if (exec.compare(s, Qt::CaseInsensitive) == 0) {
-      return true;
-    }
-  }
-
   return false;
 }
 
-void Settings::setExecutablesBlacklist(const QString& s)
-{
-  set(m_Settings, "Settings", "executable_blacklist", s);
-}
+void Settings::setExecutablesBlacklist(const QString&) {}
 
 QStringList Settings::skipFileSuffixes() const
 {
-  static const QStringList def = QStringList() << ".mohidden";
-
-  auto setting = get<QStringList>(m_Settings, "Settings", "skip_file_suffixes", def);
-
-  return setting;
+  // Keep the historical default so existing modlists with .mohidden files
+  // keep ignoring them; previously this was a user-editable Workarounds entry.
+  return {".mohidden"};
 }
 
-void Settings::setSkipFileSuffixes(const QStringList& s)
-{
-  set(m_Settings, "Settings", "skip_file_suffixes", s);
-}
+void Settings::setSkipFileSuffixes(const QStringList&) {}
 
 QStringList Settings::skipDirectories() const
 {
-  static const QStringList def = QStringList() << ".git";
-
-  auto setting = get<QStringList>(m_Settings, "Settings", "skip_directories", def);
-
-  return setting;
+  return {".git"};
 }
 
-void Settings::setSkipDirectories(const QStringList& s)
-{
-  set(m_Settings, "Settings", "skip_directories", s);
-}
+void Settings::setSkipDirectories(const QStringList&) {}
 
 void Settings::setMotdHash(uint hash)
 {
@@ -671,12 +639,15 @@ void GameSettings::setPlugin(const MOBase::IPluginGame* gamePlugin)
 
 bool GameSettings::forceEnableCoreFiles() const
 {
-  return get<bool>(m_Settings, "Settings", "force_enable_core_files", true);
+  // Hardcoded on. Disabling primary-master autoload caused user issue
+  // where DLCs went unchecked after a tab refresh; there's no use-case
+  // outside Nehrim-style total conversions that justifies the footgun.
+  return true;
 }
 
-void GameSettings::setForceEnableCoreFiles(bool b)
+void GameSettings::setForceEnableCoreFiles(bool)
 {
-  set(m_Settings, "Settings", "force_enable_core_files", b);
+  // no-op; see forceEnableCoreFiles().
 }
 
 std::optional<QString> GameSettings::directory() const
@@ -1801,32 +1772,23 @@ NetworkSettings::NetworkSettings(QSettings& settings, bool globalInstance)
 
 void NetworkSettings::updateCustomBrowser() const
 {
-  if (useCustomBrowser()) {
-    MOBase::shell::SetUrlHandler(customBrowserCommand());
-  } else {
-    MOBase::shell::SetUrlHandler("");
-  }
+  // Removed alongside the Workarounds tab; system mimetypes drive URL handling.
+  MOBase::shell::SetUrlHandler("");
 }
 
 bool NetworkSettings::offlineMode() const
 {
-  return get<bool>(m_Settings, "Settings", "offline_mode", false);
+  return false;
 }
 
-void NetworkSettings::setOfflineMode(bool b)
-{
-  set(m_Settings, "Settings", "offline_mode", b);
-}
+void NetworkSettings::setOfflineMode(bool) {}
 
 bool NetworkSettings::useProxy() const
 {
-  return get<bool>(m_Settings, "Settings", "use_proxy", false);
+  return false;
 }
 
-void NetworkSettings::setUseProxy(bool b)
-{
-  set(m_Settings, "Settings", "use_proxy", b);
-}
+void NetworkSettings::setUseProxy(bool) {}
 
 void NetworkSettings::setDownloadSpeed(const QString& name, int bytesPerSecond)
 {
@@ -1935,25 +1897,17 @@ void NetworkSettings::updateFromOldMap()
 
 bool NetworkSettings::useCustomBrowser() const
 {
-  return get<bool>(m_Settings, "Settings", "use_custom_browser", false);
+  return false;
 }
 
-void NetworkSettings::setUseCustomBrowser(bool b)
-{
-  set(m_Settings, "Settings", "use_custom_browser", b);
-  updateCustomBrowser();
-}
+void NetworkSettings::setUseCustomBrowser(bool) {}
 
 QString NetworkSettings::customBrowserCommand() const
 {
-  return get<QString>(m_Settings, "Settings", "custom_browser", "");
+  return "";
 }
 
-void NetworkSettings::setCustomBrowserCommand(const QString& s)
-{
-  set(m_Settings, "Settings", "custom_browser", s);
-  updateCustomBrowser();
-}
+void NetworkSettings::setCustomBrowserCommand(const QString&) {}
 
 ServerList NetworkSettings::serversFromOldMap() const
 {
@@ -2133,41 +2087,22 @@ SteamSettings::SteamSettings(Settings& parent, QSettings& settings)
 
 QString SteamSettings::appID() const
 {
-  return get<QString>(m_Settings, "Settings", "app_id",
-                      m_Parent.game().plugin()->steamAPPId());
+  // The user-override `app_id` ini key is no longer exposed; per-game plugins
+  // already carry the right value via steamAPPId(), and per-executable overrides
+  // live on individual Executable entries.
+  return m_Parent.game().plugin()->steamAPPId();
 }
 
-void SteamSettings::setAppID(const QString& id)
-{
-  if (id.isEmpty()) {
-    remove(m_Settings, "Settings", "app_id");
-  } else {
-    set(m_Settings, "Settings", "app_id", id);
-  }
-}
+void SteamSettings::setAppID(const QString&) {}
 
 bool SteamSettings::login(QString& username, QString& password) const
 {
-  username = get<QString>(m_Settings, "Settings", "steam_username", "");
-  password = getWindowsCredential("steam_password");
-
-  return !username.isEmpty() && !password.isEmpty();
+  username.clear();
+  password.clear();
+  return false;
 }
 
-void SteamSettings::setLogin(QString username, QString password)
-{
-  if (username == "") {
-    remove(m_Settings, "Settings", "steam_username");
-    password = "";
-  } else {
-    set(m_Settings, "Settings", "steam_username", username);
-  }
-
-  if (!setWindowsCredential("steam_password", password)) {
-    const auto e = GetLastError();
-    log::error("Storing or deleting password failed: {}", formatSystemMessage(e));
-  }
-}
+void SteamSettings::setLogin(QString, QString) {}
 
 InterfaceSettings::InterfaceSettings(QSettings& settings) : m_Settings(settings) {}
 
@@ -2296,6 +2231,16 @@ bool InterfaceSettings::hideDownloadsAfterInstallation() const
 void InterfaceSettings::setHideDownloadsAfterInstallation(bool b)
 {
   set(m_Settings, "Settings", "autohide_downloads", b);
+}
+
+bool InterfaceSettings::showDownloadNotifications() const
+{
+  return get<bool>(m_Settings, "Settings", "download_notifications", false);
+}
+
+void InterfaceSettings::setShowDownloadNotifications(bool b)
+{
+  set(m_Settings, "Settings", "download_notifications", b);
 }
 
 bool InterfaceSettings::hideAPICounter() const

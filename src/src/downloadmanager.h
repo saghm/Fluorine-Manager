@@ -117,10 +117,20 @@ private:
     bool m_Hidden{false};
 
     static DownloadInfo* createNew(const MOBase::ModRepositoryFileInfo* fileInfo,
-                                   const QStringList& URLs);
+                                   const QStringList& URLs,
+                                   std::optional<unsigned int> reservedID = {});
     static DownloadInfo* createFromMeta(const QString& filePath, bool showHidden,
                                         QString outputDirectory,
-                                        std::optional<uint64_t> fileSize = {});
+                                        std::optional<uint64_t> fileSize    = {},
+                                        std::optional<unsigned int> reservedID = {});
+
+    /**
+     * @brief Allocate a fresh download ID without creating a DownloadInfo.
+     *   Used by callers (notably addNXMDownload) that want to dedupe a
+     *   pending NXM link against the ID it will eventually own, before
+     *   the actual DownloadInfo is materialized.
+     */
+    static unsigned int newDownloadID() { return s_NextDownloadID++; }
 
     /**
      * @brief rename the file
@@ -238,7 +248,8 @@ public:
   bool addDownload(QNetworkReply* reply, const QStringList& URLs,
                    const QString& fileName, QString gameName, int modID, int fileID = 0,
                    const MOBase::ModRepositoryFileInfo* fileInfo =
-                       new MOBase::ModRepositoryFileInfo());
+                       new MOBase::ModRepositoryFileInfo(),
+                   std::optional<unsigned int> reservedID = {});
 
   /**
    * @brief start a download using a nxm-link
@@ -289,6 +300,8 @@ public:
    * @return display name of the file
    **/
   QString getDisplayName(int index) const;
+
+  QString getDisplayNameForInfo(const DownloadInfo* info) const;
 
   /**
    * @brief retrieve the filename of the download specified by index
@@ -572,7 +585,8 @@ private:
    *only happens if there is a duplicate and the user decides not to download again
    **/
   bool addDownload(const QStringList& URLs, QString gameName, int modID, int fileID,
-                   const MOBase::ModRepositoryFileInfo* fileInfo);
+                   const MOBase::ModRepositoryFileInfo* fileInfo,
+                   std::optional<unsigned int> reservedID = {});
 
   // important: the caller has to lock the list-mutex, otherwise the
   // DownloadInfo-pointer might get invalidated at any time
@@ -608,6 +622,12 @@ private:
   QVector<std::tuple<QString, int, int>> m_PendingDownloads;
 
   QVector<DownloadInfo*> m_ActiveDownloads;
+
+  // O(1) DownloadID → DownloadInfo* lookup, maintained in parallel with
+  // m_ActiveDownloads. Lets late callbacks detect a stale ID via
+  // m_ByID.contains() instead of a linear m_ActiveDownloads scan that
+  // can't distinguish "not found" from "found but invalidated".
+  QHash<unsigned int, DownloadInfo*> m_ByID;
 
   QString m_OutputDirectory;
   std::set<int> m_RequestIDs;

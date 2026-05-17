@@ -29,16 +29,29 @@ NXMUrl::NXMUrl(const QString& url)
 {
   QUrl nxm(url);
   QUrlQuery query(nxm);
-  QRegularExpression exp("(?:nxm|modl)://[a-z0-9]+/mods/(\\d+)/files/(\\d+)",
-                         QRegularExpression::CaseInsensitiveOption);
-  auto match = exp.match(url);
-  if (!match.hasMatch()) {
+
+  static const QRegularExpression modRegex(
+      "(?:nxm|modl)://[a-z0-9]+/mods/(\\d+)/files/(\\d+)",
+      QRegularExpression::CaseInsensitiveOption);
+  static const QRegularExpression collectionRegex(
+      "(?:nxm|modl)://[a-z0-9]+/collections/([a-z0-9]+)/revisions/(\\d+)",
+      QRegularExpression::CaseInsensitiveOption);
+
+  m_Game = nxm.host();
+
+  if (const auto modMatch = modRegex.match(url); modMatch.hasMatch()) {
+    m_Collection = false;
+    m_ModId      = modMatch.captured(1).toInt();
+    m_FileId     = modMatch.captured(2).toInt();
+    m_Key        = query.queryItemValue("key");
+    m_Expires    = query.queryItemValue("expires").toInt();
+    m_UserId     = query.queryItemValue("user_id").toInt();
+  } else if (const auto collectionMatch = collectionRegex.match(url);
+             collectionMatch.hasMatch()) {
+    m_Collection         = true;
+    m_CollectionId       = collectionMatch.captured(1);
+    m_CollectionRevision = collectionMatch.captured(2).toInt();
+  } else {
     throw MOBase::InvalidNXMLinkException(url);
   }
-  m_Game    = nxm.host();
-  m_ModId   = match.captured(1).toInt();
-  m_FileId  = match.captured(2).toInt();
-  m_Key     = query.queryItemValue("key");
-  m_Expires = query.queryItemValue("expires").toInt();
-  m_UserId  = query.queryItemValue("user_id").toInt();
 }

@@ -41,6 +41,7 @@ public:  // IPluginGame interface
   virtual bool prepareIni(const QString& exec) override;
   virtual QStringList DLCPlugins() const override;
   virtual QStringList CCPlugins() const override;
+  virtual QString blueprintPrefix() const override;
   virtual SortMechanism sortMechanism() const override;
   virtual LoadOrderMechanism loadOrderMechanism() const override;
   virtual int nexusModOrganizerID() const override;
@@ -72,10 +73,14 @@ private:
   QStringList CCCPlugins() const;
   bool activeESP() const;
   bool testFilePresent() const;
+  bool hasInvalidBlueprint() const;
+  bool hasUnpairedBlueprint() const;
 
 private:
-  static const unsigned int PROBLEM_ESP       = 1;
-  static const unsigned int PROBLEM_TEST_FILE = 2;
+  static const unsigned int PROBLEM_ESP                = 1;
+  static const unsigned int PROBLEM_TEST_FILE          = 2;
+  static const unsigned int PROBLEM_INVALID_BLUEPRINT  = 3;
+  static const unsigned int PROBLEM_UNPAIRED_BLUEPRINT = 4;
 
   mutable std::set<QString> m_Active_ESPs;
 };

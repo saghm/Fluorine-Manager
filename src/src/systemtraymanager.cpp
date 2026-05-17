@@ -67,6 +67,21 @@ void SystemTrayManager::restoreFromSystemTray()
   }
 }
 
+void SystemTrayManager::showNotification(const QString& title, const QString& message,
+                                         QSystemTrayIcon::MessageIcon icon)
+{
+  // The tray icon is normally only visible while minimized; show it just long
+  // enough for the notification to fire so the OS can route the message.
+  const bool wasVisible = m_SystemTrayIcon->isVisible();
+  if (!wasVisible) {
+    m_SystemTrayIcon->show();
+  }
+  m_SystemTrayIcon->showMessage(title, message, icon);
+  if (!wasVisible && !m_Parent->isHidden()) {
+    m_SystemTrayIcon->hide();
+  }
+}
+
 void SystemTrayManager::on_systemTrayIcon_activated(
     QSystemTrayIcon::ActivationReason reason)
 {

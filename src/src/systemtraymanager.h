@@ -35,6 +35,10 @@ public:
   void minimizeToSystemTray();
   void restoreFromSystemTray();
 
+  void showNotification(
+      const QString& title, const QString& message,
+      QSystemTrayIcon::MessageIcon icon = QSystemTrayIcon::MessageIcon::Information);
+
 private:
   QMainWindow* m_Parent;
   QDockWidget* m_LogDock;

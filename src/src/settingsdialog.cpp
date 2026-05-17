@@ -27,7 +27,6 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "settingsdialogproton.h"
 #include "settingsdialogtheme.h"
 #include "settingsdialogupdates.h"
-#include "settingsdialogworkarounds.h"
 #include "ui_settingsdialog.h"
 
 using namespace MOBase;
@@ -54,8 +53,6 @@ SettingsDialog::SettingsDialog(PluginContainer* pluginContainer, Settings& setti
       new PluginsSettingsTab(settings, m_pluginContainer, *this)));
   m_tabs.push_back(
       std::unique_ptr<SettingsTab>(new ProtonSettingsTab(settings, *this)));
-  m_tabs.push_back(
-      std::unique_ptr<SettingsTab>(new WorkaroundsSettingsTab(settings, *this)));
 }
 
 PluginContainer* SettingsDialog::pluginContainer()

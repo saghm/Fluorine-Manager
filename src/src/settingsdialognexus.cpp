@@ -393,15 +393,7 @@ NexusSettingsTab::NexusSettingsTab(Settings& s, SettingsDialog& d) : SettingsTab
   QObject::connect(ui->associateButton, &QPushButton::clicked, [&] {
     associate();
   });
-  QObject::connect(ui->useCustomBrowser, &QCheckBox::clicked, [&] {
-    updateCustomBrowser();
-  });
-  QObject::connect(ui->browseCustomBrowser, &QPushButton::clicked, [&] {
-    browseCustomBrowser();
-  });
-
   updateNexusData();
-  updateCustomBrowser();
 }
 
 void NexusSettingsTab::update()
@@ -495,23 +487,3 @@ void NexusSettingsTab::updateNexusData()
   }
 }
 
-void NexusSettingsTab::updateCustomBrowser()
-{
-  ui->browserCommand->setEnabled(ui->useCustomBrowser->isChecked());
-}
-
-void NexusSettingsTab::browseCustomBrowser()
-{
-  const QString Filters =
-      QObject::tr("Executables (*.exe)") + ";;" + QObject::tr("All Files (*.*)");
-
-  QString file = QFileDialog::getOpenFileName(
-      parentWidget(), QObject::tr("Select the browser executable"),
-      ui->browserCommand->text(), Filters);
-
-  if (file.isNull() || file == "") {
-    return;
-  }
-
-  ui->browserCommand->setText(file + " \"%1\"");
-}

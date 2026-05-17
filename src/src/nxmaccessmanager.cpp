@@ -31,6 +31,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <QCoreApplication>
 #include <QDir>
 #include <QEventLoop>
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QMessageBox>
@@ -329,7 +330,7 @@ void ValidationAttempt::onFinished()
     const QString id       = data.value("sub").toString();
     const QString name     = data.value("name").toString();
     const auto roles       = data.value("membership_roles").toArray();
-    QStringList validRoles = {"premium", "lifetimepremium", "supporter"};
+    QStringList validRoles = {"premium", "lifetimepremium"};
     bool premium           = false;
     for (auto role : roles) {
       QString roleVal = role.toString();
@@ -982,11 +983,15 @@ bool NXMAccessManager::validateWaiting() const
 
 void NXMAccessManager::connectOrRefresh(const NexusOAuthTokens tokens)
 {
+  if (m_NexusOAuth->status() != QAbstractOAuth::Status::NotAuthenticated &&
+      m_NexusOAuth->status() != QAbstractOAuth::Status::Granted)
+    return;
   const auto clientId = NexusOAuth::clientId();
   if (clientId.isEmpty()) {
     handleOAuthError(QObject::tr("No OAuth client id configured."));
     return;
   }
+  m_ValidationState = NotChecked;
   m_NexusOAuth->setAuthorizationUrl(QUrl(NexusOAuth::authorizeUrl()));
   m_NexusOAuth->setTokenUrl(QUrl(NexusOAuth::tokenUrl()));
   m_NexusOAuth->setClientIdentifier(clientId);
@@ -995,10 +1000,27 @@ void NXMAccessManager::connectOrRefresh(const NexusOAuthTokens tokens)
   m_NexusOAuth->setRequestedScopeTokens(scope);
   m_NexusOAuthReplyHandler->close();
   m_NexusOAuthReplyHandler->setCallbackPath(QUrl(NexusOAuth::redirectUri()).path());
+  QFile logo(":/MO/gui/app_icon");
+  logo.open(QIODevice::ReadOnly);
+  QByteArray imageData  = logo.readAll();
+  logo.close();
+  QByteArray base64Data = imageData.toBase64();
+  QString imageSrc =
+      QString("data:image/png;base64,") + QString::fromLatin1(base64Data);
   m_NexusOAuthReplyHandler->setCallbackText(
-      QObject::tr("<html><body><h2>Mod Organizer</h2><p>Authorization complete. You "
-                  "may close this "
-                  "window.</p></body></html>"));
+      QString("<style>\n"
+              "    body {\n"
+              "        text-align: center;\n"
+              "        background-color: #2b2b2b;\n"
+              "        color: white;\n"
+              "        font-family: sans-serif;\n"
+              "        font-size: 18px;\n"
+              "    }\n"
+              "</style>\n"
+              "<img src=\"%1\" alt=\"Mod Organizer\">\n")
+          .arg(imageSrc) +
+      QObject::tr("<p><strong>Authorization complete.<br>You may close this "
+                  "window.</strong></p>\n"));
   if (!m_NexusOAuthReplyHandler->listen(QHostAddress::LocalHost,
                                         NexusOAuth::redirectPort())) {
     handleOAuthError(QObject::tr("Failed to bind to localhost on port %1.")

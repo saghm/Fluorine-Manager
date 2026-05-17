@@ -132,6 +132,10 @@ public:
 
   QMainWindow* mainWindow() override;
 
+  void showNotification(const QString& title, const QString& message,
+                        QSystemTrayIcon::MessageIcon icon =
+                            QSystemTrayIcon::MessageIcon::Information) override;
+
   bool addProfile();
   void updateBSAList(const QStringList& defaultArchives,
                      const QStringList& activeArchives) override;

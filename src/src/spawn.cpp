@@ -24,7 +24,6 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "fluorineconfig.h"
 #include "protonlauncher.h"
 #include "settings.h"
-#include "settingsdialogworkarounds.h"
 #include "shared/appconfig.h"
 
 #include <QApplication>
@@ -53,7 +52,6 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 class QMessageBox;
 
 using namespace MOBase;
-using namespace MOShared;
 
 namespace spawn::dialogs
 {
@@ -153,25 +151,16 @@ QMessageBox::StandardButton confirmBlacklisted(QWidget* parent,
   const auto details = "Executable: " + sp.binary.fileName() +
                        "\nCurrent blacklist: " + settings.executablesBlacklist();
 
-  auto r = MOBase::TaskDialog(parent, title)
-               .main(mainText)
-               .content(content)
-               .details(details)
-               .icon(QMessageBox::Question)
-               .remember("blacklistedExecutable", sp.binary.fileName())
-               .button({QObject::tr("Continue"),
-                        QObject::tr("Your mods might not work."), QMessageBox::Yes})
-               .button({QObject::tr("Change the blacklist"), QMessageBox::Retry})
-               .button({QObject::tr("Cancel"), QMessageBox::Cancel})
-               .exec();
-
-  if (r == QMessageBox::Retry) {
-    if (!WorkaroundsSettingsTab::changeBlacklistNow(parent, settings)) {
-      r = QMessageBox::Cancel;
-    }
-  }
-
-  return r;
+  return MOBase::TaskDialog(parent, title)
+      .main(mainText)
+      .content(content)
+      .details(details)
+      .icon(QMessageBox::Question)
+      .remember("blacklistedExecutable", sp.binary.fileName())
+      .button({QObject::tr("Continue"),
+               QObject::tr("Your mods might not work."), QMessageBox::Yes})
+      .button({QObject::tr("Cancel"), QMessageBox::Cancel})
+      .exec();
 }
 
 }  // namespace spawn::dialogs

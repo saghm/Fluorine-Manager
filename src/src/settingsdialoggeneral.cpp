@@ -20,6 +20,9 @@ GeneralSettingsTab::GeneralSettingsTab(Settings& s, SettingsDialog& d)
   ui->showMetaBox->setChecked(settings().interface().metaDownloads());
   ui->hideDownloadInstallBox->setChecked(
       settings().interface().hideDownloadsAfterInstallation());
+  ui->showDownloadNotificationsBox->setChecked(
+      settings().interface().showDownloadNotifications());
+  ui->enableArchiveParsingBox->setChecked(settings().archiveParsing());
 
   // Update settings have moved to their own "Updates" tab. Hide the
   // legacy controls here so the two UIs don't contradict each other.
@@ -65,6 +68,9 @@ void GeneralSettingsTab::update()
   settings().interface().setMetaDownloads(ui->showMetaBox->isChecked());
   settings().interface().setHideDownloadsAfterInstallation(
       ui->hideDownloadInstallBox->isChecked());
+  settings().interface().setShowDownloadNotifications(
+      ui->showDownloadNotificationsBox->isChecked());
+  settings().setArchiveParsing(ui->enableArchiveParsingBox->isChecked());
 
   // Update settings are persisted by UpdatesSettingsTab (own tab).
 

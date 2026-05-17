@@ -369,6 +369,14 @@ void OrganizerCore::updateModInfoFromDisc()
                           m_Settings.refreshThreadCount());
 }
 
+void OrganizerCore::showNotification(const QString& title, const QString& message,
+                                     QSystemTrayIcon::MessageIcon icon)
+{
+  if (m_UserInterface) {
+    m_UserInterface->showNotification(title, message, icon);
+  }
+}
+
 void OrganizerCore::setUserInterface(IUserInterface* ui)
 {
   storeSettings();
