@@ -1661,7 +1661,8 @@ void mo2_create(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t mode
     return;
   }
 
-  const std::string relative = joinPath(parentPath, name);
+  const std::string relative =
+      joinPath(parentPath, canonicalChildName(ctx, parentPath, name));
 
   std::string realPath;
 
@@ -1775,7 +1776,8 @@ void mo2_rename(fuse_req_t req, fuse_ino_t parent, const char* name,
   }
 
   const std::string oldRelative = joinPath(parentPath, canonicalChildName(ctx, parentPath, name));
-  const std::string newRelative = joinPath(newParentPath, newname);
+  const std::string newRelative =
+      joinPath(newParentPath, canonicalChildName(ctx, newParentPath, newname));
 
   const auto oldSnap = snapshotForPath(ctx, oldRelative);
   if (!oldSnap.found) {
@@ -2113,7 +2115,8 @@ void mo2_mkdir(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t /*mod
     return;
   }
 
-  const std::string relative = joinPath(parentPath, name);
+  const std::string relative =
+      joinPath(parentPath, canonicalChildName(ctx, parentPath, name));
   if (!ctx->overwrite->createDirectory(relative)) {
     fuse_reply_err(req, EIO);
     return;
