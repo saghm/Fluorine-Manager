@@ -936,8 +936,9 @@ SetupInstanceResults setupInstance(Instance& instance, PluginContainer& pc)
     reportError(
         QObject::tr(
             "Cannot open instance '%1', the game directory '%2' doesn't exist or "
-            "the game plugin '%3' doesn't recognize it. Select the game managed "
-            "by this instance.")
+            "the game plugin '%3' doesn't recognize it. If the game was moved, "
+            "browse to the current install folder. If it is no longer installed, "
+            "select another instance.")
             .arg(instance.displayName())
             .arg(instance.gameDirectory())
             .arg(instance.gameName()));
