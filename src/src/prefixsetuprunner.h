@@ -151,6 +151,7 @@ private:
                                     const QStringList& native,
                                     const QStringList& nativeBuiltin);
   static bool isMicrosoftInstallerSuccess(int exitCode);
+  static QString describeInstallerExitCode(int exitCode);
   SetupStep& currentStep();
 
   /// Kill any wineboot/wineserver/pv-adverb processes still bound to

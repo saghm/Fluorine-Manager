@@ -1381,8 +1381,8 @@ bool PrefixSetupRunner::stepVcrun2022()
   rc = runProcess(m_wineBin, {x86Path, "/install", "/quiet", "/norestart"}, env);
   if (!isMicrosoftInstallerSuccess(rc)) {
     currentStep().errorMessage =
-        QStringLiteral("vc_redist.x86.exe failed (exit code %1, SHA256 %2)")
-            .arg(rc)
+        QStringLiteral("vc_redist.x86.exe failed (%1, SHA256 %2)")
+            .arg(describeInstallerExitCode(rc))
             .arg(fileSha256(x86Path));
     return false;
   } else if (rc != 0) {
@@ -1424,8 +1424,8 @@ bool PrefixSetupRunner::stepVcrun2022()
   rc = runProcess(m_wineBin, {x64Path, "/install", "/quiet", "/norestart"}, env);
   if (!isMicrosoftInstallerSuccess(rc)) {
     currentStep().errorMessage =
-        QStringLiteral("vc_redist.x64.exe failed (exit code %1, SHA256 %2)")
-            .arg(rc)
+        QStringLiteral("vc_redist.x64.exe failed (%1, SHA256 %2)")
+            .arg(describeInstallerExitCode(rc))
             .arg(fileSha256(x64Path));
     return false;
   } else if (rc != 0) {
@@ -1506,7 +1506,8 @@ bool PrefixSetupRunner::stepDotNetInstallPair(const QString& url32, const QStrin
     const int rc = runProcess(m_wineBin, {path, "/install", "/quiet", "/norestart"}, env);
     if (!isMicrosoftInstallerSuccess(rc)) {
       currentStep().errorMessage =
-          QStringLiteral("%1 x86 installer failed (exit code %2)").arg(name).arg(rc);
+          QStringLiteral("%1 x86 installer failed (%2)")
+              .arg(name, describeInstallerExitCode(rc));
       return false;
     } else if (rc != 0) {
       emit logMessage(QStringLiteral("%1 x86 installer returned nonfatal exit code %2")
@@ -1537,7 +1538,8 @@ bool PrefixSetupRunner::stepDotNetInstallPair(const QString& url32, const QStrin
     const int rc = runProcess(m_wineBin, {path, "/install", "/quiet", "/norestart"}, env);
     if (!isMicrosoftInstallerSuccess(rc)) {
       currentStep().errorMessage =
-          QStringLiteral("%1 x64 installer failed (exit code %2)").arg(name).arg(rc);
+          QStringLiteral("%1 x64 installer failed (%2)")
+              .arg(name, describeInstallerExitCode(rc));
       return false;
     } else if (rc != 0) {
       emit logMessage(QStringLiteral("%1 x64 installer returned nonfatal exit code %2")
@@ -1582,7 +1584,8 @@ bool PrefixSetupRunner::stepDotNetInstall(const QString& url, const QString& nam
 
   if (!isMicrosoftInstallerSuccess(rc)) {
     currentStep().errorMessage =
-        QStringLiteral("%1 installer failed (exit code %2)").arg(name).arg(rc);
+        QStringLiteral("%1 installer failed (%2)")
+            .arg(name, describeInstallerExitCode(rc));
     return false;
   } else if (rc != 0) {
     emit logMessage(QStringLiteral("%1 installer returned nonfatal exit code %2")
@@ -2315,6 +2318,25 @@ QString PrefixSetupRunner::makeDllOverrideEnv(const QString& base,
 bool PrefixSetupRunner::isMicrosoftInstallerSuccess(int exitCode)
 {
   return exitCode == 0 || exitCode == 105 || exitCode == 194 || exitCode == 236;
+}
+
+QString PrefixSetupRunner::describeInstallerExitCode(int exitCode)
+{
+  switch (exitCode) {
+  case 5:
+    return QStringLiteral("exit code 5: installer was cancelled or access was denied");
+  case 112:
+    return QStringLiteral(
+        "exit code 112: not enough disk space in the prefix or target filesystem");
+  case 105:
+    return QStringLiteral("exit code 105: installer requested restart now");
+  case 194:
+    return QStringLiteral("exit code 194: installer requested restart later");
+  case 236:
+    return QStringLiteral("exit code 236: newer version is already installed");
+  default:
+    return QStringLiteral("exit code %1").arg(exitCode);
+  }
 }
 
 SetupStep& PrefixSetupRunner::currentStep()
