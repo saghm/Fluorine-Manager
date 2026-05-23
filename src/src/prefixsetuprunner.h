@@ -45,6 +45,10 @@ signals:
   void stepStarted(int index);
   void stepFinished(int index, bool success, const QString& error);
   void logMessage(const QString& text);
+  void downloadStarted(const QString& name);
+  void downloadProgress(const QString& name, qint64 bytesReceived,
+                        qint64 bytesTotal, double bytesPerSecond);
+  void downloadFinished();
   void progressChanged(float progress);   ///< 0.0 – 1.0
   void finished(bool allSucceeded);
 
@@ -115,7 +119,8 @@ private:
                          const QString& dllFilter, const QString& destDir);
 
   // -- tool management -------------------------------------------------------
-  bool downloadFile(const QString& url, const QString& destPath);
+  bool downloadFile(const QString& url, const QString& destPath,
+                    const QString& displayName = {});
   bool downloadAndVerify(const QString& url, const QString& destPath,
                          const QString& expectedSha256);
   bool downloadRuntimeInstaller(const QString& url, const QString& destPath,
@@ -146,6 +151,7 @@ private:
                                     const QStringList& native,
                                     const QStringList& nativeBuiltin);
   static bool isMicrosoftInstallerSuccess(int exitCode);
+  SetupStep& currentStep();
 
   /// Kill any wineboot/wineserver/pv-adverb processes still bound to
   /// m_prefixPath from a previous aborted run. Safe to call when none exist.
@@ -156,6 +162,7 @@ private:
   QString m_protonPath;
   uint32_t m_appId;
   QAtomicInt m_cancelled{0};
+  int m_currentStepIndex = -1;
 
   QString m_wineBin;
   QString m_wineserverBin;

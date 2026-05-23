@@ -9,6 +9,7 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
@@ -675,9 +676,11 @@ bool PrefixSetupRunner::runStep(int index)
 {
   m_steps[index].status       = SetupStep::Running;
   m_steps[index].errorMessage.clear();
+  m_currentStepIndex = index;
   emit stepStarted(index);
 
   const bool ok = m_stepFunctions[index]();
+  m_currentStepIndex = -1;
 
   m_steps[index].status = ok ? SetupStep::Succeeded : SetupStep::Failed;
   if (!ok && m_steps[index].errorMessage.isEmpty())
@@ -940,7 +943,7 @@ bool PrefixSetupRunner::stepProtonInit()
 {
   const QString protonScript = findProtonScript();
   if (protonScript.isEmpty()) {
-    m_steps.last().errorMessage = "Proton wrapper script not found";
+    currentStep().errorMessage = "Proton wrapper script not found";
     return false;
   }
 
@@ -1007,14 +1010,14 @@ bool PrefixSetupRunner::stepProtonInit()
       const QString missing =
           (end > start) ? QString::fromUtf8(out.mid(start, end - start))
                         : QStringLiteral("default_pfx/drive_c/...");
-      m_steps.last().errorMessage =
+      currentStep().errorMessage =
           QStringLiteral(
               "Proton install is incomplete: missing '%1'. "
               "Reinstall or verify your Proton build (e.g. GE-Proton) — "
               "this is not a Fluorine bug.")
               .arg(missing);
     } else {
-      m_steps.last().errorMessage =
+      currentStep().errorMessage =
           QStringLiteral("proton wineboot failed (exit code %1)").arg(rc);
     }
     return false;
@@ -1024,7 +1027,7 @@ bool PrefixSetupRunner::stepProtonInit()
   QThread::sleep(2);
 
   if (!QDir(m_prefixPath).exists()) {
-    m_steps.last().errorMessage = "Prefix directory not created after wineboot";
+    currentStep().errorMessage = "Prefix directory not created after wineboot";
     return false;
   }
 
@@ -1130,7 +1133,7 @@ bool PrefixSetupRunner::extractFromRedist(const QString& redistPath,
   int rc = runHostProcess(cabextractBin,
       {"-d", tmpDir, "-L", "-F", cabFilter, redistPath});
   if (rc != 0) {
-    m_steps.last().errorMessage =
+    currentStep().errorMessage =
         QStringLiteral("cabextract failed (filter: %1, exit %2)").arg(cabFilter).arg(rc);
     return false;
   }
@@ -1138,7 +1141,7 @@ bool PrefixSetupRunner::extractFromRedist(const QString& redistPath,
   // Stage 2: extract DLL(s) from each inner cab.
   const QStringList cabs = QDir(tmpDir).entryList({"*.cab"}, QDir::Files);
   if (cabs.isEmpty()) {
-    m_steps.last().errorMessage =
+    currentStep().errorMessage =
         QStringLiteral("No inner cab found for filter: %1").arg(cabFilter);
     return false;
   }
@@ -1147,7 +1150,7 @@ bool PrefixSetupRunner::extractFromRedist(const QString& redistPath,
     rc = runHostProcess(cabextractBin,
         {"-d", destDir, "-L", "-F", dllFilter, tmpDir + "/" + cab});
     if (rc != 0) {
-      m_steps.last().errorMessage =
+      currentStep().errorMessage =
           QStringLiteral("cabextract inner failed (filter: %1, exit %2)").arg(dllFilter).arg(rc);
       return false;
     }
@@ -1186,7 +1189,7 @@ bool PrefixSetupRunner::stepD3DCompiler47()
     const QString dest = dllDir32 + "/d3dcompiler_47.dll";
     QFile::remove(dest);
     if (!QFile::copy(cached, dest)) {
-      m_steps.last().errorMessage = "Failed to copy d3dcompiler_47.dll to syswow64";
+      currentStep().errorMessage = "Failed to copy d3dcompiler_47.dll to syswow64";
       return false;
     }
   }
@@ -1202,7 +1205,7 @@ bool PrefixSetupRunner::stepD3DCompiler47()
     const QString dest = dllDir64 + "/d3dcompiler_47.dll";
     QFile::remove(dest);
     if (!QFile::copy(cached, dest)) {
-      m_steps.last().errorMessage = "Failed to copy d3dcompiler_47.dll to system32";
+      currentStep().errorMessage = "Failed to copy d3dcompiler_47.dll to system32";
       return false;
     }
   }
@@ -1358,14 +1361,14 @@ bool PrefixSetupRunner::stepVcrun2022()
   int rc = runHostProcess(cabextractBin,
       {"--directory=" + tmpDir + "/win32", x86Path, "-F", "a10"});
   if (rc != 0) {
-    m_steps.last().errorMessage =
+    currentStep().errorMessage =
         QStringLiteral("vc_redist.x86.exe cab extraction failed (exit code %1)").arg(rc);
     return false;
   }
   rc = runHostProcess(cabextractBin,
       {"--directory=" + dllDir32, tmpDir + "/win32/a10", "-F", "msvcp140.dll"});
   if (rc != 0) {
-    m_steps.last().errorMessage =
+    currentStep().errorMessage =
         QStringLiteral("msvcp140.dll x86 extraction failed (exit code %1)").arg(rc);
     return false;
   }
@@ -1377,7 +1380,7 @@ bool PrefixSetupRunner::stepVcrun2022()
 
   rc = runProcess(m_wineBin, {x86Path, "/install", "/quiet", "/norestart"}, env);
   if (!isMicrosoftInstallerSuccess(rc)) {
-    m_steps.last().errorMessage =
+    currentStep().errorMessage =
         QStringLiteral("vc_redist.x86.exe failed (exit code %1, SHA256 %2)")
             .arg(rc)
             .arg(fileSha256(x86Path));
@@ -1405,14 +1408,14 @@ bool PrefixSetupRunner::stepVcrun2022()
   rc = runHostProcess(cabextractBin,
       {"--directory=" + tmpDir + "/win64", x64Path, "-F", "a12"});
   if (rc != 0) {
-    m_steps.last().errorMessage =
+    currentStep().errorMessage =
         QStringLiteral("vc_redist.x64.exe cab extraction failed (exit code %1)").arg(rc);
     return false;
   }
   rc = runHostProcess(cabextractBin,
       {"--directory=" + dllDir64, tmpDir + "/win64/a12", "-F", "msvcp140.dll"});
   if (rc != 0) {
-    m_steps.last().errorMessage =
+    currentStep().errorMessage =
         QStringLiteral("msvcp140.dll x64 extraction failed (exit code %1)").arg(rc);
     return false;
   }
@@ -1420,7 +1423,7 @@ bool PrefixSetupRunner::stepVcrun2022()
   emit logMessage("Running vc_redist.x64.exe...");
   rc = runProcess(m_wineBin, {x64Path, "/install", "/quiet", "/norestart"}, env);
   if (!isMicrosoftInstallerSuccess(rc)) {
-    m_steps.last().errorMessage =
+    currentStep().errorMessage =
         QStringLiteral("vc_redist.x64.exe failed (exit code %1, SHA256 %2)")
             .arg(rc)
             .arg(fileSha256(x64Path));
@@ -1502,7 +1505,7 @@ bool PrefixSetupRunner::stepDotNetInstallPair(const QString& url32, const QStrin
     emit logMessage(QStringLiteral("Installing %1 (32-bit)...").arg(name));
     const int rc = runProcess(m_wineBin, {path, "/install", "/quiet", "/norestart"}, env);
     if (!isMicrosoftInstallerSuccess(rc)) {
-      m_steps.last().errorMessage =
+      currentStep().errorMessage =
           QStringLiteral("%1 x86 installer failed (exit code %2)").arg(name).arg(rc);
       return false;
     } else if (rc != 0) {
@@ -1533,7 +1536,7 @@ bool PrefixSetupRunner::stepDotNetInstallPair(const QString& url32, const QStrin
     emit logMessage(QStringLiteral("Installing %1 (64-bit)...").arg(name));
     const int rc = runProcess(m_wineBin, {path, "/install", "/quiet", "/norestart"}, env);
     if (!isMicrosoftInstallerSuccess(rc)) {
-      m_steps.last().errorMessage =
+      currentStep().errorMessage =
           QStringLiteral("%1 x64 installer failed (exit code %2)").arg(name).arg(rc);
       return false;
     } else if (rc != 0) {
@@ -1578,7 +1581,7 @@ bool PrefixSetupRunner::stepDotNetInstall(const QString& url, const QString& nam
       env);
 
   if (!isMicrosoftInstallerSuccess(rc)) {
-    m_steps.last().errorMessage =
+    currentStep().errorMessage =
         QStringLiteral("%1 installer failed (exit code %2)").arg(name).arg(rc);
     return false;
   } else if (rc != 0) {
@@ -1642,7 +1645,7 @@ bool PrefixSetupRunner::stepGameDetection()
   const QString regFile = tmpDir + "/game_registry.reg";
   QFile f(regFile);
   if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
-    m_steps.last().errorMessage = "Failed to write game registry file";
+    currentStep().errorMessage = "Failed to write game registry file";
     return false;
   }
   f.write(regContent.toUtf8());
@@ -1657,7 +1660,7 @@ bool PrefixSetupRunner::stepGameDetection()
   QFile::remove(regFile);
 
   if (rc != 0) {
-    m_steps.last().errorMessage =
+    currentStep().errorMessage =
         QStringLiteral("wine regedit failed (exit code %1)").arg(rc);
     return false;
   }
@@ -1676,7 +1679,7 @@ bool PrefixSetupRunner::stepWineRegistry()
   const QString regFile = tmpDir + "/wine_settings.reg";
   QFile f(regFile);
   if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
-    m_steps.last().errorMessage = "Failed to write registry file";
+    currentStep().errorMessage = "Failed to write registry file";
     return false;
   }
   f.write(WINE_SETTINGS_REG);
@@ -1690,7 +1693,7 @@ bool PrefixSetupRunner::stepWineRegistry()
   QFile::remove(regFile);
 
   if (rc != 0) {
-    m_steps.last().errorMessage =
+    currentStep().errorMessage =
         QStringLiteral("wine regedit failed (exit code %1)").arg(rc);
     return false;
   }
@@ -1719,7 +1722,7 @@ bool PrefixSetupRunner::stepWin11Mode()
 
   const int rc = runProcess("/bin/sh", {"-c", shellCmd}, env);
   if (rc != 0) {
-    m_steps.last().errorMessage =
+    currentStep().errorMessage =
         QStringLiteral("winetricks win11 failed (exit code %1)").arg(rc);
     return false;
   }
@@ -1753,7 +1756,8 @@ static void setExecPermissions(const QString& path)
       QFileDevice::ReadOther | QFileDevice::ExeOther);
 }
 
-bool PrefixSetupRunner::downloadFile(const QString& url, const QString& destPath)
+bool PrefixSetupRunner::downloadFile(const QString& url, const QString& destPath,
+                                     const QString& displayName)
 {
   // Use Qt networking — no dependency on host curl.
   QNetworkAccessManager nam;
@@ -1762,14 +1766,33 @@ bool PrefixSetupRunner::downloadFile(const QString& url, const QString& destPath
                         QNetworkRequest::NoLessSafeRedirectPolicy);
   request.setHeader(QNetworkRequest::UserAgentHeader, "Fluorine-Manager");
 
+  const QString shownName =
+      displayName.isEmpty() ? QFileInfo(destPath).fileName() : displayName;
+  QElapsedTimer timer;
+  timer.start();
+
   QNetworkReply* reply = nam.get(request);
   QEventLoop loop;
+  emit downloadStarted(shownName);
+  QObject::connect(reply, &QNetworkReply::downloadProgress,
+                   this,
+                   [this, shownName, &timer](qint64 received, qint64 total) {
+                     const qint64 elapsedMs = timer.elapsed();
+                     const double bytesPerSecond =
+                         elapsedMs > 0
+                             ? static_cast<double>(received) * 1000.0 /
+                                   static_cast<double>(elapsedMs)
+                             : 0.0;
+                     emit downloadProgress(shownName, received, total,
+                                           bytesPerSecond);
+                   });
   QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
   loop.exec();
 
   if (reply->error() != QNetworkReply::NoError) {
     emit logMessage(QStringLiteral("Download failed: %1").arg(reply->errorString()));
     reply->deleteLater();
+    emit downloadFinished();
     return false;
   }
 
@@ -1777,12 +1800,14 @@ bool PrefixSetupRunner::downloadFile(const QString& url, const QString& destPath
   if (!file.open(QIODevice::WriteOnly)) {
     emit logMessage(QStringLiteral("Failed to write: %1").arg(destPath));
     reply->deleteLater();
+    emit downloadFinished();
     return false;
   }
 
   file.write(reply->readAll());
   file.close();
   reply->deleteLater();
+  emit downloadFinished();
   return true;
 }
 
@@ -1823,9 +1848,9 @@ bool PrefixSetupRunner::downloadRuntimeInstaller(const QString& url,
 
   const QString partPath = destPath + ".part";
   QFile::remove(partPath);
-  if (!downloadFile(url, partPath)) {
+  if (!downloadFile(url, partPath, displayName)) {
     QFile::remove(partPath);
-    m_steps.last().errorMessage =
+    currentStep().errorMessage =
         QStringLiteral("Failed to download %1").arg(displayName);
     return false;
   }
@@ -1839,7 +1864,7 @@ bool PrefixSetupRunner::downloadRuntimeInstaller(const QString& url,
   QFile::remove(destPath);
   if (!QFile::rename(partPath, destPath)) {
     QFile::remove(partPath);
-    m_steps.last().errorMessage =
+    currentStep().errorMessage =
         QStringLiteral("Failed to cache %1").arg(displayName);
     return false;
   }
@@ -1863,20 +1888,20 @@ bool PrefixSetupRunner::validateRuntimeInstaller(const QString& path,
 
   QFile file(path);
   if (!file.open(QIODevice::ReadOnly)) {
-    m_steps.last().errorMessage =
+    currentStep().errorMessage =
         QStringLiteral("Failed to read %1").arg(displayName);
     return false;
   }
 
   if (file.size() < 1024 * 1024) {
-    m_steps.last().errorMessage =
+    currentStep().errorMessage =
         QStringLiteral("%1 is too small to be a valid installer").arg(displayName);
     return false;
   }
 
   const QByteArray magic = file.read(2);
   if (magic != "MZ") {
-    m_steps.last().errorMessage =
+    currentStep().errorMessage =
         QStringLiteral("%1 is not a Windows PE installer").arg(displayName);
     return false;
   }
@@ -1884,7 +1909,7 @@ bool PrefixSetupRunner::validateRuntimeInstaller(const QString& path,
 
   const QString sha = fileSha256(path);
   if (sha.isEmpty()) {
-    m_steps.last().errorMessage =
+    currentStep().errorMessage =
         QStringLiteral("Failed to hash %1").arg(displayName);
     return false;
   }
@@ -1930,13 +1955,13 @@ bool PrefixSetupRunner::downloadAndVerify(const QString& url, const QString& des
                                           const QString& expectedSha256)
 {
   if (!downloadFile(url, destPath)) {
-    m_steps.last().errorMessage = QStringLiteral("Failed to download %1").arg(url);
+    currentStep().errorMessage = QStringLiteral("Failed to download %1").arg(url);
     return false;
   }
 
   if (!verifySha256(destPath, expectedSha256)) {
     QFile::remove(destPath);
-    m_steps.last().errorMessage =
+    currentStep().errorMessage =
         QStringLiteral("SHA256 mismatch for %1").arg(QUrl(url).fileName());
     return false;
   }
@@ -2250,7 +2275,7 @@ bool PrefixSetupRunner::applyDllOverrides(const QStringList& native,
   const QString regFile = tmpDir + "/dependency_overrides.reg";
   QFile f(regFile);
   if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
-    m_steps.last().errorMessage = "Failed to write dependency override registry";
+    currentStep().errorMessage = "Failed to write dependency override registry";
     return false;
   }
   f.write(regContent.toUtf8());
@@ -2263,7 +2288,7 @@ bool PrefixSetupRunner::applyDllOverrides(const QStringList& native,
   const int rc = runProcess(m_wineBin, {"regedit", regFile}, env);
   QFile::remove(regFile);
   if (rc != 0) {
-    m_steps.last().errorMessage =
+    currentStep().errorMessage =
         QStringLiteral("dependency override import failed (exit code %1)").arg(rc);
     return false;
   }
@@ -2290,4 +2315,11 @@ QString PrefixSetupRunner::makeDllOverrideEnv(const QString& base,
 bool PrefixSetupRunner::isMicrosoftInstallerSuccess(int exitCode)
 {
   return exitCode == 0 || exitCode == 105 || exitCode == 194 || exitCode == 236;
+}
+
+SetupStep& PrefixSetupRunner::currentStep()
+{
+  if (m_currentStepIndex >= 0 && m_currentStepIndex < m_steps.size())
+    return m_steps[m_currentStepIndex];
+  return m_steps.last();
 }

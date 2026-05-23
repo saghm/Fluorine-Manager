@@ -4,6 +4,7 @@
 #include "prefixsetuprunner.h"
 
 #include <QDialog>
+#include <QLabel>
 #include <QListWidget>
 #include <QProgressBar>
 #include <QPushButton>
@@ -37,11 +38,16 @@ private slots:
   void onStepStarted(int index);
   void onStepFinished(int index, bool success, const QString& error);
   void onLogMessage(const QString& text);
+  void onDownloadStarted(const QString& name);
+  void onDownloadProgress(const QString& name, qint64 bytesReceived,
+                          qint64 bytesTotal, double bytesPerSecond);
+  void onDownloadFinished();
   void onProgressChanged(float progress);
   void onFinished(bool allSucceeded);
 
   void onCancel();
   void onRetryFailed();
+  void onShowLog();
   void onDeleteAndClose();
   void onClose();
 
@@ -49,6 +55,7 @@ private:
   void buildUI();
   void populateStepList();
   void updateButtons();
+  QString writeSetupLog() const;
 
   // -- state -----------------------------------------------------------------
   QString m_prefixPath;
@@ -66,9 +73,12 @@ private:
   QListWidget* m_stepList     = nullptr;
   QTextEdit* m_logView        = nullptr;
   QProgressBar* m_progressBar = nullptr;
+  QLabel* m_downloadLabel     = nullptr;
+  QProgressBar* m_downloadProgressBar = nullptr;
   QLabel* m_statusLabel       = nullptr;
   QPushButton* m_cancelBtn    = nullptr;
   QPushButton* m_retryBtn     = nullptr;
+  QPushButton* m_showLogBtn   = nullptr;
   QPushButton* m_deleteBtn    = nullptr;
   QPushButton* m_closeBtn     = nullptr;
 };
