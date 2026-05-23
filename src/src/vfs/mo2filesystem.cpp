@@ -337,6 +337,36 @@ std::string joinPath(const std::string& base, const std::string& name)
   return base + "/" + name;
 }
 
+bool isSameOrDescendant(const std::string& path, const std::string& root)
+{
+  const fs::path normPath = fs::path(path).lexically_normal();
+  const fs::path normRoot = fs::path(root).lexically_normal();
+  const std::string pathStr = normPath.string();
+  std::string rootStr       = normRoot.string();
+  if (pathStr == rootStr) {
+    return true;
+  }
+  if (!rootStr.empty() && rootStr.back() != '/') {
+    rootStr.push_back('/');
+  }
+  return pathStr.rfind(rootStr, 0) == 0;
+}
+
+std::string originForPath(Mo2FsContext* ctx, const std::string& realPath)
+{
+  if (ctx != nullptr) {
+    const std::string stagingRoot = ctx->overwrite->stagingPath("");
+    const std::string overwriteRoot = ctx->overwrite->overwritePath("");
+    if (isSameOrDescendant(realPath, stagingRoot)) {
+      return "Staging";
+    }
+    if (isSameOrDescendant(realPath, overwriteRoot)) {
+      return "Overwrite";
+    }
+  }
+  return "Mod";
+}
+
 // Look up the canonical (mod-provided) display name for a child entry.
 // Returns the display name if found, or the original name if not.
 std::string canonicalChildName(const Mo2FsContext* ctx, const std::string& parentPath,
@@ -1413,9 +1443,12 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
   //   1. Files already in staging/overwrite → open R/W directly.
   //   2. Tracked files (user moved from Overwrite to a mod) → open R/W
   //      in-place so writes go back to the user's dedicated mod folder.
-  //   3. Everything else (untracked mod files, base-game files) → open R/O
-  //      now, lazy COW to Overwrite on first actual write().  This avoids
-  //      COW from Wine metadata ops (O_RDWR without writing).
+  //   3. Existing mod/data-dir files → open R/W in place.
+  //   4. Base-game backing files → open R/O and COW to staging only on the
+  //      first actual write().
+  //
+  // This matches upstream USVFS behavior more closely than the previous
+  // conservative "copy everything writable into overwrite" approach.
   //
   // Read strategy: always open a real backing fd at open() time so mo2_read
   // can splice from it without re-opening per read call.  Avoids N syscalls
@@ -1451,17 +1484,17 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
     if (fd < 0 && alreadyStaged) {
       // Already in staging/overwrite — open R/W directly.
       fd = open(realPath.c_str(), O_RDWR);
-    } else if (fd < 0 && !trackedMod.empty()) {
-      // Should not reach here, but safety fallback
-      fd = open(realPath.c_str(), O_RDWR);
-    } else if (fd < 0) {
-      // Untracked file — open R/O, defer COW to first write().
-      if (isBacking && ctx->backing_dir_fd >= 0) {
+    } else if (fd < 0 && isBacking) {
+      // Backing file — open R/O, defer COW to first write().
+      if (ctx->backing_dir_fd >= 0) {
         fd = openat(ctx->backing_dir_fd, realPath.c_str(), O_RDONLY);
       } else {
         fd = open(realPath.c_str(), O_RDONLY);
       }
       cowPending = true;
+    } else if (fd < 0) {
+      // Existing mod/data-dir file — write in place.
+      fd = open(realPath.c_str(), O_RDWR);
     }
     if (fd < 0) {
       fuse_reply_err(req, EIO);
@@ -1589,8 +1622,9 @@ void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,
     return;
   }
 
-  // Lazy COW: first actual write on an untracked file — copy to Overwrite
-  // staging and reopen the fd read-write on the new copy.
+  // Lazy COW applies only to backing-game files. Existing mod files should
+  // stay in place so config writes update the source mod rather than creating
+  // a shadow copy in overwrite.
   if (cowPending) {
     try {
       std::string newPath;
@@ -1620,7 +1654,7 @@ void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,
         }
       }
       realPath = newPath;
-      updateFileNode(ctx, relativePath, newPath, "Staging");
+      updateFileNode(ctx, relativePath, newPath, originForPath(ctx, newPath));
     } catch (...) {
       fuse_reply_err(req, EIO);
       return;
@@ -1639,8 +1673,8 @@ void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,
   }
 
   if (!cowPending) {
-    // Update VFS tree size/mtime for in-place writes (tracked files)
-    updateFileNode(ctx, relativePath, realPath, "Mod");
+    // Update VFS tree size/mtime for in-place writes.
+    updateFileNode(ctx, relativePath, realPath, originForPath(ctx, realPath));
   }
   fuse_reply_write(req, static_cast<size_t>(written));
 }
@@ -1879,7 +1913,6 @@ void mo2_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
   if ((to_set & FUSE_SET_ATTR_SIZE) != 0 && attr != nullptr) {
     std::string target;
     bool targetIsBacking = false;
-    bool targetIsTracked = false;
     uint64_t fh = 0;
 
     if (fi != nullptr) {
@@ -1889,7 +1922,6 @@ void mo2_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
       if (it != ctx->open_files.end()) {
         target          = it->second.real_path;
         targetIsBacking = it->second.is_backing;
-        targetIsTracked = it->second.is_tracked;
       }
     }
 
@@ -1910,16 +1942,16 @@ void mo2_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
         const std::string modFilePath = trackedMod + "/" + path;
         if (fs::exists(modFilePath)) {
           target          = modFilePath;
-          targetIsTracked = true;
           targetIsBacking = false;
         }
       }
     }
 
-    // COW for untracked files: copy to staging before truncating.
-    // Tracked files and files already in staging are truncated in-place.
+    // COW only for backing files: copy to staging before truncating.
+    // Tracked files, staging files, and existing mod files are truncated
+    // in place.
     const std::string stagedPath = ctx->overwrite->stagingPath(path);
-    if (!targetIsTracked &&
+    if (targetIsBacking &&
         fs::path(target).lexically_normal().string() !=
             fs::path(stagedPath).lexically_normal().string()) {
       try {
@@ -1974,7 +2006,7 @@ void mo2_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
       }
     }
 
-    updateFileNode(ctx, path, target, targetIsTracked ? "Mod" : "Staging");
+    updateFileNode(ctx, path, target, originForPath(ctx, target));
   }
 
   // Handle chmod — propagate permission changes to the real file on disk.

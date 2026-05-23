@@ -6,6 +6,7 @@
 #include <QObject>
 #include <QProcess>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 
 #include <functional>
@@ -97,9 +98,12 @@ private:
   bool stepDirectXRuntime();
   bool stepVcrun2022();
   bool stepDotNetRuntimes();
-  bool stepDotNetInstall(const QString& url, const QString& name);
+  bool stepDotNetInstall(const QString& url, const QString& name,
+                         const QStringList& knownSha256 = {});
   bool stepDotNetInstallPair(const QString& url32, const QString& url64,
-                             const QString& name);
+                             const QString& name,
+                             const QStringList& knownSha25632 = {},
+                             const QStringList& knownSha25664 = {});
   bool stepGameDetection();
   bool stepWineRegistry();
   bool stepWin11Mode();
@@ -114,6 +118,13 @@ private:
   bool downloadFile(const QString& url, const QString& destPath);
   bool downloadAndVerify(const QString& url, const QString& destPath,
                          const QString& expectedSha256);
+  bool downloadRuntimeInstaller(const QString& url, const QString& destPath,
+                                const QString& displayName,
+                                const QStringList& knownSha256 = {});
+  bool validateRuntimeInstaller(const QString& path, const QString& displayName,
+                                const QStringList& knownSha256,
+                                bool* knownHashMatch = nullptr);
+  static QString fileSha256(const QString& filePath);
   static bool verifySha256(const QString& filePath, const QString& expectedHex);
   bool ensure7zz();
   bool ensureWinetricks();
@@ -129,6 +140,12 @@ private:
   static QString fluorineCacheDir() ;
   static QString fluorineTmpDir() ;
   QMap<QString, QString> baseWineEnv() const;
+  bool applyDllOverrides(const QStringList& native,
+                         const QStringList& nativeBuiltin);
+  static QString makeDllOverrideEnv(const QString& base,
+                                    const QStringList& native,
+                                    const QStringList& nativeBuiltin);
+  static bool isMicrosoftInstallerSuccess(int exitCode);
 
   /// Kill any wineboot/wineserver/pv-adverb processes still bound to
   /// m_prefixPath from a previous aborted run. Safe to call when none exist.

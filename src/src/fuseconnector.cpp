@@ -480,6 +480,35 @@ bool FuseConnector::mount(
     // with a mod file get incorrectly tracked.  Tracking now only happens
     // through explicit user actions (UI move/sync/drag-drop) or the
     // snapshot-based detectManualMoves().
+    const auto duplicates =
+        m_trackedWrites->scanOverwriteDuplicates(m_overwriteDir, mods);
+    if (!duplicates.empty()) {
+      size_t identical = 0;
+      size_t different = 0;
+      for (const auto& dup : duplicates) {
+        if (dup.state == TrackedWrites::DuplicateState::Identical) {
+          ++identical;
+        } else {
+          ++different;
+        }
+      }
+
+      std::fprintf(stderr,
+                   "[VFS] overwrite duplicate scan: %zu matches (%zu identical, %zu different)\n",
+                   duplicates.size(), identical, different);
+      const size_t preview = std::min<size_t>(duplicates.size(), 10);
+      for (size_t i = 0; i < preview; ++i) {
+        const auto& dup = duplicates[i];
+        std::fprintf(stderr,
+                     "[VFS]   %s -> %s (%s)\n",
+                     dup.relative_path.c_str(), dup.mod_name.c_str(),
+                     dup.state == TrackedWrites::DuplicateState::Identical ? "identical"
+                                                                           : "different");
+      }
+    } else {
+      std::fprintf(stderr, "[VFS] overwrite duplicate scan: no exact path matches\n");
+    }
+
     m_trackedWrites->save(m_trackingFilePath);
   } else {
     std::fprintf(stderr, "[VFS] WARNING: tracking file path is empty!\n");

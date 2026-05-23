@@ -136,7 +136,7 @@ bool GameSkyrimSE::init(IOrganizer* moInfo)
 
   registerFeature(std::make_shared<SkyrimSEScriptExtender>(this));
   registerFeature(std::make_shared<SkyrimSEDataArchives>(this));
-  registerFeature(std::make_shared<GamebryoLocalSavegames>(this, "Skyrimcustom.ini"));
+  registerFeature(std::make_shared<GamebryoLocalSavegames>(this, "SkyrimCustom.ini"));
   registerFeature(std::make_shared<SkyrimSEModDataChecker>(this));
   registerFeature(
       std::make_shared<SkyrimSEModDataContent>(m_Organizer->gameFeatures()));

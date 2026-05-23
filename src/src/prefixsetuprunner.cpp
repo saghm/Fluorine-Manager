@@ -72,6 +72,12 @@ static const char* DIRECTX_JUN2010_SHA256 =
 // Visual C++ 2015-2022 redistributable.
 static const char* VCRUN2022_X86_URL = "https://aka.ms/vs/17/release/vc_redist.x86.exe";
 static const char* VCRUN2022_X64_URL = "https://aka.ms/vs/17/release/vc_redist.x64.exe";
+static const QStringList VCRUN2022_X86_SHA256 = {
+    QStringLiteral("0c09f2611660441084ce0df425c51c11e147e6447963c3690f97e0b25c55ed64"),
+};
+static const QStringList VCRUN2022_X64_SHA256 = {
+    QStringLiteral("cc0ff0eb1dc3f5188ae6300faef32bf5beeba4bdd6e8e445a9184072096b713b"),
+};
 
 // .NET runtimes (x86 + x64 pairs for Wine prefix).
 static const char* DOTNET6_X86_URL =
@@ -102,6 +108,126 @@ static const char* DOTNET_DESKTOP6_X64_URL =
     "https://download.visualstudio.microsoft.com/download/pr/f6b6c5dc-e02d-4738-9559-296e938dabcb/"
     "b66d365729359df8e8ea131197715076/windowsdesktop-runtime-6.0.36-win-x64.exe";
 
+static const QStringList DOTNET_DESKTOP6_X86_SHA256 = {
+    QStringLiteral("4e77bd970df0a06528ee88d33e4a8c9fb85beedbdd7219b017083acf0c3aa39e"),
+};
+static const QStringList DOTNET_DESKTOP6_X64_SHA256 = {
+    QStringLiteral("0d20debb26fc8b2bc84f25fbd9d4596a6364af8517ebf012e8b871127b798941"),
+};
+static const QStringList DOTNET6_X86_SHA256 = {
+    QStringLiteral("3b3cb4636251a582158f4b6b340f20b3861e6793eb9a3e64bda29cbf32da3604"),
+};
+static const QStringList DOTNET6_X64_SHA256 = {
+    QStringLiteral("6bdad7bc4c41fe93d4ae7b0312b1d017cfe369d28e7e2e421f5b675f9feefe84"),
+};
+static const QStringList DOTNET7_X86_SHA256 = {
+    QStringLiteral("9bf79c94ab014b555167e61f3ce653fdf54c70bda6d6c74ab9f6f44652947a89"),
+};
+static const QStringList DOTNET7_X64_SHA256 = {
+    QStringLiteral("10f48feee0f7fb4c2ed61ecef5e58699743afc9531f8a293680a99fc2d0a78a5"),
+};
+static const QStringList DOTNET8_X86_SHA256 = {
+    QStringLiteral("eb0d8f39fa2dbb4ff3ff72ad325b6030773df875ab509824ea18c87a368985fa"),
+};
+static const QStringList DOTNET8_X64_SHA256 = {
+    QStringLiteral("a7c394e6ee4e8104d7a01f78103700052cc504370941b7f620e3aa5afbbc61df"),
+};
+
+static const QStringList VCRUN_DLLS = {
+    QStringLiteral("concrt140"),
+    QStringLiteral("msvcp140"),
+    QStringLiteral("msvcp140_1"),
+    QStringLiteral("msvcp140_2"),
+    QStringLiteral("msvcp140_atomic_wait"),
+    QStringLiteral("msvcp140_codecvt_ids"),
+    QStringLiteral("vcamp140"),
+    QStringLiteral("vccorlib140"),
+    QStringLiteral("vcomp140"),
+    QStringLiteral("vcruntime140"),
+    QStringLiteral("vcruntime140_1"),
+};
+
+static const QStringList DIRECTX_NATIVE_DLLS = {
+    QStringLiteral("d3dcompiler_42"),
+    QStringLiteral("d3dcompiler_43"),
+    QStringLiteral("d3dcompiler_47"),
+    QStringLiteral("d3dx9_24"),
+    QStringLiteral("d3dx9_25"),
+    QStringLiteral("d3dx9_26"),
+    QStringLiteral("d3dx9_27"),
+    QStringLiteral("d3dx9_28"),
+    QStringLiteral("d3dx9_29"),
+    QStringLiteral("d3dx9_30"),
+    QStringLiteral("d3dx9_31"),
+    QStringLiteral("d3dx9_32"),
+    QStringLiteral("d3dx9_33"),
+    QStringLiteral("d3dx9_34"),
+    QStringLiteral("d3dx9_35"),
+    QStringLiteral("d3dx9_36"),
+    QStringLiteral("d3dx9_37"),
+    QStringLiteral("d3dx9_38"),
+    QStringLiteral("d3dx9_39"),
+    QStringLiteral("d3dx9_40"),
+    QStringLiteral("d3dx9_41"),
+    QStringLiteral("d3dx9_42"),
+    QStringLiteral("d3dx9_43"),
+    QStringLiteral("d3dx10_33"),
+    QStringLiteral("d3dx10_34"),
+    QStringLiteral("d3dx10_35"),
+    QStringLiteral("d3dx10_36"),
+    QStringLiteral("d3dx10_37"),
+    QStringLiteral("d3dx10_38"),
+    QStringLiteral("d3dx10_39"),
+    QStringLiteral("d3dx10_40"),
+    QStringLiteral("d3dx10_41"),
+    QStringLiteral("d3dx10_42"),
+    QStringLiteral("d3dx10_43"),
+    QStringLiteral("d3dx11_42"),
+    QStringLiteral("d3dx11_43"),
+};
+
+static const QStringList DIRECTX_NATIVE_BUILTIN_DLLS = {
+    QStringLiteral("xaudio2_0"),
+    QStringLiteral("xaudio2_1"),
+    QStringLiteral("xaudio2_2"),
+    QStringLiteral("xaudio2_3"),
+    QStringLiteral("xaudio2_4"),
+    QStringLiteral("xaudio2_5"),
+    QStringLiteral("xaudio2_6"),
+    QStringLiteral("xaudio2_7"),
+    QStringLiteral("x3daudio1_0"),
+    QStringLiteral("x3daudio1_1"),
+    QStringLiteral("x3daudio1_2"),
+    QStringLiteral("x3daudio1_3"),
+    QStringLiteral("x3daudio1_4"),
+    QStringLiteral("x3daudio1_5"),
+    QStringLiteral("x3daudio1_6"),
+    QStringLiteral("x3daudio1_7"),
+    QStringLiteral("xapofx1_1"),
+    QStringLiteral("xapofx1_2"),
+    QStringLiteral("xapofx1_3"),
+    QStringLiteral("xapofx1_4"),
+    QStringLiteral("xapofx1_5"),
+    QStringLiteral("xactengine2_0"),
+    QStringLiteral("xactengine2_1"),
+    QStringLiteral("xactengine2_2"),
+    QStringLiteral("xactengine2_3"),
+    QStringLiteral("xactengine2_4"),
+    QStringLiteral("xactengine2_5"),
+    QStringLiteral("xactengine2_6"),
+    QStringLiteral("xactengine2_7"),
+    QStringLiteral("xactengine2_8"),
+    QStringLiteral("xactengine2_9"),
+    QStringLiteral("xactengine2_10"),
+    QStringLiteral("xactengine3_0"),
+    QStringLiteral("xactengine3_1"),
+    QStringLiteral("xactengine3_2"),
+    QStringLiteral("xactengine3_3"),
+    QStringLiteral("xactengine3_4"),
+    QStringLiteral("xactengine3_5"),
+    QStringLiteral("xactengine3_6"),
+    QStringLiteral("xactengine3_7"),
+};
 
 // Allowed drive letters to keep in the prefix.
 static const QStringList ALLOWED_DRIVES = {"c:", "z:"};
@@ -438,7 +564,12 @@ void PrefixSetupRunner::buildStepList()
   addStep("vcrun2022", "Visual C++ 2022",
           [this] { return stepVcrun2022(); });
   addStep("dotnetdesktop6", ".NET Desktop Runtime 6",
-          [this] { return stepDotNetInstallPair(DOTNET_DESKTOP6_X86_URL, DOTNET_DESKTOP6_X64_URL, ".NET Desktop 6"); });
+          [this] {
+            return stepDotNetInstallPair(
+                DOTNET_DESKTOP6_X86_URL, DOTNET_DESKTOP6_X64_URL,
+                ".NET Desktop 6", DOTNET_DESKTOP6_X86_SHA256,
+                DOTNET_DESKTOP6_X64_SHA256);
+          });
   addStep("dotnet_runtimes", ".NET Runtimes (6-9)",
           [this] { return stepDotNetRuntimes(); });
   addStep("dotnet10_sdk", ".NET 10 SDK",
@@ -1084,6 +1215,9 @@ bool PrefixSetupRunner::stepDirectXRuntime()
 {
   emit logMessage("Installing DirectX runtimes...");
 
+  if (!applyDllOverrides(DIRECTX_NATIVE_DLLS, DIRECTX_NATIVE_BUILTIN_DLLS))
+    return false;
+
   const QString dllDir64 = m_prefixPath + "/drive_c/windows/system32";
   const QString dllDir32 = m_prefixPath + "/drive_c/windows/syswow64";
 
@@ -1157,7 +1291,8 @@ bool PrefixSetupRunner::stepDirectXRuntime()
   };
 
   QMap<QString, QString> env = baseWineEnv();
-  env["WINEDLLOVERRIDES"] = "mshtml=d";
+  env["WINEDLLOVERRIDES"] = makeDllOverrideEnv(
+      "mshtml=d", DIRECTX_NATIVE_DLLS, DIRECTX_NATIVE_BUILTIN_DLLS);
 
   // 32-bit registration.
   QStringList reg32 = collectRegDlls(dllDir32);
@@ -1189,6 +1324,9 @@ bool PrefixSetupRunner::stepVcrun2022()
 {
   emit logMessage("Installing Visual C++ 2022...");
 
+  if (!applyDllOverrides({}, VCRUN_DLLS))
+    return false;
+
   const QString cacheDir = fluorineCacheDir() + "/vcrun2022";
   const QString tmpDir   = fluorineTmpDir() + "/vcrun2022";
   QDir().mkpath(cacheDir);
@@ -1202,53 +1340,93 @@ bool PrefixSetupRunner::stepVcrun2022()
   const QString x86Path = cacheDir + "/vc_redist.x86.exe";
   if (!QFileInfo::exists(x86Path)) {
     emit logMessage("Downloading vc_redist.x86.exe...");
-    if (!downloadFile(VCRUN2022_X86_URL, x86Path)) {
-      m_steps.last().errorMessage = "Failed to download vc_redist.x86.exe";
+    if (!downloadRuntimeInstaller(VCRUN2022_X86_URL, x86Path,
+                                  "vc_redist.x86.exe",
+                                  VCRUN2022_X86_SHA256)) {
       return false;
     }
+  } else if (!downloadRuntimeInstaller(VCRUN2022_X86_URL, x86Path,
+                                       "vc_redist.x86.exe",
+                                       VCRUN2022_X86_SHA256)) {
+    return false;
   }
 
   // Wine bug #57518 workaround: manually extract msvcp140.dll before running
   // the installer, because the installer refuses to replace the builtin
   // (builtin version number is higher).
   emit logMessage("Extracting msvcp140.dll (32-bit)...");
-  runHostProcess(cabextractBin, {"--directory=" + tmpDir + "/win32", x86Path, "-F", "a10"});
-  runHostProcess(cabextractBin,
+  int rc = runHostProcess(cabextractBin,
+      {"--directory=" + tmpDir + "/win32", x86Path, "-F", "a10"});
+  if (rc != 0) {
+    m_steps.last().errorMessage =
+        QStringLiteral("vc_redist.x86.exe cab extraction failed (exit code %1)").arg(rc);
+    return false;
+  }
+  rc = runHostProcess(cabextractBin,
       {"--directory=" + dllDir32, tmpDir + "/win32/a10", "-F", "msvcp140.dll"});
+  if (rc != 0) {
+    m_steps.last().errorMessage =
+        QStringLiteral("msvcp140.dll x86 extraction failed (exit code %1)").arg(rc);
+    return false;
+  }
 
   // Run 32-bit installer.
   emit logMessage("Running vc_redist.x86.exe...");
   QMap<QString, QString> env = baseWineEnv();
-  env["WINEDLLOVERRIDES"] = "mshtml=d";
+  env["WINEDLLOVERRIDES"] = makeDllOverrideEnv("mshtml=d", {}, VCRUN_DLLS);
 
-  int rc = runProcess(m_wineBin, {x86Path, "/install", "/quiet", "/norestart"}, env);
-  if (rc != 0) {
+  rc = runProcess(m_wineBin, {x86Path, "/install", "/quiet", "/norestart"}, env);
+  if (!isMicrosoftInstallerSuccess(rc)) {
     m_steps.last().errorMessage =
-        QStringLiteral("vc_redist.x86.exe failed (exit code %1)").arg(rc);
+        QStringLiteral("vc_redist.x86.exe failed (exit code %1, SHA256 %2)")
+            .arg(rc)
+            .arg(fileSha256(x86Path));
     return false;
+  } else if (rc != 0) {
+    emit logMessage(QStringLiteral("vc_redist.x86.exe returned nonfatal exit code %1").arg(rc));
   }
 
   // Download and run x64 installer.
   const QString x64Path = cacheDir + "/vc_redist.x64.exe";
   if (!QFileInfo::exists(x64Path)) {
     emit logMessage("Downloading vc_redist.x64.exe...");
-    if (!downloadFile(VCRUN2022_X64_URL, x64Path)) {
-      m_steps.last().errorMessage = "Failed to download vc_redist.x64.exe";
+    if (!downloadRuntimeInstaller(VCRUN2022_X64_URL, x64Path,
+                                  "vc_redist.x64.exe",
+                                  VCRUN2022_X64_SHA256)) {
       return false;
     }
+  } else if (!downloadRuntimeInstaller(VCRUN2022_X64_URL, x64Path,
+                                       "vc_redist.x64.exe",
+                                       VCRUN2022_X64_SHA256)) {
+    return false;
   }
 
   emit logMessage("Extracting msvcp140.dll (64-bit)...");
-  runHostProcess(cabextractBin, {"--directory=" + tmpDir + "/win64", x64Path, "-F", "a12"});
-  runHostProcess(cabextractBin,
+  rc = runHostProcess(cabextractBin,
+      {"--directory=" + tmpDir + "/win64", x64Path, "-F", "a12"});
+  if (rc != 0) {
+    m_steps.last().errorMessage =
+        QStringLiteral("vc_redist.x64.exe cab extraction failed (exit code %1)").arg(rc);
+    return false;
+  }
+  rc = runHostProcess(cabextractBin,
       {"--directory=" + dllDir64, tmpDir + "/win64/a12", "-F", "msvcp140.dll"});
+  if (rc != 0) {
+    m_steps.last().errorMessage =
+        QStringLiteral("msvcp140.dll x64 extraction failed (exit code %1)").arg(rc);
+    return false;
+  }
 
   emit logMessage("Running vc_redist.x64.exe...");
   rc = runProcess(m_wineBin, {x64Path, "/install", "/quiet", "/norestart"}, env);
-  if (rc != 0) {
+  if (!isMicrosoftInstallerSuccess(rc)) {
     m_steps.last().errorMessage =
-        QStringLiteral("vc_redist.x64.exe failed (exit code %1)").arg(rc);
+        QStringLiteral("vc_redist.x64.exe failed (exit code %1, SHA256 %2)")
+            .arg(rc)
+            .arg(fileSha256(x64Path));
     return false;
+  } else if (rc != 0) {
+    emit logMessage(QStringLiteral("vc_redist.x64.exe returned nonfatal exit code %1").arg(rc));
   }
 
   QDir(tmpDir).removeRecursively();
@@ -1260,16 +1438,26 @@ bool PrefixSetupRunner::stepDotNetRuntimes()
 {
   emit logMessage("Installing .NET Runtimes (6-9)...");
 
-  struct RuntimePair { const char* url32; const char* url64; const char* name; };
+  struct RuntimePair {
+    const char* url32;
+    const char* url64;
+    const char* name;
+    const QStringList* sha32;
+    const QStringList* sha64;
+  };
   static const RuntimePair runtimes[] = {
-    {.url32=DOTNET6_X86_URL, .url64=DOTNET6_X64_URL, .name=".NET 6"},
-    {.url32=DOTNET7_X86_URL, .url64=DOTNET7_X64_URL, .name=".NET 7"},
-    {.url32=DOTNET8_X86_URL, .url64=DOTNET8_X64_URL, .name=".NET 8"},
+    {.url32=DOTNET6_X86_URL, .url64=DOTNET6_X64_URL, .name=".NET 6",
+     .sha32=&DOTNET6_X86_SHA256, .sha64=&DOTNET6_X64_SHA256},
+    {.url32=DOTNET7_X86_URL, .url64=DOTNET7_X64_URL, .name=".NET 7",
+     .sha32=&DOTNET7_X86_SHA256, .sha64=&DOTNET7_X64_SHA256},
+    {.url32=DOTNET8_X86_URL, .url64=DOTNET8_X64_URL, .name=".NET 8",
+     .sha32=&DOTNET8_X86_SHA256, .sha64=&DOTNET8_X64_SHA256},
   };
 
   for (const auto& rt : runtimes) {
     if (isCancelled()) return false;
-    if (!stepDotNetInstallPair(rt.url32, rt.url64, rt.name))
+    if (!stepDotNetInstallPair(rt.url32, rt.url64, rt.name,
+                               *rt.sha32, *rt.sha64))
       return false;
   }
 
@@ -1283,7 +1471,9 @@ bool PrefixSetupRunner::stepDotNetRuntimes()
 }
 
 bool PrefixSetupRunner::stepDotNetInstallPair(const QString& url32, const QString& url64,
-                                              const QString& name)
+                                              const QString& name,
+                                              const QStringList& knownSha25632,
+                                              const QStringList& knownSha25664)
 {
   const QString cacheDir = fluorineCacheDir();
   QDir().mkpath(cacheDir);
@@ -1298,18 +1488,27 @@ bool PrefixSetupRunner::stepDotNetInstallPair(const QString& url32, const QStrin
 
     if (!QFileInfo::exists(path)) {
       emit logMessage(QStringLiteral("Downloading %1 (32-bit)...").arg(name));
-      if (!downloadFile(url32, path)) {
-        m_steps.last().errorMessage = QStringLiteral("Failed to download %1 x86").arg(name);
+      if (!downloadRuntimeInstaller(url32, path,
+                                    QStringLiteral("%1 x86").arg(name),
+                                    knownSha25632)) {
         return false;
       }
+    } else if (!downloadRuntimeInstaller(url32, path,
+                                         QStringLiteral("%1 x86").arg(name),
+                                         knownSha25632)) {
+      return false;
     }
 
     emit logMessage(QStringLiteral("Installing %1 (32-bit)...").arg(name));
     const int rc = runProcess(m_wineBin, {path, "/install", "/quiet", "/norestart"}, env);
-    if (rc != 0) {
+    if (!isMicrosoftInstallerSuccess(rc)) {
       m_steps.last().errorMessage =
           QStringLiteral("%1 x86 installer failed (exit code %2)").arg(name).arg(rc);
       return false;
+    } else if (rc != 0) {
+      emit logMessage(QStringLiteral("%1 x86 installer returned nonfatal exit code %2")
+                          .arg(name)
+                          .arg(rc));
     }
   }
 
@@ -1320,18 +1519,27 @@ bool PrefixSetupRunner::stepDotNetInstallPair(const QString& url32, const QStrin
 
     if (!QFileInfo::exists(path)) {
       emit logMessage(QStringLiteral("Downloading %1 (64-bit)...").arg(name));
-      if (!downloadFile(url64, path)) {
-        m_steps.last().errorMessage = QStringLiteral("Failed to download %1 x64").arg(name);
+      if (!downloadRuntimeInstaller(url64, path,
+                                    QStringLiteral("%1 x64").arg(name),
+                                    knownSha25664)) {
         return false;
       }
+    } else if (!downloadRuntimeInstaller(url64, path,
+                                         QStringLiteral("%1 x64").arg(name),
+                                         knownSha25664)) {
+      return false;
     }
 
     emit logMessage(QStringLiteral("Installing %1 (64-bit)...").arg(name));
     const int rc = runProcess(m_wineBin, {path, "/install", "/quiet", "/norestart"}, env);
-    if (rc != 0) {
+    if (!isMicrosoftInstallerSuccess(rc)) {
       m_steps.last().errorMessage =
           QStringLiteral("%1 x64 installer failed (exit code %2)").arg(name).arg(rc);
       return false;
+    } else if (rc != 0) {
+      emit logMessage(QStringLiteral("%1 x64 installer returned nonfatal exit code %2")
+                          .arg(name)
+                          .arg(rc));
     }
   }
 
@@ -1339,7 +1547,8 @@ bool PrefixSetupRunner::stepDotNetInstallPair(const QString& url32, const QStrin
   return true;
 }
 
-bool PrefixSetupRunner::stepDotNetInstall(const QString& url, const QString& name)
+bool PrefixSetupRunner::stepDotNetInstall(const QString& url, const QString& name,
+                                          const QStringList& knownSha256)
 {
   const QString cacheDir = fluorineCacheDir();
   QDir().mkpath(cacheDir);
@@ -1351,11 +1560,11 @@ bool PrefixSetupRunner::stepDotNetInstall(const QString& url, const QString& nam
   if (!QFileInfo::exists(installerPath)) {
     emit logMessage(QStringLiteral("Downloading %1...").arg(name));
 
-    if (!downloadFile(url, installerPath)) {
-      m_steps.last().errorMessage =
-          QStringLiteral("Failed to download %1").arg(name);
+    if (!downloadRuntimeInstaller(url, installerPath, name, knownSha256)) {
       return false;
     }
+  } else if (!downloadRuntimeInstaller(url, installerPath, name, knownSha256)) {
+    return false;
   }
 
   emit logMessage(QStringLiteral("Installing %1...").arg(name));
@@ -1368,10 +1577,14 @@ bool PrefixSetupRunner::stepDotNetInstall(const QString& url, const QString& nam
       {installerPath, "/install", "/quiet", "/norestart"},
       env);
 
-  if (rc != 0) {
+  if (!isMicrosoftInstallerSuccess(rc)) {
     m_steps.last().errorMessage =
         QStringLiteral("%1 installer failed (exit code %2)").arg(name).arg(rc);
     return false;
+  } else if (rc != 0) {
+    emit logMessage(QStringLiteral("%1 installer returned nonfatal exit code %2")
+                        .arg(name)
+                        .arg(rc));
   }
 
   return true;
@@ -1482,6 +1695,9 @@ bool PrefixSetupRunner::stepWineRegistry()
     return false;
   }
 
+  if (!applyDllOverrides(DIRECTX_NATIVE_DLLS, DIRECTX_NATIVE_BUILTIN_DLLS + VCRUN_DLLS))
+    return false;
+
   emit logMessage("Registry settings applied successfully");
   return true;
 }
@@ -1570,17 +1786,144 @@ bool PrefixSetupRunner::downloadFile(const QString& url, const QString& destPath
   return true;
 }
 
-bool PrefixSetupRunner::verifySha256(const QString& filePath, const QString& expectedHex)
+bool PrefixSetupRunner::downloadRuntimeInstaller(const QString& url,
+                                                 const QString& destPath,
+                                                 const QString& displayName,
+                                                 const QStringList& knownSha256)
+{
+  const QString stampPath = destPath + ".sha256";
+  bool refreshExisting = false;
+  bool knownHashMatch = false;
+  if (QFileInfo::exists(destPath) &&
+      validateRuntimeInstaller(destPath, displayName, knownSha256,
+                               &knownHashMatch)) {
+    if (knownSha256.isEmpty() || knownHashMatch)
+      return true;
+
+    const QString cachedSha = fileSha256(destPath);
+    QFile stamp(stampPath);
+    if (!cachedSha.isEmpty() && stamp.open(QIODevice::ReadOnly | QIODevice::Text) &&
+        QString::fromUtf8(stamp.readAll()).trimmed().compare(
+            cachedSha, Qt::CaseInsensitive) == 0) {
+      emit logMessage(QStringLiteral(
+          "Cached %1 has a previously accepted rolling hash.").arg(displayName));
+      return true;
+    }
+
+    emit logMessage(QStringLiteral(
+        "Cached %1 has an unknown hash, refreshing once...").arg(displayName));
+    refreshExisting = true;
+  }
+
+  if (QFileInfo::exists(destPath) && !refreshExisting) {
+    emit logMessage(QStringLiteral("Cached %1 failed validation, re-downloading...")
+                        .arg(displayName));
+    QFile::remove(destPath);
+  }
+
+  const QString partPath = destPath + ".part";
+  QFile::remove(partPath);
+  if (!downloadFile(url, partPath)) {
+    QFile::remove(partPath);
+    m_steps.last().errorMessage =
+        QStringLiteral("Failed to download %1").arg(displayName);
+    return false;
+  }
+
+  if (!validateRuntimeInstaller(partPath, displayName, knownSha256,
+                                &knownHashMatch)) {
+    QFile::remove(partPath);
+    return false;
+  }
+
+  QFile::remove(destPath);
+  if (!QFile::rename(partPath, destPath)) {
+    QFile::remove(partPath);
+    m_steps.last().errorMessage =
+        QStringLiteral("Failed to cache %1").arg(displayName);
+    return false;
+  }
+
+  QFile stamp(stampPath);
+  if (stamp.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+    stamp.write(fileSha256(destPath).toUtf8());
+    stamp.write("\n");
+  }
+
+  return true;
+}
+
+bool PrefixSetupRunner::validateRuntimeInstaller(const QString& path,
+                                                 const QString& displayName,
+                                                 const QStringList& knownSha256,
+                                                 bool* knownHashMatch)
+{
+  if (knownHashMatch)
+    *knownHashMatch = false;
+
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly)) {
+    m_steps.last().errorMessage =
+        QStringLiteral("Failed to read %1").arg(displayName);
+    return false;
+  }
+
+  if (file.size() < 1024 * 1024) {
+    m_steps.last().errorMessage =
+        QStringLiteral("%1 is too small to be a valid installer").arg(displayName);
+    return false;
+  }
+
+  const QByteArray magic = file.read(2);
+  if (magic != "MZ") {
+    m_steps.last().errorMessage =
+        QStringLiteral("%1 is not a Windows PE installer").arg(displayName);
+    return false;
+  }
+  file.close();
+
+  const QString sha = fileSha256(path);
+  if (sha.isEmpty()) {
+    m_steps.last().errorMessage =
+        QStringLiteral("Failed to hash %1").arg(displayName);
+    return false;
+  }
+
+  emit logMessage(QStringLiteral("%1 SHA256: %2").arg(displayName, sha));
+
+  if (!knownSha256.isEmpty()) {
+    const bool matched = knownSha256.contains(sha, Qt::CaseInsensitive);
+    if (knownHashMatch)
+      *knownHashMatch = matched;
+    if (!matched) {
+      emit logMessage(
+          QStringLiteral(
+              "WARNING: %1 hash is not in the known list; accepting because "
+              "the installer passed PE validation and Microsoft may have "
+              "updated the rolling download.")
+              .arg(displayName));
+    }
+  }
+
+  return true;
+}
+
+QString PrefixSetupRunner::fileSha256(const QString& filePath)
 {
   QFile file(filePath);
   if (!file.open(QIODevice::ReadOnly))
-    return false;
+    return {};
 
   QCryptographicHash hash(QCryptographicHash::Sha256);
   if (!hash.addData(&file))
-    return false;
+    return {};
 
-  return hash.result().toHex() == expectedHex.toLatin1();
+  return QString::fromLatin1(hash.result().toHex());
+}
+
+bool PrefixSetupRunner::verifySha256(const QString& filePath, const QString& expectedHex)
+{
+  return fileSha256(filePath).compare(expectedHex, Qt::CaseInsensitive) == 0;
 }
 
 bool PrefixSetupRunner::downloadAndVerify(const QString& url, const QString& destPath,
@@ -1878,4 +2221,73 @@ QMap<QString, QString> PrefixSetupRunner::baseWineEnv() const
   env["WINE"]       = m_wineBin;
   env["WINESERVER"] = m_wineserverBin;
   return env;
+}
+
+bool PrefixSetupRunner::applyDllOverrides(const QStringList& native,
+                                          const QStringList& nativeBuiltin)
+{
+  if (native.isEmpty() && nativeBuiltin.isEmpty())
+    return true;
+
+  const QString tmpDir = fluorineTmpDir();
+  QDir().mkpath(tmpDir);
+
+  QString regContent = QStringLiteral(
+      "Windows Registry Editor Version 5.00\n\n"
+      "[HKEY_CURRENT_USER\\Software\\Wine\\DllOverrides]\n");
+
+  auto appendOverrides = [&regContent](const QStringList& dlls,
+                                       const QString& mode) {
+    for (const QString& dll : dlls) {
+      regContent += QStringLiteral("\"*%1\"=\"%2\"\n").arg(dll, mode);
+    }
+  };
+
+  appendOverrides(native, QStringLiteral("native"));
+  appendOverrides(nativeBuiltin, QStringLiteral("native,builtin"));
+  regContent += QLatin1Char('\n');
+
+  const QString regFile = tmpDir + "/dependency_overrides.reg";
+  QFile f(regFile);
+  if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    m_steps.last().errorMessage = "Failed to write dependency override registry";
+    return false;
+  }
+  f.write(regContent.toUtf8());
+  f.close();
+
+  QMap<QString, QString> env = baseWineEnv();
+  env["WINEDLLOVERRIDES"] = "mshtml=d";
+  env["PROTON_USE_XALIA"] = "0";
+
+  const int rc = runProcess(m_wineBin, {"regedit", regFile}, env);
+  QFile::remove(regFile);
+  if (rc != 0) {
+    m_steps.last().errorMessage =
+        QStringLiteral("dependency override import failed (exit code %1)").arg(rc);
+    return false;
+  }
+
+  return true;
+}
+
+QString PrefixSetupRunner::makeDllOverrideEnv(const QString& base,
+                                              const QStringList& native,
+                                              const QStringList& nativeBuiltin)
+{
+  QStringList entries;
+  if (!base.trimmed().isEmpty())
+    entries.append(base.split(';', Qt::SkipEmptyParts));
+
+  for (const QString& dll : native)
+    entries.append(QStringLiteral("%1=n").arg(dll));
+  for (const QString& dll : nativeBuiltin)
+    entries.append(QStringLiteral("%1=n,b").arg(dll));
+
+  return entries.join(QLatin1Char(';'));
+}
+
+bool PrefixSetupRunner::isMicrosoftInstallerSuccess(int exitCode)
+{
+  return exitCode == 0 || exitCode == 105 || exitCode == 194 || exitCode == 236;
 }

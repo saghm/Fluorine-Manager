@@ -318,23 +318,24 @@ void UpdatesSettingsTab::onInstall()
                 return;
               }
 
-              // The tarball is packed as `fluorine-manager/…`. Locate the
-              // top-level dir (picks up a rename too, just in case).
+              // Release assets are not consistent: tarballs are packed as
+              // `fluorine-manager/...`, while zips may extract files directly
+              // into the root. Accept both layouts.
               QDir extract(extractDir);
-              const QStringList tops = extract.entryList(
-                  QDir::Dirs | QDir::NoDotAndDotDot);
-              if (tops.isEmpty()) {
-                m_statusLabel->setText(
-                    tr("<i>Install failed:</i> extracted archive is empty"));
-                m_progressBar->setVisible(false);
-                m_installButton->setEnabled(true);
-                m_checkNowButton->setEnabled(true);
-                return;
+              QString newLauncher =
+                  extract.absoluteFilePath(QStringLiteral("fluorine-manager"));
+              if (!QFileInfo::exists(newLauncher)) {
+                const QStringList tops = extract.entryList(
+                    QDir::Dirs | QDir::NoDotAndDotDot);
+                for (const QString& top : tops) {
+                  const QString candidate = extract.absoluteFilePath(
+                      top + QStringLiteral("/fluorine-manager"));
+                  if (QFileInfo::exists(candidate)) {
+                    newLauncher = candidate;
+                    break;
+                  }
+                }
               }
-              const QString newBundle =
-                  extract.absoluteFilePath(tops.first());
-              const QString newLauncher =
-                  newBundle + QStringLiteral("/fluorine-manager");
               if (!QFileInfo::exists(newLauncher)) {
                 m_statusLabel->setText(
                     tr("<i>Install failed:</i> launcher not found in "
