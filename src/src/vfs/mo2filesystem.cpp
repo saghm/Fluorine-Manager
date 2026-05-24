@@ -34,6 +34,8 @@ void fillStatForFile(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid,
                      const std::string& real_path = {},
                      mode_t cached_mode = 0);
 void invalidateLookupCache(Mo2FsContext* ctx, const std::string& dirPath);
+bool pathTouchesMutation(const std::string& cachedPath,
+                         const std::string& changedPath);
 
 // RAII helper that records per-op wall-clock nanoseconds into a counter.
 struct OpTimer
@@ -183,11 +185,13 @@ void invalidateDirCache(Mo2FsContext* ctx, const std::string& dirPath)
     return;
   }
 
-  // Invalidate only the affected directory (and its open-dir handles), not all.
+  // Invalidate the affected directory plus ancestors/descendants. Some VFS
+  // mutations prune empty parents, and stale cached listings for those parents
+  // can resurrect paths that no longer exist in the tree.
   {
     std::scoped_lock lock(ctx->open_dirs_mutex);
     for (auto it = ctx->open_dirs.begin(); it != ctx->open_dirs.end();) {
-      if (it->second.path == dirPath) {
+      if (pathTouchesMutation(it->second.path, dirPath)) {
         it = ctx->open_dirs.erase(it);
       } else {
         ++it;
@@ -196,9 +200,29 @@ void invalidateDirCache(Mo2FsContext* ctx, const std::string& dirPath)
   }
   {
     std::scoped_lock cacheLock(ctx->dir_cache_mutex);
-    ctx->dir_cache.erase(dirPath);
-    ctx->readdir_blob_cache.erase(dirPath);
-    ctx->readdirplus_blob_cache.erase(dirPath);
+    for (auto it = ctx->dir_cache.begin(); it != ctx->dir_cache.end();) {
+      if (pathTouchesMutation(it->first, dirPath)) {
+        it = ctx->dir_cache.erase(it);
+      } else {
+        ++it;
+      }
+    }
+    for (auto it = ctx->readdir_blob_cache.begin();
+         it != ctx->readdir_blob_cache.end();) {
+      if (pathTouchesMutation(it->first, dirPath)) {
+        it = ctx->readdir_blob_cache.erase(it);
+      } else {
+        ++it;
+      }
+    }
+    for (auto it = ctx->readdirplus_blob_cache.begin();
+         it != ctx->readdirplus_blob_cache.end();) {
+      if (pathTouchesMutation(it->first, dirPath)) {
+        it = ctx->readdirplus_blob_cache.erase(it);
+      } else {
+        ++it;
+      }
+    }
   }
   invalidateLookupCache(ctx, dirPath);
 }
@@ -212,21 +236,25 @@ void invalidateLookupCache(Mo2FsContext* ctx, const std::string& dirPath)
     return;
   }
 
-  fuse_ino_t parentIno = 0;
-  if (dirPath.empty()) {
-    parentIno = 1;  // root
-  } else {
-    std::shared_lock lock(ctx->inode_mutex);
-    parentIno = ctx->inodes->get(dirPath);
-  }
-
-  if (parentIno == 0) {
-    return;
+  std::vector<fuse_ino_t> parentsToClear;
+  {
+    std::shared_lock inodeLock(ctx->inode_mutex);
+    std::scoped_lock lookupLock(ctx->lookup_cache_mutex);
+    for (const auto& [parentIno, _] : ctx->lookup_cache_by_parent) {
+      const std::string parentPath =
+          parentIno == 1 ? std::string{} : ctx->inodes->getPath(parentIno);
+      if (parentIno == 1 || pathTouchesMutation(parentPath, dirPath)) {
+        parentsToClear.push_back(parentIno);
+      }
+    }
   }
 
   std::scoped_lock lock(ctx->lookup_cache_mutex);
-  auto idxIt = ctx->lookup_cache_by_parent.find(parentIno);
-  if (idxIt != ctx->lookup_cache_by_parent.end()) {
+  for (const fuse_ino_t parentIno : parentsToClear) {
+    auto idxIt = ctx->lookup_cache_by_parent.find(parentIno);
+    if (idxIt == ctx->lookup_cache_by_parent.end()) {
+      continue;
+    }
     for (const auto& childName : idxIt->second) {
       ctx->lookup_cache.erase({parentIno, childName});
     }
@@ -234,18 +262,33 @@ void invalidateLookupCache(Mo2FsContext* ctx, const std::string& dirPath)
   }
 }
 
-// Clear all node_cache entries whose path is |path| or any descendant
-// under |path|/.  Must be called while tree_mutex is held exclusively (during
-// mutations).  The parent of |path| is also invalidated because its
-// children-map has changed.
+bool isStrictDescendantPath(const std::string& path, const std::string& parent)
+{
+  if (parent.empty()) {
+    return !path.empty();
+  }
+
+  return path.size() > parent.size() && path[parent.size()] == '/' &&
+         path.compare(0, parent.size(), parent) == 0;
+}
+
+bool pathTouchesMutation(const std::string& cachedPath, const std::string& changedPath)
+{
+  return cachedPath == changedPath ||
+         isStrictDescendantPath(cachedPath, changedPath) ||
+         isStrictDescendantPath(changedPath, cachedPath);
+}
+
+// Clear all node_cache entries whose path is |path|, any descendant under
+// |path|/, or any ancestor of |path|. Must be called while tree_mutex is held
+// exclusively during mutations.
 //
 // SUBTREE invalidation matters for any mutation that destroys VfsNodes
 // (removeFromTree on a directory, rename of a directory): every descendant
 // VfsNode is destroyed too, so every cached pointer into that subtree is
-// now dangling.  The original implementation only cleared the exact path
-// and its parent — that left dangling pointers for descendants, which the
-// next getattr/readdir would dereference and crash with bad_alloc /
-// SIGSEGV (manifesting as F4SE "couldn't load plugin (0000007E)" in #210).
+// now dangling. Ancestor invalidation matters because removeFromTree() prunes
+// empty parents recursively, so removing a leaf can also destroy cached parent
+// directory nodes.
 void invalidateNodeCache(Mo2FsContext* ctx, const std::string& path)
 {
   if (ctx == nullptr) {
@@ -257,34 +300,15 @@ void invalidateNodeCache(Mo2FsContext* ctx, const std::string& path)
   std::shared_lock ilock(ctx->inode_mutex);
   std::scoped_lock nlock(ctx->node_cache_mutex);
 
-  // Sweep node_cache for any entry whose path is the prefix or a descendant.
-  // O(N) over the cache, but each ino→path lookup is O(1) and N is bounded
+  // O(N) over the cache, but each ino->path lookup is O(1) and N is bounded
   // by the cache size; mutations are infrequent compared to reads.
-  const std::string prefixSlash = path + "/";
   for (auto it = ctx->node_cache.begin(); it != ctx->node_cache.end();) {
     const std::string entryPath = ctx->inodes->getPath(it->first);
-    const bool inSubtree =
-        entryPath == path ||
-        (entryPath.size() > prefixSlash.size() &&
-         entryPath.compare(0, prefixSlash.size(), prefixSlash) == 0);
-    if (inSubtree) {
+    if (pathTouchesMutation(entryPath, path)) {
       it = ctx->node_cache.erase(it);
     } else {
       ++it;
     }
-  }
-
-  // Invalidate the parent's cache entry too (its children map changed).
-  const auto slash = path.rfind('/');
-  if (slash != std::string::npos) {
-    const std::string parentPath = path.substr(0, slash);
-    const fuse_ino_t parentIno   = ctx->inodes->get(parentPath);
-    if (parentIno != 0) {
-      ctx->node_cache.erase(parentIno);
-    }
-  } else {
-    // Top-level entry — parent is root (inode 1).
-    ctx->node_cache.erase(1);
   }
 }
 
