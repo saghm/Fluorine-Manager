@@ -195,6 +195,8 @@ jobs:
             gh release edit "${TAG}" \
               --title "${TITLE}" \
               --notes-file "${NOTES_FILE}" \
+              --draft=false \
+              --prerelease=false \
               --latest
             gh release upload "${TAG}" "${archive_path}" --clobber
           else

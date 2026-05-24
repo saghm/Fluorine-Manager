@@ -13,28 +13,22 @@ follows SemVer (MAJOR.MINOR.PATCH). Two distribution channels:
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-05-24
+
+### Changed
+- Updated the embedded MO2 integration through upstream 2.5.3 Beta 12.
+- Stable release publishing now explicitly clears draft/prerelease state when
+  updating an existing `v*` release and marks it as the latest stable release.
+
 ### Added
-- In-app self-update checker with channel toggle (stable / beta) in
-  Settings → General. Runs on startup (when "Check for updates" is on) and
-  surfaces new releases without auto-installing.
-- Fluorine version is now distinct from the embedded MO2 engine version.
-  About dialog shows `Fluorine Manager <version>` with the MO2 engine
-  version and build commit on the revision line.
-- CI publishes a rolling `beta` GitHub release on each push to `main`,
-  including a machine-parseable `fluorine-meta` block (timestamp, commit)
-  that the updater reads to detect matching builds.
-- FUSE VFS now handles `rmdir`, unblocking tools like Wrye Bash that tear
-  down temp directories inside the virtual Data folder.
+- Clearer prefix setup progress and failure logs, including installer exit
+  code descriptions when dependency setup fails.
 
 ### Fixed
-- Bulk hide from Conflict tab (#54) no longer fails with a misleading
-  "Input/output error" when the DirectoryEntry tree has lowercased a
-  parent directory. `FileRenamer` now resolves case mismatches against the
-  real filesystem before giving up, and the rename path surfaces the
-  actual errno text instead of conflating the Windows error code 5 with
-  errno 5 (EIO).
-- Wrye Bash `NotADirectoryError: [WinError 267]` during Data-folder
-  initialization (#47). Rooted in the missing FUSE `rmdir` op.
+- Native Stardew Valley launch path detection.
+- Invalid instance recovery messaging during startup.
+- Prefix dependency setup and related VFS handling.
+- Preview NIF third-party warning noise during builds.
 
 ## [0.1.3]
 
