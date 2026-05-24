@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     liblz4-dev zlib1g-dev libzstd-dev libbz2-dev liblzma-dev \
     libssl-dev libcurl4-openssl-dev \
     libtomlplusplus-dev \
-    # Qt 6 runtime deps (aqtinstall provides Qt 6.10 headers/tools/libs for build)
+    # Qt 6 runtime deps (aqtinstall provides Qt 6.11 headers/tools/libs for build)
     kde-style-breeze \
     libgl-dev libopengl-dev libvulkan-dev libxkbcommon-dev libfontconfig1-dev \
     libfreetype-dev libx11-dev libxext-dev libxfixes-dev \
@@ -57,21 +57,21 @@ RUN uv python install --install-dir /opt/uv-tmp "${PYTHON_VERSION}" && \
 ENV BUILD_PYTHON=/opt/python-bundled/bin/python3
 ENV PATH="/opt/python-bundled/bin:${PATH}"
 
-# ── Qt 6.10 via aqtinstall (one-off via uv tool run) ──
-RUN uv tool run --from aqtinstall aqt install-qt linux desktop 6.10.2 linux_gcc_64 \
-      -m qtwebsockets qtwaylandcompositor qtnetworkauth \
+# ── Qt 6.11 via aqtinstall (one-off via uv tool run) ──
+RUN uv tool run --from aqtinstall aqt install-qt linux desktop 6.11.1 linux_gcc_64 \
+      -m qtwebsockets qtwaylandcompositor qtnetworkauth qttasktree \
       --outputdir /opt/qt6 && \
-    ls /opt/qt6/6.10.2/gcc_64/bin/qmake
-ENV Qt6_DIR=/opt/qt6/6.10.2/gcc_64
-ENV CMAKE_PREFIX_PATH="/opt/qt6/6.10.2/gcc_64:${CMAKE_PREFIX_PATH}"
-ENV PATH="/opt/qt6/6.10.2/gcc_64/bin:${PATH}"
-ENV LD_LIBRARY_PATH="/opt/qt6/6.10.2/gcc_64/lib:${LD_LIBRARY_PATH}"
+    ls /opt/qt6/6.11.1/gcc_64/bin/qmake
+ENV Qt6_DIR=/opt/qt6/6.11.1/gcc_64
+ENV CMAKE_PREFIX_PATH="/opt/qt6/6.11.1/gcc_64:${CMAKE_PREFIX_PATH}"
+ENV PATH="/opt/qt6/6.11.1/gcc_64/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/opt/qt6/6.11.1/gcc_64/lib:${LD_LIBRARY_PATH}"
 
 # ── Build-time Python packages ──
 # pybind11/sip/etc. for compiling mobase.so; PyQt6 is staged into the distribution.
 RUN uv pip install --system --break-system-packages \
       --python /opt/python-bundled/bin/python3 --no-cache \
-      pybind11==2.13.6 sip psutil larian-formats==0.8.1 vdf "PyQt6>=6.10,<6.11"
+      pybind11==2.13.6 sip psutil larian-formats==0.8.1 vdf "PyQt6>=6.11,<6.12"
 
 # ── Rust toolchain ──
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \

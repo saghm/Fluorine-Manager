@@ -201,6 +201,8 @@ void createGameSymlinksAuto(const QString& prefixPath)
 
   // "My Documents" compat symlink.
   const QString myDocs = userDir + "/My Documents";
-  if (!QFileInfo::exists(myDocs) && !QFileInfo(myDocs).isSymLink())
-    symlink("Documents", myDocs.toUtf8().constData());
+  if (!QFileInfo::exists(myDocs) && !QFileInfo(myDocs).isSymLink() &&
+      symlink("Documents", myDocs.toUtf8().constData()) != 0) {
+    MOBase::log::warn("Failed to create symlink {} -> Documents", myDocs);
+  }
 }

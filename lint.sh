@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Run clang-tidy over source translation units we maintain, inside the build container so
-# the toolchain (gcc 15, libstdc++, Qt 6.10 headers, etc.) matches what
+# the toolchain (gcc 15, libstdc++, Qt 6.11 headers, etc.) matches what
 # generated build/compile_commands.json.
 #
 # Usage:

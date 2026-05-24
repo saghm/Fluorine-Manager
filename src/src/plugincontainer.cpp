@@ -1175,13 +1175,14 @@ void PluginContainer::loadPlugins()
     loadCheck.setFileName(qApp->property("dataPath").toString() +
                           "/plugin_loadcheck.tmp");
 
-    if (loadCheck.exists() && loadCheck.open(QIODevice::ReadOnly)) {
+    if (loadCheck.exists() && loadCheck.open(QIODevice::ReadOnly | QIODevice::Text)) {
       // oh, there was a failed plugin load last time. Find out which plugin was loaded
       // last
-      QString fileName;
-      while (!loadCheck.atEnd()) {
-        fileName = QString::fromUtf8(loadCheck.readLine().constData()).trimmed();
-      }
+      const auto contents = loadCheck.readAll();
+      loadCheck.close();
+
+      const auto lines = QString::fromUtf8(contents).split('\n', Qt::SkipEmptyParts);
+      const auto fileName = lines.isEmpty() ? QString() : lines.last().trimmed();
 
       log::warn("loadcheck file found for plugin '{}'", fileName);
 
@@ -1224,8 +1225,6 @@ void PluginContainer::loadPlugins()
       default:
         break;
       }
-
-      loadCheck.close();
     }
 
     if (!loadCheck.open(QIODevice::WriteOnly)) {

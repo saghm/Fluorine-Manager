@@ -1001,9 +1001,11 @@ void NXMAccessManager::connectOrRefresh(const NexusOAuthTokens tokens)
   m_NexusOAuthReplyHandler->close();
   m_NexusOAuthReplyHandler->setCallbackPath(QUrl(NexusOAuth::redirectUri()).path());
   QFile logo(":/MO/gui/app_icon");
-  logo.open(QIODevice::ReadOnly);
-  QByteArray imageData  = logo.readAll();
-  logo.close();
+  QByteArray imageData;
+  if (logo.open(QIODevice::ReadOnly)) {
+    imageData = logo.readAll();
+    logo.close();
+  }
   QByteArray base64Data = imageData.toBase64();
   QString imageSrc =
       QString("data:image/png;base64,") + QString::fromLatin1(base64Data);

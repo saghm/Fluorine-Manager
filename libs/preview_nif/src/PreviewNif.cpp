@@ -56,7 +56,7 @@ QWidget* PreviewNif::genFilePreview(const QString& fileName, const QSize&) const
     auto nifFile = std::make_shared<nifly::NifFile>(path);
 
     if (!nifFile->IsValid()) {
-        qWarning(qUtf8Printable(tr("Failed to load file: %1").arg(fileName)));
+        qWarning("%s", qUtf8Printable(tr("Failed to load file: %1").arg(fileName)));
         return nullptr;
     }
 
@@ -71,7 +71,7 @@ QWidget* PreviewNif::genDataPreview(const QByteArray& fileData,
 
     auto nifFile = std::make_shared<nifly::NifFile>();
     if (nifFile->Load(stream) != 0 || !nifFile->IsValid()) {
-        qWarning(qUtf8Printable(tr("Failed to load file: %1").arg(fileName)));
+        qWarning("%s", qUtf8Printable(tr("Failed to load file: %1").arg(fileName)));
         return nullptr;
     }
 

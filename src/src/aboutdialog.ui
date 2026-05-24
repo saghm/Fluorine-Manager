@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1010</width>
-    <height>477</height>
+    <height>525</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -657,6 +657,181 @@
               <item>
                <property name="text">
                 <string notr="true">ashemedai</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">aglowinthefield</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">AkiraJkr</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">AmeliaCute</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">Azlle</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">CheffieGithub</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">daescha</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">Deewens</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">DefinitelyNotSade</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">Deorder</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">diegofesanto</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">Jonny_Bro</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">ju5tA1ex</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">Kane Dou</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">KenJyn76</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">Ketsuban</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">LaughingHyena</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">mick-lue</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">ModZero</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">mopioid</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">mrudat</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">Nikirack</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">Paynamia</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">Ra2-IFV</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">RodolfoFigueroa</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">Ryan Young</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">shellbj</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">SimplisticMind</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">Syer10</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">The Conceptionist</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">TheForgotten69</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">TheUnlocked</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">uwx</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">xieve</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string notr="true">Zash</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>...and all other contributors!</string>
                </property>
               </item>
              </widget>

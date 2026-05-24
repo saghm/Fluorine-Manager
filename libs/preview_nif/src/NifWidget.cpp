@@ -99,7 +99,7 @@ void NifWidget::initializeGL()
             this,
             [](const QOpenGLDebugMessage& debugMessage){
                 auto msg = tr("OpenGL debug message: %1").arg(debugMessage.message());
-                qDebug(qUtf8Printable(msg));
+                qDebug("%s", qUtf8Printable(msg));
             });
     }
 

@@ -1052,7 +1052,7 @@ void PluginList::scanDataFiles(bool invalidate)
         std::make_shared<FileInfo>(this, filename, forceLoaded, forceEnabled,
                                    forceDisabled, lightPluginsAreSupported));
 
-    auto assocTask = std::async(std::launch::async, [=, &smph] {
+    auto assocTask = std::async(std::launch::async, [this, info, tree, &smph] {
       smph.acquire();
       checkBsa(*info, tree);
       checkIni(*info, tree);

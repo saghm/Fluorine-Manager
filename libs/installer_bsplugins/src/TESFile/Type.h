@@ -68,7 +68,7 @@ namespace literals
   {
     return T;
   }
-  static_assert("TES4"_ts.value == '4SET');
+  static_assert("TES4"_ts.value == 0x34534554);
   static_assert("AMMO"_ts < "BOOK"_ts);
 }  // namespace literals
 }  // namespace TESFile

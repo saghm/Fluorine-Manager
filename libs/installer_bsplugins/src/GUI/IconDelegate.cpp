@@ -23,7 +23,7 @@ IconDelegate::IconDelegate(QTreeView* view, int column, int compactSize)
 {
   if (view) {
     connect(view->header(), &QHeaderView::sectionResized,
-            [=](int logicalIndex, [[maybe_unused]] int oldSize, int newSize) {
+            [this](int logicalIndex, [[maybe_unused]] int oldSize, int newSize) {
               if (logicalIndex == m_Column) {
                 m_Compact = newSize < m_CompactSize;
               }
