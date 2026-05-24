@@ -19,6 +19,7 @@ FetchContent_Declare(
     GIT_TAG        main
 )
 
+set(CMAKE_WARN_DEPRECATED OFF CACHE BOOL "Suppress deprecation warnings from fetched preview_nif dependencies" FORCE)
 FetchContent_MakeAvailable(gli nifly)
 
 # mo2_install_target compatibility shim (upstream uses mo2_install_target;
@@ -32,3 +33,10 @@ endif()
 add_subdirectory(src)
 
 target_link_libraries(preview_nif PRIVATE nifly gli)
+
+# gli is an unmaintained third-party header dependency and currently emits this
+# warning with newer compilers.
+target_compile_options(preview_nif PRIVATE
+    $<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-Wno-deprecated-enum-enum-conversion>
+    $<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-Wno-unused-result>
+)
