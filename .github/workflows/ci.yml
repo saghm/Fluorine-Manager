@@ -191,13 +191,23 @@ jobs:
             echo "See CHANGELOG.md for the full list of changes."
           } > "${NOTES_FILE}"
 
-          if gh release view "${TAG}" >/dev/null 2>&1; then
-            gh release edit "${TAG}" \
-              --title "${TITLE}" \
-              --notes-file "${NOTES_FILE}" \
-              --draft=false \
-              --prerelease=false \
-              --latest
+          EXISTING_DRAFT="$(gh release view "${TAG}" --json isDraft --jq '.isDraft' 2>/dev/null || true)"
+          if [[ -n "${EXISTING_DRAFT}" ]]; then
+            if [[ "${EXISTING_DRAFT}" == "true" ]]; then
+              gh release edit "${TAG}" \
+                --title "${TITLE}" \
+                --notes-file "${NOTES_FILE}" \
+                --draft \
+                --prerelease=false \
+                --latest=false
+            else
+              gh release edit "${TAG}" \
+                --title "${TITLE}" \
+                --notes-file "${NOTES_FILE}" \
+                --draft=false \
+                --prerelease=false \
+                --latest
+            fi
             gh release upload "${TAG}" "${archive_path}" --clobber
           else
             gh release create "${TAG}" "${archive_path}" \

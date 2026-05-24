@@ -17,8 +17,9 @@ follows SemVer (MAJOR.MINOR.PATCH). Two distribution channels:
 
 ### Changed
 - Updated the embedded MO2 integration through upstream 2.5.3 Beta 12.
-- Stable release publishing now explicitly clears draft/prerelease state when
-  updating an existing `v*` release and marks it as the latest stable release.
+- Stable release publishing now preserves existing draft `v*` releases while
+  forcing published stable releases out of prerelease state and marking them
+  as latest.
 
 ### Added
 - Clearer prefix setup progress and failure logs, including installer exit
