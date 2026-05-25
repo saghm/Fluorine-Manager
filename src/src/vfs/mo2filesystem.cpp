@@ -232,34 +232,8 @@ void invalidateDirCache(Mo2FsContext* ctx, const std::string& dirPath)
 // need to remove all entries with the given parent inode.
 void invalidateLookupCache(Mo2FsContext* ctx, const std::string& dirPath)
 {
-  if (ctx == nullptr) {
-    return;
-  }
-
-  std::vector<fuse_ino_t> parentsToClear;
-  {
-    std::shared_lock inodeLock(ctx->inode_mutex);
-    std::scoped_lock lookupLock(ctx->lookup_cache_mutex);
-    for (const auto& [parentIno, _] : ctx->lookup_cache_by_parent) {
-      const std::string parentPath =
-          parentIno == 1 ? std::string{} : ctx->inodes->getPath(parentIno);
-      if (parentIno == 1 || pathTouchesMutation(parentPath, dirPath)) {
-        parentsToClear.push_back(parentIno);
-      }
-    }
-  }
-
-  std::scoped_lock lock(ctx->lookup_cache_mutex);
-  for (const fuse_ino_t parentIno : parentsToClear) {
-    auto idxIt = ctx->lookup_cache_by_parent.find(parentIno);
-    if (idxIt == ctx->lookup_cache_by_parent.end()) {
-      continue;
-    }
-    for (const auto& childName : idxIt->second) {
-      ctx->lookup_cache.erase({parentIno, childName});
-    }
-    ctx->lookup_cache_by_parent.erase(idxIt);
-  }
+  (void)ctx;
+  (void)dirPath;
 }
 
 bool isStrictDescendantPath(const std::string& path, const std::string& parent)
@@ -1020,23 +994,10 @@ void mo2_lookup(fuse_req_t req, fuse_ino_t parent, const char* name)
   ctx->lookup_count.fetch_add(1, std::memory_order_relaxed);
   maybeLogCounters(ctx);
 
-  // Fast path: check userspace lookup cache.  The kernel FUSE dcache is
-  // case-sensitive, so Wine's different-case probes ("Shaders", "shaders")
-  // each miss the kernel cache and reach us.  Our cache keys on normalized
-  // (lowercased) name so all case variants hit on the second probe.
-  const std::string normName = normalizeForLookup(name);
-  const auto cacheKey = std::make_pair(parent, normName);
-  {
-    std::scoped_lock lock(ctx->lookup_cache_mutex);
-    auto it = ctx->lookup_cache.find(cacheKey);
-    if (it != ctx->lookup_cache.end()) {
-      // Cache hit — reply directly, no tree/inode locks needed
-      fuse_reply_entry(req, &it->second.entry);
-      return;
-    }
-  }
-
-  // Cache miss — do the full lookup
+  // Do the full lookup every time. The userspace lookup cache was a
+  // performance shortcut, but crash reports showed corruption while updating
+  // its reverse index under concurrent Proton startup probes. Kernel FUSE
+  // dcache still handles repeated exact-case lookups.
   const auto lr = lookupChild(ctx, parent, name);
 
   if (!lr.found) {
@@ -1045,16 +1006,6 @@ void mo2_lookup(fuse_req_t req, fuse_ino_t parent, const char* name)
     e.ino           = 0;
     e.attr_timeout  = NEGATIVE_TTL_SECONDS;
     e.entry_timeout = NEGATIVE_TTL_SECONDS;
-
-    // Cache negative results too (Wine probes many non-existent paths)
-    {
-      std::scoped_lock lock(ctx->lookup_cache_mutex);
-      Mo2FsContext::LookupCacheEntry lce;
-      lce.child_ino = 0;
-      lce.entry     = e;
-      ctx->lookup_cache[cacheKey] = lce;
-      ctx->lookup_cache_by_parent[cacheKey.first].push_back(cacheKey.second);
-    }
 
     fuse_reply_entry(req, &e);
     return;
@@ -1094,7 +1045,7 @@ void mo2_lookup(fuse_req_t req, fuse_ino_t parent, const char* name)
     }
   }
 
-  // Build the entry_param and cache it for future case-variant lookups
+  // Build the entry_param for the kernel dcache.
   struct fuse_entry_param e;
   std::memset(&e, 0, sizeof(e));
   e.ino           = childIno;
@@ -1105,15 +1056,6 @@ void mo2_lookup(fuse_req_t req, fuse_ino_t parent, const char* name)
   } else {
     fillStatForFile(&e.attr, childIno, ctx->uid, ctx->gid, lr.snap.size, lr.snap.mtime,
                     lr.snap.real_path);
-  }
-
-  {
-    std::scoped_lock lock(ctx->lookup_cache_mutex);
-    Mo2FsContext::LookupCacheEntry lce;
-    lce.child_ino = childIno;
-    lce.entry     = e;
-    ctx->lookup_cache[cacheKey] = lce;
-    ctx->lookup_cache_by_parent[cacheKey.first].push_back(cacheKey.second);
   }
 
   fuse_reply_entry(req, &e);
