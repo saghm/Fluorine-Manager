@@ -416,13 +416,11 @@ int spawn(const SpawnParameters& sp, pid_t& processId)
     // Read per-instance settings from the instance INI (not the global QSettings).
     const Settings* instanceForLaunch = Settings::maybeInstance();
     bool useSteamDrm                  = true;
-    bool useSLR                       = true;
     bool useSteamOverlay              = false;
     QString storeVariant;
     if (instanceForLaunch) {
       const QSettings instanceIni(instanceForLaunch->filename(), QSettings::IniFormat);
       useSteamDrm     = instanceIni.value("fluorine/steam_drm", true).toBool();
-      useSLR          = instanceIni.value("fluorine/use_slr", true).toBool();
       useSteamOverlay = instanceIni.value("fluorine/steam_overlay", false).toBool();
       storeVariant    = instanceIni.value("game_edition").toString().trimmed();
     }
@@ -430,7 +428,7 @@ int spawn(const SpawnParameters& sp, pid_t& processId)
     launcher.setSteamDrm(useSteamDrm)
         .setSteamOverlay(useSteamOverlay)
         .setStoreVariant(storeVariant)
-        .setUseSLR(useSLR);
+        .setUseSLR(true);
 
     const QString prefixPath = resolvePrefixPath();
     if (prefixPath.isEmpty()) {

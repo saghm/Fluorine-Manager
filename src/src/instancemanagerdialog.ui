@@ -326,11 +326,14 @@
                </item>
                <item row="11" column="0" colspan="2">
                 <widget class="QCheckBox" name="steamLinuxRuntimeCheckBox">
+                 <property name="enabled">
+                  <bool>false</bool>
+                 </property>
                  <property name="text">
-                  <string>Use Steam Linux Runtime (SLR)</string>
+                  <string>Steam Linux Runtime (required for Proton)</string>
                  </property>
                  <property name="toolTip">
-                  <string>Run games inside the Steam Linux Runtime container (pressure-vessel). Provides GStreamer, 32-bit libs, and other dependencies for non-FHS distros like NixOS. Requires Steam to be installed.</string>
+                  <string>Proton launches always run inside the Steam Linux Runtime container. Native Linux executables are launched directly.</string>
                  </property>
                  <property name="checked">
                   <bool>true</bool>

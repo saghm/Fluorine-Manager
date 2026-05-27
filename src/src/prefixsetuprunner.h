@@ -141,6 +141,7 @@ private:
   QString findProtonScript() const;
   static QString detectSteamPath() ;
   QString detectSLRRunScript() const;
+  bool ensureSLRRunScript();
   static QString fluorineBinDir() ;
   static QString fluorineCacheDir() ;
   static QString fluorineTmpDir() ;

@@ -231,18 +231,6 @@ InstanceManagerDialog::InstanceManagerDialog(PluginContainer& pc, QWidget* paren
     s.setValue("fluorine/steam_drm", checked);
   });
 
-  connect(ui->steamLinuxRuntimeCheckBox, &QCheckBox::toggled, [&](bool checked) {
-    const auto* inst = singleSelection();
-    if (!inst) return;
-    const QString ini = inst->iniPath();
-    if (ini.isEmpty()) return;
-    QSettings s(ini, QSettings::IniFormat);
-    s.setValue("fluorine/use_slr", checked);
-    if (checked) {
-      downloadSLRIfNeeded();
-    }
-  });
-
   connect(ui->vfsRootBuilderCheckBox, &QCheckBox::toggled, [&](bool checked) {
     const auto* inst = singleSelection();
     if (!inst) return;
@@ -840,7 +828,7 @@ void InstanceManagerDialog::fillData(const Instance& ii)
       ui->steamDrmCheckBox->blockSignals(false);
 
       ui->steamLinuxRuntimeCheckBox->blockSignals(true);
-      ui->steamLinuxRuntimeCheckBox->setChecked(s.value("fluorine/use_slr", true).toBool());
+      ui->steamLinuxRuntimeCheckBox->setChecked(true);
       ui->steamLinuxRuntimeCheckBox->blockSignals(false);
 
       ui->vfsRootBuilderCheckBox->blockSignals(true);
@@ -998,19 +986,7 @@ void InstanceManagerDialog::downloadSLRIfNeeded()
         if (!err.isEmpty()) {
           MOBase::log::error("[SLR] Download failed: {}", err);
           QMessageBox::warning(this, tr("Steam Linux Runtime"),
-              tr("Download failed:\n%1\n\nSLR has been disabled for this instance.")
-                  .arg(err));
-          ui->steamLinuxRuntimeCheckBox->blockSignals(true);
-          ui->steamLinuxRuntimeCheckBox->setChecked(false);
-          ui->steamLinuxRuntimeCheckBox->blockSignals(false);
-          const auto* inst = singleSelection();
-          if (inst) {
-            const QString ini = inst->iniPath();
-            if (!ini.isEmpty()) {
-              QSettings s(ini, QSettings::IniFormat);
-              s.setValue("fluorine/use_slr", false);
-            }
-          }
+              tr("Download failed:\n%1").arg(err));
         } else {
           MOBase::log::info("[SLR] Steam Linux Runtime installed successfully");
           progress->setLabelText(tr("Steam Linux Runtime is ready."));

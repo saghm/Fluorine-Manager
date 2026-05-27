@@ -23,6 +23,7 @@
 #include <QStandardPaths>
 #include <QTemporaryFile>
 #include <QThread>
+#include <QTimer>
 #include <QUrl>
 
 #include <log.h>
@@ -952,6 +953,10 @@ bool PrefixSetupRunner::stepProtonInit()
   // registry/filesystem locks and any new wineboot -u deadlocks waiting
   // for them. Nothing cleans them up automatically.
   killStalePrefixProcesses();
+
+  if (!ensureSLRRunScript()) {
+    return false;
+  }
 
   // Proton-GE invokes `xrandr` during protonfixes at wineboot time. The
   // steamrt4 pressure-vessel container ships without it, so back-fill our
@@ -2126,7 +2131,8 @@ QString PrefixSetupRunner::detectSLRRunScript() const
       fluorineDataDir() + "/steamrt/SteamLinuxRuntime_sniper/run",
   };
   for (const QString& p : nakCandidates) {
-    if (QFileInfo::exists(p))
+    const QFileInfo fi(p);
+    if (fi.exists() && fi.isExecutable())
       return p;
   }
 
@@ -2141,10 +2147,64 @@ QString PrefixSetupRunner::detectSLRRunScript() const
   };
 
   for (const QString& p : candidates) {
-    if (!p.isEmpty() && QFileInfo::exists(p))
+    const QFileInfo fi(p);
+    if (!p.isEmpty() && fi.exists() && fi.isExecutable())
       return p;
   }
   return {};
+}
+
+bool PrefixSetupRunner::ensureSLRRunScript()
+{
+  if (!m_slrRunScript.isEmpty()) {
+    emit logMessage(
+        QStringLiteral("Using Steam Linux Runtime: %1").arg(m_slrRunScript));
+    return true;
+  }
+
+  emit logMessage(
+      "Steam Linux Runtime is required for Proton prefix initialization; "
+      "installing steamrt4...");
+  emit downloadStarted(QStringLiteral("Steam Linux Runtime"));
+
+  int cancelFlag = 0;
+  QTimer cancelTimer;
+  connect(&cancelTimer, &QTimer::timeout, this, [this, &cancelFlag] {
+    if (isCancelled()) {
+      cancelFlag = 1;
+    }
+  });
+  cancelTimer.start(200);
+
+  const QString err = downloadSlr(
+      nullptr,
+      [this](const QString& msg) { emit logMessage(msg); },
+      &cancelFlag);
+
+  cancelTimer.stop();
+  emit downloadFinished();
+
+  if (cancelFlag != 0) {
+    currentStep().errorMessage = "Steam Linux Runtime download cancelled";
+    return false;
+  }
+
+  if (!err.isEmpty()) {
+    currentStep().errorMessage =
+        QStringLiteral("Steam Linux Runtime install failed: %1").arg(err);
+    return false;
+  }
+
+  m_slrRunScript = detectSLRRunScript();
+  if (m_slrRunScript.isEmpty()) {
+    currentStep().errorMessage =
+        "Steam Linux Runtime installed but run script was not found";
+    return false;
+  }
+
+  emit logMessage(
+      QStringLiteral("Using Steam Linux Runtime: %1").arg(m_slrRunScript));
+  return true;
 }
 
 QString PrefixSetupRunner::fluorineBinDir()
