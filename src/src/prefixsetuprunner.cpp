@@ -958,15 +958,14 @@ bool PrefixSetupRunner::stepProtonInit()
     return false;
   }
 
-  // Proton-GE invokes `xrandr` during protonfixes at wineboot time. The
-  // steamrt4 pressure-vessel container ships without it, so back-fill our
-  // injected copy before init if missing — otherwise the protonfix
-  // silently no-ops and prefix setup can hang or fall back to a broken
-  // state on multi-monitor machines. See issue #49.
-  if (!isXrandrInjected()) {
-    emit logMessage("xrandr helper missing; downloading…");
-    ensureXrandrInstalled(
-        nullptr, [this](const QString& msg) { emit logMessage(msg); });
+  // Proton-GE invokes `xrandr` during protonfixes at wineboot time. Always
+  // ensure Fluorine's injected helper exists after SLR is available, then the
+  // wrapper below exposes that exact directory and prepends it to PATH.
+  emit logMessage("Ensuring xrandr helper is available...");
+  if (!ensureXrandrInstalled(
+          nullptr, [this](const QString& msg) { emit logMessage(msg); })) {
+    currentStep().errorMessage = "Failed to install xrandr helper";
+    return false;
   }
 
   const QString steamPath = detectSteamPath();
