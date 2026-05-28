@@ -10,7 +10,7 @@ ENV PATH="/opt/rust/cargo/bin:${PATH}"
 # Python comes from uv (python-build-standalone), not apt.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Build essentials
-    build-essential cmake ninja-build ccache \
+    build-essential cmake meson ninja-build ccache \
     git curl wget file binutils patchelf pkg-config ca-certificates \
     # Library dependencies
     libboost-all-dev \
@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libfontconfig1-dev \
     libspdlog-dev \
     libfuse3-dev fuse3 libcap-dev \
+    liburing-dev libnuma-dev \
     liblz4-dev zlib1g-dev libzstd-dev libbz2-dev liblzma-dev \
     libssl-dev libcurl4-openssl-dev \
     libtomlplusplus-dev \
@@ -38,6 +39,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Static analysis
     clang-tidy \
     && rm -rf /var/lib/apt/lists/*
+
+# Ubuntu 25.10 currently carries libfuse 3.17.x, which cannot mount with
+# the stable FUSE-over-io_uring option. Build the pinned upstream release
+# so Fluorine compiles and bundles matching 3.18.x headers/runtime.
+ARG LIBFUSE_VERSION=3.18.2
+RUN curl -L --fail \
+      "https://github.com/libfuse/libfuse/releases/download/fuse-${LIBFUSE_VERSION}/fuse-${LIBFUSE_VERSION}.tar.gz" \
+      -o /tmp/libfuse.tar.gz && \
+    tar -xf /tmp/libfuse.tar.gz -C /tmp && \
+    meson setup /tmp/libfuse-build "/tmp/fuse-${LIBFUSE_VERSION}" \
+      --prefix=/usr \
+      --libdir=lib/x86_64-linux-gnu \
+      -Dexamples=false \
+      -Dutils=true \
+      -Dtests=false \
+      -Duseroot=false \
+      -Denable-io-uring=true && \
+    meson compile -C /tmp/libfuse-build && \
+    meson install -C /tmp/libfuse-build && \
+    ldconfig && \
+    test "$(pkg-config --modversion fuse3)" = "${LIBFUSE_VERSION}" && \
+    rm -rf /tmp/libfuse.tar.gz "/tmp/fuse-${LIBFUSE_VERSION}" /tmp/libfuse-build
 
 # ── uv (Astral) ──
 # Single static binary; manages Python interpreters and packages.

@@ -33,9 +33,11 @@ private:
   void onWinetricks();
   void onBrowsePrefixLocation();
   void onDownloadSLR();
+  void onFuseIoUringToggled(bool checked);
 
   static QString ensureWinetricks();
   static QString findProtonWine(const QString& protonPath);
+  void refreshFuseIoUringState();
 
   void runPrefixSetupDialog(uint32_t appId, const QString& prefixPath,
                             const QString& protonName, const QString& protonPath);
