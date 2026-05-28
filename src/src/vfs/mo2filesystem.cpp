@@ -9,8 +9,10 @@
 #include <algorithm>
 #include <chrono>
 #include <climits>
+#include <cstdint>
 #include <cstring>
 #include <filesystem>
+#include <utility>
 
 #if __has_include(<linux/msdos_fs.h>)
 #include <linux/msdos_fs.h>
@@ -27,6 +29,7 @@ constexpr double TTL_SECONDS          = 86400.0;  // 24 hours
 constexpr double NEGATIVE_TTL_SECONDS = 3600.0;   // 1 hour — Wine probes many non-existent files
 constexpr double ATTR_CACHE_SECONDS   = 86400.0;
 constexpr size_t MAX_RETAINED_RO_FDS  = 1024;
+constexpr uint64_t SLOW_OP_LOG_NS     = 100ull * 1000ull * 1000ull;
 
 void fillStatForDir(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid);
 void fillStatForFile(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid,
@@ -43,9 +46,13 @@ bool pathTouchesMutation(const std::string& cachedPath,
 struct OpTimer
 {
   std::atomic<uint64_t>* sink;
+  const char* op;
+  std::string path;
   std::chrono::steady_clock::time_point start;
-  explicit OpTimer(std::atomic<uint64_t>* s)
-      : sink(s), start(std::chrono::steady_clock::now()) {}
+  explicit OpTimer(std::atomic<uint64_t>* s, const char* opName = nullptr,
+                   std::string opPath = {})
+      : sink(s), op(opName), path(std::move(opPath)),
+        start(std::chrono::steady_clock::now()) {}
   ~OpTimer()
   {
     if (sink == nullptr) return;
@@ -53,10 +60,67 @@ struct OpTimer
     const uint64_t ns = static_cast<uint64_t>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
     sink->fetch_add(ns, std::memory_order_relaxed);
+    if (op != nullptr && ns >= SLOW_OP_LOG_NS) {
+      std::fprintf(stderr, "[VFS] slow op=%s elapsed=%.1fms path='%s'\n",
+                   op, ns / 1e6, path.c_str());
+    }
   }
   OpTimer(const OpTimer&)            = delete;
   OpTimer& operator=(const OpTimer&)  = delete;
 };
+
+bool fuseHasFeature(const struct fuse_conn_info* conn, uint64_t flag)
+{
+  if (conn == nullptr) {
+    return false;
+  }
+#ifdef FUSE_CAP_OVER_IO_URING
+  return (conn->capable_ext & flag) != 0 ||
+         (flag <= UINT32_MAX && (conn->capable & static_cast<uint32_t>(flag)) != 0);
+#else
+  return (conn->capable & static_cast<uint32_t>(flag)) != 0;
+#endif
+}
+
+bool fuseWantsFeature(const struct fuse_conn_info* conn, uint64_t flag)
+{
+  if (conn == nullptr) {
+    return false;
+  }
+#if defined(FUSE_CAP_OVER_IO_URING) && FUSE_VERSION >= FUSE_MAKE_VERSION(3, 17)
+  return fuse_get_feature_flag(const_cast<struct fuse_conn_info*>(conn), flag);
+#else
+  return (conn->want & static_cast<uint32_t>(flag)) != 0;
+#endif
+}
+
+bool fuseRequestFeature(struct fuse_conn_info* conn, uint64_t flag)
+{
+  if (conn == nullptr) {
+    return false;
+  }
+#if defined(FUSE_CAP_OVER_IO_URING) && FUSE_VERSION >= FUSE_MAKE_VERSION(3, 17)
+  return fuse_set_feature_flag(conn, flag);
+#else
+  if ((conn->capable & static_cast<uint32_t>(flag)) == 0) {
+    return false;
+  }
+  conn->want |= static_cast<uint32_t>(flag);
+  return true;
+#endif
+}
+
+void fuseDropFeature(struct fuse_conn_info* conn, uint64_t flag)
+{
+  if (conn == nullptr) {
+    return;
+  }
+#if defined(FUSE_CAP_OVER_IO_URING) && FUSE_VERSION >= FUSE_MAKE_VERSION(3, 17)
+  fuse_unset_feature_flag(conn, flag);
+#else
+  conn->want &= ~static_cast<uint32_t>(flag);
+#endif
+}
 
 void maybeLogCounters(Mo2FsContext* ctx)
 {
@@ -74,15 +138,31 @@ void maybeLogCounters(Mo2FsContext* ctx)
   const uint64_t rc = ctx->readdir_count.load(std::memory_order_relaxed);
   const uint64_t oc = ctx->open_count.load(std::memory_order_relaxed);
   const uint64_t rdc = ctx->read_count.load(std::memory_order_relaxed);
+  const uint64_t wc = ctx->write_count.load(std::memory_order_relaxed);
+  const uint64_t cc = ctx->create_count.load(std::memory_order_relaxed);
+  const uint64_t rnc = ctx->rename_count.load(std::memory_order_relaxed);
+  const uint64_t sc = ctx->setattr_count.load(std::memory_order_relaxed);
+  const uint64_t uc = ctx->unlink_count.load(std::memory_order_relaxed);
+  const uint64_t fc = ctx->flush_count.load(std::memory_order_relaxed);
+  const uint64_t fsc = ctx->fsync_count.load(std::memory_order_relaxed);
   const uint64_t ic = ctx->ioctl_count.load(std::memory_order_relaxed);
 
   std::fprintf(stderr,
-               "[VFS] ops lookup=%llu getattr=%llu readdir=%llu open=%llu read=%llu ioctl=%llu",
+               "[VFS] ops lookup=%llu getattr=%llu readdir=%llu open=%llu read=%llu "
+               "write=%llu create=%llu rename=%llu setattr=%llu unlink=%llu "
+               "flush=%llu fsync=%llu ioctl=%llu",
                static_cast<unsigned long long>(lc),
                static_cast<unsigned long long>(gc),
                static_cast<unsigned long long>(rc),
                static_cast<unsigned long long>(oc),
                static_cast<unsigned long long>(rdc),
+               static_cast<unsigned long long>(wc),
+               static_cast<unsigned long long>(cc),
+               static_cast<unsigned long long>(rnc),
+               static_cast<unsigned long long>(sc),
+               static_cast<unsigned long long>(uc),
+               static_cast<unsigned long long>(fc),
+               static_cast<unsigned long long>(fsc),
                static_cast<unsigned long long>(ic));
   {
     std::scoped_lock lock(ctx->open_files_mutex);
@@ -90,6 +170,8 @@ void maybeLogCounters(Mo2FsContext* ctx)
   }
   std::fprintf(stderr,
                "[VFS] cache lookup_hit=%llu lookup_miss=%llu lookup_inval=%llu "
+               "attr_hit=%llu attr_miss=%llu dir_hit=%llu dir_miss=%llu "
+               "readdir_blob_hit=%llu readdirplus_blob_hit=%llu "
                "lazy_ro_open=%llu ro_fd_hit=%llu ro_fd_evict=%llu\n",
                static_cast<unsigned long long>(
                    ctx->lookup_cache_hits.load(std::memory_order_relaxed)),
@@ -98,11 +180,72 @@ void maybeLogCounters(Mo2FsContext* ctx)
                static_cast<unsigned long long>(
                    ctx->lookup_cache_invalidations.load(std::memory_order_relaxed)),
                static_cast<unsigned long long>(
+                   ctx->attr_cache_hits.load(std::memory_order_relaxed)),
+               static_cast<unsigned long long>(
+                   ctx->attr_cache_misses.load(std::memory_order_relaxed)),
+               static_cast<unsigned long long>(
+                   ctx->dir_cache_hits.load(std::memory_order_relaxed)),
+               static_cast<unsigned long long>(
+                   ctx->dir_cache_misses.load(std::memory_order_relaxed)),
+               static_cast<unsigned long long>(
+                   ctx->readdir_blob_hits.load(std::memory_order_relaxed)),
+               static_cast<unsigned long long>(
+                   ctx->readdirplus_blob_hits.load(std::memory_order_relaxed)),
+               static_cast<unsigned long long>(
                    ctx->lazy_ro_fd_opens.load(std::memory_order_relaxed)),
                static_cast<unsigned long long>(
                    ctx->retained_ro_fd_hits.load(std::memory_order_relaxed)),
                static_cast<unsigned long long>(
                    ctx->retained_ro_fd_evictions.load(std::memory_order_relaxed)));
+  std::fprintf(stderr,
+               "[VFS] io bytes_read=%llu bytes_written=%llu cow_writes=%llu "
+               "transport_uring=%llu transport_legacy=%llu\n",
+               static_cast<unsigned long long>(
+                   ctx->read_bytes.load(std::memory_order_relaxed)),
+               static_cast<unsigned long long>(
+                   ctx->write_bytes.load(std::memory_order_relaxed)),
+               static_cast<unsigned long long>(
+                   ctx->cow_write_count.load(std::memory_order_relaxed)),
+               static_cast<unsigned long long>(
+                   ctx->uring_request_count.load(std::memory_order_relaxed)),
+               static_cast<unsigned long long>(
+                   ctx->legacy_request_count.load(std::memory_order_relaxed)));
+  {
+    size_t lookupSize = 0;
+    size_t attrSize = 0;
+    size_t dirSize = 0;
+    size_t readdirBlobSize = 0;
+    size_t readdirPlusBlobSize = 0;
+    size_t openDirSize = 0;
+    size_t nodeSize = 0;
+    {
+      std::scoped_lock lock(ctx->lookup_cache_mutex);
+      lookupSize = ctx->lookup_cache.size();
+    }
+    {
+      std::scoped_lock lock(ctx->attr_cache_mutex);
+      attrSize = ctx->attr_cache.size();
+    }
+    {
+      std::scoped_lock lock(ctx->dir_cache_mutex);
+      dirSize = ctx->dir_cache.size();
+      readdirBlobSize = ctx->readdir_blob_cache.size();
+      readdirPlusBlobSize = ctx->readdirplus_blob_cache.size();
+    }
+    {
+      std::scoped_lock lock(ctx->open_dirs_mutex);
+      openDirSize = ctx->open_dirs.size();
+    }
+    {
+      std::scoped_lock lock(ctx->node_cache_mutex);
+      nodeSize = ctx->node_cache.size();
+    }
+    std::fprintf(stderr,
+                 "[VFS] cache_size lookup=%zu attr=%zu dir=%zu readdir_blob=%zu "
+                 "readdirplus_blob=%zu open_dirs=%zu node=%zu\n",
+                 lookupSize, attrSize, dirSize, readdirBlobSize,
+                 readdirPlusBlobSize, openDirSize, nodeSize);
+  }
 
   // Per-op wall-clock totals and averages (microseconds).
   auto avgUs = [](uint64_t ns, uint64_t count) -> double {
@@ -113,14 +256,32 @@ void maybeLogCounters(Mo2FsContext* ctx)
   const uint64_t rns = ctx->readdir_ns.load(std::memory_order_relaxed);
   const uint64_t ons = ctx->open_ns.load(std::memory_order_relaxed);
   const uint64_t rdns = ctx->read_ns.load(std::memory_order_relaxed);
+  const uint64_t wns = ctx->write_ns.load(std::memory_order_relaxed);
+  const uint64_t cns = ctx->create_ns.load(std::memory_order_relaxed);
+  const uint64_t rnns = ctx->rename_ns.load(std::memory_order_relaxed);
+  const uint64_t sns = ctx->setattr_ns.load(std::memory_order_relaxed);
+  const uint64_t uns = ctx->unlink_ns.load(std::memory_order_relaxed);
+  const uint64_t fns = ctx->flush_ns.load(std::memory_order_relaxed);
+  const uint64_t fsns = ctx->fsync_ns.load(std::memory_order_relaxed);
   std::fprintf(stderr,
                "[VFS] time lookup=%.1fms/%.1fus-avg getattr=%.1fms/%.1fus readdir=%.1fms/%.1fus "
-               "open=%.1fms/%.1fus read=%.1fms/%.1fus\n",
+               "open=%.1fms/%.1fus read=%.1fms/%.1fus write=%.1fms/%.1fus\n",
                lns / 1e6, avgUs(lns, lc),
                gns / 1e6, avgUs(gns, gc),
                rns / 1e6, avgUs(rns, rc),
                ons / 1e6, avgUs(ons, oc),
-               rdns / 1e6, avgUs(rdns, rdc));
+               rdns / 1e6, avgUs(rdns, rdc),
+               wns / 1e6, avgUs(wns, wc));
+  std::fprintf(stderr,
+               "[VFS] time_mut create=%.1fms/%.1fus rename=%.1fms/%.1fus "
+               "setattr=%.1fms/%.1fus unlink=%.1fms/%.1fus flush=%.1fms/%.1fus "
+               "fsync=%.1fms/%.1fus\n",
+               cns / 1e6, avgUs(cns, cc),
+               rnns / 1e6, avgUs(rnns, rnc),
+               sns / 1e6, avgUs(sns, sc),
+               uns / 1e6, avgUs(uns, uc),
+               fns / 1e6, avgUs(fns, fc),
+               fsns / 1e6, avgUs(fsns, fsc));
 
   // Process-wide CPU usage + delta since last tick. Lets us tell whether
   // high per-op wall time is spent burning CPU (parsing, mutex contention)
@@ -669,9 +830,11 @@ std::shared_ptr<std::vector<Mo2FsContext::DirEntry>> getOrBuildDirEntries(
     auto it = ctx->dir_cache.find(path);
     if (it != ctx->dir_cache.end()) {
       *ok = true;
+      ctx->dir_cache_hits.fetch_add(1, std::memory_order_relaxed);
       return it->second;
     }
   }
+  ctx->dir_cache_misses.fetch_add(1, std::memory_order_relaxed);
 
   auto entries = std::make_shared<std::vector<Mo2FsContext::DirEntry>>(
       buildDirEntries(ctx, path, ino, ok));
@@ -983,24 +1146,24 @@ void mo2_init(void* userdata, struct fuse_conn_info* conn)
   // reduction.  Our VFS tree is immutable during a session — we handle
   // invalidation ourselves via fuse_lowlevel_notify_inval_inode() when
   // files are created/renamed/deleted through our own handlers.
-  conn->want &= ~FUSE_CAP_AUTO_INVAL_DATA;
+  fuseDropFeature(conn, FUSE_CAP_AUTO_INVAL_DATA);
 
   // Let us control page cache invalidation explicitly.
-  if (conn->capable & FUSE_CAP_EXPLICIT_INVAL_DATA) {
-    conn->want |= FUSE_CAP_EXPLICIT_INVAL_DATA;
+  if (fuseHasFeature(conn, FUSE_CAP_EXPLICIT_INVAL_DATA)) {
+    fuseRequestFeature(conn, FUSE_CAP_EXPLICIT_INVAL_DATA);
   }
 
   // Plain readdir is the conservative default for large modlists. Wine and
   // game startup often enumerate large directories but only stat/open a small
   // subset, so forced readdirplus can send a lot of unused metadata.
-  if (conn->capable & FUSE_CAP_READDIRPLUS) {
-    conn->want &= ~FUSE_CAP_READDIRPLUS;
-    conn->want &= ~FUSE_CAP_READDIRPLUS_AUTO;
+  if (fuseHasFeature(conn, FUSE_CAP_READDIRPLUS)) {
+    fuseDropFeature(conn, FUSE_CAP_READDIRPLUS);
+    fuseDropFeature(conn, FUSE_CAP_READDIRPLUS_AUTO);
   }
 
 #ifdef FUSE_CAP_NO_OPENDIR_SUPPORT
-  if (conn->capable & FUSE_CAP_NO_OPENDIR_SUPPORT) {
-    conn->want |= FUSE_CAP_NO_OPENDIR_SUPPORT;
+  if (fuseHasFeature(conn, FUSE_CAP_NO_OPENDIR_SUPPORT)) {
+    fuseRequestFeature(conn, FUSE_CAP_NO_OPENDIR_SUPPORT);
   }
 #endif
 
@@ -1009,41 +1172,44 @@ void mo2_init(void* userdata, struct fuse_conn_info* conn)
   // our read-heavy VFS more than the write buffering helps.
 
   // Cache symlink targets in the kernel page cache.
-  if (conn->capable & FUSE_CAP_CACHE_SYMLINKS) {
-    conn->want |= FUSE_CAP_CACHE_SYMLINKS;
+  if (fuseHasFeature(conn, FUSE_CAP_CACHE_SYMLINKS)) {
+    fuseRequestFeature(conn, FUSE_CAP_CACHE_SYMLINKS);
   }
 
   // Allow concurrent lookup()/readdir() on the same directory.
-  if (conn->capable & FUSE_CAP_PARALLEL_DIROPS) {
-    conn->want |= FUSE_CAP_PARALLEL_DIROPS;
+  if (fuseHasFeature(conn, FUSE_CAP_PARALLEL_DIROPS)) {
+    fuseRequestFeature(conn, FUSE_CAP_PARALLEL_DIROPS);
   }
 
   // Splice: reduce kernel↔userspace data copies for reads and writes.
-  if (conn->capable & FUSE_CAP_SPLICE_WRITE) {
-    conn->want |= FUSE_CAP_SPLICE_WRITE;
+  if (fuseHasFeature(conn, FUSE_CAP_SPLICE_WRITE)) {
+    fuseRequestFeature(conn, FUSE_CAP_SPLICE_WRITE);
   }
-  if (conn->capable & FUSE_CAP_SPLICE_MOVE) {
-    conn->want |= FUSE_CAP_SPLICE_MOVE;
+  if (fuseHasFeature(conn, FUSE_CAP_SPLICE_MOVE)) {
+    fuseRequestFeature(conn, FUSE_CAP_SPLICE_MOVE);
   }
-  if (conn->capable & FUSE_CAP_SPLICE_READ) {
-    conn->want |= FUSE_CAP_SPLICE_READ;
+  if (fuseHasFeature(conn, FUSE_CAP_SPLICE_READ)) {
+    fuseRequestFeature(conn, FUSE_CAP_SPLICE_READ);
   }
 
   // Allow concurrent submission of split direct I/O requests.
   // Harmless when not triggered; helps if Wine opens files with O_DIRECT.
-  if (conn->capable & FUSE_CAP_ASYNC_DIO) {
-    conn->want |= FUSE_CAP_ASYNC_DIO;
+  if (fuseHasFeature(conn, FUSE_CAP_ASYNC_DIO)) {
+    fuseRequestFeature(conn, FUSE_CAP_ASYNC_DIO);
   }
 
   // Softer dentry invalidation: mark entries as expired rather than
   // forcefully removing them, reducing cascading cache evictions.
-  if (conn->capable & FUSE_CAP_EXPIRE_ONLY) {
-    conn->want |= FUSE_CAP_EXPIRE_ONLY;
+  if (fuseHasFeature(conn, FUSE_CAP_EXPIRE_ONLY)) {
+    fuseRequestFeature(conn, FUSE_CAP_EXPIRE_ONLY);
   }
 
+  bool uringCapable = false;
+  bool uringWanted = false;
 #ifdef FUSE_CAP_OVER_IO_URING
-  if (conn->capable & FUSE_CAP_OVER_IO_URING) {
-    std::fprintf(stderr, "[VFS] init: kernel reports FUSE over io_uring support\n");
+  uringCapable = fuseHasFeature(conn, FUSE_CAP_OVER_IO_URING);
+  if (uringCapable) {
+    uringWanted = fuseRequestFeature(conn, FUSE_CAP_OVER_IO_URING);
   }
 #endif
 
@@ -1073,16 +1239,29 @@ void mo2_init(void* userdata, struct fuse_conn_info* conn)
 
   std::fprintf(stderr,
                "[VFS] init: auto_inval=%d explicit_inval=%d readdirplus=%d "
-               "no_opendir=%d max_bg=%u max_readahead=%u\n",
-               (conn->want & FUSE_CAP_AUTO_INVAL_DATA) ? 1 : 0,
-               (conn->want & FUSE_CAP_EXPLICIT_INVAL_DATA) ? 1 : 0,
-               (conn->want & FUSE_CAP_READDIRPLUS) ? 1 : 0,
+               "no_opendir=%d uring_capable=%d uring_wanted=%d "
+               "max_bg=%u max_readahead=%u\n",
+               fuseWantsFeature(conn, FUSE_CAP_AUTO_INVAL_DATA) ? 1 : 0,
+               fuseWantsFeature(conn, FUSE_CAP_EXPLICIT_INVAL_DATA) ? 1 : 0,
+               fuseWantsFeature(conn, FUSE_CAP_READDIRPLUS) ? 1 : 0,
 #ifdef FUSE_CAP_NO_OPENDIR_SUPPORT
-               (conn->want & FUSE_CAP_NO_OPENDIR_SUPPORT) ? 1 : 0,
+               fuseWantsFeature(conn, FUSE_CAP_NO_OPENDIR_SUPPORT) ? 1 : 0,
 #else
                0,
 #endif
+               uringCapable ? 1 : 0,
+               uringWanted ? 1 : 0,
                conn->max_background, conn->max_readahead);
+  std::fprintf(stderr,
+               "[VFS] init_caps: libfuse=%s headers=%d.%d proto=%u.%u "
+               "capable=0x%08x capable_ext=0x%016llx want=0x%08x "
+               "want_ext=0x%016llx max_write=%u max_read=%u\n",
+               fuse_pkgversion(), FUSE_MAJOR_VERSION, FUSE_MINOR_VERSION,
+               conn->proto_major, conn->proto_minor, conn->capable,
+               static_cast<unsigned long long>(conn->capable_ext),
+               conn->want,
+               static_cast<unsigned long long>(conn->want_ext),
+               conn->max_write, conn->max_read);
 }
 
 void mo2_lookup(fuse_req_t req, fuse_ino_t parent, const char* name)
@@ -1092,7 +1271,7 @@ void mo2_lookup(fuse_req_t req, fuse_ino_t parent, const char* name)
     fuse_reply_err(req, EINVAL);
     return;
   }
-  OpTimer _t(&ctx->lookup_ns);
+  OpTimer _t(&ctx->lookup_ns, "lookup");
   ctx->lookup_count.fetch_add(1, std::memory_order_relaxed);
   maybeLogCounters(ctx);
 
@@ -1134,6 +1313,7 @@ void mo2_lookup(fuse_req_t req, fuse_ino_t parent, const char* name)
     return;
   }
   const std::string childPath = joinPath(parentPath, lr.canonical_name);
+  _t.path = childPath;
   samplePathStat(ctx, "lookup", childPath, false);
 
   fuse_ino_t childIno = 0;
@@ -1188,7 +1368,7 @@ void mo2_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* /*fi*/)
     fuse_reply_err(req, EINVAL);
     return;
   }
-  OpTimer _t(&ctx->getattr_ns);
+  OpTimer _t(&ctx->getattr_ns, "getattr");
   ctx->getattr_count.fetch_add(1, std::memory_order_relaxed);
   maybeLogCounters(ctx);
 
@@ -1197,12 +1377,15 @@ void mo2_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* /*fi*/)
     auto it = ctx->attr_cache.find(ino);
     if (it != ctx->attr_cache.end() && it->second.valid &&
         std::chrono::steady_clock::now() < it->second.expires_at) {
+      ctx->attr_cache_hits.fetch_add(1, std::memory_order_relaxed);
       fuse_reply_attr(req, &it->second.st, TTL_SECONDS);
       return;
     }
   }
+  ctx->attr_cache_misses.fetch_add(1, std::memory_order_relaxed);
 
   if (ino == 1) {
+    _t.path = "/";
     struct stat st;
     fillStatForDir(&st, 1, ctx->uid, ctx->gid);
     {
@@ -1299,7 +1482,7 @@ void mo2_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
     fuse_reply_err(req, EINVAL);
     return;
   }
-  OpTimer _t(&ctx->readdir_ns);
+  OpTimer _t(&ctx->readdir_ns, "readdir");
   ctx->readdir_count.fetch_add(1, std::memory_order_relaxed);
   maybeLogCounters(ctx);
 
@@ -1319,6 +1502,8 @@ void mo2_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
   }
 
   if (readdirBlob != nullptr) {
+    ctx->readdir_blob_hits.fetch_add(1, std::memory_order_relaxed);
+    _t.path = path;
     samplePathStat(ctx, "readdir", path);
     const size_t start = static_cast<size_t>(off);
     if (start >= readdirBlob->size()) {
@@ -1346,6 +1531,7 @@ void mo2_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
     }
   }
   samplePathStat(ctx, "readdir", path);
+  _t.path = path;
 
   // Cap the buffer.  size comes from the kernel and is normally bounded by
   // FUSE protocol limits, but a corrupt/oversized request would otherwise
@@ -1389,7 +1575,7 @@ void mo2_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
     fuse_reply_err(req, EINVAL);
     return;
   }
-  OpTimer _t(&ctx->readdir_ns);
+  OpTimer _t(&ctx->readdir_ns, "readdirplus");
   ctx->readdir_count.fetch_add(1, std::memory_order_relaxed);
   maybeLogCounters(ctx);
 
@@ -1423,6 +1609,8 @@ void mo2_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
   }
 
   if (readdirPlusBlob != nullptr) {
+    ctx->readdirplus_blob_hits.fetch_add(1, std::memory_order_relaxed);
+    _t.path = path;
     samplePathStat(ctx, "readdir", path);
     const size_t start = static_cast<size_t>(off);
     if (start >= readdirPlusBlob->size()) {
@@ -1450,6 +1638,7 @@ void mo2_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
     }
   }
   samplePathStat(ctx, "readdir", path);
+  _t.path = path;
 
   constexpr size_t kReaddirPlusBufMax = 1 * 1024 * 1024;
   if (size > kReaddirPlusBufMax) {
@@ -1492,12 +1681,13 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
     fuse_reply_err(req, EINVAL);
     return;
   }
-  OpTimer _t(&ctx->open_ns);
+  OpTimer _t(&ctx->open_ns, "open");
   ctx->open_count.fetch_add(1, std::memory_order_relaxed);
   maybeLogCounters(ctx);
 
   bool ok = false;
   const std::string path = inodeToPath(ctx, ino, &ok);
+  _t.path = path;
   if (!ok) {
     fuse_reply_err(req, ENOENT);
     return;
@@ -1617,7 +1807,7 @@ void mo2_read(fuse_req_t req, fuse_ino_t /*ino*/, size_t size, off_t off,
     fuse_reply_err(req, EINVAL);
     return;
   }
-  OpTimer _t(&ctx->read_ns);
+  OpTimer _t(&ctx->read_ns, "read");
   ctx->read_count.fetch_add(1, std::memory_order_relaxed);
   maybeLogCounters(ctx);
 
@@ -1636,7 +1826,9 @@ void mo2_read(fuse_req_t req, fuse_ino_t /*ino*/, size_t size, off_t off,
     realPath = it->second.real_path;
     isBacking = it->second.is_backing;
     writable = it->second.writable;
+    _t.path = it->second.relative_path;
   }
+  ctx->read_bytes.fetch_add(static_cast<uint64_t>(size), std::memory_order_relaxed);
 
   int localFd = fd;
   if (localFd < 0) {
@@ -1696,6 +1888,9 @@ void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,
     fuse_reply_err(req, EINVAL);
     return;
   }
+  OpTimer _t(&ctx->write_ns, "write");
+  ctx->write_count.fetch_add(1, std::memory_order_relaxed);
+  maybeLogCounters(ctx);
 
   int fd = -1;
   std::string relativePath;
@@ -1716,6 +1911,7 @@ void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,
     isBacking    = it->second.is_backing;
     relativePath = it->second.relative_path;
     realPath     = it->second.real_path;
+    _t.path      = relativePath;
   }
 
   if (!writable) {
@@ -1727,6 +1923,7 @@ void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,
   // stay in place so config writes update the source mod rather than creating
   // a shadow copy in overwrite.
   if (cowPending) {
+    ctx->cow_write_count.fetch_add(1, std::memory_order_relaxed);
     try {
       std::string newPath;
       if (isBacking && ctx->backing_dir_fd >= 0) {
@@ -1772,6 +1969,8 @@ void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,
     fuse_reply_err(req, EIO);
     return;
   }
+  ctx->write_bytes.fetch_add(static_cast<uint64_t>(written),
+                             std::memory_order_relaxed);
 
   if (!cowPending) {
     // Update VFS tree size/mtime for in-place writes.
@@ -1788,6 +1987,9 @@ void mo2_create(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t mode
     fuse_reply_err(req, EINVAL);
     return;
   }
+  OpTimer _t(&ctx->create_ns, "create");
+  ctx->create_count.fetch_add(1, std::memory_order_relaxed);
+  maybeLogCounters(ctx);
 
   bool ok = false;
   const std::string parentPath = inodeToPath(ctx, parent, &ok);
@@ -1798,6 +2000,7 @@ void mo2_create(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t mode
 
   const std::string relative =
       joinPath(parentPath, canonicalChildName(ctx, parentPath, name));
+  _t.path = relative;
 
   std::string realPath;
 
@@ -1892,6 +2095,9 @@ void mo2_rename(fuse_req_t req, fuse_ino_t parent, const char* name,
     fuse_reply_err(req, EINVAL);
     return;
   }
+  OpTimer _t(&ctx->rename_ns, "rename");
+  ctx->rename_count.fetch_add(1, std::memory_order_relaxed);
+  maybeLogCounters(ctx);
 
   // Reject unsupported flags (only RENAME_NOREPLACE is supported).
   // Wine uses renameat2(RENAME_NOREPLACE) for MoveFileW() calls where
@@ -1913,6 +2119,7 @@ void mo2_rename(fuse_req_t req, fuse_ino_t parent, const char* name,
   const std::string oldRelative = joinPath(parentPath, canonicalChildName(ctx, parentPath, name));
   const std::string newRelative =
       joinPath(newParentPath, canonicalChildName(ctx, newParentPath, newname));
+  _t.path = oldRelative + " -> " + newRelative;
 
   const auto oldSnap = snapshotForPath(ctx, oldRelative);
   if (!oldSnap.found) {
@@ -2009,8 +2216,12 @@ void mo2_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
     fuse_reply_err(req, EINVAL);
     return;
   }
+  OpTimer _t(&ctx->setattr_ns, "setattr");
+  ctx->setattr_count.fetch_add(1, std::memory_order_relaxed);
+  maybeLogCounters(ctx);
 
   if (ino == 1) {
+    _t.path = "/";
     struct stat st;
     fillStatForDir(&st, 1, ctx->uid, ctx->gid);
     fuse_reply_attr(req, &st, TTL_SECONDS);
@@ -2019,6 +2230,7 @@ void mo2_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
 
   bool ok = false;
   const std::string path = inodeToPath(ctx, ino, &ok);
+  _t.path = path;
   if (!ok) {
     fuse_reply_err(req, ENOENT);
     return;
@@ -2221,6 +2433,9 @@ void mo2_unlink(fuse_req_t req, fuse_ino_t parent, const char* name)
     fuse_reply_err(req, EINVAL);
     return;
   }
+  OpTimer _t(&ctx->unlink_ns, "unlink");
+  ctx->unlink_count.fetch_add(1, std::memory_order_relaxed);
+  maybeLogCounters(ctx);
 
   bool ok = false;
   const std::string parentPath = inodeToPath(ctx, parent, &ok);
@@ -2230,6 +2445,7 @@ void mo2_unlink(fuse_req_t req, fuse_ino_t parent, const char* name)
   }
 
   const std::string relative = joinPath(parentPath, canonicalChildName(ctx, parentPath, name));
+  _t.path = relative;
   if (!ctx->overwrite->removeFile(relative)) {
     const auto snap = snapshotForPath(ctx, relative);
     if (!snap.found || snap.is_directory) {
@@ -2423,6 +2639,9 @@ void mo2_flush(fuse_req_t req, fuse_ino_t /*ino*/, struct fuse_file_info* fi)
     fuse_reply_err(req, EINVAL);
     return;
   }
+  OpTimer _t(&ctx->flush_ns, "flush");
+  ctx->flush_count.fetch_add(1, std::memory_order_relaxed);
+  maybeLogCounters(ctx);
 
   int fd = -1;
   bool writable = false;
@@ -2435,6 +2654,7 @@ void mo2_flush(fuse_req_t req, fuse_ino_t /*ino*/, struct fuse_file_info* fi)
     }
     fd = it->second.fd;
     writable = it->second.writable;
+    _t.path = it->second.relative_path;
   }
 
   if (writable && fd >= 0 && fdatasync(fd) != 0) {
@@ -2452,6 +2672,9 @@ void mo2_fsync(fuse_req_t req, fuse_ino_t /*ino*/, int datasync,
     fuse_reply_err(req, EINVAL);
     return;
   }
+  OpTimer _t(&ctx->fsync_ns, "fsync");
+  ctx->fsync_count.fetch_add(1, std::memory_order_relaxed);
+  maybeLogCounters(ctx);
 
   int fd = -1;
   {
@@ -2462,6 +2685,7 @@ void mo2_fsync(fuse_req_t req, fuse_ino_t /*ino*/, int datasync,
       return;
     }
     fd = it->second.fd;
+    _t.path = it->second.relative_path;
   }
 
   if (fd >= 0) {

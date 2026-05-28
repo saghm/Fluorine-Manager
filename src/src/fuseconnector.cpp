@@ -22,6 +22,7 @@
 #include <chrono>
 #include <cerrno>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
 #include <filesystem>
@@ -54,6 +55,69 @@ const char* getFuseMountPointForCrashCleanup()
 namespace
 {
 namespace fs = std::filesystem;
+
+bool parseVersionTriplet(const char* text, int* major, int* minor, int* patch)
+{
+  if (text == nullptr || major == nullptr || minor == nullptr || patch == nullptr) {
+    return false;
+  }
+
+  char* end = nullptr;
+  const long ma = std::strtol(text, &end, 10);
+  if (end == text || *end != '.') {
+    return false;
+  }
+  const long mi = std::strtol(end + 1, &end, 10);
+  if (*end != '.') {
+    return false;
+  }
+  const long pa = std::strtol(end + 1, &end, 10);
+  if (ma < 0 || mi < 0 || pa < 0) {
+    return false;
+  }
+
+  *major = static_cast<int>(ma);
+  *minor = static_cast<int>(mi);
+  *patch = static_cast<int>(pa);
+  return true;
+}
+
+bool runtimeLibfuseHasStableIoUring()
+{
+#if defined(FUSE_CAP_OVER_IO_URING) && FUSE_VERSION >= FUSE_MAKE_VERSION(3, 18)
+  int major = 0;
+  int minor = 0;
+  int patch = 0;
+  if (!parseVersionTriplet(fuse_pkgversion(), &major, &minor, &patch)) {
+    return false;
+  }
+  return major > 3 || (major == 3 && (minor > 18 || (minor == 18 && patch >= 2)));
+#else
+  return false;
+#endif
+}
+
+void recordRequestTransport(fuse_req_t req) noexcept
+{
+  if (req == nullptr) {
+    return;
+  }
+
+  auto* ctx = static_cast<Mo2FsContext*>(fuse_req_userdata(req));
+  if (ctx == nullptr) {
+    return;
+  }
+
+#if defined(FUSE_CAP_OVER_IO_URING) && FUSE_VERSION >= FUSE_MAKE_VERSION(3, 18)
+  if (fuse_req_is_uring(req)) {
+    ctx->uring_request_count.fetch_add(1, std::memory_order_relaxed);
+  } else {
+    ctx->legacy_request_count.fetch_add(1, std::memory_order_relaxed);
+  }
+#else
+  ctx->legacy_request_count.fetch_add(1, std::memory_order_relaxed);
+#endif
+}
 
 std::string decodeProcMountField(const std::string& in)
 {
@@ -208,18 +272,21 @@ void wrap_init(void* userdata, struct fuse_conn_info* conn) noexcept
 
 void wrap_lookup(fuse_req_t req, fuse_ino_t parent, const char* name) noexcept
 {
+  recordRequestTransport(req);
   try { mo2_lookup(req, parent, name); }
   MO2_TRY_REPLY(req, "lookup", parent, EIO)
 }
 
 void wrap_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) noexcept
 {
+  recordRequestTransport(req);
   try { mo2_getattr(req, ino, fi); }
   MO2_TRY_REPLY(req, "getattr", ino, EIO)
 }
 
 void wrap_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) noexcept
 {
+  recordRequestTransport(req);
   try { mo2_opendir(req, ino, fi); }
   MO2_TRY_REPLY(req, "opendir", ino, EIO)
 }
@@ -227,6 +294,7 @@ void wrap_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) noe
 void wrap_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                   struct fuse_file_info* fi) noexcept
 {
+  recordRequestTransport(req);
   try { mo2_readdir(req, ino, size, off, fi); }
   MO2_TRY_REPLY(req, "readdir", ino, EIO)
 }
@@ -234,12 +302,14 @@ void wrap_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 void wrap_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                       struct fuse_file_info* fi) noexcept
 {
+  recordRequestTransport(req);
   try { mo2_readdirplus(req, ino, size, off, fi); }
   MO2_TRY_REPLY(req, "readdirplus", ino, EIO)
 }
 
 void wrap_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) noexcept
 {
+  recordRequestTransport(req);
   try { mo2_open(req, ino, fi); }
   MO2_TRY_REPLY(req, "open", ino, EIO)
 }
@@ -247,6 +317,7 @@ void wrap_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) noexce
 void wrap_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                struct fuse_file_info* fi) noexcept
 {
+  recordRequestTransport(req);
   try { mo2_read(req, ino, size, off, fi); }
   MO2_TRY_REPLY(req, "read", ino, EIO)
 }
@@ -254,6 +325,7 @@ void wrap_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 void wrap_write(fuse_req_t req, fuse_ino_t ino, const char* buf, size_t size,
                 off_t off, struct fuse_file_info* fi) noexcept
 {
+  recordRequestTransport(req);
   try { mo2_write(req, ino, buf, size, off, fi); }
   MO2_TRY_REPLY(req, "write", ino, EIO)
 }
@@ -261,6 +333,7 @@ void wrap_write(fuse_req_t req, fuse_ino_t ino, const char* buf, size_t size,
 void wrap_create(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t mode,
                  struct fuse_file_info* fi) noexcept
 {
+  recordRequestTransport(req);
   try { mo2_create(req, parent, name, mode, fi); }
   MO2_TRY_REPLY(req, "create", parent, EIO)
 }
@@ -268,6 +341,7 @@ void wrap_create(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t mod
 void wrap_rename(fuse_req_t req, fuse_ino_t parent, const char* name,
                  fuse_ino_t newparent, const char* newname, unsigned int flags) noexcept
 {
+  recordRequestTransport(req);
   try { mo2_rename(req, parent, name, newparent, newname, flags); }
   MO2_TRY_REPLY(req, "rename", parent, EIO)
 }
@@ -275,48 +349,56 @@ void wrap_rename(fuse_req_t req, fuse_ino_t parent, const char* name,
 void wrap_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
                   struct fuse_file_info* fi) noexcept
 {
+  recordRequestTransport(req);
   try { mo2_setattr(req, ino, attr, to_set, fi); }
   MO2_TRY_REPLY(req, "setattr", ino, EIO)
 }
 
 void wrap_unlink(fuse_req_t req, fuse_ino_t parent, const char* name) noexcept
 {
+  recordRequestTransport(req);
   try { mo2_unlink(req, parent, name); }
   MO2_TRY_REPLY(req, "unlink", parent, EIO)
 }
 
 void wrap_mkdir(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t mode) noexcept
 {
+  recordRequestTransport(req);
   try { mo2_mkdir(req, parent, name, mode); }
   MO2_TRY_REPLY(req, "mkdir", parent, EIO)
 }
 
 void wrap_rmdir(fuse_req_t req, fuse_ino_t parent, const char* name) noexcept
 {
+  recordRequestTransport(req);
   try { mo2_rmdir(req, parent, name); }
   MO2_TRY_REPLY(req, "rmdir", parent, EIO)
 }
 
 void wrap_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) noexcept
 {
+  recordRequestTransport(req);
   try { mo2_release(req, ino, fi); }
   MO2_TRY_REPLY(req, "release", ino, EIO)
 }
 
 void wrap_releasedir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) noexcept
 {
+  recordRequestTransport(req);
   try { mo2_releasedir(req, ino, fi); }
   MO2_TRY_REPLY(req, "releasedir", ino, EIO)
 }
 
 void wrap_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup) noexcept
 {
+  recordRequestTransport(req);
   try { mo2_forget(req, ino, nlookup); }
   catch (...) { fuse_reply_none(req); }
 }
 
 void wrap_flush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) noexcept
 {
+  recordRequestTransport(req);
   try { mo2_flush(req, ino, fi); }
   MO2_TRY_REPLY(req, "flush", ino, EIO)
 }
@@ -324,6 +406,7 @@ void wrap_flush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) noexc
 void wrap_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
                 struct fuse_file_info* fi) noexcept
 {
+  recordRequestTransport(req);
   try { mo2_fsync(req, ino, datasync, fi); }
   MO2_TRY_REPLY(req, "fsync", ino, EIO)
 }
@@ -557,6 +640,15 @@ bool FuseConnector::mount(
   std::vector<std::string> argvStorage = {
       "mo2fuse", "-o", "fsname=mo2linux", "-o", "noatime",
       "-o", "default_permissions", "-o", "max_read=1048576"};
+  const bool requestIoUring = runtimeLibfuseHasStableIoUring();
+  if (requestIoUring) {
+    argvStorage.push_back("-o");
+    argvStorage.push_back("io_uring");
+  }
+  std::fprintf(stderr,
+               "[VFS] libfuse=%s headers=%d.%d io_uring_mount_option=%d\n",
+               fuse_pkgversion(), FUSE_MAJOR_VERSION, FUSE_MINOR_VERSION,
+               requestIoUring ? 1 : 0);
 
   std::vector<char*> argv;
   argv.reserve(argvStorage.size());

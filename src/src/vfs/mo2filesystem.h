@@ -112,6 +112,13 @@ struct Mo2FsContext
   std::atomic<uint64_t> readdir_count{0};
   std::atomic<uint64_t> open_count{0};
   std::atomic<uint64_t> read_count{0};
+  std::atomic<uint64_t> write_count{0};
+  std::atomic<uint64_t> create_count{0};
+  std::atomic<uint64_t> rename_count{0};
+  std::atomic<uint64_t> setattr_count{0};
+  std::atomic<uint64_t> unlink_count{0};
+  std::atomic<uint64_t> flush_count{0};
+  std::atomic<uint64_t> fsync_count{0};
   std::atomic<uint64_t> ioctl_count{0};
   std::atomic<uint64_t> op_tick{0};
   // Cumulative wall-clock nanoseconds spent inside each op handler.
@@ -121,12 +128,30 @@ struct Mo2FsContext
   std::atomic<uint64_t> readdir_ns{0};
   std::atomic<uint64_t> open_ns{0};
   std::atomic<uint64_t> read_ns{0};
+  std::atomic<uint64_t> write_ns{0};
+  std::atomic<uint64_t> create_ns{0};
+  std::atomic<uint64_t> rename_ns{0};
+  std::atomic<uint64_t> setattr_ns{0};
+  std::atomic<uint64_t> unlink_ns{0};
+  std::atomic<uint64_t> flush_ns{0};
+  std::atomic<uint64_t> fsync_ns{0};
   std::atomic<uint64_t> lookup_cache_hits{0};
   std::atomic<uint64_t> lookup_cache_misses{0};
   std::atomic<uint64_t> lookup_cache_invalidations{0};
+  std::atomic<uint64_t> attr_cache_hits{0};
+  std::atomic<uint64_t> attr_cache_misses{0};
+  std::atomic<uint64_t> dir_cache_hits{0};
+  std::atomic<uint64_t> dir_cache_misses{0};
+  std::atomic<uint64_t> readdir_blob_hits{0};
+  std::atomic<uint64_t> readdirplus_blob_hits{0};
   std::atomic<uint64_t> lazy_ro_fd_opens{0};
   std::atomic<uint64_t> retained_ro_fd_hits{0};
   std::atomic<uint64_t> retained_ro_fd_evictions{0};
+  std::atomic<uint64_t> read_bytes{0};
+  std::atomic<uint64_t> write_bytes{0};
+  std::atomic<uint64_t> cow_write_count{0};
+  std::atomic<uint64_t> uring_request_count{0};
+  std::atomic<uint64_t> legacy_request_count{0};
   // CPU snapshot from previous stats tick (microseconds, from getrusage).
   // Used to compute per-tick CPU delta so we can distinguish disk-bound vs
   // CPU-bound slowness in the VFS layer.
