@@ -1532,9 +1532,9 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
   // This matches upstream USVFS behavior more closely than the previous
   // conservative "copy everything writable into overwrite" approach.
   //
-  // Read strategy: always open a real backing fd at open() time so mo2_read
-  // can splice from it without re-opening per read call.  Avoids N syscalls
-  // per file for games that stream large BSAs in many small chunks.
+  // Read strategy: create the handle cheaply, then open the backing fd on the
+  // first read and retain a bounded LRU set. Wine probes many files it never
+  // reads, while streamed files still get splice-friendly retained fds.
   int fd = -1;
 
   if (writable) {
