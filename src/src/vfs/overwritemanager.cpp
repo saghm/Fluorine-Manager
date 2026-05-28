@@ -143,6 +143,25 @@ std::string OverwriteManager::writeFile(const std::string& relative_path,
   return path.string();
 }
 
+int OverwriteManager::createFile(const std::string& relative_path, mode_t mode,
+                                 std::string* real_path) const
+{
+  const fs::path path = stagingPath(relative_path);
+  std::error_code ec;
+  fs::create_directories(path.parent_path(), ec);
+  if (ec) {
+    return -1;
+  }
+
+  const mode_t fileMode = mode != 0 ? (mode & 07777) : 0644;
+  const int fd = open(path.c_str(), O_RDWR | O_CREAT | O_TRUNC | O_CLOEXEC,
+                      fileMode);
+  if (fd >= 0 && real_path != nullptr) {
+    *real_path = path.string();
+  }
+  return fd;
+}
+
 bool OverwriteManager::rename(const std::string& old_relative,
                               const std::string& new_relative) const
 {

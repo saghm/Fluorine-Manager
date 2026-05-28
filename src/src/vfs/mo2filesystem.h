@@ -47,6 +47,9 @@ struct Mo2FsContext
     bool is_tracked  = false;   // true = user moved this from Overwrite to a mod
     std::string relative_path;
     uint64_t last_read_tick = 0;
+    bool metadata_dirty = false;
+    uint64_t virtual_size = 0;
+    std::chrono::system_clock::time_point virtual_mtime;
   };
 
   std::unordered_map<uint64_t, OpenFile> open_files;
@@ -162,6 +165,10 @@ struct Mo2FsContext
   std::unordered_map<std::string, uint64_t> lookup_miss_paths;
   std::unordered_map<std::string, uint64_t> getattr_paths;
   std::unordered_map<std::string, uint64_t> readdir_paths;
+  std::unordered_map<std::string, uint64_t> write_paths;
+  std::unordered_map<std::string, uint64_t> create_paths;
+  std::unordered_map<std::string, uint64_t> setattr_paths;
+  std::unordered_map<std::string, uint64_t> flush_paths;
   mutable std::mutex path_stats_mutex;
   std::atomic<uint64_t> path_sample_tick{0};
 

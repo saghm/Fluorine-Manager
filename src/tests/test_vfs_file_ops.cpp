@@ -81,6 +81,28 @@ TEST(VfsFileOps, CopyOnWriteFromFdCanCopyBackingSourceToDifferentDestination)
   EXPECT_EQ(readText(staging / "Plugin.esp"), "saved plugin");
 }
 
+TEST(VfsFileOps, CreateFileReturnsWritableStagingHandle)
+{
+  TempRoot tmp;
+  ASSERT_FALSE(tmp.path().empty());
+
+  const fs::path staging = tmp.path() / "staging";
+  const fs::path overwrite = tmp.path() / "overwrite";
+
+  OverwriteManager overwriteManager(staging.string(), overwrite.string());
+  std::string realPath;
+  const int fd = overwriteManager.createFile("ShaderCache/Lighting/test.pso",
+                                             0600, &realPath);
+  ASSERT_GE(fd, 0);
+
+  const char payload[] = "shader";
+  ASSERT_EQ(write(fd, payload, sizeof(payload) - 1), ssize_t(sizeof(payload) - 1));
+  close(fd);
+
+  EXPECT_EQ(fs::path(realPath), staging / "ShaderCache/Lighting/test.pso");
+  EXPECT_EQ(readText(realPath), "shader");
+}
+
 TEST(VfsFileOps, InodeRenameMovesDescendants)
 {
   InodeTable table;

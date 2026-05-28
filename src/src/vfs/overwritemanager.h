@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <string>
+#include <sys/types.h>
 #include <vector>
 
 class OverwriteManager
@@ -19,6 +20,8 @@ public:
 
   std::string writeFile(const std::string& relative_path,
                         const std::vector<uint8_t>& data) const;
+  int createFile(const std::string& relative_path, mode_t mode,
+                 std::string* real_path) const;
 
   bool rename(const std::string& old_relative, const std::string& new_relative) const;
   bool removeFile(const std::string& relative_path) const;
