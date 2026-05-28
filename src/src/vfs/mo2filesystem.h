@@ -46,6 +46,7 @@ struct Mo2FsContext
     bool cow_pending = false;   // true = opened R/O, will COW on first write()
     bool is_tracked  = false;   // true = user moved this from Overwrite to a mod
     std::string relative_path;
+    uint64_t last_read_tick = 0;
   };
 
   std::unordered_map<uint64_t, OpenFile> open_files;
@@ -102,12 +103,10 @@ struct Mo2FsContext
     }
   };
   std::unordered_map<std::pair<fuse_ino_t, std::string>, LookupCacheEntry, PairHash> lookup_cache;
-  // Reverse index: parent_ino → set of normalized child names in lookup_cache.
-  // Makes invalidation O(children) instead of O(total_cache_size).
-  std::unordered_map<fuse_ino_t, std::vector<std::string>> lookup_cache_by_parent;
   mutable std::mutex lookup_cache_mutex;
 
   std::atomic<uint64_t> next_dh{1};
+  std::atomic<uint64_t> fd_lru_tick{1};
   std::atomic<uint64_t> lookup_count{0};
   std::atomic<uint64_t> getattr_count{0};
   std::atomic<uint64_t> readdir_count{0};
@@ -122,6 +121,12 @@ struct Mo2FsContext
   std::atomic<uint64_t> readdir_ns{0};
   std::atomic<uint64_t> open_ns{0};
   std::atomic<uint64_t> read_ns{0};
+  std::atomic<uint64_t> lookup_cache_hits{0};
+  std::atomic<uint64_t> lookup_cache_misses{0};
+  std::atomic<uint64_t> lookup_cache_invalidations{0};
+  std::atomic<uint64_t> lazy_ro_fd_opens{0};
+  std::atomic<uint64_t> retained_ro_fd_hits{0};
+  std::atomic<uint64_t> retained_ro_fd_evictions{0};
   // CPU snapshot from previous stats tick (microseconds, from getrusage).
   // Used to compute per-tick CPU delta so we can distinguish disk-bound vs
   // CPU-bound slowness in the VFS layer.
@@ -164,6 +169,10 @@ void mo2_mkdir(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t mode)
 void mo2_rmdir(fuse_req_t req, fuse_ino_t parent, const char* name);
 void mo2_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi);
 void mo2_releasedir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi);
+void mo2_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup);
+void mo2_flush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi);
+void mo2_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
+               struct fuse_file_info* fi);
 #if FUSE_USE_VERSION < 35
 void mo2_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void* arg,
                struct fuse_file_info* fi, unsigned flags, const void* in_buf,

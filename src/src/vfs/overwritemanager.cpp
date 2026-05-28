@@ -80,7 +80,14 @@ std::string OverwriteManager::copyOnWrite(const std::string& source_path,
 std::string OverwriteManager::copyOnWriteFromFd(int dir_fd,
                                                 const std::string& relative_path) const
 {
-  const fs::path dest = stagingPath(relative_path);
+  return copyOnWriteFromFd(dir_fd, relative_path, relative_path);
+}
+
+std::string OverwriteManager::copyOnWriteFromFd(
+    int dir_fd, const std::string& source_relative_path,
+    const std::string& dest_relative_path) const
+{
+  const fs::path dest = stagingPath(dest_relative_path);
 
   std::error_code ec;
   fs::create_directories(dest.parent_path(), ec);
@@ -89,7 +96,7 @@ std::string OverwriteManager::copyOnWriteFromFd(int dir_fd,
     return dest.string();
   }
 
-  const std::string rel = sanitizeRelative(relative_path);
+  const std::string rel = sanitizeRelative(source_relative_path);
   const int src_fd      = openat(dir_fd, rel.c_str(), O_RDONLY);
   if (src_fd < 0) {
     // Source doesn't exist in backing dir, create empty file
@@ -112,6 +119,8 @@ std::string OverwriteManager::copyOnWriteFromFd(int dir_fd,
   }
 
   close(src_fd);
+  out.close();
+  fs::permissions(dest, fs::perms::owner_write, fs::perm_options::add, ec);
   return dest.string();
 }
 

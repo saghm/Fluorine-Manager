@@ -14,6 +14,8 @@ public:
                           const std::string& relative_path) const;
 
   std::string copyOnWriteFromFd(int dir_fd, const std::string& relative_path) const;
+  std::string copyOnWriteFromFd(int dir_fd, const std::string& source_relative_path,
+                                const std::string& dest_relative_path) const;
 
   std::string writeFile(const std::string& relative_path,
                         const std::vector<uint8_t>& data) const;

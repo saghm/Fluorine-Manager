@@ -26,6 +26,7 @@ namespace fs = std::filesystem;
 constexpr double TTL_SECONDS          = 86400.0;  // 24 hours
 constexpr double NEGATIVE_TTL_SECONDS = 3600.0;   // 1 hour — Wine probes many non-existent files
 constexpr double ATTR_CACHE_SECONDS   = 86400.0;
+constexpr size_t MAX_RETAINED_RO_FDS  = 1024;
 
 void fillStatForDir(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid);
 void fillStatForFile(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid,
@@ -34,6 +35,7 @@ void fillStatForFile(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid,
                      const std::string& real_path = {},
                      mode_t cached_mode = 0);
 void invalidateLookupCache(Mo2FsContext* ctx, const std::string& dirPath);
+void invalidateAttrCache(Mo2FsContext* ctx, fuse_ino_t ino);
 bool pathTouchesMutation(const std::string& cachedPath,
                          const std::string& changedPath);
 
@@ -86,6 +88,21 @@ void maybeLogCounters(Mo2FsContext* ctx)
     std::scoped_lock lock(ctx->open_files_mutex);
     std::fprintf(stderr, " open_handles=%zu\n", ctx->open_files.size());
   }
+  std::fprintf(stderr,
+               "[VFS] cache lookup_hit=%llu lookup_miss=%llu lookup_inval=%llu "
+               "lazy_ro_open=%llu ro_fd_hit=%llu ro_fd_evict=%llu\n",
+               static_cast<unsigned long long>(
+                   ctx->lookup_cache_hits.load(std::memory_order_relaxed)),
+               static_cast<unsigned long long>(
+                   ctx->lookup_cache_misses.load(std::memory_order_relaxed)),
+               static_cast<unsigned long long>(
+                   ctx->lookup_cache_invalidations.load(std::memory_order_relaxed)),
+               static_cast<unsigned long long>(
+                   ctx->lazy_ro_fd_opens.load(std::memory_order_relaxed)),
+               static_cast<unsigned long long>(
+                   ctx->retained_ro_fd_hits.load(std::memory_order_relaxed)),
+               static_cast<unsigned long long>(
+                   ctx->retained_ro_fd_evictions.load(std::memory_order_relaxed)));
 
   // Per-op wall-clock totals and averages (microseconds).
   auto avgUs = [](uint64_t ns, uint64_t count) -> double {
@@ -232,8 +249,26 @@ void invalidateDirCache(Mo2FsContext* ctx, const std::string& dirPath)
 // need to remove all entries with the given parent inode.
 void invalidateLookupCache(Mo2FsContext* ctx, const std::string& dirPath)
 {
-  (void)ctx;
   (void)dirPath;
+  if (ctx == nullptr) {
+    return;
+  }
+
+  std::scoped_lock lock(ctx->lookup_cache_mutex);
+  if (!ctx->lookup_cache.empty()) {
+    ctx->lookup_cache.clear();
+    ctx->lookup_cache_invalidations.fetch_add(1, std::memory_order_relaxed);
+  }
+}
+
+void invalidateAttrCache(Mo2FsContext* ctx, fuse_ino_t ino)
+{
+  if (ctx == nullptr) {
+    return;
+  }
+
+  std::scoped_lock lock(ctx->attr_cache_mutex);
+  ctx->attr_cache.erase(ino);
 }
 
 bool isStrictDescendantPath(const std::string& path, const std::string& parent)
@@ -765,6 +800,46 @@ std::shared_ptr<std::vector<char>> getOrBuildReaddirPlusBlob(
   return built;
 }
 
+void pruneRetainedReadOnlyFds(Mo2FsContext* ctx)
+{
+  if (ctx == nullptr) {
+    return;
+  }
+
+  std::scoped_lock lock(ctx->open_files_mutex);
+  size_t retained = 0;
+  for (const auto& [fh, of] : ctx->open_files) {
+    (void)fh;
+    if (!of.writable && of.fd >= 0) {
+      ++retained;
+    }
+  }
+  if (retained <= MAX_RETAINED_RO_FDS) {
+    return;
+  }
+
+  while (retained > MAX_RETAINED_RO_FDS) {
+    auto victim = ctx->open_files.end();
+    for (auto it = ctx->open_files.begin(); it != ctx->open_files.end(); ++it) {
+      if (it->second.writable || it->second.fd < 0) {
+        continue;
+      }
+      if (victim == ctx->open_files.end() ||
+          it->second.last_read_tick < victim->second.last_read_tick) {
+        victim = it;
+      }
+    }
+    if (victim == ctx->open_files.end()) {
+      return;
+    }
+
+    close(victim->second.fd);
+    victim->second.fd = -1;
+    ctx->retained_ro_fd_evictions.fetch_add(1, std::memory_order_relaxed);
+    --retained;
+  }
+}
+
 void fillStatForDir(struct stat* st, fuse_ino_t ino, uid_t uid, gid_t gid)
 {
   std::memset(st, 0, sizeof(struct stat));
@@ -862,6 +937,16 @@ void updateFileNode(Mo2FsContext* ctx, const std::string& relative,
   ctx->tree->root.insertFile(splitPath(relative), realPath, ec ? 0 : size, mtime,
                              origin);
   invalidateNodeCache(ctx, relative);
+  lock.unlock();
+
+  fuse_ino_t ino = 0;
+  {
+    std::shared_lock ilock(ctx->inode_mutex);
+    ino = ctx->inodes->get(relative);
+  }
+  if (ino != 0) {
+    invalidateAttrCache(ctx, ino);
+  }
 }
 
 }  // namespace
@@ -905,13 +990,19 @@ void mo2_init(void* userdata, struct fuse_conn_info* conn)
     conn->want |= FUSE_CAP_EXPLICIT_INVAL_DATA;
   }
 
-  // Force readdirplus always (unset adaptive mode).  Our stat info is
-  // free (in-memory tree), so always return full entries to pre-populate
-  // the kernel dentry + attr caches on every directory listing.
+  // Plain readdir is the conservative default for large modlists. Wine and
+  // game startup often enumerate large directories but only stat/open a small
+  // subset, so forced readdirplus can send a lot of unused metadata.
   if (conn->capable & FUSE_CAP_READDIRPLUS) {
-    conn->want |= FUSE_CAP_READDIRPLUS;
+    conn->want &= ~FUSE_CAP_READDIRPLUS;
     conn->want &= ~FUSE_CAP_READDIRPLUS_AUTO;
   }
+
+#ifdef FUSE_CAP_NO_OPENDIR_SUPPORT
+  if (conn->capable & FUSE_CAP_NO_OPENDIR_SUPPORT) {
+    conn->want |= FUSE_CAP_NO_OPENDIR_SUPPORT;
+  }
+#endif
 
   // NOTE: FUSE_CAP_WRITEBACK_CACHE intentionally NOT enabled.
   // It causes extra getattr calls for cache coherency, which hurts
@@ -950,6 +1041,12 @@ void mo2_init(void* userdata, struct fuse_conn_info* conn)
     conn->want |= FUSE_CAP_EXPIRE_ONLY;
   }
 
+#ifdef FUSE_CAP_OVER_IO_URING
+  if (conn->capable & FUSE_CAP_OVER_IO_URING) {
+    std::fprintf(stderr, "[VFS] init: kernel reports FUSE over io_uring support\n");
+  }
+#endif
+
   // Maximize async I/O slots (default is 12).  The kernel will still only
   // dispatch as many as there are actual concurrent requests, so higher
   // values just raise the ceiling without wasting memory.
@@ -976,10 +1073,15 @@ void mo2_init(void* userdata, struct fuse_conn_info* conn)
 
   std::fprintf(stderr,
                "[VFS] init: auto_inval=%d explicit_inval=%d readdirplus=%d "
-               "max_bg=%u max_readahead=%u\n",
+               "no_opendir=%d max_bg=%u max_readahead=%u\n",
                (conn->want & FUSE_CAP_AUTO_INVAL_DATA) ? 1 : 0,
                (conn->want & FUSE_CAP_EXPLICIT_INVAL_DATA) ? 1 : 0,
                (conn->want & FUSE_CAP_READDIRPLUS) ? 1 : 0,
+#ifdef FUSE_CAP_NO_OPENDIR_SUPPORT
+               (conn->want & FUSE_CAP_NO_OPENDIR_SUPPORT) ? 1 : 0,
+#else
+               0,
+#endif
                conn->max_background, conn->max_readahead);
 }
 
@@ -994,10 +1096,19 @@ void mo2_lookup(fuse_req_t req, fuse_ino_t parent, const char* name)
   ctx->lookup_count.fetch_add(1, std::memory_order_relaxed);
   maybeLogCounters(ctx);
 
-  // Do the full lookup every time. The userspace lookup cache was a
-  // performance shortcut, but crash reports showed corruption while updating
-  // its reverse index under concurrent Proton startup probes. Kernel FUSE
-  // dcache still handles repeated exact-case lookups.
+  const auto cacheKey =
+      std::make_pair(parent, normalizeForLookup(std::string(name)));
+  {
+    std::scoped_lock lock(ctx->lookup_cache_mutex);
+    auto it = ctx->lookup_cache.find(cacheKey);
+    if (it != ctx->lookup_cache.end()) {
+      ctx->lookup_cache_hits.fetch_add(1, std::memory_order_relaxed);
+      fuse_reply_entry(req, &it->second.entry);
+      return;
+    }
+  }
+  ctx->lookup_cache_misses.fetch_add(1, std::memory_order_relaxed);
+
   const auto lr = lookupChild(ctx, parent, name);
 
   if (!lr.found) {
@@ -1007,6 +1118,10 @@ void mo2_lookup(fuse_req_t req, fuse_ino_t parent, const char* name)
     e.attr_timeout  = NEGATIVE_TTL_SECONDS;
     e.entry_timeout = NEGATIVE_TTL_SECONDS;
 
+    {
+      std::scoped_lock lock(ctx->lookup_cache_mutex);
+      ctx->lookup_cache[cacheKey] = Mo2FsContext::LookupCacheEntry{.child_ino=0, .entry=e};
+    }
     fuse_reply_entry(req, &e);
     return;
   }
@@ -1058,6 +1173,11 @@ void mo2_lookup(fuse_req_t req, fuse_ino_t parent, const char* name)
                     lr.snap.real_path);
   }
 
+  {
+    std::scoped_lock lock(ctx->lookup_cache_mutex);
+    ctx->lookup_cache[cacheKey] =
+        Mo2FsContext::LookupCacheEntry{.child_ino=childIno, .entry=e};
+  }
   fuse_reply_entry(req, &e);
 }
 
@@ -1244,13 +1364,8 @@ void mo2_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
     if ((*entries)[i].is_dir) {
       st.st_mode = S_IFDIR | 0755;
     } else {
-      mode_t mode = 0644;
-      if (!(*entries)[i].real_path.empty()) {
-        struct stat real_st;
-        if (::stat((*entries)[i].real_path.c_str(), &real_st) == 0) {
-          mode = real_st.st_mode & 0777;
-        }
-      }
+      mode_t mode = (*entries)[i].cached_mode != 0 ? (*entries)[i].cached_mode
+                                                   : static_cast<mode_t>(0644);
       st.st_mode = S_IFREG | mode;
     }
 
@@ -1354,7 +1469,8 @@ void mo2_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
       fillStatForDir(&e.attr, (*entries)[i].ino, ctx->uid, ctx->gid);
     } else {
       fillStatForFile(&e.attr, (*entries)[i].ino, ctx->uid, ctx->gid,
-                      (*entries)[i].size, (*entries)[i].mtime);
+                      (*entries)[i].size, (*entries)[i].mtime,
+                      (*entries)[i].real_path, (*entries)[i].cached_mode);
     }
 
     const size_t ent = fuse_add_direntry_plus(
@@ -1467,15 +1583,10 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
       return;
     }
   } else {
-    // Read-only open: keep a real fd so mo2_read can splice without
-    // re-opening the backing file on every read() call.
-    if (isBacking && ctx->backing_dir_fd >= 0) {
-      fd = openat(ctx->backing_dir_fd, realPath.c_str(), O_RDONLY);
-    } else {
-      fd = open(realPath.c_str(), O_RDONLY);
-    }
-    // Non-fatal: fall back to lazy per-read open if we hit EMFILE etc.
-    // mo2_read handles fd=-1 by opening temporarily.
+    // Read-only open: delay the real fd until first read. Wine often opens
+    // files only to probe metadata, and retaining those fds can exhaust the
+    // process limit on large modlists.
+    fd = -1;
   }
 
   const uint64_t fh = ctx->next_fh.fetch_add(1, std::memory_order_relaxed);
@@ -1513,6 +1624,7 @@ void mo2_read(fuse_req_t req, fuse_ino_t /*ino*/, size_t size, off_t off,
   int fd = -1;
   std::string realPath;
   bool isBacking = false;
+  bool writable = false;
   {
     std::shared_lock lock(ctx->open_files_mutex);
     auto it = ctx->open_files.find(fi->fh);
@@ -1523,10 +1635,10 @@ void mo2_read(fuse_req_t req, fuse_ino_t /*ino*/, size_t size, off_t off,
     fd       = it->second.fd;
     realPath = it->second.real_path;
     isBacking = it->second.is_backing;
+    writable = it->second.writable;
   }
 
   int localFd = fd;
-  bool openedTempFd = false;
   if (localFd < 0) {
     if (isBacking && ctx->backing_dir_fd >= 0) {
       localFd = openat(ctx->backing_dir_fd, realPath.c_str(), O_RDONLY);
@@ -1537,7 +1649,34 @@ void mo2_read(fuse_req_t req, fuse_ino_t /*ino*/, size_t size, off_t off,
       fuse_reply_err(req, EIO);
       return;
     }
-    openedTempFd = true;
+    ctx->lazy_ro_fd_opens.fetch_add(1, std::memory_order_relaxed);
+    if (!writable) {
+      const uint64_t tick = ctx->fd_lru_tick.fetch_add(1, std::memory_order_relaxed) + 1;
+      bool retained = false;
+      {
+        std::scoped_lock lock(ctx->open_files_mutex);
+        auto it = ctx->open_files.find(fi->fh);
+        if (it != ctx->open_files.end() && it->second.fd < 0 && !it->second.writable) {
+          it->second.fd = localFd;
+          it->second.last_read_tick = tick;
+          retained = true;
+        }
+      }
+      if (!retained) {
+        close(localFd);
+        fuse_reply_err(req, EBADF);
+        return;
+      }
+      pruneRetainedReadOnlyFds(ctx);
+    }
+  } else if (!writable) {
+    ctx->retained_ro_fd_hits.fetch_add(1, std::memory_order_relaxed);
+    const uint64_t tick = ctx->fd_lru_tick.fetch_add(1, std::memory_order_relaxed) + 1;
+    std::scoped_lock lock(ctx->open_files_mutex);
+    auto it = ctx->open_files.find(fi->fh);
+    if (it != ctx->open_files.end()) {
+      it->second.last_read_tick = tick;
+    }
   }
 
   // Zero-copy read: splice data directly from backing fd to /dev/fuse,
@@ -1547,10 +1686,6 @@ void mo2_read(fuse_req_t req, fuse_ino_t /*ino*/, size_t size, off_t off,
   buf.buf[0].fd    = localFd;
   buf.buf[0].pos   = off;
   fuse_reply_data(req, &buf, FUSE_BUF_SPLICE_MOVE);
-
-  if (openedTempFd) {
-    close(localFd);
-  }
 }
 
 void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,
@@ -1810,7 +1945,7 @@ void mo2_rename(fuse_req_t req, fuse_ino_t parent, const char* name,
     try {
       if (oldSnap.is_backing && ctx->backing_dir_fd >= 0) {
         newRealPath = ctx->overwrite->copyOnWriteFromFd(ctx->backing_dir_fd,
-                                                        newRelative);
+                                                        oldRelative, newRelative);
       } else {
         newRealPath = ctx->overwrite->copyOnWrite(oldSnap.real_path, newRelative);
       }
@@ -1822,6 +1957,13 @@ void mo2_rename(fuse_req_t req, fuse_ino_t parent, const char* name,
     }
   }
 
+  fuse_ino_t oldIno = 0;
+  fuse_ino_t newIno = 0;
+  {
+    std::shared_lock lock(ctx->inode_mutex);
+    oldIno = ctx->inodes->get(oldRelative);
+    newIno = ctx->inodes->get(newRelative);
+  }
   {
     std::unique_lock lock(ctx->tree_mutex);
     invalidateNodeCache(ctx, oldRelative);
@@ -1844,6 +1986,12 @@ void mo2_rename(fuse_req_t req, fuse_ino_t parent, const char* name,
   {
     std::unique_lock lock(ctx->inode_mutex);
     ctx->inodes->rename(oldRelative, newRelative);
+  }
+  if (oldIno != 0) {
+    invalidateAttrCache(ctx, oldIno);
+  }
+  if (newIno != 0 && newIno != oldIno) {
+    invalidateAttrCache(ctx, newIno);
   }
   invalidateDirCache(ctx, parentPath);
   if (newParentPath != parentPath) {
@@ -2049,6 +2197,7 @@ void mo2_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
     }
   }
 
+  invalidateAttrCache(ctx, ino);
   const auto snap = snapshotForPath(ctx, path);
   if (!snap.found) {
     fuse_reply_err(req, ENOENT);
@@ -2082,16 +2231,27 @@ void mo2_unlink(fuse_req_t req, fuse_ino_t parent, const char* name)
 
   const std::string relative = joinPath(parentPath, canonicalChildName(ctx, parentPath, name));
   if (!ctx->overwrite->removeFile(relative)) {
-    fuse_reply_err(req, EACCES);
-    return;
+    const auto snap = snapshotForPath(ctx, relative);
+    if (!snap.found || snap.is_directory) {
+      fuse_reply_err(req, snap.found ? EISDIR : ENOENT);
+      return;
+    }
   }
 
+  fuse_ino_t removedIno = 0;
+  {
+    std::shared_lock lock(ctx->inode_mutex);
+    removedIno = ctx->inodes->get(relative);
+  }
   {
     std::unique_lock lock(ctx->tree_mutex);
     invalidateNodeCache(ctx, relative);
     if (ctx->tree->root.removeFromTree(splitPath(relative))) {
       ctx->tree->file_count = ctx->tree->file_count > 0 ? ctx->tree->file_count - 1 : 0;
     }
+  }
+  if (removedIno != 0) {
+    invalidateAttrCache(ctx, removedIno);
   }
   invalidateDirCache(ctx, parentPath);
 
@@ -2244,6 +2404,73 @@ void mo2_releasedir(fuse_req_t req, fuse_ino_t /*ino*/, struct fuse_file_info* f
     ctx->open_dirs.erase(fi->fh);
   }
 
+  fuse_reply_err(req, 0);
+}
+
+void mo2_forget(fuse_req_t req, fuse_ino_t ino, uint64_t /*nlookup*/)
+{
+  Mo2FsContext* ctx = getContext(req);
+  if (ctx != nullptr) {
+    invalidateAttrCache(ctx, ino);
+  }
+  fuse_reply_none(req);
+}
+
+void mo2_flush(fuse_req_t req, fuse_ino_t /*ino*/, struct fuse_file_info* fi)
+{
+  Mo2FsContext* ctx = getContext(req);
+  if (ctx == nullptr || fi == nullptr) {
+    fuse_reply_err(req, EINVAL);
+    return;
+  }
+
+  int fd = -1;
+  bool writable = false;
+  {
+    std::shared_lock lock(ctx->open_files_mutex);
+    auto it = ctx->open_files.find(fi->fh);
+    if (it == ctx->open_files.end()) {
+      fuse_reply_err(req, EBADF);
+      return;
+    }
+    fd = it->second.fd;
+    writable = it->second.writable;
+  }
+
+  if (writable && fd >= 0 && fdatasync(fd) != 0) {
+    fuse_reply_err(req, errno);
+    return;
+  }
+  fuse_reply_err(req, 0);
+}
+
+void mo2_fsync(fuse_req_t req, fuse_ino_t /*ino*/, int datasync,
+               struct fuse_file_info* fi)
+{
+  Mo2FsContext* ctx = getContext(req);
+  if (ctx == nullptr || fi == nullptr) {
+    fuse_reply_err(req, EINVAL);
+    return;
+  }
+
+  int fd = -1;
+  {
+    std::shared_lock lock(ctx->open_files_mutex);
+    auto it = ctx->open_files.find(fi->fh);
+    if (it == ctx->open_files.end()) {
+      fuse_reply_err(req, EBADF);
+      return;
+    }
+    fd = it->second.fd;
+  }
+
+  if (fd >= 0) {
+    const int rc = datasync ? fdatasync(fd) : fsync(fd);
+    if (rc != 0) {
+      fuse_reply_err(req, errno);
+      return;
+    }
+  }
   fuse_reply_err(req, 0);
 }
 

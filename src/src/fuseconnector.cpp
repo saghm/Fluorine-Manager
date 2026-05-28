@@ -309,6 +309,25 @@ void wrap_releasedir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) 
   MO2_TRY_REPLY(req, "releasedir", ino, EIO)
 }
 
+void wrap_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup) noexcept
+{
+  try { mo2_forget(req, ino, nlookup); }
+  catch (...) { fuse_reply_none(req); }
+}
+
+void wrap_flush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) noexcept
+{
+  try { mo2_flush(req, ino, fi); }
+  MO2_TRY_REPLY(req, "flush", ino, EIO)
+}
+
+void wrap_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
+                struct fuse_file_info* fi) noexcept
+{
+  try { mo2_fsync(req, ino, datasync, fi); }
+  MO2_TRY_REPLY(req, "fsync", ino, EIO)
+}
+
 #undef MO2_TRY_REPLY
 
 }  // namespace
@@ -318,6 +337,7 @@ void setupFuseOps(struct fuse_lowlevel_ops* ops)
   std::memset(ops, 0, sizeof(struct fuse_lowlevel_ops));
   ops->init        = wrap_init;
   ops->lookup      = wrap_lookup;
+  ops->forget      = wrap_forget;
   ops->getattr     = wrap_getattr;
   ops->opendir     = wrap_opendir;
   ops->readdir     = wrap_readdir;
@@ -333,6 +353,8 @@ void setupFuseOps(struct fuse_lowlevel_ops* ops)
   ops->rmdir       = wrap_rmdir;
   ops->release     = wrap_release;
   ops->releasedir  = wrap_releasedir;
+  ops->flush       = wrap_flush;
+  ops->fsync       = wrap_fsync;
   // access handler removed: default_permissions mount option lets the kernel
   // handle permission checks in-kernel, eliminating access() round-trips.
 }
@@ -735,6 +757,24 @@ void FuseConnector::rebuild(
   {
     std::scoped_lock const lock(m_context->open_dirs_mutex);
     m_context->open_dirs.clear();
+  }
+  {
+    std::scoped_lock const lock(m_context->dir_cache_mutex);
+    m_context->dir_cache.clear();
+    m_context->readdir_blob_cache.clear();
+    m_context->readdirplus_blob_cache.clear();
+  }
+  {
+    std::scoped_lock const lock(m_context->lookup_cache_mutex);
+    m_context->lookup_cache.clear();
+  }
+  {
+    std::scoped_lock const lock(m_context->attr_cache_mutex);
+    m_context->attr_cache.clear();
+  }
+  {
+    std::scoped_lock const lock(m_context->node_cache_mutex);
+    m_context->node_cache.clear();
   }
 }
 
@@ -1143,6 +1183,24 @@ void FuseConnector::flushStagingLive()
   {
     std::scoped_lock const lock(m_context->open_dirs_mutex);
     m_context->open_dirs.clear();
+  }
+  {
+    std::scoped_lock const lock(m_context->dir_cache_mutex);
+    m_context->dir_cache.clear();
+    m_context->readdir_blob_cache.clear();
+    m_context->readdirplus_blob_cache.clear();
+  }
+  {
+    std::scoped_lock const lock(m_context->lookup_cache_mutex);
+    m_context->lookup_cache.clear();
+  }
+  {
+    std::scoped_lock const lock(m_context->attr_cache_mutex);
+    m_context->attr_cache.clear();
+  }
+  {
+    std::scoped_lock const lock(m_context->node_cache_mutex);
+    m_context->node_cache.clear();
   }
 
   // Re-create OverwriteManager with fresh staging dir

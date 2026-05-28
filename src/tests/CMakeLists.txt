@@ -69,6 +69,30 @@ target_link_libraries(test_overwrite_duplicates PRIVATE
 )
 add_test(NAME test_overwrite_duplicates COMMAND test_overwrite_duplicates)
 
+# ---------------------------------------------------------------------------
+# VFS file-operation regression tests
+# ---------------------------------------------------------------------------
+add_executable(test_vfs_file_ops EXCLUDE_FROM_ALL
+    test_vfs_file_ops.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/vfs/inodetable.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/vfs/overwritemanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/vfs/vfstree.cpp
+)
+set_target_properties(test_vfs_file_ops PROPERTIES
+    AUTOMOC OFF
+    CXX_STANDARD 23
+    CXX_STANDARD_REQUIRED ON
+)
+target_include_directories(test_vfs_file_ops PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/src
+)
+target_link_libraries(test_vfs_file_ops PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+)
+add_test(NAME test_vfs_file_ops COMMAND test_vfs_file_ops)
+
 # Register a "fluorine-tests" umbrella target that builds every test exe.
 add_custom_target(fluorine-tests
-    DEPENDS test_metainiutils test_external_dir_mapping test_overwrite_duplicates)
+    DEPENDS test_metainiutils test_external_dir_mapping test_overwrite_duplicates
+            test_vfs_file_ops)
