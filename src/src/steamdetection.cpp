@@ -2,9 +2,12 @@
 
 #include <QDir>
 #include <QDirIterator>
+#include <QFile>
 #include <QFileInfo>
 #include <QStandardPaths>
 #include <uibase/log.h>
+
+#include "vdfparser.h"
 
 // ============================================================================
 // SteamProtonInfo
@@ -54,6 +57,40 @@ QString findSteamPath()
       return p;
   }
   return {};
+}
+
+QStringList findSteamLibraryPaths()
+{
+  QStringList libraries;
+
+  const QString steamPath = findSteamPath();
+  if (steamPath.isEmpty())
+    return libraries;
+
+  auto addLibrary = [&](const QString& path) {
+    const QString cleanPath = QDir::cleanPath(path);
+    if (cleanPath.isEmpty() || libraries.contains(cleanPath))
+      return;
+    if (QFileInfo::exists(QDir(cleanPath).filePath(QStringLiteral("steamapps"))))
+      libraries.append(cleanPath);
+  };
+
+  addLibrary(steamPath);
+
+  QFile libraryFolders(QDir(steamPath).filePath(
+      QStringLiteral("steamapps/libraryfolders.vdf")));
+  if (!libraryFolders.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    MOBase::log::debug("Steam libraryfolders.vdf not found at '{}'",
+                       libraryFolders.fileName());
+    return libraries;
+  }
+
+  const QString content = QString::fromUtf8(libraryFolders.readAll());
+  for (const QString& path : parseLibraryFolders(content)) {
+    addLibrary(path);
+  }
+
+  return libraries;
 }
 
 // ============================================================================
@@ -143,27 +180,28 @@ QVector<SteamProtonInfo> findSteamProtons()
 {
   QVector<SteamProtonInfo> protons;
 
-  const QString steamPath = findSteamPath();
-  if (steamPath.isEmpty())
+  const QStringList steamLibraries = findSteamLibraryPaths();
+  if (steamLibraries.isEmpty())
     return protons;
 
-  // 1. Steam's built-in Protons (only entries starting with "Proton").
-  {
+  // 1. Steam's built-in Protons across every Steam library. Steam may install
+  // tools like "Proton 10.0" under a secondary library's steamapps/common.
+  for (const QString& library : steamLibraries) {
     QVector<SteamProtonInfo> builtin;
-    scanProtonDir(steamPath + "/steamapps/common", true, builtin);
-    // Keep only entries whose folder name starts with "Proton". Proton 11
-    // had ntsync/futex deadlocks during wineboot -u on modern kernels; the
-    // workaround now lives in prefixsetuprunner (waitforexitandrun + ntsync
-    // env nudge) so we no longer blacklist it here.
+    scanProtonDir(QDir(library).filePath(QStringLiteral("steamapps/common")), true,
+                  builtin);
     for (auto& p : builtin) {
-      if (!p.name.startsWith(QStringLiteral("Proton")))
-        continue;
-      protons.append(std::move(p));
+      if (p.name.startsWith(QStringLiteral("Proton"))) {
+        protons.append(std::move(p));
+      }
     }
   }
 
   // 2. Custom Protons in user's compatibilitytools.d.
-  scanProtonDir(steamPath + "/compatibilitytools.d", false, protons);
+  for (const QString& library : steamLibraries) {
+    scanProtonDir(QDir(library).filePath(QStringLiteral("compatibilitytools.d")),
+                  false, protons);
+  }
 
   // 3. System-level Protons.
   scanProtonDir(QStringLiteral("/usr/share/steam/compatibilitytools.d"), false, protons);

@@ -138,8 +138,14 @@ QStringList parseLibraryFolders(const QString& content)
     return paths;
 
   for (const VdfValue& entry : folders->asObject()) {
-    const QString path = entry.getString(QStringLiteral("path"));
-    if (!path.isEmpty())
+    QString path;
+    if (entry.isString()) {
+      path = entry.asString();
+    } else {
+      path = entry.getString(QStringLiteral("path"));
+    }
+
+    if (!path.isEmpty() && !paths.contains(path))
       paths.append(path);
   }
   return paths;

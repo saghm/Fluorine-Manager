@@ -26,6 +26,9 @@ struct SteamProtonInfo {
 /// Find the Steam installation path (returns empty string if not found).
 __attribute__((visibility("default"))) QString findSteamPath();
 
+/// Find all Steam library root paths, including secondary libraries.
+__attribute__((visibility("default"))) QStringList findSteamLibraryPaths();
+
 /// Find all installed Proton versions (Proton 10+ only, sorted newest first).
 __attribute__((visibility("default"))) QVector<SteamProtonInfo> findSteamProtons();
 
