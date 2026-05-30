@@ -69,6 +69,7 @@ private:
 
   void clearCache();
   void associate();
+  void removeAssociation();
 
   void updateNexusData();
 };

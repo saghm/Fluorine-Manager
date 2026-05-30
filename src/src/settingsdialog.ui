@@ -1411,11 +1411,22 @@ If you disable this feature, MO will only display official DLCs this way. Please
                   <number>0</number>
                  </property>
                  <item>
-                  <widget class="QPushButton" name="associateButton">
-                   <property name="text">
-                    <string>Associate with &quot;Download with manager&quot; links</string>
-                   </property>
-                  </widget>
+                  <layout class="QHBoxLayout" name="nxmAssociationLayout">
+                   <item>
+                    <widget class="QPushButton" name="associateButton">
+                     <property name="text">
+                      <string>Associate NXM Links</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QPushButton" name="removeAssociationButton">
+                     <property name="text">
+                      <string>Remove NXM Association</string>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
                  </item>
                  <item>
                   <widget class="QPushButton" name="clearCacheButton">

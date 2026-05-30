@@ -13,6 +13,22 @@ follows SemVer (MAJOR.MINOR.PATCH). Two distribution channels:
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-05-30
+
+### Changed
+- Made the virtual filesystem faster and more reliable for large mod lists,
+  file moves, and frequent file changes.
+- Updated the bundled FUSE support and added an optional `io_uring` setting.
+- Made Proton launches and prefix setup use the expected Steam Linux Runtime
+  environment more consistently.
+
+### Added
+- Added a Nexus settings button to remove Fluorine's download link association.
+
+### Fixed
+- Fixed download link association on Linux so old MO2 or Vortex handlers are
+  less likely to keep taking priority after moving to Fluorine Manager.
+
 ## [0.2.2] - 2026-05-24
 
 ### Changed

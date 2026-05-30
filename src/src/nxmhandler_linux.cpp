@@ -20,6 +20,13 @@ using namespace MOBase;
 
 namespace
 {
+const QString NxmDesktopFile = QStringLiteral("com.fluorine.manager.nxm-handler.desktop");
+const QString LegacyNxmDesktopFile = QStringLiteral("mo2-nxm-handler.desktop");
+const QStringList UrlSchemes = {
+    QStringLiteral("x-scheme-handler/nxm"),
+    QStringLiteral("x-scheme-handler/modl"),
+};
+
 QString ensureDir(const QString& path)
 {
   QDir const dir(path);
@@ -41,83 +48,237 @@ bool writeTextFile(const QString& path, const QString& content)
   return stream.status() == QTextStream::Ok;
 }
 
+QStringList desktopFilesFromEntry(const QString& line)
+{
+  const int equals = line.indexOf('=');
+  if (equals < 0) {
+    return {};
+  }
+
+  QStringList result;
+  for (const auto& desktopFile : line.mid(equals + 1).split(';', Qt::SkipEmptyParts)) {
+    const auto trimmed = desktopFile.trimmed();
+    if (!trimmed.isEmpty() && !result.contains(trimmed)) {
+      result.append(trimmed);
+    }
+  }
+  return result;
+}
+
+QString desktopFilesEntry(const QString& mimeType, const QStringList& desktopFiles)
+{
+  return mimeType + "=" + desktopFiles.join(';') + ";";
+}
+
+QStringList readMimeAppsList(const QString& path)
+{
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    return {};
+  }
+
+  auto lines = QString::fromUtf8(file.readAll()).split('\n');
+  while (!lines.isEmpty() && lines.back().isEmpty()) {
+    lines.removeLast();
+  }
+  return lines;
+}
+
+int findSection(const QStringList& lines, const QString& sectionName)
+{
+  for (int i = 0; i < lines.size(); ++i) {
+    if (lines.at(i).trimmed() == sectionName) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+int sectionEnd(const QStringList& lines, int sectionStart)
+{
+  for (int i = sectionStart + 1; i < lines.size(); ++i) {
+    if (lines.at(i).trimmed().startsWith('[')) {
+      return i;
+    }
+  }
+  return lines.size();
+}
+
+template <typename Update>
+void updateMimeSection(QStringList& lines, const QString& sectionName,
+                       const QString& mimeType, Update update, bool createSection)
+{
+  int sectionStart = findSection(lines, sectionName);
+  if (sectionStart < 0) {
+    if (!createSection) {
+      return;
+    }
+
+    if (!lines.isEmpty() && !lines.back().isEmpty()) {
+      lines.append(QString());
+    }
+    sectionStart = lines.size();
+    lines.append(sectionName);
+  }
+
+  const int end = sectionEnd(lines, sectionStart);
+  for (int i = sectionStart + 1; i < end; ++i) {
+    const QString item = lines.at(i).trimmed();
+    if (!item.startsWith(mimeType + "=")) {
+      continue;
+    }
+
+    const QStringList updated = update(desktopFilesFromEntry(item));
+    if (updated.isEmpty()) {
+      lines.removeAt(i);
+    } else {
+      lines[i] = desktopFilesEntry(mimeType, updated);
+    }
+    return;
+  }
+
+  const QStringList updated = update(QStringList{});
+  if (!updated.isEmpty()) {
+    lines.insert(sectionStart + 1, desktopFilesEntry(mimeType, updated));
+  }
+}
+
+void prependDesktopFile(QStringList& desktopFiles, const QString& desktopFile)
+{
+  desktopFiles.removeAll(desktopFile);
+  desktopFiles.prepend(desktopFile);
+}
+
+void removeDesktopFile(QStringList& desktopFiles, const QString& desktopFile)
+{
+  desktopFiles.removeAll(desktopFile);
+}
+
+void runDesktopCommand(const QString& program, const QStringList& arguments)
+{
+  const int result = QProcess::execute(program, arguments);
+  if (result == -2) {
+    log::debug("{} is not available", program);
+  } else if (result != 0) {
+    log::warn("{} exited with code {}", program, result);
+  }
+}
+
+void setDefaultAssociation(const QString& mimeType, const QString& desktopFile)
+{
+  runDesktopCommand(QStringLiteral("xdg-mime"),
+                    QStringList{QStringLiteral("default"), desktopFile, mimeType});
+
+  // Some GLib/GNOME stacks cache associations independently of direct
+  // mimeapps.list edits. gio is optional, so absence is only logged at debug.
+  runDesktopCommand(QStringLiteral("gio"),
+                    QStringList{QStringLiteral("mime"), mimeType, desktopFile});
+}
+
+void refreshDesktopAssociationCaches(const QString& appsDir)
+{
+  runDesktopCommand(QStringLiteral("update-desktop-database"), QStringList{appsDir});
+  runDesktopCommand(QStringLiteral("xdg-desktop-menu"),
+                    QStringList{QStringLiteral("forceupdate")});
+}
+
 // xdg-desktop-portal remembers chooser picks in its permission store. An
 // earlier build registered both com.fluorine.manager.desktop and
 // mo2-nxm-handler.desktop for nxm:// — anyone who picked Fluorine Manager
 // from the chooser had it persisted as their always-use app, which kept
 // routing nxm:// to the wrong handler (full MO2 launch with no URL) even
-// after the bad MimeType was removed. Strip the stale com.fluorine.manager
-// entry so existing users self-heal on next launch.
+// after the bad MimeType was removed. Strip known stale app IDs so existing
+// users self-heal on next launch or when they re-associate links.
 void clearStalePortalChoice(const QString& mimeType)
 {
-  QDBusMessage msg = QDBusMessage::createMethodCall(
-      "org.freedesktop.impl.portal.PermissionStore",
-      "/org/freedesktop/impl/portal/PermissionStore",
-      "org.freedesktop.impl.portal.PermissionStore", "DeletePermission");
-  msg << QStringLiteral("desktop-used-apps") << mimeType
-      << QStringLiteral("com.fluorine.manager");
+  const QStringList staleAppIds = {
+      QStringLiteral("com.fluorine.manager"),
+      QStringLiteral("mo2-nxm-handler"),
+      QStringLiteral("ModOrganizer"),
+      QStringLiteral("modorganizer"),
+      QStringLiteral("vortex"),
+      QStringLiteral("Vortex"),
+      QStringLiteral("com.nexusmods.vortex"),
+      QStringLiteral("nexusmods-vortex"),
+  };
 
-  // Fire-and-forget on the session bus. The reply is uninteresting: a missing
-  // entry returns an error and we don't want to log on every clean startup.
-  QDBusConnection::sessionBus().call(msg, QDBus::NoBlock);
+  for (const auto& appId : staleAppIds) {
+    QDBusMessage msg = QDBusMessage::createMethodCall(
+        "org.freedesktop.impl.portal.PermissionStore",
+        "/org/freedesktop/impl/portal/PermissionStore",
+        "org.freedesktop.impl.portal.PermissionStore", "DeletePermission");
+    msg << QStringLiteral("desktop-used-apps") << mimeType << appId;
+
+    // Fire-and-forget on the session bus. The reply is uninteresting: a missing
+    // entry returns an error and we don't want to log on every clean startup.
+    QDBusConnection::sessionBus().call(msg, QDBus::NoBlock);
+  }
 }
 
 void updateMimeAppsList(const QString& path, const QString& mimeType,
                         const QString& desktopFile)
 {
-  const QString entry = mimeType + "=" + desktopFile;
+  QStringList lines = readMimeAppsList(path);
 
-  QStringList lines;
-  {
-    QFile file(path);
-    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-      const auto content = QString::fromUtf8(file.readAll());
-      lines              = content.split('\n');
-      while (!lines.isEmpty() && lines.back().isEmpty()) {
-        lines.removeLast();
-      }
-    }
-  }
+  updateMimeSection(
+      lines, QStringLiteral("[Default Applications]"), mimeType,
+      [&](QStringList) {
+        return QStringList{desktopFile};
+      },
+      true);
 
-  int defaultHeader = -1;
-  bool replaced     = false;
+  updateMimeSection(
+      lines, QStringLiteral("[Added Associations]"), mimeType,
+      [&](QStringList desktopFiles) {
+        removeDesktopFile(desktopFiles, LegacyNxmDesktopFile);
+        prependDesktopFile(desktopFiles, desktopFile);
+        return desktopFiles;
+      },
+      true);
 
-  for (int i = 0; i <= lines.size(); ++i) {
-    const bool atEnd = i == lines.size();
-    const QString trimmed =
-        atEnd ? QString() : lines.at(i).trimmed();
+  updateMimeSection(
+      lines, QStringLiteral("[Removed Associations]"), mimeType,
+      [&](QStringList desktopFiles) {
+        removeDesktopFile(desktopFiles, desktopFile);
+        removeDesktopFile(desktopFiles, LegacyNxmDesktopFile);
+        return desktopFiles;
+      },
+      false);
 
-    if (!atEnd && trimmed.startsWith('[')) {
-      if (trimmed == "[Default Applications]") {
-        defaultHeader = i;
-      }
-      continue;
-    }
+  writeTextFile(path, lines.join('\n') + "\n");
+}
 
-    if (defaultHeader >= 0 && (atEnd || trimmed.startsWith('['))) {
-      const int sectionEnd = atEnd ? lines.size() : i;
-      for (int j = defaultHeader + 1; j < sectionEnd; ++j) {
-        const QString item = lines.at(j).trimmed();
-        if (item.startsWith(mimeType + "=")) {
-          lines[j] = entry;
-          replaced = true;
-          break;
-        }
-      }
-      if (!replaced) {
-        lines.insert(defaultHeader + 1, entry);
-      }
-      break;
-    }
-  }
+void removeMimeAppsAssociation(const QString& path, const QString& mimeType,
+                               const QString& desktopFile)
+{
+  QStringList lines = readMimeAppsList(path);
 
-  if (defaultHeader < 0) {
-    if (!lines.isEmpty() && !lines.back().isEmpty()) {
-      lines.append(QString());
-    }
-    lines.append("[Default Applications]");
-    lines.append(entry);
-  }
+  updateMimeSection(
+      lines, QStringLiteral("[Default Applications]"), mimeType,
+      [&](QStringList desktopFiles) {
+        removeDesktopFile(desktopFiles, desktopFile);
+        removeDesktopFile(desktopFiles, LegacyNxmDesktopFile);
+        return desktopFiles;
+      },
+      false);
+
+  updateMimeSection(
+      lines, QStringLiteral("[Added Associations]"), mimeType,
+      [&](QStringList desktopFiles) {
+        removeDesktopFile(desktopFiles, desktopFile);
+        removeDesktopFile(desktopFiles, LegacyNxmDesktopFile);
+        return desktopFiles;
+      },
+      false);
+
+  updateMimeSection(
+      lines, QStringLiteral("[Removed Associations]"), mimeType,
+      [&](QStringList desktopFiles) {
+        prependDesktopFile(desktopFiles, desktopFile);
+        prependDesktopFile(desktopFiles, LegacyNxmDesktopFile);
+        return desktopFiles;
+      },
+      true);
 
   writeTextFile(path, lines.join('\n') + "\n");
 }
@@ -241,10 +402,10 @@ void NxmHandlerLinux::registerHandler()
   // browser or desktop environment invokes the URL scheme handler.
   const QString execLine = wrapperPath + " nxm-handle %u";
 
-  const QString desktopPath = appsDir + "/mo2-nxm-handler.desktop";
+  const QString desktopPath = appsDir + "/" + NxmDesktopFile;
   const QString desktop = QString("[Desktop Entry]\n"
                                   "Type=Application\n"
-                                  "Name=Mod Organizer 2 NXM Handler\n"
+                                  "Name=Fluorine Manager NXM Handler\n"
                                   "Exec=%1\n"
                                   "MimeType=x-scheme-handler/nxm;x-scheme-handler/modl;\n"
                                   "NoDisplay=true\n").arg(execLine);
@@ -254,23 +415,50 @@ void NxmHandlerLinux::registerHandler()
     return;
   }
 
-  updateMimeAppsList(configDir + "/mimeapps.list", "x-scheme-handler/nxm",
-                     "mo2-nxm-handler.desktop");
-  updateMimeAppsList(appsDir + "/mimeapps.list", "x-scheme-handler/nxm",
-                     "mo2-nxm-handler.desktop");
-  updateMimeAppsList(configDir + "/mimeapps.list", "x-scheme-handler/modl",
-                     "mo2-nxm-handler.desktop");
-  updateMimeAppsList(appsDir + "/mimeapps.list", "x-scheme-handler/modl",
-                     "mo2-nxm-handler.desktop");
+  QFile::remove(appsDir + "/" + LegacyNxmDesktopFile);
 
-  const auto result =
-      QProcess::execute("update-desktop-database", QStringList() << appsDir);
-  if (result != 0) {
-    log::warn("update-desktop-database exited with code {}", result);
+  for (const auto& scheme : UrlSchemes) {
+    updateMimeAppsList(configDir + "/mimeapps.list", scheme, NxmDesktopFile);
+    updateMimeAppsList(appsDir + "/mimeapps.list", scheme, NxmDesktopFile);
+    setDefaultAssociation(scheme, NxmDesktopFile);
   }
 
-  clearStalePortalChoice("x-scheme-handler/nxm");
-  clearStalePortalChoice("x-scheme-handler/modl");
+  refreshDesktopAssociationCaches(appsDir);
+
+  for (const auto& scheme : UrlSchemes) {
+    clearStalePortalChoice(scheme);
+  }
+}
+
+void NxmHandlerLinux::unregisterHandler()
+{
+  const QString home = QDir::homePath();
+  if (home.isEmpty()) {
+    log::error("cannot remove nxm handler: home path is empty");
+    return;
+  }
+
+  const QString appsDir   = ensureDir(home + "/.local/share/applications");
+  const QString configDir = ensureDir(home + "/.config");
+
+  if (appsDir.isEmpty() || configDir.isEmpty()) {
+    log::error("cannot remove nxm handler: failed to create required directories");
+    return;
+  }
+
+  for (const auto& scheme : UrlSchemes) {
+    removeMimeAppsAssociation(configDir + "/mimeapps.list", scheme, NxmDesktopFile);
+    removeMimeAppsAssociation(appsDir + "/mimeapps.list", scheme, NxmDesktopFile);
+  }
+
+  QFile::remove(appsDir + "/" + NxmDesktopFile);
+  QFile::remove(appsDir + "/" + LegacyNxmDesktopFile);
+
+  refreshDesktopAssociationCaches(appsDir);
+
+  for (const auto& scheme : UrlSchemes) {
+    clearStalePortalChoice(scheme);
+  }
 }
 
 bool NxmHandlerLinux::startListener()

@@ -393,6 +393,9 @@ NexusSettingsTab::NexusSettingsTab(Settings& s, SettingsDialog& d) : SettingsTab
   QObject::connect(ui->associateButton, &QPushButton::clicked, [&] {
     associate();
   });
+  QObject::connect(ui->removeAssociationButton, &QPushButton::clicked, [&] {
+    removeAssociation();
+  });
   updateNexusData();
 }
 
@@ -462,6 +465,11 @@ void NexusSettingsTab::associate()
   Settings::instance().nexus().registerAsNXMHandler(true);
 }
 
+void NexusSettingsTab::removeAssociation()
+{
+  Settings::instance().nexus().unregisterAsNXMHandler();
+}
+
 void NexusSettingsTab::updateNexusData()
 {
   const auto user = NexusInterface::instance().getAPIUserAccount();
@@ -486,4 +494,3 @@ void NexusSettingsTab::updateNexusData()
     ui->nexusHourlyRequests->setText(QObject::tr("N/A"));
   }
 }
-

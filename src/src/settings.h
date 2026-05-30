@@ -527,6 +527,7 @@ public:
   // said earlier not to
   //
   static void registerAsNXMHandler(bool force);
+  static void unregisterAsNXMHandler();
 
   std::vector<std::chrono::seconds> validationTimeouts() const;
 

@@ -2002,8 +2002,12 @@ void NexusSettings::setCategoryMappings(bool b) const
 void NexusSettings::registerAsNXMHandler(bool force)
 {
   Q_UNUSED(force);
-  NxmHandlerLinux handler;
   NxmHandlerLinux::registerHandler();
+}
+
+void NexusSettings::unregisterAsNXMHandler()
+{
+  NxmHandlerLinux::unregisterHandler();
 }
 
 std::vector<std::chrono::seconds> NexusSettings::validationTimeouts() const

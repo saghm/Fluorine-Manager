@@ -33,7 +33,8 @@ public:
   explicit NxmHandlerLinux(QObject* parent = nullptr);
   ~NxmHandlerLinux() override;
 
-  static void registerHandler() ;
+  static void registerHandler();
+  static void unregisterHandler();
   bool startListener();
 
   static bool sendToSocket(const QString& url);
