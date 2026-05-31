@@ -2591,6 +2591,8 @@ bool OrganizerCore::beforeRun(
     loop.exec();
   }
 
+  movePGPatcherLogsToLogsFolder();
+
   // need to make sure all data is saved before we start the application
   if (m_CurrentProfile != nullptr) {
     m_CurrentProfile->writeModlistNow(true);
