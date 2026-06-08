@@ -12,6 +12,7 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QTextStream>
 #include <QUrl>
 #include <QUrlQuery>
@@ -156,7 +157,85 @@ void removeDesktopFile(QStringList& desktopFiles, const QString& desktopFile)
 
 void runDesktopCommand(const QString& program, const QStringList& arguments)
 {
-  const int result = QProcess::execute(program, arguments);
+  QProcess proc;
+  proc.setProgram(program);
+  proc.setArguments(arguments);
+  proc.setProcessChannelMode(QProcess::ForwardedChannels);
+
+  QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+  auto restoreOrStrip = [&env](const QString& var, const QString& origVar) {
+    if (env.contains(origVar)) {
+      const QString orig = env.value(origVar);
+      if (orig.isEmpty()) {
+        env.remove(var);
+      } else {
+        env.insert(var, orig);
+      }
+      env.remove(origVar);
+    }
+  };
+
+  restoreOrStrip(QStringLiteral("LD_LIBRARY_PATH"),
+                 QStringLiteral("FLUORINE_ORIG_LD_LIBRARY_PATH"));
+  restoreOrStrip(QStringLiteral("LD_PRELOAD"),
+                 QStringLiteral("FLUORINE_ORIG_LD_PRELOAD"));
+  restoreOrStrip(QStringLiteral("PATH"), QStringLiteral("FLUORINE_ORIG_PATH"));
+  restoreOrStrip(QStringLiteral("XDG_DATA_DIRS"),
+                 QStringLiteral("FLUORINE_ORIG_XDG_DATA_DIRS"));
+  restoreOrStrip(QStringLiteral("QT_PLUGIN_PATH"),
+                 QStringLiteral("FLUORINE_ORIG_QT_PLUGIN_PATH"));
+
+  QStringList toolDirs;
+  auto addToolDir = [&toolDirs](const QString& path) {
+    if (!path.isEmpty() && QDir(path).exists() && !toolDirs.contains(path)) {
+      toolDirs.append(path);
+    }
+  };
+
+  const QString baseDir = env.value(QStringLiteral("MO2_BASE_DIR"));
+  addToolDir(env.value(QStringLiteral("MO2_LIBS_DIR")));
+  if (!baseDir.isEmpty()) {
+    addToolDir(QDir(baseDir).filePath(QStringLiteral("lib")));
+    addToolDir(baseDir);
+  }
+  const QString appDir = QCoreApplication::applicationDirPath();
+  addToolDir(QDir(appDir).filePath(QStringLiteral("lib")));
+  addToolDir(appDir);
+  if (!toolDirs.isEmpty()) {
+    const QString path = env.value(QStringLiteral("PATH"));
+    env.insert(QStringLiteral("PATH"),
+               toolDirs.join(QLatin1Char(':')) +
+                   (path.isEmpty() ? QString() : QStringLiteral(":") + path));
+  }
+
+  QString fontDir;
+  if (!baseDir.isEmpty()) {
+    fontDir = QDir(baseDir).filePath(QStringLiteral("etc/fonts"));
+  }
+  if (fontDir.isEmpty() ||
+      !QFileInfo::exists(QDir(fontDir).filePath(QStringLiteral("fonts.conf")))) {
+    fontDir = QDir(appDir).filePath(QStringLiteral("etc/fonts"));
+  }
+  const QString fontConfig = QDir(fontDir).filePath(QStringLiteral("fonts.conf"));
+  if (QFileInfo::exists(fontConfig)) {
+    env.insert(QStringLiteral("FONTCONFIG_FILE"), fontConfig);
+    env.insert(QStringLiteral("FONTCONFIG_PATH"), fontDir);
+  } else {
+    env.remove(QStringLiteral("FONTCONFIG_FILE"));
+    env.remove(QStringLiteral("FONTCONFIG_PATH"));
+  }
+
+  env.remove(QStringLiteral("QT_QPA_PLATFORM_PLUGIN_PATH"));
+  proc.setProcessEnvironment(env);
+
+  proc.start();
+  if (!proc.waitForStarted()) {
+    log::debug("{} is not available", program);
+    return;
+  }
+
+  proc.waitForFinished();
+  const int result = proc.exitCode();
   if (result == -2) {
     log::debug("{} is not available", program);
   } else if (result != 0) {

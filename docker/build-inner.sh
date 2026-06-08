@@ -39,7 +39,11 @@ cmake -S . -B build -G Ninja \
     -DFLUORINE_BUILD_COMMIT="${FLUORINE_BUILD_COMMIT}" \
     "${CMAKE_EXTRA_ARGS[@]}"
 
-cmake --build build --parallel "${BUILD_JOBS:-}"
+if [ -n "${BUILD_JOBS:-}" ]; then
+    cmake --build build --parallel "${BUILD_JOBS}"
+else
+    cmake --build build --parallel
+fi
 
 MODORG_BIN="build/src/src/ModOrganizer"
 if [ ! -f "${MODORG_BIN}" ]; then
@@ -609,6 +613,24 @@ unset PYTHONPATH PYTHONNOUSERSITE PYTHONHOME MO2_PYTHON_DIR
 # plugin lookup and overrides system-wide qt.conf (e.g. Fedora's /etc/xdg/QtProject/).
 export QT_PLUGIN_PATH="${RUN}/qt6plugins"
 export QT_QPA_PLATFORM_PLUGIN_PATH="${RUN}/qt6plugins/platforms"
+
+# The portable bundle ships its own fontconfig library. If it reads the host's
+# newer /etc/fonts configuration, older bundled fontconfig can warn on syntax
+# like xsi:nil and newer generic families. Use a minimal compatible config for
+# Fluorine itself; launched games/tools restore the user's original env.
+mkdir -p "${RUN}/etc/fonts"
+cat > "${RUN}/etc/fonts/fonts.conf" <<EOF
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+<fontconfig>
+  <dir>/usr/share/fonts</dir>
+  <dir>/usr/local/share/fonts</dir>
+  <dir prefix="xdg">fonts</dir>
+  <cachedir prefix="xdg">fontconfig</cachedir>
+</fontconfig>
+EOF
+export FONTCONFIG_FILE="${RUN}/etc/fonts/fonts.conf"
+export FONTCONFIG_PATH="${RUN}/etc/fonts"
 
 # Raise open file descriptor limit — large modlists with FUSE VFS
 # can easily exceed the default 1024

@@ -108,6 +108,7 @@ private:
                              const QString& name,
                              const QStringList& knownSha25632 = {},
                              const QStringList& knownSha25664 = {});
+  bool stepNuGetSignaturePolicy();
   bool stepGameDetection();
   bool stepWineRegistry();
   bool stepWin11Mode();

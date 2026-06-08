@@ -13,6 +13,9 @@
 #include <log.h>
 #include <report.h>
 
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QString>
 
 #include <atomic>
@@ -29,6 +32,51 @@ using namespace MOBase;
 
 int run(int argc, char* argv[]);
 
+namespace
+{
+const char* COMPAT_FONTCONFIG = R"(<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+<fontconfig>
+  <dir>/usr/share/fonts</dir>
+  <dir>/usr/local/share/fonts</dir>
+  <dir prefix="xdg">fonts</dir>
+  <cachedir prefix="xdg">fontconfig</cachedir>
+</fontconfig>
+)";
+
+void configureCompatibleFontconfig(int argc, char* argv[])
+{
+  if (qEnvironmentVariableIsSet("FLUORINE_DISABLE_FONTCONFIG_FIX")) {
+    return;
+  }
+
+  QString appDir = QDir::currentPath();
+  if (argc > 0 && argv[0] != nullptr && argv[0][0] != '\0') {
+    const QFileInfo exeInfo(QString::fromLocal8Bit(argv[0]));
+    if (exeInfo.exists()) {
+      appDir = exeInfo.absoluteDir().absolutePath();
+    }
+  }
+
+  const QString fontDir = QDir(appDir).filePath(QStringLiteral("etc/fonts"));
+  const QString configPath = QDir(fontDir).filePath(QStringLiteral("fonts.conf"));
+
+  if (!QFileInfo::exists(configPath)) {
+    QDir().mkpath(fontDir);
+    QFile config(configPath);
+    if (config.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+      config.write(COMPAT_FONTCONFIG);
+      config.close();
+    }
+  }
+
+  if (QFileInfo::exists(configPath)) {
+    qputenv("FONTCONFIG_FILE", QFile::encodeName(configPath));
+    qputenv("FONTCONFIG_PATH", QFile::encodeName(fontDir));
+  }
+}
+}
+
 int main(int argc, char* argv[])
 {
   const int r = run(argc, argv);
@@ -38,6 +86,8 @@ int main(int argc, char* argv[])
 
 int run(int argc, char* argv[])
 {
+  configureCompatibleFontconfig(argc, argv);
+
   if (argc >= 3 && QString(argv[1]) == "nxm-handle") {
     QString nxmUrl = QString::fromLocal8Bit(argv[2]);
     if (nxmUrl == "nxm-handle" && argc >= 4) {

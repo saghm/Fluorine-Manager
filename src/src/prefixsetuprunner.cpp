@@ -31,6 +31,16 @@
 #include <csignal>
 #include <sys/types.h>
 
+namespace
+{
+QString linuxPathToWineZPath(const QString& path)
+{
+  QString clean = QDir::cleanPath(QFileInfo(path).absoluteFilePath());
+  clean.replace(QLatin1Char('/'), QLatin1Char('\\'));
+  return QStringLiteral("Z:") + clean;
+}
+}
+
 // ============================================================================
 // Constants
 // ============================================================================
@@ -52,6 +62,113 @@ static const char* DOTNET9_RUNTIME_URL =
 static const char* DOTNET10_SDK_URL =
     "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.201/"
     "dotnet-sdk-10.0.201-win-x64.exe";
+
+static const char* NUGET_CONFIG_TEMPLATE = R"(<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <config>
+    <add key="signatureValidationMode" value="accept" />
+  </config>
+  <packageSources>
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
+  </packageSources>
+  <trustedSigners>
+    <repository name="nuget.org" serviceIndex="https://api.nuget.org/v3/index.json">
+      <certificate fingerprint="0E5F38F57DC1BCC806D8494F4F90FBCEDD988B46760709CBEEC6F4219AA6157D" hashAlgorithm="SHA256" allowUntrustedRoot="true" />
+      <certificate fingerprint="5A2901D6ADA3D18260B9C6DFE2133C95D74B9EEF6AE0E5DC334C8454D1477DF4" hashAlgorithm="SHA256" allowUntrustedRoot="true" />
+      <certificate fingerprint="1F4B311D9ACC115C8DC8018B5A49E00FCE6DA8E2855F9F014CA6F34570BC482D" hashAlgorithm="SHA256" allowUntrustedRoot="true" />
+    </repository>
+  </trustedSigners>
+</configuration>
+)";
+
+static const char* CERT_IMPORTER_CSPROJ = R"(<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+</Project>
+)";
+
+static const char* CERT_IMPORTER_PROGRAM = R"(using System.Security.Cryptography.X509Certificates;
+
+if (args.Length % 2 != 0)
+{
+    Console.Error.WriteLine("Expected pairs: <store> <pem-bundle>");
+    return 2;
+}
+
+for (var i = 0; i < args.Length; i += 2)
+{
+    ImportBundle(args[i], args[i + 1]);
+}
+
+return 0;
+
+static void ImportBundle(string storeName, string bundlePath)
+{
+    if (!File.Exists(bundlePath))
+    {
+        Console.WriteLine($"Missing bundle: {bundlePath}");
+        return;
+    }
+
+    using var store = new X509Store(storeName, StoreLocation.CurrentUser);
+    store.Open(OpenFlags.ReadWrite);
+
+    var imported = 0;
+    foreach (var cert in ReadPemBundle(bundlePath))
+    {
+        var existing = store.Certificates.Find(
+            X509FindType.FindByThumbprint, cert.Thumbprint, validOnly: false);
+        if (existing.Count > 0)
+        {
+            cert.Dispose();
+            continue;
+        }
+
+        store.Add(cert);
+        cert.Dispose();
+        ++imported;
+    }
+
+    Console.WriteLine($"Imported {imported} certificate(s) into {storeName}");
+}
+
+static IEnumerable<X509Certificate2> ReadPemBundle(string bundlePath)
+{
+    var text = File.ReadAllText(bundlePath);
+    const string begin = "-----BEGIN CERTIFICATE-----";
+    const string end = "-----END CERTIFICATE-----";
+    var offset = 0;
+
+    while (true)
+    {
+        var beginIndex = text.IndexOf(begin, offset, StringComparison.Ordinal);
+        if (beginIndex < 0)
+        {
+            yield break;
+        }
+
+        beginIndex += begin.Length;
+        var endIndex = text.IndexOf(end, beginIndex, StringComparison.Ordinal);
+        if (endIndex < 0)
+        {
+            yield break;
+        }
+
+        var base64 = text.Substring(beginIndex, endIndex - beginIndex)
+            .Replace("\r", "")
+            .Replace("\n", "")
+            .Trim();
+
+        yield return X509CertificateLoader.LoadCertificate(Convert.FromBase64String(base64));
+        offset = endIndex + end.Length;
+    }
+}
+)";
 
 // d3dcompiler_47: prebuilt DLLs from Mozilla's fxc2 repo (Windows 8.1 SDK redist).
 static const char* D3DCOMPILER_47_32_URL =
@@ -576,6 +693,8 @@ void PrefixSetupRunner::buildStepList()
           [this] { return stepDotNetRuntimes(); });
   addStep("dotnet10_sdk", ".NET 10 SDK",
           [this] { return stepDotNetInstall(DOTNET10_SDK_URL, ".NET 10 SDK"); });
+  addStep("nuget_signature_policy", "NuGet Signature Policy",
+          [this] { return stepNuGetSignaturePolicy(); });
 
   addStep("game_detection", "Auto-Detect Games",
           [this] { return stepGameDetection(); });
@@ -784,7 +903,8 @@ QProcess* PrefixSetupRunner::buildWrappedProcess(
     // container's PATH.
     if (QDir(xrandrDir).exists()) {
       slrArgs << "--" << QStringLiteral("/usr/bin/env")
-              << QStringLiteral("PATH=%1:/usr/bin:/bin").arg(xrandrDir) << exe;
+              << QStringLiteral("PATH=%1:/usr/bin:/bin").arg(xrandrDir);
+      slrArgs << exe;
     } else {
       slrArgs << "--" << exe;
     }
@@ -982,7 +1102,7 @@ bool PrefixSetupRunner::stepProtonInit()
   // Keep DISPLAY/WAYLAND_DISPLAY from the host: Proton-GE protonfixes runs
   // `xrandr` during wineboot -u to detect monitors, and xrandr exits 1 if
   // it can't open a display, which cascades to a failed prefix init on
-  // newer Proton-GE builds. wineboot -u is unattended and doesn't pop UI.
+  // newer Proton-GE builds.
   env["WINEDLLOVERRIDES"] = "msdia80.dll=n;conhost.exe=d;cmd.exe=d";
   // ntsync on kernel 7.0+ can deadlock wineboot -u during prefix init
   // under Proton 11 (wineboot blocks in ntsync_char_ioctl forever). Force
@@ -992,15 +1112,15 @@ bool PrefixSetupRunner::stepProtonInit()
   env["PROTON_NO_NTSYNC"]       = "1";
   env["WINENTSYNC"]             = "0";
 
-  emit logMessage("Initializing Wine prefix with Proton...");
-
-  QByteArray protonOutput;
   // waitforexitandrun (not "run") is required for Proton 11+ which uses
   // use_sessions=1 — a plain "run" forks into a session manager that never
   // exits, hanging prefix init.
+  QByteArray protonOutput;
+  emit logMessage("Initializing Wine prefix with Proton...");
   const int rc = runProcess(protonScript,
                             {"waitforexitandrun", "wineboot", "-u"},
                             env, -1, &protonOutput);
+
   if (rc != 0) {
     // Detect a broken Proton install: setup_prefix copies DLLs from Proton's
     // bundled default_pfx template, so a FileNotFoundError there means the
@@ -1597,6 +1717,154 @@ bool PrefixSetupRunner::stepDotNetInstall(const QString& url, const QString& nam
                         .arg(rc));
   }
 
+  return true;
+}
+
+bool PrefixSetupRunner::stepNuGetSignaturePolicy()
+{
+  emit logMessage("Configuring NuGet signature policy...");
+
+  const QString usersRoot = QDir(m_prefixPath).filePath("drive_c/users");
+  QDir usersDir(usersRoot);
+  if (!usersDir.exists()) {
+    if (!usersDir.mkpath(QStringLiteral("."))) {
+      currentStep().errorMessage = "Failed to create Wine users directory";
+      return false;
+    }
+  }
+
+  QStringList userNames =
+      usersDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot | QDir::Readable);
+  userNames.removeAll(QStringLiteral("Public"));
+  userNames.removeAll(QStringLiteral("Default"));
+  userNames.removeAll(QStringLiteral("Default User"));
+
+  if (userNames.isEmpty()) {
+    userNames << QStringLiteral("steamuser");
+  }
+
+  int written = 0;
+  for (const QString& userName : userNames) {
+    if (isCancelled()) {
+      return false;
+    }
+
+    const QString nugetDir = usersDir.filePath(
+        userName + QStringLiteral("/AppData/Roaming/NuGet"));
+    if (!QDir().mkpath(nugetDir)) {
+      emit logMessage(QStringLiteral("Skipping NuGet config for %1: cannot create %2")
+                          .arg(userName, nugetDir));
+      continue;
+    }
+
+    const QString configPath = QDir(nugetDir).filePath(QStringLiteral("NuGet.Config"));
+    if (QFileInfo::exists(configPath)) {
+      emit logMessage(QStringLiteral(
+          "NuGet.Config already exists for %1; leaving user config unchanged.")
+                          .arg(userName));
+      continue;
+    }
+
+    QFile config(configPath);
+    if (!config.open(QIODevice::WriteOnly | QIODevice::Text)) {
+      emit logMessage(QStringLiteral("Skipping NuGet config for %1: cannot write %2")
+                          .arg(userName, configPath));
+      continue;
+    }
+    config.write(NUGET_CONFIG_TEMPLATE);
+    config.close();
+    ++written;
+  }
+
+  const QString dotnetRoot =
+      QDir(m_prefixPath).filePath("drive_c/Program Files/dotnet");
+  const QString dotnetExe = QDir(dotnetRoot).filePath(QStringLiteral("dotnet.exe"));
+  if (!QFileInfo::exists(dotnetExe)) {
+    currentStep().errorMessage = ".NET SDK install did not provide dotnet.exe";
+    return false;
+  }
+
+  const QString dotnetSdkRoot = QDir(dotnetRoot).filePath(QStringLiteral("sdk"));
+  QDir sdkDir(dotnetSdkRoot);
+  const QStringList sdkVersions =
+      sdkDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+  QString codeRoots;
+  QString timestampRoots;
+  for (auto it = sdkVersions.crbegin(); it != sdkVersions.crend(); ++it) {
+    const QString trustedRoots =
+        sdkDir.filePath(*it + QStringLiteral("/trustedroots"));
+    const QString candidateCodeRoots =
+        QDir(trustedRoots).filePath(QStringLiteral("codesignctl.pem"));
+    const QString candidateTimestampRoots =
+        QDir(trustedRoots).filePath(QStringLiteral("timestampctl.pem"));
+    if (QFileInfo::exists(candidateCodeRoots) &&
+        QFileInfo::exists(candidateTimestampRoots)) {
+      codeRoots = candidateCodeRoots;
+      timestampRoots = candidateTimestampRoots;
+      emit logMessage(QStringLiteral("Found .NET trusted root bundles in SDK %1").arg(*it));
+      break;
+    }
+  }
+
+  if (codeRoots.isEmpty() || timestampRoots.isEmpty()) {
+    currentStep().errorMessage = ".NET SDK trusted root bundles were not found";
+    return false;
+  }
+
+  const QString importerDir = QDir(fluorineTmpDir()).filePath(
+      QStringLiteral("nuget-cert-importer"));
+  QDir(importerDir).removeRecursively();
+  if (!QDir().mkpath(importerDir)) {
+    currentStep().errorMessage = "Failed to create certificate importer workspace";
+    return false;
+  }
+
+  QFile projectFile(QDir(importerDir).filePath(QStringLiteral("FluorineCertImport.csproj")));
+  if (!projectFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    currentStep().errorMessage = "Failed to write certificate importer project";
+    return false;
+  }
+  projectFile.write(CERT_IMPORTER_CSPROJ);
+  projectFile.close();
+
+  QFile programFile(QDir(importerDir).filePath(QStringLiteral("Program.cs")));
+  if (!programFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    currentStep().errorMessage = "Failed to write certificate importer program";
+    return false;
+  }
+  programFile.write(CERT_IMPORTER_PROGRAM);
+  programFile.close();
+
+  QMap<QString, QString> env = baseWineEnv();
+  env["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
+  env["DOTNET_NOLOGO"] = "1";
+  env["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1";
+  env["NUGET_XMLDOC_MODE"] = "skip";
+  env["NUGET_CERT_REVOCATION_MODE"] = "offline";
+  env["NUGET_EXPERIMENTAL_CHAIN_BUILD_RETRY_POLICY"] = "10,1000";
+  env["WINEDLLOVERRIDES"] = "mshtml=d";
+
+  emit logMessage("Importing .NET code-signing and timestamp roots into Wine...");
+  const QString wineImporterDir = linuxPathToWineZPath(importerDir);
+  const QString wineCodeRoots = linuxPathToWineZPath(codeRoots);
+  const QString wineTimestampRoots = linuxPathToWineZPath(timestampRoots);
+  const int rc = runProcess(m_wineBin,
+                            {dotnetExe, QStringLiteral("run"),
+                             QStringLiteral("--project"), wineImporterDir,
+                             QStringLiteral("-p:UseSharedCompilation=false"),
+                             QStringLiteral("--"),
+                             QStringLiteral("Root"), wineCodeRoots,
+                             QStringLiteral("Root"), wineTimestampRoots},
+                            env);
+  QDir(importerDir).removeRecursively();
+  if (rc != 0) {
+    currentStep().errorMessage =
+        QStringLiteral("NuGet certificate import failed (exit code %1)").arg(rc);
+    return false;
+  }
+
+  emit logMessage(QStringLiteral("NuGet signature policy configured for %1 Wine user(s).")
+                      .arg(written));
   return true;
 }
 

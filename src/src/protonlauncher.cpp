@@ -912,6 +912,8 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
 
   env.insert("DOTNET_ROOT", "");
   env.insert("DOTNET_MULTILEVEL_LOOKUP", "0");
+  env.insert("NUGET_EXPERIMENTAL_CHAIN_BUILD_RETRY_POLICY", "10,1000");
+  env.insert("NUGET_CERT_REVOCATION_MODE", "offline");
 
   // Detect ntsync availability: newer Proton/Wine builds prefer the
   // in-kernel ntsync driver for synchronization primitives, but it's

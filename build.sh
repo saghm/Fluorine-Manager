@@ -65,9 +65,8 @@ fi
 
 echo "=== Starting build (mode: ${BUILD_MODE}) ==="
 # BUILD_JOBS controls parallelism (override with `BUILD_JOBS=N ./build.sh`).
-# Defaults to all available cores; set to 4 by default for the in-progress
-# code-review pass to keep the host responsive.
-BUILD_JOBS="${BUILD_JOBS:-4}"
+# Defaults to all available cores.
+BUILD_JOBS="${BUILD_JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)}"
 ${DOCKER} run --rm \
     -v "${SCRIPT_DIR}:/src:rw" \
     -v "${CCACHE_DIR}:/ccache:rw" \
