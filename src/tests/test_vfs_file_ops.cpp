@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <system_error>
 
 namespace fs = std::filesystem;
 
@@ -101,6 +102,88 @@ TEST(VfsFileOps, CreateFileReturnsWritableStagingHandle)
 
   EXPECT_EQ(fs::path(realPath), staging / "ShaderCache/Lighting/test.pso");
   EXPECT_EQ(readText(realPath), "shader");
+}
+
+TEST(VfsFileOps, CreateFileReusesExistingCaseVariant)
+{
+  TempRoot tmp;
+  ASSERT_FALSE(tmp.path().empty());
+
+  const fs::path staging = tmp.path() / "staging";
+  const fs::path overwrite = tmp.path() / "overwrite";
+
+  OverwriteManager overwriteManager(staging.string(), overwrite.string());
+  std::error_code ec;
+  ASSERT_TRUE(overwriteManager.createDirectory("TempProbe", &ec));
+  ASSERT_FALSE(ec);
+
+  std::string firstPath;
+  int fd = overwriteManager.createFile("TempProbe/.wb_case_test", 0600,
+                                       &firstPath, &ec);
+  ASSERT_GE(fd, 0);
+  ASSERT_FALSE(ec);
+  const char first[] = "first";
+  ASSERT_EQ(write(fd, first, sizeof(first) - 1), ssize_t(sizeof(first) - 1));
+  close(fd);
+
+  std::string secondPath;
+  fd = overwriteManager.createFile("tempprobe/.Wb_CaSe_TeSt", 0600,
+                                   &secondPath, &ec);
+  ASSERT_GE(fd, 0);
+  ASSERT_FALSE(ec);
+  const char second[] = "second";
+  ASSERT_EQ(write(fd, second, sizeof(second) - 1), ssize_t(sizeof(second) - 1));
+  close(fd);
+
+  EXPECT_EQ(fs::path(secondPath), fs::path(firstPath));
+  EXPECT_EQ(fs::path(firstPath), staging / "TempProbe/.wb_case_test");
+  EXPECT_EQ(readText(firstPath), "second");
+
+  size_t childCount = 0;
+  for (const auto& entry : fs::directory_iterator(staging / "TempProbe")) {
+    (void)entry;
+    ++childCount;
+  }
+  EXPECT_EQ(childCount, 1u);
+}
+
+TEST(VfsFileOps, CreateDirectoryReusesExistingCaseVariant)
+{
+  TempRoot tmp;
+  ASSERT_FALSE(tmp.path().empty());
+
+  const fs::path staging = tmp.path() / "staging";
+  const fs::path overwrite = tmp.path() / "overwrite";
+
+  OverwriteManager overwriteManager(staging.string(), overwrite.string());
+  std::error_code ec;
+  ASSERT_TRUE(overwriteManager.createDirectory("TempProbe", &ec));
+  ASSERT_FALSE(ec);
+  ASSERT_TRUE(overwriteManager.createDirectory("tempprobe", &ec));
+  ASSERT_FALSE(ec);
+
+  EXPECT_TRUE(fs::is_directory(staging / "TempProbe"));
+  EXPECT_FALSE(fs::exists(staging / "tempprobe"));
+}
+
+TEST(VfsFileOps, CreateDirectoryReportsParentFileAsNotDirectory)
+{
+  TempRoot tmp;
+  ASSERT_FALSE(tmp.path().empty());
+
+  const fs::path staging = tmp.path() / "staging";
+  const fs::path overwrite = tmp.path() / "overwrite";
+
+  OverwriteManager overwriteManager(staging.string(), overwrite.string());
+  std::error_code ec;
+  std::string realPath;
+  const int fd = overwriteManager.createFile("TempProbe", 0600, &realPath, &ec);
+  ASSERT_GE(fd, 0);
+  close(fd);
+  ASSERT_FALSE(ec);
+
+  EXPECT_FALSE(overwriteManager.createDirectory("tempprobe/child", &ec));
+  EXPECT_EQ(ec, std::make_error_code(std::errc::not_a_directory));
 }
 
 TEST(VfsFileOps, InodeRenameMovesDescendants)

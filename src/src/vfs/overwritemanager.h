@@ -2,6 +2,7 @@
 #define VFS_OVERWRITEMANAGER_H
 
 #include <cstdint>
+#include <system_error>
 #include <string>
 #include <sys/types.h>
 #include <vector>
@@ -21,12 +22,15 @@ public:
   std::string writeFile(const std::string& relative_path,
                         const std::vector<uint8_t>& data) const;
   int createFile(const std::string& relative_path, mode_t mode,
-                 std::string* real_path) const;
+                 std::string* real_path,
+                 std::error_code* out_error = nullptr) const;
 
-  bool rename(const std::string& old_relative, const std::string& new_relative) const;
+  bool rename(const std::string& old_relative, const std::string& new_relative,
+              std::error_code* out_error = nullptr) const;
   bool removeFile(const std::string& relative_path) const;
   bool removeDirectory(const std::string& relative_path, bool* out_not_empty = nullptr) const;
-  bool createDirectory(const std::string& relative_path) const;
+  bool createDirectory(const std::string& relative_path,
+                       std::error_code* out_error = nullptr) const;
 
   bool exists(const std::string& relative_path) const;
   std::string overwritePath(const std::string& relative_path) const;

@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#include <system_error>
 #include <utility>
 
 #if __has_include(<linux/msdos_fs.h>)
@@ -41,6 +42,29 @@ void invalidateLookupCache(Mo2FsContext* ctx, const std::string& dirPath);
 void invalidateAttrCache(Mo2FsContext* ctx, fuse_ino_t ino);
 bool pathTouchesMutation(const std::string& cachedPath,
                          const std::string& changedPath);
+
+int fuseErrnoFromError(std::error_code ec, int fallback = EIO)
+{
+  if (!ec) {
+    return fallback;
+  }
+
+  if (ec == std::errc::no_such_file_or_directory) return ENOENT;
+  if (ec == std::errc::not_a_directory) return ENOTDIR;
+  if (ec == std::errc::is_a_directory) return EISDIR;
+  if (ec == std::errc::file_exists) return EEXIST;
+  if (ec == std::errc::permission_denied) return EACCES;
+  if (ec == std::errc::directory_not_empty) return ENOTEMPTY;
+  if (ec == std::errc::invalid_argument) return EINVAL;
+  if (ec == std::errc::too_many_symbolic_link_levels) return ELOOP;
+  if (ec == std::errc::filename_too_long) return ENAMETOOLONG;
+
+  if (ec.category() == std::generic_category() ||
+      ec.category() == std::system_category()) {
+    return ec.value() != 0 ? ec.value() : fallback;
+  }
+  return fallback;
+}
 
 // RAII helper that records per-op wall-clock nanoseconds into a counter.
 struct OpTimer
@@ -1872,7 +1896,7 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
       fd = open(realPath.c_str(), O_RDWR);
     }
     if (fd < 0) {
-      fuse_reply_err(req, EIO);
+      fuse_reply_err(req, errno != 0 ? errno : EIO);
       return;
     }
   } else {
@@ -2105,6 +2129,12 @@ void mo2_create(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t mode
       joinPath(parentPath, canonicalChildName(ctx, parentPath, name));
   _t.path = relative;
 
+  const auto preCreateSnap = snapshotForPath(ctx, relative);
+  if (preCreateSnap.found && preCreateSnap.is_directory) {
+    fuse_reply_err(req, EISDIR);
+    return;
+  }
+
   std::string realPath;
 
   // If this file is tracked to a mod folder, create it there instead of staging
@@ -2131,9 +2161,10 @@ void mo2_create(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t mode
   }
 
   if (trackedMod.empty()) {
-    fd = ctx->overwrite->createFile(relative, mode, &realPath);
+    std::error_code createError;
+    fd = ctx->overwrite->createFile(relative, mode, &realPath, &createError);
     if (fd < 0) {
-      fuse_reply_err(req, EIO);
+      fuse_reply_err(req, fuseErrnoFromError(createError));
       return;
     }
   }
@@ -2150,7 +2181,7 @@ void mo2_create(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t mode
 
   updateFileNodeKnown(ctx, relative, realPath, origin, createdSize, createdMtime);
   invalidateDirCache(ctx, parentPath);
-  {
+  if (!preCreateSnap.found) {
     std::unique_lock lock(ctx->tree_mutex);
     ++ctx->tree->file_count;
   }
@@ -2242,12 +2273,17 @@ void mo2_rename(fuse_req_t req, fuse_ino_t parent, const char* name,
 
   std::string newRealPath;
 
-  if (!ctx->overwrite->rename(oldRelative, newRelative)) {
+  std::error_code renameError;
+  if (!ctx->overwrite->rename(oldRelative, newRelative, &renameError)) {
     // Source file is not in staging or overwrite — it's a backing (game) file
     // or a mod file. Copy it to staging at the destination path instead of
     // moving the original. This is the VFS equivalent of a rename: the file
     // appears at the new path and disappears from the old path in the virtual
     // view, but we never modify the real game/mod directories.
+    if (renameError != std::make_error_code(std::errc::no_such_file_or_directory)) {
+      fuse_reply_err(req, fuseErrnoFromError(renameError));
+      return;
+    }
     if (oldSnap.is_directory) {
       fuse_reply_err(req, EACCES);
       return;
@@ -2605,15 +2641,24 @@ void mo2_mkdir(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t /*mod
 
   const std::string relative =
       joinPath(parentPath, canonicalChildName(ctx, parentPath, name));
-  if (!ctx->overwrite->createDirectory(relative)) {
-    fuse_reply_err(req, EIO);
+  const auto preCreateSnap = snapshotForPath(ctx, relative);
+  if (preCreateSnap.found && !preCreateSnap.is_directory) {
+    fuse_reply_err(req, EEXIST);
+    return;
+  }
+
+  std::error_code createError;
+  if (!ctx->overwrite->createDirectory(relative, &createError)) {
+    fuse_reply_err(req, fuseErrnoFromError(createError));
     return;
   }
 
   {
     std::unique_lock lock(ctx->tree_mutex);
     ctx->tree->root.insertDirectory(splitPath(relative));
-    ++ctx->tree->dir_count;
+    if (!preCreateSnap.found) {
+      ++ctx->tree->dir_count;
+    }
     invalidateNodeCache(ctx, relative);
   }
   invalidateDirCache(ctx, parentPath);
