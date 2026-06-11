@@ -581,6 +581,12 @@ ProtonLauncher& ProtonLauncher::setWorkingDir(const QString& dir)
   return *this;
 }
 
+ProtonLauncher& ProtonLauncher::setGameDirectory(const QString& dir)
+{
+  m_gameDirectory = dir.trimmed();
+  return *this;
+}
+
 ProtonLauncher& ProtonLauncher::setProtonPath(const QString& path)
 {
   m_protonPath = path.trimmed();
@@ -723,8 +729,9 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
   // before starting a new one.
   const QStringList protonArgs = QStringList() << "waitforexitandrun" << m_binary << m_arguments;
   QStringList pressureVesselImportantPaths;
-  pressureVesselImportantPaths << m_binary << m_workingDir << m_prefixPath
-                               << m_bindMountSource << m_bindMountTarget;
+  pressureVesselImportantPaths << m_binary << m_workingDir << m_gameDirectory
+                               << m_prefixPath << m_bindMountSource
+                               << m_bindMountTarget;
 
   // If SLR is enabled, wrap the whole proton invocation inside the
   // pressure-vessel container provided by SteamLinuxRuntime_sniper.
@@ -739,20 +746,13 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
       // Build: [wrappers] run_script [--filesystem=...] -- proton_script protonArgs
       QStringList slrArgs;
 
-      // Expose host directories to the pressure-vessel container.
-      // Without --filesystem= flags, the container's mount namespace
-      // may not see FUSE mounts or system-installed Proton paths.
-      if (!m_binary.isEmpty()) {
-        QString gameDir = QFileInfo(m_binary).absolutePath();
-        const QFileInfo gameDirInfo(gameDir);
-        if (gameDirInfo.fileName().compare(QStringLiteral("bin"),
-                                           Qt::CaseInsensitive) == 0) {
-          const QString gameRoot = gameDirInfo.dir().absolutePath();
-          if (QFileInfo(gameRoot).exists()) {
-            gameDir = gameRoot;
-          }
-        }
-        slrArgs << QStringLiteral("--filesystem=%1").arg(gameDir);
+      // Expose the managed game root.  Extenders frequently live below a
+      // nested bin directory but load assets/modules from the root.
+      if (!m_gameDirectory.isEmpty() && QFileInfo::exists(m_gameDirectory)) {
+        slrArgs << QStringLiteral("--filesystem=%1").arg(m_gameDirectory);
+      } else if (!m_binary.isEmpty()) {
+        slrArgs << QStringLiteral("--filesystem=%1")
+                       .arg(QFileInfo(m_binary).absolutePath());
       }
       if (!m_prefixPath.isEmpty()) {
         slrArgs << QStringLiteral("--filesystem=%1").arg(m_prefixPath);

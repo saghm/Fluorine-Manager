@@ -22,6 +22,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "env.h"
 #include "envmodule.h"
 #include "fluorineconfig.h"
+#include "knowngames.h"
 #include "protonlauncher.h"
 #include "settings.h"
 #include "shared/appconfig.h"
@@ -190,6 +191,38 @@ uint32_t parseSteamAppId(const QString& steamAppId)
   bool ok      = false;
   const auto n = steamAppId.toUInt(&ok);
   return (ok ? n : 0u);
+}
+
+static uint32_t steamAppIdFromFluorineConfig()
+{
+  if (auto cfg = FluorineConfig::load(); cfg.has_value()) {
+    return cfg->app_id;
+  }
+
+  return 0;
+}
+
+static uint32_t steamAppIdFromKnownGame(const QString& gameName)
+{
+  if (const auto* knownGame = findKnownGameByTitle(gameName);
+      knownGame != nullptr && knownGame->steam_app_id != nullptr) {
+    bool ok      = false;
+    const auto n = QString::fromLatin1(knownGame->steam_app_id).toUInt(&ok);
+    return (ok ? n : 0u);
+  }
+
+  return 0;
+}
+
+static bool steamOverlayEnabledForCurrentInstance()
+{
+  const Settings* instanceForLaunch = Settings::maybeInstance();
+  if (!instanceForLaunch) {
+    return false;
+  }
+
+  const QSettings instanceIni(instanceForLaunch->filename(), QSettings::IniFormat);
+  return instanceIni.value("fluorine/steam_overlay", false).toBool();
 }
 
 QString firstExistingSetting(const QSettings& settings, const QStringList& keys)
@@ -406,11 +439,38 @@ int spawn(const SpawnParameters& sp, pid_t& processId)
 
   logSpawning(sp, bin + " " + sp.arguments);
 
+  uint32_t steamAppId = parseSteamAppId(sp.steamAppID);
+  const bool resolveOverlaySteamAppId =
+      sp.useProton && steamOverlayEnabledForCurrentInstance();
+  if (resolveOverlaySteamAppId && steamAppId == 0) {
+    const Settings* instanceForLaunch = Settings::maybeInstance();
+    if (instanceForLaunch) {
+      const auto gameName = instanceForLaunch->game().name();
+      if (gameName && !gameName->trimmed().isEmpty()) {
+        steamAppId = steamAppIdFromKnownGame(*gameName);
+        if (steamAppId != 0) {
+          MOBase::log::debug("spawn: using known-game steam app id '{}' "
+                             "for '{}'",
+                             steamAppId, *gameName);
+        }
+      }
+    }
+  }
+  if (resolveOverlaySteamAppId && steamAppId == 0) {
+    steamAppId = steamAppIdFromFluorineConfig();
+    if (steamAppId != 0) {
+      MOBase::log::debug("spawn: using Fluorine config steam app id '{}' "
+                         "for Proton launch",
+                         steamAppId);
+    }
+  }
+
   ProtonLauncher launcher;
   launcher.setBinary(bin)
       .setArguments(argList)
       .setWorkingDir(cwd)
-      .setSteamAppId(parseSteamAppId(sp.steamAppID));
+      .setGameDirectory(MOBase::normalizePathForHost(sp.gameDirectory.absolutePath()))
+      .setSteamAppId(steamAppId);
 
   if (sp.useProton) {
     // Read per-instance settings from the instance INI (not the global QSettings).

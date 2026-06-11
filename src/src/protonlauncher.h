@@ -16,6 +16,7 @@ public:
   ProtonLauncher& setBinary(const QString& path);
   ProtonLauncher& setArguments(const QStringList& args);
   ProtonLauncher& setWorkingDir(const QString& dir);
+  ProtonLauncher& setGameDirectory(const QString& dir);
   ProtonLauncher& setProtonPath(const QString& path);
   ProtonLauncher& setPrefix(const QString& path);
   ProtonLauncher& setSteamAppId(uint32_t id);
@@ -50,6 +51,7 @@ private:
   QString m_binary;
   QStringList m_arguments;
   QString m_workingDir;
+  QString m_gameDirectory;
   QString m_protonPath;
   QString m_prefixPath;
   uint32_t m_steamAppId{0};

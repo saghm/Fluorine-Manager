@@ -49,6 +49,7 @@ struct SpawnParameters
   QFileInfo binary;
   QString arguments;
   QDir currentDirectory;
+  QDir gameDirectory;
   QString steamAppID;
   bool hooked = false;
   bool useProton = true;
