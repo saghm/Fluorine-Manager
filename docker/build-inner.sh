@@ -57,6 +57,33 @@ OUT_DIR="/src/build/staging"
 rm -rf "${OUT_DIR}"
 mkdir -p "${OUT_DIR}/plugins" "${OUT_DIR}/lib"
 
+# ── Bundled fallback fonts ──
+# The release uses a minimal fontconfig file so bundled fontconfig doesn't try
+# to parse newer host configs. Ship a known Latin UI font so that generic
+# families don't resolve to symbol-only fonts on hosts like Fedora/Bazzite.
+mkdir -p "${OUT_DIR}/fonts" "${OUT_DIR}/licenses"
+DEJAVU_DIR=""
+for candidate in \
+    /usr/share/fonts/truetype/dejavu \
+    /usr/share/fonts/dejavu \
+    /usr/share/fonts/TTF; do
+    if [ -f "${candidate}/DejaVuSans.ttf" ]; then
+        DEJAVU_DIR="${candidate}"
+        break
+    fi
+done
+if [ -z "${DEJAVU_DIR}" ]; then
+    echo "ERROR: DejaVu Sans font not found in build container"
+    exit 1
+fi
+for font in DejaVuSans.ttf DejaVuSans-Bold.ttf DejaVuSansMono.ttf DejaVuSansMono-Bold.ttf; do
+    cp -f "${DEJAVU_DIR}/${font}" "${OUT_DIR}/fonts/"
+done
+if [ -f /usr/share/doc/fonts-dejavu-core/copyright ]; then
+    cp -f /usr/share/doc/fonts-dejavu-core/copyright \
+        "${OUT_DIR}/licenses/fonts-dejavu-core.txt"
+fi
+
 # ── Main binary + helpers ──
 cp -f "${RUNDIR}/ModOrganizer" "${OUT_DIR}/ModOrganizer-core"
 [ -f "${RUNDIR}/README-PORTABLE.txt" ] && cp -f "${RUNDIR}/README-PORTABLE.txt" "${OUT_DIR}/"
@@ -616,19 +643,45 @@ export QT_QPA_PLATFORM_PLUGIN_PATH="${RUN}/qt6plugins/platforms"
 # newer /etc/fonts configuration, older bundled fontconfig can warn on syntax
 # like xsi:nil and newer generic families. Use a minimal compatible config for
 # Fluorine itself; launched games/tools restore the user's original env.
-mkdir -p "${RUN}/etc/fonts"
-cat > "${RUN}/etc/fonts/fonts.conf" <<EOF
+if [ -z "${FLUORINE_DISABLE_FONTCONFIG_FIX:-}" ]; then
+    mkdir -p "${RUN}/etc/fonts"
+    cat > "${RUN}/etc/fonts/fonts.conf" <<EOF
 <?xml version="1.0"?>
 <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
 <fontconfig>
+  <dir>${RUN}/fonts</dir>
   <dir>/usr/share/fonts</dir>
   <dir>/usr/local/share/fonts</dir>
   <dir prefix="xdg">fonts</dir>
   <cachedir prefix="xdg">fontconfig</cachedir>
+
+  <alias>
+    <family>sans-serif</family>
+    <prefer><family>DejaVu Sans</family></prefer>
+  </alias>
+  <alias>
+    <family>monospace</family>
+    <prefer><family>DejaVu Sans Mono</family></prefer>
+  </alias>
+  <alias>
+    <family>MS Shell Dlg 2</family>
+    <prefer><family>DejaVu Sans</family></prefer>
+  </alias>
+  <alias>
+    <family>Segoe UI</family>
+    <prefer><family>DejaVu Sans</family></prefer>
+  </alias>
+  <alias>
+    <family>Arial</family>
+    <prefer><family>DejaVu Sans</family></prefer>
+  </alias>
 </fontconfig>
 EOF
-export FONTCONFIG_FILE="${RUN}/etc/fonts/fonts.conf"
-export FONTCONFIG_PATH="${RUN}/etc/fonts"
+    export FONTCONFIG_FILE="${RUN}/etc/fonts/fonts.conf"
+    export FONTCONFIG_PATH="${RUN}/etc/fonts"
+else
+    unset FONTCONFIG_FILE FONTCONFIG_PATH
+fi
 
 # Raise open file descriptor limit — large modlists with FUSE VFS
 # can easily exceed the default 1024

@@ -45,6 +45,8 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <QDesktopServices>
 #include <QEvent>
 #include <QFile>
+#include <QFont>
+#include <QFontDatabase>
 #include <QPainter>
 #include <QProxyStyle>
 #include <QRegularExpression>
@@ -135,6 +137,36 @@ void addLinuxLibrariesToPath()
   env::prependToPath(libsPath);
 }
 
+void configureApplicationFont()
+{
+  const QDir fontDir(QCoreApplication::applicationDirPath() + "/fonts");
+  const QStringList bundledFonts{
+      "DejaVuSans.ttf",
+      "DejaVuSans-Bold.ttf",
+      "DejaVuSansMono.ttf",
+      "DejaVuSansMono-Bold.ttf",
+  };
+
+  QString uiFamily;
+  for (const QString& font : bundledFonts) {
+    const int id = QFontDatabase::addApplicationFont(fontDir.filePath(font));
+    if (id < 0 || !uiFamily.isEmpty()) {
+      continue;
+    }
+
+    const QStringList families = QFontDatabase::applicationFontFamilies(id);
+    if (!families.isEmpty()) {
+      uiFamily = families.first();
+    }
+  }
+
+  if (!uiFamily.isEmpty()) {
+    QFont font = QApplication::font();
+    font.setFamily(uiFamily);
+    QApplication::setFont(font);
+  }
+}
+
 #ifdef MO2_WEBENGINE
 void configureQtWebEngineProcessPath()
 {
@@ -205,6 +237,7 @@ void configureQtWebEngineProcessPath()
 MOApplication::MOApplication(int& argc, char** argv) : QApplication(argc, argv)
 {
   TimeThis const tt("MOApplication()");
+  configureApplicationFont();
 
   // Ensure the app name is always "ModOrganizer" regardless of the binary
   // filename (settings/profile lookups key off this).

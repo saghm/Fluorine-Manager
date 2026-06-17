@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Build essentials
     build-essential cmake meson ninja-build ccache \
     git curl wget file binutils patchelf pkg-config ca-certificates \
+    fonts-dejavu-core \
     # Library dependencies
     libboost-all-dev \
     libsqlite3-dev \

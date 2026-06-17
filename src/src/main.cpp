@@ -34,15 +34,43 @@ int run(int argc, char* argv[]);
 
 namespace
 {
-const char* COMPAT_FONTCONFIG = R"(<?xml version="1.0"?>
+QString compatibleFontconfig(const QString& appDir)
+{
+  const QString fontDir = QDir(appDir).filePath(QStringLiteral("fonts")).toHtmlEscaped();
+
+  return QStringLiteral(R"(<?xml version="1.0"?>
 <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
 <fontconfig>
+  <dir>%1</dir>
   <dir>/usr/share/fonts</dir>
   <dir>/usr/local/share/fonts</dir>
   <dir prefix="xdg">fonts</dir>
   <cachedir prefix="xdg">fontconfig</cachedir>
+
+  <alias>
+    <family>sans-serif</family>
+    <prefer><family>DejaVu Sans</family></prefer>
+  </alias>
+  <alias>
+    <family>monospace</family>
+    <prefer><family>DejaVu Sans Mono</family></prefer>
+  </alias>
+  <alias>
+    <family>MS Shell Dlg 2</family>
+    <prefer><family>DejaVu Sans</family></prefer>
+  </alias>
+  <alias>
+    <family>Segoe UI</family>
+    <prefer><family>DejaVu Sans</family></prefer>
+  </alias>
+  <alias>
+    <family>Arial</family>
+    <prefer><family>DejaVu Sans</family></prefer>
+  </alias>
 </fontconfig>
-)";
+)")
+      .arg(fontDir);
+}
 
 void configureCompatibleFontconfig(int argc, char* argv[])
 {
@@ -61,13 +89,11 @@ void configureCompatibleFontconfig(int argc, char* argv[])
   const QString fontDir = QDir(appDir).filePath(QStringLiteral("etc/fonts"));
   const QString configPath = QDir(fontDir).filePath(QStringLiteral("fonts.conf"));
 
-  if (!QFileInfo::exists(configPath)) {
-    QDir().mkpath(fontDir);
-    QFile config(configPath);
-    if (config.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
-      config.write(COMPAT_FONTCONFIG);
-      config.close();
-    }
+  QDir().mkpath(fontDir);
+  QFile config(configPath);
+  if (config.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+    config.write(compatibleFontconfig(appDir).toUtf8());
+    config.close();
   }
 
   if (QFileInfo::exists(configPath)) {
