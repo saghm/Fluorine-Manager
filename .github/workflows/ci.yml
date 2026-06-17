@@ -188,7 +188,7 @@ jobs:
             echo "- Channel: stable"
             echo "- Commit: ${COMMIT}"
             echo ""
-            echo "See CHANGELOG.md for the full list of changes."
+            echo "See the GitHub release notes for the full list of changes."
           } > "${NOTES_FILE}"
 
           EXISTING_DRAFT="$(gh release view "${TAG}" --json isDraft --jq '.isDraft' 2>/dev/null || true)"
@@ -196,7 +196,6 @@ jobs:
             if [[ "${EXISTING_DRAFT}" == "true" ]]; then
               gh release edit "${TAG}" \
                 --title "${TITLE}" \
-                --notes-file "${NOTES_FILE}" \
                 --draft \
                 --prerelease=false \
                 --latest=false
