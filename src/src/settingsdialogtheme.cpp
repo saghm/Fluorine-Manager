@@ -17,6 +17,7 @@ ThemeSettingsTab::ThemeSettingsTab(Settings& s, SettingsDialog& d) : SettingsTab
   // style
   addStyles();
   selectStyle();
+  selectQssFontSize();
 
   // colors
   ui->colorTable->load(s);
@@ -36,9 +37,18 @@ void ThemeSettingsTab::update()
   const QString oldStyle = settings().interface().styleName().value_or("");
   const QString newStyle =
       ui->styleBox->itemData(ui->styleBox->currentIndex()).toString();
+  const int oldQssFontSize = settings().interface().qssFontSize();
+  const int newQssFontSize = ui->qssFontSizeSpinBox->value();
 
   if (oldStyle != newStyle) {
     settings().interface().setStyleName(newStyle);
+  }
+
+  if (oldQssFontSize != newQssFontSize) {
+    settings().interface().setQssFontSize(newQssFontSize);
+  }
+
+  if (oldStyle != newStyle || oldQssFontSize != newQssFontSize) {
     emit settings().styleChanged(newStyle);
   }
 
@@ -93,6 +103,11 @@ void ThemeSettingsTab::selectStyle()
   if (currentID != -1) {
     ui->styleBox->setCurrentIndex(currentID);
   }
+}
+
+void ThemeSettingsTab::selectQssFontSize()
+{
+  ui->qssFontSizeSpinBox->setValue(settings().interface().qssFontSize());
 }
 
 void ThemeSettingsTab::onExploreStyles()

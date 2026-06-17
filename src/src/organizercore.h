@@ -446,6 +446,8 @@ public:
                                             RefreshCallbackGroup group,
                                             RefreshCallbackMode mode);
 
+  void saveCurrentProfileForShutdown();
+
 public:  // IPluginDiagnose interface
   std::vector<unsigned int> activeProblems() const override;
   QString shortDescription(unsigned int key) const override;
@@ -561,6 +563,7 @@ private:
   ModDataContentHolder m_Contents;
 
   std::shared_ptr<Profile> m_CurrentProfile;
+  bool m_CurrentProfileSavedForShutdown = false;
 
   Settings& m_Settings;
 

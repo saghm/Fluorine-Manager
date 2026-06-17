@@ -8,9 +8,11 @@
 #include <QCoreApplication>
 #include <QDirIterator>
 #include <QMessageBox>
+#include <QSet>
 #include <QToolButton>
 #include <QSettings>
 #include <cstdio>
+#include <utility>
 #include <boost/fusion/algorithm/iteration/for_each.hpp>
 #include <boost/fusion/include/at_key.hpp>
 #include <boost/fusion/include/for_each.hpp>
@@ -333,8 +335,14 @@ PluginContainer::PluginContainer(OrganizerCore* organizer)
 
 PluginContainer::~PluginContainer()
 {
+  try {
+    unloadPlugins();
+  } catch (const std::exception& e) {
+    log::error("failed to unload plugins during shutdown: {}", e.what());
+  } catch (...) {
+    log::error("failed to unload plugins during shutdown: unknown exception");
+  }
   m_Organizer = nullptr;
-  unloadPlugins();
 }
 
 void PluginContainer::startPlugins(IUserInterface* userInterface)
@@ -1140,6 +1148,48 @@ void PluginContainer::unloadPlugins()
     m_Organizer->settings().plugins().clearPlugins();
   }
 
+  QSet<QString> seenProxiedPaths;
+  std::vector<std::pair<IPluginProxy*, QString>> proxiedPaths;
+  const auto objects = bf::at_key<QObject>(m_Plugins);
+  for (QObject* object : objects) {
+    auto* plugin = qobject_cast<IPlugin*>(object);
+    if (!plugin) {
+      continue;
+    }
+
+    const auto req = m_Requirements.find(plugin);
+    if (req == m_Requirements.end()) {
+      continue;
+    }
+
+    if (auto* proxy = req->second.m_Organizer) {
+      proxy->disconnectSignals();
+    }
+
+    if (auto* game = qobject_cast<IPluginGame*>(object)) {
+      unregisterGame(game);
+    }
+
+    auto* pluginProxy = req->second.proxy();
+    if (pluginProxy) {
+      const QString path = filepath(plugin);
+      if (!seenProxiedPaths.contains(path)) {
+        proxiedPaths.emplace_back(pluginProxy, path);
+        seenProxiedPaths.insert(path);
+      }
+    }
+  }
+
+  for (const auto& [proxy, path] : proxiedPaths) {
+    try {
+      proxy->unload(path);
+    } catch (const std::exception& e) {
+      log::error("failed to unload proxied plugin '{}': {}", path, e.what());
+    } catch (...) {
+      log::error("failed to unload proxied plugin '{}': unknown exception", path);
+    }
+  }
+
   bf::for_each(m_Plugins, [](auto& t) {
     t.second.clear();
   });
@@ -1151,8 +1201,17 @@ void PluginContainer::unloadPlugins()
   while (!m_PluginLoaders.empty()) {
     QPluginLoader* loader = m_PluginLoaders.back();
     m_PluginLoaders.pop_back();
-    if ((loader != nullptr) && !loader->unload()) {
-      log::debug("failed to unload {}: {}", loader->fileName(), loader->errorString());
+    if (loader != nullptr) {
+      try {
+        if (!loader->unload()) {
+          log::debug("failed to unload {}: {}", loader->fileName(),
+                     loader->errorString());
+        }
+      } catch (const std::exception& e) {
+        log::error("failed to unload {}: {}", loader->fileName(), e.what());
+      } catch (...) {
+        log::error("failed to unload {}: unknown exception", loader->fileName());
+      }
     }
     delete loader;
   }

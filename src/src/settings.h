@@ -590,6 +590,11 @@ public:
   std::optional<QString> styleName() const;
   void setStyleName(const QString& name);
 
+  // QSS font size override in pixels; 0 means use the stylesheet defaults
+  //
+  int qssFontSize() const;
+  void setQssFontSize(int size);
+
   // whether to use collapsible separators when possible
   //
   bool collapsibleSeparators(Qt::SortOrder order) const;

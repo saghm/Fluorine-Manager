@@ -68,7 +68,6 @@ cp -f "${RUNDIR}/ModOrganizer" "${OUT_DIR}/ModOrganizer-core"
 find build/libs -type f \( \
     -name "libgame_*.so" -o \
     -name "libinstaller_*.so" -o \
-    -name "libfomod_plus_*.so" -o \
     -name "libpreview_*.so" -o \
     -name "libdiagnose_*.so" -o \
     -name "libcheck_*.so" -o \
@@ -482,9 +481,8 @@ export FLUORINE_ORIG_PATH="${PATH}"
 export FLUORINE_ORIG_XDG_DATA_DIRS="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
 export FLUORINE_ORIG_QT_PLUGIN_PATH="${QT_PLUGIN_PATH:-}"
 
-# Steam injects 32-bit gameoverlayrenderer.so via LD_PRELOAD which causes
-# "wrong ELF class" errors for 64-bit Qt6 apps (see PrismLauncher #3421).
-# Clear it for our process; game launches restore via FLUORINE_ORIG_LD_PRELOAD.
+# Clear any injected preload for the bundled Qt6 process. Game launches restore
+# the original value via FLUORINE_ORIG_LD_PRELOAD.
 unset LD_PRELOAD
 
 # Suppress Qt debug logging by default. Some plugins (e.g. BG3 file mapper)

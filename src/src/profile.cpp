@@ -151,8 +151,15 @@ Profile::Profile(const Profile& reference)
 
 Profile::~Profile()
 {
+  try {
+    m_ModListWriter.writeImmediately(true);
+  } catch (const std::exception& e) {
+    log::error("failed to flush mod list during profile shutdown: {}", e.what());
+  } catch (...) {
+    log::error("failed to flush mod list during profile shutdown: unknown exception");
+  }
+
   delete m_Settings;
-  m_ModListWriter.writeImmediately(true);
 }
 
 void Profile::findProfileSettings()

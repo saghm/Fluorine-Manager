@@ -46,6 +46,13 @@ static QString sanitizeDesktopName(const QString& s)
   return result;
 }
 
+static QString shellQuote(const QString& s)
+{
+  QString result = s;
+  result.replace("'", "'\"'\"'");
+  return "'" + result + "'";
+}
+
 // ---------------------------------------------------------------------------
 // PE icon extractor — reads the largest icon embedded in a Windows .exe
 // and returns it as a QImage.  Returns a null QImage on failure.
@@ -443,6 +450,33 @@ bool Shortcut::add(Locations loc)
 
   QDir().mkpath(QFileInfo(path).absolutePath());
 
+  const QString script = scriptPath(loc);
+  if (script.isEmpty()) {
+    return false;
+  }
+
+  QFile scriptFile(script);
+  if (!scriptFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    return false;
+  }
+
+  QTextStream scriptOut(&scriptFile);
+  scriptOut << "#!/usr/bin/env bash\n";
+  scriptOut << "set -euo pipefail\n";
+  if (!m_workingDirectory.isEmpty()) {
+    scriptOut << "cd " << shellQuote(m_workingDirectory) << "\n";
+  }
+  scriptOut << "exec " << shellQuote(m_target);
+  if (!m_arguments.isEmpty()) {
+    scriptOut << " " << m_arguments;
+  }
+  scriptOut << "\n";
+  scriptFile.close();
+  scriptFile.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                            QFileDevice::ExeOwner | QFileDevice::ReadGroup |
+                            QFileDevice::ExeGroup | QFileDevice::ReadOther |
+                            QFileDevice::ExeOther);
+
   QFile file(path);
   if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
     return false;
@@ -463,12 +497,7 @@ bool Shortcut::add(Locations loc)
   if (!m_description.isEmpty()) {
     out << "Comment=" << m_description << "\n";
   }
-  // .desktop Exec values require quoting paths that contain spaces
-  out << "Exec=\"" << m_target << "\"";
-  if (!m_arguments.isEmpty()) {
-    out << " " << m_arguments;
-  }
-  out << "\n";
+  out << "Exec=\"" << script << "\"\n";
   if (!m_workingDirectory.isEmpty()) {
     out << "Path=" << m_workingDirectory << "\n";
   }
@@ -481,7 +510,10 @@ bool Shortcut::add(Locations loc)
   file.close();
 
   // Make it executable (required by some desktop environments)
-  file.setPermissions(file.permissions() | QFileDevice::ExeUser);
+  file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                      QFileDevice::ExeOwner | QFileDevice::ReadGroup |
+                      QFileDevice::ExeGroup | QFileDevice::ReadOther |
+                      QFileDevice::ExeOther);
 
   return true;
 }
@@ -492,7 +524,12 @@ bool Shortcut::remove(Locations loc)
   if (path.isEmpty()) {
     return false;
   }
-  return QFile::remove(path);
+  const bool removedShortcut = QFile::remove(path);
+  const QString script = scriptPath(loc);
+  if (!script.isEmpty()) {
+    QFile::remove(script);
+  }
+  return removedShortcut;
 }
 
 QString Shortcut::shortcutPath(Locations loc) const
@@ -502,6 +539,15 @@ QString Shortcut::shortcutPath(Locations loc) const
     return {};
   }
   return dir + "/" + shortcutFilename();
+}
+
+QString Shortcut::scriptPath(Locations loc) const
+{
+  const QString dir = shortcutDirectory(loc);
+  if (dir.isEmpty()) {
+    return {};
+  }
+  return dir + "/" + scriptFilename();
 }
 
 QString Shortcut::shortcutDirectory(Locations loc)
@@ -533,6 +579,19 @@ QString Shortcut::shortcutFilename() const
     base = sanitizeDesktopName(m_instanceName) + "-" + base;
   }
   return base + ".desktop";
+}
+
+QString Shortcut::scriptFilename() const
+{
+  if (m_name.isEmpty()) {
+    return "fluorine-launch.sh";
+  }
+
+  QString base = m_name;
+  if (!m_instanceName.isEmpty()) {
+    base = sanitizeDesktopName(m_instanceName) + "-" + base;
+  }
+  return sanitizeDesktopName(base) + ".sh";
 }
 
 QString toString(Shortcut::Locations loc)

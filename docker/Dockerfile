@@ -18,8 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libtinyxml2-dev \
     libfontconfig1-dev \
     libspdlog-dev \
-    libfuse3-dev fuse3 libcap-dev \
-    liburing-dev libnuma-dev \
+    libfuse3-dev fuse3 libcap-dev libnuma-dev \
     liblz4-dev zlib1g-dev libzstd-dev libbz2-dev liblzma-dev \
     libssl-dev libcurl4-openssl-dev \
     libtomlplusplus-dev \
@@ -40,9 +39,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     clang-tidy \
     && rm -rf /var/lib/apt/lists/*
 
-# Ubuntu 25.10 currently carries libfuse 3.17.x, which cannot mount with
-# the stable FUSE-over-io_uring option. Build the pinned upstream release
-# so Fluorine compiles and bundles matching 3.18.x headers/runtime.
+# Build a pinned upstream libfuse so Fluorine compiles and bundles matching
+# headers/runtime across supported build images.
 ARG LIBFUSE_VERSION=3.18.2
 RUN curl -L --fail \
       "https://github.com/libfuse/libfuse/releases/download/fuse-${LIBFUSE_VERSION}/fuse-${LIBFUSE_VERSION}.tar.gz" \
@@ -54,8 +52,7 @@ RUN curl -L --fail \
       -Dexamples=false \
       -Dutils=true \
       -Dtests=false \
-      -Duseroot=false \
-      -Denable-io-uring=true && \
+      -Duseroot=false && \
     meson compile -C /tmp/libfuse-build && \
     meson install -C /tmp/libfuse-build && \
     ldconfig && \

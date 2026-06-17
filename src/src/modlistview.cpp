@@ -702,6 +702,66 @@ void ModListView::updateGroupByProxy()
   }
 }
 
+void ModListView::applyDefaultHeaderState()
+{
+  // hide these columns by default
+  header()->setSectionHidden(ModList::COL_CONTENT, true);
+  header()->setSectionHidden(ModList::COL_MODID, true);
+  header()->setSectionHidden(ModList::COL_UPLOADER, true);
+  header()->setSectionHidden(ModList::COL_GAME, true);
+  header()->setSectionHidden(ModList::COL_INSTALLTIME, true);
+  header()->setSectionHidden(ModList::COL_NOTES, true);
+
+  // resize mod list to fit content
+  for (int i = 0; i < header()->count(); ++i) {
+    header()->setSectionResizeMode(i, QHeaderView::ResizeToContents);
+  }
+
+  header()->setSectionResizeMode(ModList::COL_NAME, QHeaderView::Stretch);
+}
+
+void ModListView::forceHeaderVisibilityRefresh()
+{
+  // restoreState() does not reliably emit resize/visibility signals for each
+  // section, so force our proxy's visible-column bookkeeping to catch up.
+  for (int column = 0; column <= ModList::COL_LASTCOLUMN; ++column) {
+    const int sectionSize = header()->sectionSize(column);
+    header()->resizeSection(column, sectionSize + 1);
+    header()->resizeSection(column, sectionSize);
+  }
+}
+
+bool ModListView::headerStateLooksBroken() const
+{
+  int visibleCount = 0;
+  int tinyCount    = 0;
+
+  for (int column = 0; column <= ModList::COL_LASTCOLUMN; ++column) {
+    if (header()->isSectionHidden(column)) {
+      continue;
+    }
+
+    ++visibleCount;
+    if (header()->sectionSize(column) < 50) {
+      ++tinyCount;
+    }
+  }
+
+  return visibleCount >= 8 && tinyCount >= visibleCount - 1;
+}
+
+void ModListView::syncColumnVisibilityFromHeader()
+{
+  if (m_sortProxy == nullptr) {
+    return;
+  }
+
+  for (int column = 0; column <= ModList::COL_LASTCOLUMN; ++column) {
+    m_sortProxy->setColumnVisible(
+        column, !header()->isSectionHidden(column) && header()->sectionSize(column) > 0);
+  }
+}
+
 void ModListView::setup(OrganizerCore& core, CategoryFactory& factory, MainWindow* mw,
                         Ui::MainWindow* mwui)
 {
@@ -798,6 +858,9 @@ void ModListView::setup(OrganizerCore& core, CategoryFactory& factory, MainWindo
           [=, this](int logicalIndex, int oldSize, int newSize) {
             m_sortProxy->setColumnVisible(logicalIndex, newSize != 0);
           });
+  connect(header(), &QHeaderView::geometriesChanged, [=, this] {
+    syncColumnVisibilityFromHeader();
+  });
 
   setItemDelegateForColumn(ModList::COL_FLAGS,
                            new ModFlagIconDelegate(this, ModList::COL_FLAGS, 120));
@@ -808,38 +871,6 @@ void ModListView::setup(OrganizerCore& core, CategoryFactory& factory, MainWindo
                            new ModContentIconDelegate(this, ModList::COL_CONTENT, 150));
   setItemDelegateForColumn(ModList::COL_VERSION,
                            new ModListVersionDelegate(this, core.settings()));
-
-  m_restoringHeaderState = true;
-  const bool headerRestored = m_core->settings().geometry().restoreState(header());
-  m_restoringHeaderState = false;
-
-  if (headerRestored) {
-    // hack: force the resize-signal to be triggered because restoreState doesn't seem
-    // to do that
-    for (int column = 0; column <= ModList::COL_LASTCOLUMN; ++column) {
-      int sectionSize = header()->sectionSize(column);
-      header()->resizeSection(column, sectionSize + 1);
-      header()->resizeSection(column, sectionSize);
-    }
-  } else {
-    // hide these columns by default
-    header()->setSectionHidden(ModList::COL_CONTENT, true);
-    header()->setSectionHidden(ModList::COL_MODID, true);
-    header()->setSectionHidden(ModList::COL_UPLOADER, true);
-    header()->setSectionHidden(ModList::COL_GAME, true);
-    header()->setSectionHidden(ModList::COL_INSTALLTIME, true);
-    header()->setSectionHidden(ModList::COL_NOTES, true);
-
-    // resize mod list to fit content
-    for (int i = 0; i < header()->count(); ++i) {
-      header()->setSectionResizeMode(i, QHeaderView::ResizeToContents);
-    }
-
-    header()->setSectionResizeMode(ModList::COL_NAME, QHeaderView::Stretch);
-  }
-
-  // prevent the name-column from being hidden
-  header()->setSectionHidden(ModList::COL_NAME, false);
 
   // we need QueuedConnection for the download/archive dropped otherwise the
   // installation starts within the drop-event and it's not possible to drag&drop
@@ -901,8 +932,20 @@ void ModListView::restoreState(const Settings& s)
   s.widgets().restoreIndex(ui.groupBy);
 
   m_restoringHeaderState = true;
-  s.geometry().restoreState(header());
+  const bool headerRestored = s.geometry().restoreState(header());
   m_restoringHeaderState = false;
+  if (headerRestored && !headerStateLooksBroken()) {
+    forceHeaderVisibilityRefresh();
+  } else {
+    if (headerRestored) {
+      log::warn("discarding broken mod list header state");
+    }
+    applyDefaultHeaderState();
+  }
+
+  // prevent the name-column from being hidden
+  header()->setSectionHidden(ModList::COL_NAME, false);
+  syncColumnVisibilityFromHeader();
 
   s.widgets().restoreTreeExpandState(this);
 

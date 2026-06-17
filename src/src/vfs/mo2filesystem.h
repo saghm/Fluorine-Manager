@@ -153,8 +153,6 @@ struct Mo2FsContext
   std::atomic<uint64_t> read_bytes{0};
   std::atomic<uint64_t> write_bytes{0};
   std::atomic<uint64_t> cow_write_count{0};
-  std::atomic<uint64_t> uring_request_count{0};
-  std::atomic<uint64_t> legacy_request_count{0};
   // CPU snapshot from previous stats tick (microseconds, from getrusage).
   // Used to compute per-tick CPU delta so we can distinguish disk-bound vs
   // CPU-bound slowness in the VFS layer.

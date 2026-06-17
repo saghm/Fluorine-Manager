@@ -4,6 +4,7 @@
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QSet>
 #include <QStandardPaths>
 #include <uibase/log.h>
 
@@ -69,10 +70,22 @@ QStringList findSteamLibraryPaths()
 
   auto addLibrary = [&](const QString& path) {
     const QString cleanPath = QDir::cleanPath(path);
-    if (cleanPath.isEmpty() || libraries.contains(cleanPath))
+    if (cleanPath.isEmpty()) {
       return;
-    if (QFileInfo::exists(QDir(cleanPath).filePath(QStringLiteral("steamapps"))))
-      libraries.append(cleanPath);
+    }
+
+    const QFileInfo info(cleanPath);
+    const QString canonicalPath = info.canonicalFilePath();
+    const QString libraryPath =
+        canonicalPath.isEmpty() ? info.absoluteFilePath() : canonicalPath;
+    const QString normalizedLibraryPath = QDir::cleanPath(libraryPath);
+
+    if (normalizedLibraryPath.isEmpty() || libraries.contains(normalizedLibraryPath)) {
+      return;
+    }
+    if (QFileInfo::exists(QDir(normalizedLibraryPath).filePath(QStringLiteral("steamapps")))) {
+      libraries.append(normalizedLibraryPath);
+    }
   };
 
   addLibrary(steamPath);
@@ -224,6 +237,36 @@ QVector<SteamProtonInfo> findSteamProtons()
                        return !ok;
                      }),
       protons.end());
+
+  QSet<QString> seenPaths;
+  QSet<QString> seenNames;
+  QVector<SteamProtonInfo> uniqueProtons;
+  uniqueProtons.reserve(protons.size());
+
+  for (SteamProtonInfo& proton : protons) {
+    const QFileInfo pathInfo(proton.path);
+    const QString canonicalPath = pathInfo.canonicalFilePath();
+    const QString pathKey =
+        QDir::cleanPath(canonicalPath.isEmpty() ? proton.path : canonicalPath);
+    const QString nameKey = proton.name.trimmed().toCaseFolded();
+
+    if ((!pathKey.isEmpty() && seenPaths.contains(pathKey)) ||
+        (!nameKey.isEmpty() && seenNames.contains(nameKey))) {
+      MOBase::log::debug("Skipping duplicate Proton '{}' at '{}'",
+                         proton.name, proton.path);
+      continue;
+    }
+
+    if (!pathKey.isEmpty()) {
+      seenPaths.insert(pathKey);
+    }
+    if (!nameKey.isEmpty()) {
+      seenNames.insert(nameKey);
+    }
+    uniqueProtons.append(std::move(proton));
+  }
+
+  protons = std::move(uniqueProtons);
 
   // Sort: Experimental first, then by name descending (newest first).
   std::sort(protons.begin(), protons.end(),

@@ -2120,6 +2120,28 @@ void InterfaceSettings::setStyleName(const QString& name)
   set(m_Settings, "Settings", "style", name);
 }
 
+int InterfaceSettings::qssFontSize() const
+{
+  const int size = get<int>(m_Settings, "Settings", "qss_font_size", 0);
+  if (size < 0) {
+    return 0;
+  }
+  if (size > 48) {
+    return 48;
+  }
+  return size;
+}
+
+void InterfaceSettings::setQssFontSize(int size)
+{
+  if (size < 0) {
+    size = 0;
+  } else if (size > 48) {
+    size = 48;
+  }
+  set(m_Settings, "Settings", "qss_font_size", size);
+}
+
 bool InterfaceSettings::collapsibleSeparators(Qt::SortOrder order) const
 {
   return get<bool>(m_Settings, "Settings",

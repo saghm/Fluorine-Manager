@@ -673,6 +673,8 @@ void MainWindow::resetButtonIcons()
 MainWindow::~MainWindow()
 {
   try {
+    m_ArchiveListWriter.writeImmediately(true);
+    m_OrganizerCore.pluginsWriter().writeImmediately(true);
     cleanup();
 
     m_OrganizerCore.setUserInterface(nullptr);
@@ -2245,7 +2247,8 @@ void MainWindow::readSettings()
   s.geometry().restoreToolbars(this);
   s.geometry().restoreState(ui->splitter);
   s.geometry().restoreState(ui->categoriesSplitter);
-  s.geometry().restoreVisibility(ui->menuBar);
+  ui->menuBar->show();
+  ui->toolBar->show();
   s.geometry().restoreVisibility(ui->statusBar);
 
   FilterWidget::setOptions(s.interface().filterOptions());
@@ -2341,7 +2344,6 @@ void MainWindow::storeSettings()
   s.geometry().saveGeometry(this);
   s.geometry().saveDocks(this);
 
-  s.geometry().saveVisibility(ui->menuBar);
   s.geometry().saveVisibility(ui->statusBar);
   s.geometry().saveToolbars(this);
   s.geometry().saveState(ui->splitter);

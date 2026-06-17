@@ -318,6 +318,10 @@ private:  // private functions
   // current one (e.g. when changing the sort column)
   //
   void updateGroupByProxy();
+  void applyDefaultHeaderState();
+  void forceHeaderVisibilityRefresh();
+  bool headerStateLooksBroken() const;
+  void syncColumnVisibilityFromHeader();
 
 public:  // member variables
   OrganizerCore* m_core{nullptr};

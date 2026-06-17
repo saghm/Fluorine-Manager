@@ -340,23 +340,44 @@ OrganizerCore::OrganizerCore(Settings& settings)
 
 OrganizerCore::~OrganizerCore()
 {
-  m_RefresherThread.exit();
-  m_RefresherThread.wait();
-
-  if (m_StructureDeleter.joinable()) {
-    m_StructureDeleter.join();
+  try {
+    saveCurrentProfileForShutdown();
+  } catch (const std::exception& e) {
+    log::error("failed to save current profile during OrganizerCore shutdown: {}",
+               e.what());
+  } catch (...) {
+    log::error(
+        "failed to save current profile during OrganizerCore shutdown: unknown exception");
   }
 
-  saveCurrentProfile();
+  try {
+    m_RefresherThread.exit();
+    m_RefresherThread.wait();
 
-  // profile has to be cleaned up before the modinfo-buffer is cleared
-  m_CurrentProfile.reset();
+    if (m_StructureDeleter.joinable()) {
+      m_StructureDeleter.join();
+    }
+  } catch (const std::exception& e) {
+    log::error("failed while stopping OrganizerCore worker threads: {}", e.what());
+  } catch (...) {
+    log::error("failed while stopping OrganizerCore worker threads: unknown exception");
+  }
 
-  ModInfo::clear();
-  m_ModList.setProfile(nullptr);
-  //  NexusInterface::instance()->cleanup();
+  try {
+    // profile has to be cleaned up before the modinfo-buffer is cleared
+    m_CurrentProfile.reset();
 
-  delete m_DirectoryStructure;
+    ModInfo::clear();
+    m_ModList.setProfile(nullptr);
+    //  NexusInterface::instance()->cleanup();
+
+    delete m_DirectoryStructure;
+    m_DirectoryStructure = nullptr;
+  } catch (const std::exception& e) {
+    log::error("failed while clearing OrganizerCore state: {}", e.what());
+  } catch (...) {
+    log::error("failed while clearing OrganizerCore state: unknown exception");
+  }
 }
 
 void OrganizerCore::storeSettings()
@@ -2460,6 +2481,51 @@ void OrganizerCore::saveCurrentProfile()
   m_CurrentProfile->createTweakedIniFile();
   saveCurrentLists();
   storeSettings();
+}
+
+void OrganizerCore::saveCurrentProfileForShutdown()
+{
+  if (m_CurrentProfileSavedForShutdown) {
+    return;
+  }
+
+  try {
+    saveCurrentProfile();
+  } catch (const std::exception& e) {
+    log::error("failed to save current profile during shutdown: {}", e.what());
+  } catch (...) {
+    log::error("failed to save current profile during shutdown: unknown exception");
+  }
+
+  try {
+    if (m_CurrentProfile != nullptr) {
+      m_CurrentProfile->writeModlistNow(true);
+    }
+  } catch (const std::exception& e) {
+    log::error("failed to flush mod list during shutdown: {}", e.what());
+  } catch (...) {
+    log::error("failed to flush mod list during shutdown: unknown exception");
+  }
+
+  try {
+    m_PluginListsWriter.writeImmediately(true);
+  } catch (const std::exception& e) {
+    log::error("failed to flush plugin list during shutdown: {}", e.what());
+  } catch (...) {
+    log::error("failed to flush plugin list during shutdown: unknown exception");
+  }
+
+  try {
+    if (m_UserInterface != nullptr) {
+      m_UserInterface->archivesWriter().writeImmediately(true);
+    }
+  } catch (const std::exception& e) {
+    log::error("failed to flush archive list during shutdown: {}", e.what());
+  } catch (...) {
+    log::error("failed to flush archive list during shutdown: unknown exception");
+  }
+
+  m_CurrentProfileSavedForShutdown = true;
 }
 
 ProcessRunner OrganizerCore::processRunner()

@@ -193,6 +193,7 @@ private:
   QString m_dir;
   bool m_portable;
   QString m_gameName, m_gameDir, m_gameVariant, m_baseDir;
+  bool m_gameDirAutoDetectedFromInvalidIni{false};
   MOBase::IPluginGame* m_plugin{nullptr};
   QString m_profile;
 

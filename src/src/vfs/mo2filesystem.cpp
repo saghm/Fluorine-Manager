@@ -93,57 +93,40 @@ struct OpTimer
   OpTimer& operator=(const OpTimer&)  = delete;
 };
 
-bool fuseHasFeature(const struct fuse_conn_info* conn, uint64_t flag)
+bool fuseHasFeature(const struct fuse_conn_info* conn, uint32_t flag)
 {
   if (conn == nullptr) {
     return false;
   }
-#ifdef FUSE_CAP_OVER_IO_URING
-  return (conn->capable_ext & flag) != 0 ||
-         (flag <= UINT32_MAX && (conn->capable & static_cast<uint32_t>(flag)) != 0);
-#else
-  return (conn->capable & static_cast<uint32_t>(flag)) != 0;
-#endif
+  return (conn->capable & flag) != 0;
 }
 
-bool fuseWantsFeature(const struct fuse_conn_info* conn, uint64_t flag)
+bool fuseWantsFeature(const struct fuse_conn_info* conn, uint32_t flag)
 {
   if (conn == nullptr) {
     return false;
   }
-#if defined(FUSE_CAP_OVER_IO_URING) && FUSE_VERSION >= FUSE_MAKE_VERSION(3, 17)
-  return fuse_get_feature_flag(const_cast<struct fuse_conn_info*>(conn), flag);
-#else
-  return (conn->want & static_cast<uint32_t>(flag)) != 0;
-#endif
+  return (conn->want & flag) != 0;
 }
 
-bool fuseRequestFeature(struct fuse_conn_info* conn, uint64_t flag)
+bool fuseRequestFeature(struct fuse_conn_info* conn, uint32_t flag)
 {
   if (conn == nullptr) {
     return false;
   }
-#if defined(FUSE_CAP_OVER_IO_URING) && FUSE_VERSION >= FUSE_MAKE_VERSION(3, 17)
-  return fuse_set_feature_flag(conn, flag);
-#else
-  if ((conn->capable & static_cast<uint32_t>(flag)) == 0) {
+  if ((conn->capable & flag) == 0) {
     return false;
   }
-  conn->want |= static_cast<uint32_t>(flag);
+  conn->want |= flag;
   return true;
-#endif
 }
 
-void fuseDropFeature(struct fuse_conn_info* conn, uint64_t flag)
+void fuseDropFeature(struct fuse_conn_info* conn, uint32_t flag)
 {
   if (conn == nullptr) {
     return;
   }
-#if defined(FUSE_CAP_OVER_IO_URING) && FUSE_VERSION >= FUSE_MAKE_VERSION(3, 17)
-  fuse_unset_feature_flag(conn, flag);
-#else
-  conn->want &= ~static_cast<uint32_t>(flag);
-#endif
+  conn->want &= ~flag;
 }
 
 void maybeLogCounters(Mo2FsContext* ctx)
@@ -222,18 +205,13 @@ void maybeLogCounters(Mo2FsContext* ctx)
                static_cast<unsigned long long>(
                    ctx->retained_ro_fd_evictions.load(std::memory_order_relaxed)));
   std::fprintf(stderr,
-               "[VFS] io bytes_read=%llu bytes_written=%llu cow_writes=%llu "
-               "transport_uring=%llu transport_legacy=%llu\n",
+               "[VFS] io bytes_read=%llu bytes_written=%llu cow_writes=%llu\n",
                static_cast<unsigned long long>(
                    ctx->read_bytes.load(std::memory_order_relaxed)),
                static_cast<unsigned long long>(
                    ctx->write_bytes.load(std::memory_order_relaxed)),
                static_cast<unsigned long long>(
-                   ctx->cow_write_count.load(std::memory_order_relaxed)),
-               static_cast<unsigned long long>(
-                   ctx->uring_request_count.load(std::memory_order_relaxed)),
-               static_cast<unsigned long long>(
-                   ctx->legacy_request_count.load(std::memory_order_relaxed)));
+                   ctx->cow_write_count.load(std::memory_order_relaxed)));
   {
     size_t lookupSize = 0;
     size_t attrSize = 0;
@@ -1331,15 +1309,6 @@ void mo2_init(void* userdata, struct fuse_conn_info* conn)
     fuseRequestFeature(conn, FUSE_CAP_EXPIRE_ONLY);
   }
 
-  bool uringCapable = false;
-  bool uringWanted = false;
-#ifdef FUSE_CAP_OVER_IO_URING
-  uringCapable = fuseHasFeature(conn, FUSE_CAP_OVER_IO_URING);
-  if (uringCapable) {
-    uringWanted = fuseRequestFeature(conn, FUSE_CAP_OVER_IO_URING);
-  }
-#endif
-
   // Maximize async I/O slots (default is 12).  The kernel will still only
   // dispatch as many as there are actual concurrent requests, so higher
   // values just raise the ceiling without wasting memory.
@@ -1366,8 +1335,7 @@ void mo2_init(void* userdata, struct fuse_conn_info* conn)
 
   std::fprintf(stderr,
                "[VFS] init: auto_inval=%d explicit_inval=%d readdirplus=%d "
-               "no_opendir=%d uring_capable=%d uring_wanted=%d "
-               "max_bg=%u max_readahead=%u\n",
+               "no_opendir=%d max_bg=%u max_readahead=%u\n",
                fuseWantsFeature(conn, FUSE_CAP_AUTO_INVAL_DATA) ? 1 : 0,
                fuseWantsFeature(conn, FUSE_CAP_EXPLICIT_INVAL_DATA) ? 1 : 0,
                fuseWantsFeature(conn, FUSE_CAP_READDIRPLUS) ? 1 : 0,
@@ -1376,19 +1344,13 @@ void mo2_init(void* userdata, struct fuse_conn_info* conn)
 #else
                0,
 #endif
-               uringCapable ? 1 : 0,
-               uringWanted ? 1 : 0,
                conn->max_background, conn->max_readahead);
   std::fprintf(stderr,
                "[VFS] init_caps: libfuse=%s headers=%d.%d proto=%u.%u "
-               "capable=0x%08x capable_ext=0x%016llx want=0x%08x "
-               "want_ext=0x%016llx max_write=%u max_read=%u\n",
+               "capable=0x%08x want=0x%08x max_write=%u max_read=%u\n",
                fuse_pkgversion(), FUSE_MAJOR_VERSION, FUSE_MINOR_VERSION,
                conn->proto_major, conn->proto_minor, conn->capable,
-               static_cast<unsigned long long>(conn->capable_ext),
-               conn->want,
-               static_cast<unsigned long long>(conn->want_ext),
-               conn->max_write, conn->max_read);
+               conn->want, conn->max_write, conn->max_read);
 }
 
 void mo2_lookup(fuse_req_t req, fuse_ino_t parent, const char* name)

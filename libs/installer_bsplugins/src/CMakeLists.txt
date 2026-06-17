@@ -103,7 +103,7 @@ target_link_libraries(bsplugins PRIVATE
     ZLIB::ZLIB
 )
 
-# Install into fluorine plugins dir (uses fomod_plus-style shim).
+# Install into the Fluorine plugins dir.
 if(COMMAND mo2_install_plugin)
     mo2_install_plugin(bsplugins)
 elseif(COMMAND mo2_install_target)

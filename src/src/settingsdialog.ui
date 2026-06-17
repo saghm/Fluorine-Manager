@@ -441,6 +441,32 @@
            </widget>
           </item>
           <item>
+           <widget class="QLabel" name="qssFontSizeLabel">
+            <property name="text">
+             <string>Font size</string>
+            </property>
+            <property name="buddy">
+             <cstring>qssFontSizeSpinBox</cstring>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QSpinBox" name="qssFontSizeSpinBox">
+            <property name="toolTip">
+             <string>Overrides font-size values in QSS themes. Default uses the theme value.</string>
+            </property>
+            <property name="specialValueText">
+             <string>Default</string>
+            </property>
+            <property name="suffix">
+             <string> px</string>
+            </property>
+            <property name="maximum">
+             <number>48</number>
+            </property>
+           </widget>
+          </item>
+          <item>
            <spacer name="horizontalSpacer_5">
             <property name="orientation">
              <enum>Qt::Horizontal</enum>
@@ -1840,16 +1866,6 @@ If you disable this feature, MO will only display official DLCs this way. Please
             </property>
             <property name="toolTip">
              <string>Download SteamLinuxRuntime_4 (steamrt4, ~200 MB) from Valve's servers. Provides GStreamer, 32-bit libs, and an FHS environment for non-FHS distros (NixOS, etc.). Required for the "Use SLR" option in the Instance Manager and for Proton 11+.</string>
-            </property>
-           </widget>
-          </item>
-          <item row="5" column="0" colspan="4">
-           <widget class="QCheckBox" name="fuseIoUringCheckBox">
-            <property name="toolTip">
-             <string>Enable the kernel FUSE io_uring transport for new VFS mounts. Requires administrator authentication and a VFS remount; Fluorine falls back automatically when unsupported.</string>
-            </property>
-            <property name="text">
-             <string>Enable FUSE io_uring</string>
             </property>
            </widget>
           </item>

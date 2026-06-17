@@ -16,6 +16,7 @@ public:
 private:
   void addStyles();
   void selectStyle();
+  void selectQssFontSize();
   static void onExploreStyles();
 };
 

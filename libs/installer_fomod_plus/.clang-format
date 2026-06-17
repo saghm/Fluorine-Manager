@@ -1,4 +1,0 @@
-﻿BasedOnStyle: WebKit
-AlignConsecutiveAssignments: Consecutive
-AccessModifierOffset: -2
-ColumnLimit: 120

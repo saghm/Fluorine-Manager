@@ -11,7 +11,6 @@
 #include "steamdetection.h"
 #include "slrmanager.h"
 #include <atomic>
-#include <QCheckBox>
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDateTime>
@@ -32,115 +31,11 @@
 #include <QSettings>
 #include <QScopeGuard>
 #include <QStandardPaths>
-#include <QSignalBlocker>
 #include <QVBoxLayout>
 
 namespace
 {
 std::atomic<ProtonSettingsTab*> g_activeInstallTab = nullptr;
-
-constexpr const char* kFuseIoUringParameter =
-    "/sys/module/fuse/parameters/enable_uring";
-
-enum class FuseIoUringState
-{
-  Unsupported,
-  Disabled,
-  Enabled,
-  Unknown
-};
-
-FuseIoUringState readFuseIoUringState()
-{
-  QFile parameter(QString::fromUtf8(kFuseIoUringParameter));
-  if (!parameter.exists()) {
-    return FuseIoUringState::Unsupported;
-  }
-
-  if (!parameter.open(QIODevice::ReadOnly | QIODevice::Text)) {
-    return FuseIoUringState::Unknown;
-  }
-
-  const QByteArray value = parameter.readAll().trimmed().toUpper();
-  if (value == "Y" || value == "1") {
-    return FuseIoUringState::Enabled;
-  }
-  if (value == "N" || value == "0") {
-    return FuseIoUringState::Disabled;
-  }
-
-  return FuseIoUringState::Unknown;
-}
-
-QString findPrivilegeHelper(QStringList* arguments)
-{
-  const QString command =
-      QStringLiteral("printf Y > %1").arg(QString::fromUtf8(kFuseIoUringParameter));
-
-  const QString pkexec = QStandardPaths::findExecutable(QStringLiteral("pkexec"));
-  if (!pkexec.isEmpty()) {
-    *arguments = {QStringLiteral("/bin/sh"), QStringLiteral("-c"), command};
-    return pkexec;
-  }
-
-  const QString sudo = QStandardPaths::findExecutable(QStringLiteral("sudo"));
-  if (!sudo.isEmpty()) {
-    const QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-    if (!env.value(QStringLiteral("SUDO_ASKPASS")).isEmpty()) {
-      *arguments = {QStringLiteral("-A"), QStringLiteral("/bin/sh"),
-                    QStringLiteral("-c"), command};
-      return sudo;
-    }
-
-    const QFileInfo stdinInfo(QStringLiteral("/proc/self/fd/0"));
-    const QString stdinTarget = stdinInfo.symLinkTarget();
-    if (stdinInfo.exists() &&
-        (stdinTarget.startsWith(QStringLiteral("/dev/pts/")) ||
-         stdinTarget == QStringLiteral("/dev/tty"))) {
-      *arguments = {QStringLiteral("/bin/sh"), QStringLiteral("-c"), command};
-      return sudo;
-    }
-  }
-
-  return {};
-}
-
-QString enableFuseIoUring()
-{
-  QStringList arguments;
-  const QString helper = findPrivilegeHelper(&arguments);
-  if (helper.isEmpty()) {
-    return QObject::tr("Install pkexec/polkit, or configure sudo askpass, then try "
-                       "again.");
-  }
-
-  QProcess process;
-  process.start(helper, arguments);
-  if (!process.waitForStarted(5000)) {
-    return QObject::tr("Failed to start %1.").arg(helper);
-  }
-
-  if (!process.waitForFinished(120000)) {
-    process.kill();
-    process.waitForFinished(3000);
-    return QObject::tr("Timed out waiting for administrator authentication.");
-  }
-
-  if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
-    const QString stderrText = QString::fromLocal8Bit(process.readAllStandardError())
-                                   .trimmed();
-    if (!stderrText.isEmpty()) {
-      return stderrText;
-    }
-    return QObject::tr("Administrator authentication was cancelled or failed.");
-  }
-
-  if (readFuseIoUringState() != FuseIoUringState::Enabled) {
-    return QObject::tr("The kernel did not accept the FUSE io_uring setting.");
-  }
-
-  return {};
-}
 }
 
 ProtonSettingsTab::ProtonSettingsTab(Settings& s, SettingsDialog& d)
@@ -203,8 +98,6 @@ ProtonSettingsTab::ProtonSettingsTab(Settings& s, SettingsDialog& d)
                    &ProtonSettingsTab::onBrowsePrefixLocation);
   QObject::connect(ui->downloadSLRButton, &QPushButton::clicked, this,
                    &ProtonSettingsTab::onDownloadSLR);
-  QObject::connect(ui->fuseIoUringCheckBox, &QCheckBox::clicked, this,
-                   &ProtonSettingsTab::onFuseIoUringToggled);
 
   QObject::connect(&m_installWatcher, &QFutureWatcher<InstallResult>::finished, this,
                    &ProtonSettingsTab::onInstallFinished);
@@ -291,8 +184,6 @@ void ProtonSettingsTab::refreshState()
   ui->openPrefixFolderButton->setEnabled(!m_busy && active);
   ui->winetricksButton->setEnabled(!m_busy && active);
   ui->protonVersionCombo->setEnabled(!m_busy);
-
-  refreshFuseIoUringState();
 }
 
 void ProtonSettingsTab::setBusy(bool busy)
@@ -440,74 +331,6 @@ void ProtonSettingsTab::onDownloadSLR()
     return downloadSlr(nullptr, nullptr, cancelPtr);
   }));
   progress->show();
-}
-
-void ProtonSettingsTab::refreshFuseIoUringState()
-{
-  QSignalBlocker blocker(ui->fuseIoUringCheckBox);
-  Q_UNUSED(blocker);
-
-  const FuseIoUringState state = readFuseIoUringState();
-  ui->fuseIoUringCheckBox->setVisible(true);
-
-  switch (state) {
-  case FuseIoUringState::Enabled:
-    ui->fuseIoUringCheckBox->setChecked(true);
-    ui->fuseIoUringCheckBox->setEnabled(false);
-    ui->fuseIoUringCheckBox->setToolTip(
-        tr("FUSE io_uring is enabled in the kernel. It applies to new VFS "
-           "mounts after relaunch/remount."));
-    break;
-  case FuseIoUringState::Disabled:
-    ui->fuseIoUringCheckBox->setChecked(false);
-    ui->fuseIoUringCheckBox->setEnabled(!m_busy);
-    ui->fuseIoUringCheckBox->setToolTip(
-        tr("Enable the kernel FUSE io_uring transport for new VFS mounts. "
-           "Requires administrator authentication and a VFS remount; Fluorine "
-           "falls back automatically when unsupported."));
-    break;
-  case FuseIoUringState::Unsupported:
-    ui->fuseIoUringCheckBox->setChecked(false);
-    ui->fuseIoUringCheckBox->setEnabled(false);
-    ui->fuseIoUringCheckBox->setToolTip(
-        tr("This kernel does not expose %1. FUSE io_uring requires kernel "
-           "support for CONFIG_FUSE_IO_URING.")
-            .arg(QString::fromUtf8(kFuseIoUringParameter)));
-    break;
-  case FuseIoUringState::Unknown:
-    ui->fuseIoUringCheckBox->setChecked(false);
-    ui->fuseIoUringCheckBox->setEnabled(!m_busy);
-    ui->fuseIoUringCheckBox->setToolTip(
-        tr("Fluorine could not read the kernel FUSE io_uring setting. Click "
-           "to try enabling it with administrator authentication."));
-    break;
-  }
-}
-
-void ProtonSettingsTab::onFuseIoUringToggled(bool checked)
-{
-  if (!checked) {
-    refreshFuseIoUringState();
-    return;
-  }
-
-  MOBase::log::info("[VFS] user requested enabling FUSE io_uring via settings UI");
-
-  const QString error = enableFuseIoUring();
-  if (!error.isEmpty()) {
-    MOBase::log::warn("[VFS] failed to enable FUSE io_uring: {}", error);
-    QMessageBox::warning(parentWidget(), tr("FUSE io_uring"),
-                         tr("Could not enable FUSE io_uring:\n%1").arg(error));
-    refreshFuseIoUringState();
-    return;
-  }
-
-  MOBase::log::info("[VFS] kernel FUSE io_uring parameter is now enabled");
-  QMessageBox::information(
-      parentWidget(), tr("FUSE io_uring"),
-      tr("FUSE io_uring is enabled. Restart the game/VFS mount before testing; "
-         "existing mounts keep their current transport."));
-  refreshFuseIoUringState();
 }
 
 void ProtonSettingsTab::onBrowsePrefixLocation()

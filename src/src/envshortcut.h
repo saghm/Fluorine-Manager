@@ -92,14 +92,16 @@ private:
   // returns the path where the shortcut file should be saved
   //
   QString shortcutPath(Locations loc) const;
+  QString scriptPath(Locations loc) const;
 
   // returns the directory where the shortcut file should be saved
   //
-  static QString shortcutDirectory(Locations loc) ;
+  static QString shortcutDirectory(Locations loc);
 
   // returns the filename of the shortcut file that should be used when saving
   //
   QString shortcutFilename() const;
+  QString scriptFilename() const;
 };
 
 // returns a string representation of the given location

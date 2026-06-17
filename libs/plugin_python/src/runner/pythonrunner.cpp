@@ -460,19 +460,88 @@ namespace mo2::python {
                 py::object sys   = py::module_::import("sys");
                 py::dict modules = sys.attr("modules");
                 py::list keys    = modules.attr("keys")();
+
+                auto pathBelongsToPlugin = [&folder](const QString& path) {
+                    if (path.isEmpty()) {
+                        return false;
+                    }
+
+                    const QString relative = folder.relativeFilePath(path);
+                    return relative == "." || (!relative.startsWith("..") &&
+                                               !QDir::isAbsolutePath(relative));
+                };
+
+                auto tryCastPath = [](const py::object& object) -> std::optional<QString> {
+                    if (object.is_none() || !py::isinstance<py::str>(object)) {
+                        return {};
+                    }
+                    return object.cast<QString>();
+                };
+
+                QStringList modulesToRemove;
                 for (std::size_t i = 0; i < py::len(keys); ++i) {
-                    py::object mod = modules[keys[i]];
-                    if (PyObject_HasAttrString(mod.ptr(), "__path__")) {
-                        QString mpath =
-                            mod.attr("__path__")[py::int_(0)].cast<QString>();
+                    try {
+                        py::object key = keys[i];
+                        if (PyDict_Contains(modules.ptr(), key.ptr()) != 1) {
+                            continue;
+                        }
 
-                        if (!folder.relativeFilePath(mpath).startsWith("..")) {
-                            // If the path is under identifier, we need to unload
-                            // it.
-                            log::debug("Unloading module {} from {} for {}.",
-                                       keys[i].cast<std::string>(), mpath, identifier);
+                        py::object mod = modules[key];
+                        bool remove    = false;
+                        QString removePath;
 
-                            PyDict_DelItem(modules.ptr(), keys[i].ptr());
+                        if (PyObject_HasAttrString(mod.ptr(), "__file__")) {
+                            const auto path = tryCastPath(mod.attr("__file__"));
+                            if (path && pathBelongsToPlugin(*path)) {
+                                remove     = true;
+                                removePath = *path;
+                            }
+                        }
+
+                        if (!remove && PyObject_HasAttrString(mod.ptr(), "__path__")) {
+                            py::object paths = mod.attr("__path__");
+                            for (std::size_t j = 0; j < py::len(paths); ++j) {
+                                const auto path = tryCastPath(paths[py::int_(j)]);
+                                if (path && pathBelongsToPlugin(*path)) {
+                                    remove     = true;
+                                    removePath = *path;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (remove) {
+                            const QString moduleName = key.cast<QString>();
+                            log::debug("Queueing module {} from {} for unload of {}.",
+                                       moduleName, removePath, identifier);
+                            modulesToRemove.append(moduleName);
+                        }
+                    } catch (const py::error_already_set& ex) {
+                        MOBase::log::warn("failed to inspect python module during "
+                                          "unload of {}: {}",
+                                          identifier, ex.what());
+                    } catch (const std::exception& ex) {
+                        MOBase::log::warn("failed to inspect python module during "
+                                          "unload of {}: {}",
+                                          identifier, ex.what());
+                    }
+                }
+
+                std::sort(modulesToRemove.begin(), modulesToRemove.end(),
+                          [](const QString& lhs, const QString& rhs) {
+                              return lhs.count('.') > rhs.count('.');
+                          });
+
+                for (const auto& moduleName : modulesToRemove) {
+                    py::str key(moduleName.toStdString());
+                    if (PyDict_Contains(modules.ptr(), key.ptr()) == 1) {
+                        log::debug("Unloading module {} for {}.", moduleName,
+                                   identifier);
+                        if (PyDict_DelItem(modules.ptr(), key.ptr()) != 0) {
+                            PyErr_Clear();
+                            log::warn("failed to remove python module {} during "
+                                      "unload of {}",
+                                      moduleName, identifier);
                         }
                     }
                 }

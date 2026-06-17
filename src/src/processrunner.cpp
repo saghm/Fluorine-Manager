@@ -1,10 +1,8 @@
 #include "processrunner.h"
 #include "env.h"
 #include "envmodule.h"
-#include "fluorineconfig.h"
 #include "instancemanager.h"
 #include "iuserinterface.h"
-#include "knowngames.h"
 #include "organizercore.h"
 
 #include <iplugingame.h>
@@ -19,7 +17,6 @@
 #include <QMetaObject>
 #include <QPointer>
 #include <QProcess>
-#include <QSettings>
 #include <QThread>
 
 #include <cerrno>
@@ -33,31 +30,6 @@
 #include <unordered_set>
 
 using namespace MOBase;
-
-static QString steamAppIdFromFluorineConfig()
-{
-  if (auto cfg = FluorineConfig::load(); cfg.has_value() && cfg->app_id != 0) {
-    return QString::number(cfg->app_id);
-  }
-
-  return {};
-}
-
-static QString steamAppIdFromKnownGame(const QString& gameName)
-{
-  if (const auto* knownGame = findKnownGameByTitle(gameName);
-      knownGame != nullptr && knownGame->steam_app_id != nullptr) {
-    return QString::fromLatin1(knownGame->steam_app_id);
-  }
-
-  return {};
-}
-
-static bool steamOverlayEnabled(const Settings& settings)
-{
-  const QSettings instanceIni(settings.filename(), QSettings::IniFormat);
-  return instanceIni.value("fluorine/steam_overlay", false).toBool();
-}
 
 void adjustForVirtualized(const IPluginGame* game, spawn::SpawnParameters& sp,
                           const Settings& settings)
@@ -1208,27 +1180,6 @@ std::optional<ProcessRunner::Results> ProcessRunner::runBinary()
     if (!gameSteamId.isEmpty()) {
       m_sp.steamAppID = gameSteamId;
       log::debug("process runner: using game steam app id '{}' for launch",
-                 m_sp.steamAppID);
-    }
-  }
-
-  const bool resolveOverlaySteamAppId = m_sp.useProton && steamOverlayEnabled(settings);
-
-  if (resolveOverlaySteamAppId && m_sp.steamAppID.trimmed().isEmpty()) {
-    const QString knownSteamId = steamAppIdFromKnownGame(game->gameName());
-    if (!knownSteamId.isEmpty()) {
-      m_sp.steamAppID = knownSteamId;
-      log::debug("process runner: using known-game steam app id '{}' for '{}'",
-                 m_sp.steamAppID, game->gameName());
-    }
-  }
-
-  if (resolveOverlaySteamAppId && m_sp.steamAppID.trimmed().isEmpty()) {
-    const QString configSteamId = steamAppIdFromFluorineConfig();
-    if (!configSteamId.isEmpty()) {
-      m_sp.steamAppID = configSteamId;
-      log::debug("process runner: using Fluorine config steam app id '{}' "
-                 "for launch",
                  m_sp.steamAppID);
     }
   }

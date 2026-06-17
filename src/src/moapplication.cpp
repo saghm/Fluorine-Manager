@@ -43,9 +43,11 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "tutorialmanager.h"
 #include <QDebug>
 #include <QDesktopServices>
+#include <QEvent>
 #include <QFile>
 #include <QPainter>
 #include <QProxyStyle>
+#include <QRegularExpression>
 #include <QSslSocket>
 #include <QStringList>
 #include <QStyleFactory>
@@ -498,6 +500,16 @@ int MOApplication::run(MOMultiProcess& multiProcess)
 
     // main window is about to be destroyed
     m_nexus->getAccessManager()->setTopLevelWidget(nullptr);
+
+    try {
+      if (m_core != nullptr) {
+        m_core->saveCurrentProfileForShutdown();
+      }
+    } catch (const std::exception& e) {
+      log::error("failed to save current profile during shutdown: {}", e.what());
+    } catch (...) {
+      log::error("failed to save current profile during shutdown: unknown exception");
+    }
   }
 
   // reset geometry if the flag was set from the settings dialog
@@ -650,11 +662,19 @@ void MOApplication::resetForRestart()
   // clear instance and profile overrides
   InstanceManager::singleton().clearOverrides();
 
-  m_core     = {};
+  if (m_core != nullptr) {
+    m_core->saveCurrentProfileForShutdown();
+  }
+
   m_plugins  = {};
+  QCoreApplication::removePostedEvents(nullptr);
+
+  m_core     = {};
   m_nexus    = {};
   m_settings = {};
   m_instance = {};
+
+  QCoreApplication::removePostedEvents(nullptr);
 }
 
 bool MOApplication::setStyleFile(const QString& styleName)
@@ -772,6 +792,78 @@ bool MOApplication::notify(QObject* receiver, QEvent* event)
 
 namespace
 {
+QString styleSheetFontSizeOverride(int fontSize)
+{
+  if (fontSize <= 0) {
+    return {};
+  }
+
+  return QStringLiteral("\n\n/* Fluorine QSS font size override */\n"
+                        "QWidget { font-size: %1px; }\n")
+      .arg(fontSize);
+}
+
+QString resolveStyleSheetUrl(const QString& url, const QString& baseDir)
+{
+  const QString trimmed = url.trimmed();
+  if (trimmed.isEmpty() || trimmed.startsWith(':') || trimmed.startsWith('/') ||
+      trimmed.contains("://")) {
+    return trimmed;
+  }
+
+  return QUrl::fromLocalFile(QDir(baseDir).absoluteFilePath(trimmed)).toString();
+}
+
+QString resolveRelativeStyleSheetUrls(const QString& stylesheet,
+                                      const QString& baseDir)
+{
+  static const QRegularExpression urlRe(
+      QStringLiteral(R"(url\(\s*(['"]?)([^'")]+)\1\s*\))"),
+      QRegularExpression::CaseInsensitiveOption);
+
+  QString result;
+  qsizetype last = 0;
+  auto matches  = urlRe.globalMatch(stylesheet);
+  while (matches.hasNext()) {
+    const auto match = matches.next();
+    result += stylesheet.mid(last, match.capturedStart() - last);
+    result += QStringLiteral("url(%1)")
+                  .arg(resolveStyleSheetUrl(match.captured(2), baseDir));
+    last = match.capturedEnd();
+  }
+  result += stylesheet.mid(last);
+  return result;
+}
+
+QString applyQssFontSize(const QString& stylesheet, int fontSize)
+{
+  if (fontSize <= 0) {
+    return stylesheet;
+  }
+
+  static const QRegularExpression fontSizeRe(
+      QStringLiteral(R"(font-size\s*:\s*[^;{}]+;)"),
+      QRegularExpression::CaseInsensitiveOption);
+
+  QString result = stylesheet;
+  result.replace(fontSizeRe, QStringLiteral("font-size: %1px;").arg(fontSize));
+  result += styleSheetFontSizeOverride(fontSize);
+  return result;
+}
+
+std::optional<QString> loadStyleSheet(const QString& fileName, int fontSize)
+{
+  QFile stylesheet(fileName);
+  if (!stylesheet.open(QFile::ReadOnly | QFile::Text)) {
+    log::error("failed to open stylesheet file {}", fileName);
+    return {};
+  }
+
+  QString content = QString::fromUtf8(stylesheet.readAll());
+  content = resolveRelativeStyleSheetUrls(content, QFileInfo(fileName).absolutePath());
+  return applyQssFontSize(content, fontSize);
+}
+
 QStringList extractTopStyleSheetComments(QFile& stylesheet)
 {
   if (!stylesheet.open(QFile::ReadOnly)) {
@@ -903,6 +995,9 @@ static void createStylesheetCaseShims(const QString& dirPath)
 
 void MOApplication::updateStyle(const QString& fileName)
 {
+  const int qssFontSize =
+      m_settings != nullptr ? m_settings->interface().qssFontSize() : 0;
+
   if (QStyleFactory::keys().contains(fileName)) {
     setStyleSheet("");
     setStyle(new ProxyStyle(QStyleFactory::create(fileName)));
@@ -914,7 +1009,9 @@ void MOApplication::updateStyle(const QString& fileName)
       createStylesheetCaseShims(QFileInfo(fileName).absolutePath());
       setStyle(new ProxyStyle(QStyleFactory::create(
           extractBaseStyleFromStyleSheet(stylesheet, m_defaultStyle))));
-      setStyleSheet(QString("file:///%1").arg(fileName));
+      if (auto content = loadStyleSheet(fileName, qssFontSize)) {
+        setStyleSheet(*content);
+      }
     } else {
       log::warn("invalid stylesheet: {}", fileName);
     }

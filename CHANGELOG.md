@@ -18,7 +18,7 @@ follows SemVer (MAJOR.MINOR.PATCH). Two distribution channels:
 ### Changed
 - Made the virtual filesystem faster and more reliable for large mod lists,
   file moves, and frequent file changes.
-- Updated the bundled FUSE support and added an optional `io_uring` setting.
+- Updated the bundled FUSE support.
 - Made Proton launches and prefix setup use the expected Steam Linux Runtime
   environment more consistently.
 

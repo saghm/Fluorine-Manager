@@ -228,7 +228,12 @@ void Instance::updateIni()
 
   // updating the settings since some of these values might have been missing
   s.game().setName(m_gameName);
-  s.game().setDirectory(m_gameDir);
+  if (!m_gameDirAutoDetectedFromInvalidIni) {
+    s.game().setDirectory(m_gameDir);
+  } else {
+    log::warn("preserving existing gamePath in ini {} after auto-detecting {}",
+              iniPath(), m_gameDir);
+  }
   s.game().setSelectedProfileName(m_profile);
 
   if (!m_gameVariant.isEmpty()) {
@@ -241,6 +246,7 @@ void Instance::setGame(const QString& name, const QString& dir)
 {
   m_gameName = name;
   m_gameDir  = dir;
+  m_gameDirAutoDetectedFromInvalidIni = false;
 }
 
 void Instance::setVariant(const QString& name)
@@ -276,6 +282,7 @@ Instance::SetupResults Instance::getGamePlugin(PluginContainer& plugins)
                       game->gameDirectory().absolutePath());
 
             m_gameDir = game->gameDirectory().absolutePath();
+            m_gameDirAutoDetectedFromInvalidIni = true;
           } else {
             // game seems to be gone completely
             log::warn("game plugin {} found no game installation at all",

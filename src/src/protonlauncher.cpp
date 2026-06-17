@@ -633,12 +633,6 @@ ProtonLauncher& ProtonLauncher::setSteamDrm(bool useSteamDrm)
   return *this;
 }
 
-ProtonLauncher& ProtonLauncher::setSteamOverlay(bool useSteamOverlay)
-{
-  m_useSteamOverlay = useSteamOverlay;
-  return *this;
-}
-
 ProtonLauncher& ProtonLauncher::setUseSLR(bool useSLR)
 {
   m_useSLR = useSLR;
@@ -714,7 +708,7 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
     return false;
   }
 
-  if (m_useSteamDrm || m_useSteamOverlay) {
+  if (m_useSteamDrm) {
     ensureSteamRunning();
   }
 
@@ -766,31 +760,25 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
         pressureVesselImportantPaths << protonDir;
       }
 
-      // Steam overlay needs gameoverlayrenderer.so visible inside the
-      // pressure-vessel container.  Steam dirs are usually mapped already,
-      // but bind them explicitly to be safe — pressure-vessel's defaults
-      // change between SLR versions.
-      if (m_useSteamOverlay) {
-        const QString steamPath = detectSteamPath();
-        if (!steamPath.isEmpty()) {
-          slrArgs << QStringLiteral("--filesystem=%1/ubuntu12_32").arg(steamPath)
-                  << QStringLiteral("--filesystem=%1/ubuntu12_64").arg(steamPath);
-        }
-      }
-
       // Expose dedicated xrandr dir so container sees our injected xrandr
       // (steamrt4 ships without it, required by Proton-GE protonfixes).
       // Pressure-vessel forces PATH=/usr/bin:/bin inside the container and
       // ignores host PATH, so we prepend via `env PATH=...` as the command.
       QStringList containerCmd;
+      containerCmd << QStringLiteral("/usr/bin/env");
       {
         const QString xrandrDir =
             QDir::homePath() + "/.local/share/fluorine/steamrt/xrandr-bin";
         if (QDir(xrandrDir).exists()) {
           slrArgs << QStringLiteral("--filesystem=%1").arg(xrandrDir);
-          containerCmd << QStringLiteral("/usr/bin/env")
-                       << QStringLiteral("PATH=%1:/usr/bin:/bin").arg(xrandrDir);
+          containerCmd << QStringLiteral("PATH=%1:/usr/bin:/bin").arg(xrandrDir);
         }
+      }
+      if (m_steamAppId != 0) {
+        const QString appId = QString::number(m_steamAppId);
+        containerCmd << QStringLiteral("STEAM_COMPAT_APP_ID=%1").arg(appId)
+                     << QStringLiteral("SteamAppId=%1").arg(appId)
+                     << QStringLiteral("SteamGameId=%1").arg(appId);
       }
       containerCmd << protonScript << protonArgs;
 
@@ -836,62 +824,9 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
 
   if (m_steamAppId != 0) {
     const QString appId = QString::number(m_steamAppId);
+    env.insert("STEAM_COMPAT_APP_ID", appId);
     env.insert("SteamAppId", appId);
     env.insert("SteamGameId", appId);
-  }
-
-  // Steam overlay injection. Requires (a) Steam client running (handled
-  // above), (b) the game owned on the running Steam account, (c) the env
-  // triplet SteamAppId/SteamGameId/SteamOverlayGameId pointing at the real
-  // Steam app id so the overlay's IPC handshake matches an installed app,
-  // (d) gameoverlayrenderer.so preloaded for legacy GL/X11 hooks, and (e)
-  // the Steam Vulkan overlay layer enabled for DXVK-rendered games (most
-  // modern titles via Proton — Bethesda games included).  We don't add any
-  // wrapper process (no reaper) so Steam's "in-game" indicator may stay
-  // blank, but the overlay itself still attaches because the .so/layer
-  // hook the running process directly.
-  if (m_useSteamOverlay && m_steamAppId != 0 && !steamPath.isEmpty()) {
-    const QString appId = QString::number(m_steamAppId);
-    env.insert("SteamOverlayGameId", appId);
-
-    const QString preload32 =
-        steamPath + "/ubuntu12_32/gameoverlayrenderer.so";
-    const QString preload64 =
-        steamPath + "/ubuntu12_64/gameoverlayrenderer.so";
-
-    QStringList preloads;
-    if (QFileInfo::exists(preload32)) preloads << preload32;
-    if (QFileInfo::exists(preload64)) preloads << preload64;
-
-    if (preloads.isEmpty()) {
-      MOBase::log::warn(
-          "Steam overlay enabled but gameoverlayrenderer.so not found under "
-          "'{}/ubuntu12_{{32,64}}' — skipping overlay env",
-          steamPath);
-    } else {
-      const QString existing = env.value("LD_PRELOAD");
-      const QString joined = preloads.join(":");
-      env.insert("LD_PRELOAD",
-                 existing.isEmpty() ? joined : existing + ":" + joined);
-
-      // Force-enable the Vulkan overlay implicit layer.  Steam ships
-      // VkLayer_VALVE_steam_overlay as an *implicit* Vulkan layer that is
-      // normally auto-loaded for Steam-launched processes; pressure-vessel
-      // and some loader configurations skip it unless explicitly enabled.
-      env.insert("ENABLE_VK_LAYER_VALVE_steam_overlay_1", "1");
-      // Also clear the disable-flag in case a Proton wrapper script set it.
-      env.remove("DISABLE_VK_LAYER_VALVE_steam_overlay_1");
-
-      MOBase::log::info(
-          "Steam overlay enabled (appid={}, LD_PRELOAD+={}, "
-          "ENABLE_VK_LAYER_VALVE_steam_overlay_1=1)",
-          appId, joined);
-    }
-  } else if (m_useSteamOverlay && m_steamAppId == 0) {
-    MOBase::log::warn(
-        "Steam overlay requested but no Steam App ID is set for this "
-        "executable — overlay needs an appid for Steam to recognise the "
-        "game; skipping");
   }
 
   // When Steam DRM is disabled (e.g. GOG games), set UMU_ID so that
