@@ -137,7 +137,7 @@ void addLinuxLibrariesToPath()
   env::prependToPath(libsPath);
 }
 
-void configureApplicationFont()
+QString configureApplicationFont()
 {
   const QDir fontDir(QCoreApplication::applicationDirPath() + "/fonts");
   const QStringList bundledFonts{
@@ -165,6 +165,8 @@ void configureApplicationFont()
     font.setFamily(uiFamily);
     QApplication::setFont(font);
   }
+
+  return uiFamily;
 }
 
 #ifdef MO2_WEBENGINE
@@ -237,7 +239,7 @@ void configureQtWebEngineProcessPath()
 MOApplication::MOApplication(int& argc, char** argv) : QApplication(argc, argv)
 {
   TimeThis const tt("MOApplication()");
-  configureApplicationFont();
+  m_defaultFontFamily = configureApplicationFont();
 
   // Ensure the app name is always "ModOrganizer" regardless of the binary
   // filename (settings/profile lookups key off this).
@@ -759,6 +761,12 @@ bool MOApplication::setStyleFile(const QString& styleName)
   } else {
     setStyle(new ProxyStyle(QStyleFactory::create(m_defaultStyle)));
     setStyleSheet("");
+
+    const QString fontFamily =
+        m_settings != nullptr ? m_settings->interface().fontFamily() : QString();
+    QFont appFont = QApplication::font();
+    appFont.setFamily(!fontFamily.isEmpty() ? fontFamily : m_defaultFontFamily);
+    QApplication::setFont(appFont);
   }
   return true;
 }
@@ -1049,6 +1057,13 @@ void MOApplication::updateStyle(const QString& fileName)
       log::warn("invalid stylesheet: {}", fileName);
     }
   }
+
+  // Apply user's font family override (or fall back to bundled DejaVu Sans)
+  const QString fontFamily =
+      m_settings != nullptr ? m_settings->interface().fontFamily() : QString();
+  QFont appFont = QApplication::font();
+  appFont.setFamily(!fontFamily.isEmpty() ? fontFamily : m_defaultFontFamily);
+  QApplication::setFont(appFont);
 }
 
 MOSplash::MOSplash(const Settings& settings, const QString& dataPath,

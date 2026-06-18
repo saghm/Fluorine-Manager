@@ -17,6 +17,8 @@ private:
   void addStyles();
   void selectStyle();
   void selectQssFontSize();
+  void populateFontFamilies();
+  void selectFontFamily();
   static void onExploreStyles();
 };
 

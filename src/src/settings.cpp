@@ -2142,6 +2142,16 @@ void InterfaceSettings::setQssFontSize(int size)
   set(m_Settings, "Settings", "qss_font_size", size);
 }
 
+QString InterfaceSettings::fontFamily() const
+{
+  return get<QString>(m_Settings, "Settings", "font_family", "");
+}
+
+void InterfaceSettings::setFontFamily(const QString& family)
+{
+  set(m_Settings, "Settings", "font_family", family);
+}
+
 bool InterfaceSettings::collapsibleSeparators(Qt::SortOrder order) const
 {
   return get<bool>(m_Settings, "Settings",

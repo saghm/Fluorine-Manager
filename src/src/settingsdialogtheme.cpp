@@ -7,6 +7,8 @@
 #include "ui_settingsdialog.h"
 #include "fluorinepaths.h"
 
+#include <QFontDatabase>
+
 #include <questionboxmemory.h>
 #include <utility.h>
 
@@ -18,6 +20,8 @@ ThemeSettingsTab::ThemeSettingsTab(Settings& s, SettingsDialog& d) : SettingsTab
   addStyles();
   selectStyle();
   selectQssFontSize();
+  populateFontFamilies();
+  selectFontFamily();
 
   // colors
   ui->colorTable->load(s);
@@ -39,6 +43,9 @@ void ThemeSettingsTab::update()
       ui->styleBox->itemData(ui->styleBox->currentIndex()).toString();
   const int oldQssFontSize = settings().interface().qssFontSize();
   const int newQssFontSize = ui->qssFontSizeSpinBox->value();
+  const QString oldFontFamily = settings().interface().fontFamily();
+  const QString newFontFamily =
+      ui->fontFamilyCombo->itemData(ui->fontFamilyCombo->currentIndex()).toString();
 
   if (oldStyle != newStyle) {
     settings().interface().setStyleName(newStyle);
@@ -48,7 +55,12 @@ void ThemeSettingsTab::update()
     settings().interface().setQssFontSize(newQssFontSize);
   }
 
-  if (oldStyle != newStyle || oldQssFontSize != newQssFontSize) {
+  if (oldFontFamily != newFontFamily) {
+    settings().interface().setFontFamily(newFontFamily);
+  }
+
+  if (oldStyle != newStyle || oldQssFontSize != newQssFontSize ||
+      oldFontFamily != newFontFamily) {
     emit settings().styleChanged(newStyle);
   }
 
@@ -108,6 +120,26 @@ void ThemeSettingsTab::selectStyle()
 void ThemeSettingsTab::selectQssFontSize()
 {
   ui->qssFontSizeSpinBox->setValue(settings().interface().qssFontSize());
+}
+
+void ThemeSettingsTab::populateFontFamilies()
+{
+  ui->fontFamilyCombo->addItem("Default (DejaVu Sans)", QString());
+
+  QStringList families = QFontDatabase::families();
+  families.sort();
+  for (const QString& family : families) {
+    ui->fontFamilyCombo->addItem(family, family);
+  }
+}
+
+void ThemeSettingsTab::selectFontFamily()
+{
+  const QString family = settings().interface().fontFamily();
+  const int idx = ui->fontFamilyCombo->findData(family);
+  if (idx != -1) {
+    ui->fontFamilyCombo->setCurrentIndex(idx);
+  }
 }
 
 void ThemeSettingsTab::onExploreStyles()
