@@ -8,6 +8,7 @@
 #include "fluorinepaths.h"
 
 #include <QFontDatabase>
+#include <QFontInfo>
 
 #include <questionboxmemory.h>
 #include <utility.h>
@@ -20,8 +21,13 @@ ThemeSettingsTab::ThemeSettingsTab(Settings& s, SettingsDialog& d) : SettingsTab
   addStyles();
   selectStyle();
   selectQssFontSize();
+  updateDefaultFontSizeHint();
   populateFontFamilies();
   selectFontFamily();
+
+  QObject::connect(ui->styleBox, &QComboBox::currentIndexChanged, [&] {
+    updateDefaultFontSizeHint();
+  });
 
   // colors
   ui->colorTable->load(s);
@@ -120,6 +126,15 @@ void ThemeSettingsTab::selectStyle()
 void ThemeSettingsTab::selectQssFontSize()
 {
   ui->qssFontSizeSpinBox->setValue(settings().interface().qssFontSize());
+}
+
+void ThemeSettingsTab::updateDefaultFontSizeHint()
+{
+  int px = QFontInfo(QApplication::font()).pixelSize();
+  if (px > 0) {
+    ui->qssFontSizeSpinBox->setSpecialValueText(
+        QStringLiteral("Default (%1 px)").arg(px));
+  }
 }
 
 void ThemeSettingsTab::populateFontFamilies()

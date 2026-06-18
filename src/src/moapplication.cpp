@@ -764,8 +764,13 @@ bool MOApplication::setStyleFile(const QString& styleName)
 
     const QString fontFamily =
         m_settings != nullptr ? m_settings->interface().fontFamily() : QString();
+    const int fontSize =
+        m_settings != nullptr ? m_settings->interface().qssFontSize() : 0;
     QFont appFont = QApplication::font();
     appFont.setFamily(!fontFamily.isEmpty() ? fontFamily : m_defaultFontFamily);
+    if (fontSize > 0) {
+      appFont.setPixelSize(fontSize);
+    }
     QApplication::setFont(appFont);
   }
   return true;
@@ -1058,11 +1063,14 @@ void MOApplication::updateStyle(const QString& fileName)
     }
   }
 
-  // Apply user's font family override (or fall back to bundled DejaVu Sans)
+  // Apply user's font family/size override (or fall back to bundled DejaVu Sans)
   const QString fontFamily =
       m_settings != nullptr ? m_settings->interface().fontFamily() : QString();
   QFont appFont = QApplication::font();
   appFont.setFamily(!fontFamily.isEmpty() ? fontFamily : m_defaultFontFamily);
+  if (qssFontSize > 0) {
+    appFont.setPixelSize(qssFontSize);
+  }
   QApplication::setFont(appFont);
 }
 

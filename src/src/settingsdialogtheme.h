@@ -19,6 +19,7 @@ private:
   void selectQssFontSize();
   void populateFontFamilies();
   void selectFontFamily();
+  void updateDefaultFontSizeHint();
   static void onExploreStyles();
 };
 
