@@ -764,6 +764,22 @@ void MainWindow::updateStyle(const QString&)
 {
   resetActionIcons();
   resetButtonIcons();
+
+  // Font may have changed — force list views to re-query item roles.
+  // This runs via direct connection before the queued setStyleFile(),
+  // so defer until the next event-loop iteration so the font is applied first.
+  QTimer::singleShot(0, [this] {
+    QFont newFont = QApplication::font();
+    auto refresh = [&](QTreeView* view) {
+      view->setFont(newFont);
+      view->header()->resizeSections(QHeaderView::ResizeToContents);
+    };
+    refresh(ui->modList);
+    refresh(ui->espList);
+    refresh(ui->dataTree);
+    refresh(ui->downloadView);
+    refresh(ui->logList);
+  });
 }
 
 void MainWindow::resizeEvent(QResizeEvent* event)
