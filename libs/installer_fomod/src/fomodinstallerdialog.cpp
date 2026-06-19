@@ -146,6 +146,26 @@ struct XmlParseError : std::runtime_error
   XmlParseError(const QString& message) : std::runtime_error(qUtf8Printable(message)) {}
 };
 
+static QString normalizeArchivePath(QString path)
+{
+  path.replace("\\", "/");
+  path = QDir::cleanPath(path);
+  return path == "." ? QString() : path;
+}
+
+static QString joinArchivePath(const QString& base, const QString& child)
+{
+  if (base.isEmpty()) {
+    return normalizeArchivePath(child);
+  }
+  return normalizeArchivePath(QDir(base).filePath(child));
+}
+
+static QString tempArchivePath(const QString& archivePath)
+{
+  return QDir(QDir::tempPath()).filePath(normalizeArchivePath(archivePath));
+}
+
 QByteArray skipXmlHeader(QIODevice& file)
 {
   static const unsigned char UTF16LE_BOM[] = {0xFF, 0xFE};
@@ -245,7 +265,8 @@ void FomodInstallerDialog::readXml(QFile& file,
 
 void FomodInstallerDialog::readInfoXml()
 {
-  QFile file(QDir::tempPath() + "/" + m_FomodPath + "/" + m_FomodDirName + "/info.xml");
+  QFile file(tempArchivePath(joinArchivePath(
+      joinArchivePath(m_FomodPath, m_FomodDirName), "info.xml")));
 
   // We don't need a info.xml file, so we just return if we cannot open it:
   if (!file.open(QIODevice::ReadOnly)) {
@@ -256,7 +277,8 @@ void FomodInstallerDialog::readInfoXml()
 
 void FomodInstallerDialog::readModuleConfigXml()
 {
-  QFile file(QDir::tempPath() + "/" + m_FomodPath + "/" + m_FomodDirName + "/ModuleConfig.xml");
+  QFile file(tempArchivePath(joinArchivePath(
+      joinArchivePath(m_FomodPath, m_FomodDirName), "ModuleConfig.xml")));
   if (!file.open(QIODevice::ReadOnly)) {
     throw Exception(tr("%1 missing.").arg(file.fileName()));
   }
@@ -270,8 +292,8 @@ void FomodInstallerDialog::initData(IOrganizer* moInfo)
   // parse provided package information
   readInfoXml();
 
-  QString screenshotPath =
-      QDir::tempPath() + "/" + m_FomodPath + "/" + m_FomodDirName + "/screenshot.png";
+  QString screenshotPath = tempArchivePath(joinArchivePath(
+      joinArchivePath(m_FomodPath, m_FomodDirName), "screenshot.png"));
   if (!QImage(screenshotPath).isNull()) {
     ui->screenshotLabel->setScalableResource(screenshotPath);
     ui->screenshotExpand->setVisible(false);
@@ -645,8 +667,8 @@ void FomodInstallerDialog::highlightControl(QAbstractButton* button)
   if (screenshotName.isValid()) {
     QString screenshotFileName = screenshotName.toString();
     if (!screenshotFileName.isEmpty()) {
-      QString temp = QDir::tempPath() + "/" + m_FomodPath + "/" +
-                     QDir::fromNativeSeparators(screenshotFileName);
+      QString temp =
+          tempArchivePath(joinArchivePath(m_FomodPath, screenshotFileName));
       ui->screenshotLabel->setScalableResource(temp);
       ui->screenshotExpand->setVisible(true);
     } else {
@@ -775,10 +797,12 @@ void FomodInstallerDialog::readFileList(XmlReader& reader, FileDescriptorList& f
         log::debug("Ignoring {} entry with empty source.", reader.name().toString());
       } else {
         FileDescriptor* file           = new FileDescriptor(this);
-        file->m_Source                 = attributes.value("source").toString();
-        file->m_Destination            = attributes.hasAttribute("destination")
-                                             ? attributes.value("destination").toString()
-                                             : file->m_Source;
+        file->m_Source =
+            normalizeArchivePath(attributes.value("source").toString());
+        file->m_Destination =
+            attributes.hasAttribute("destination")
+                ? normalizeArchivePath(attributes.value("destination").toString())
+                : file->m_Source;
         file->m_Priority               = attributes.hasAttribute("priority")
                                              ? attributes.value("priority").toString().toInt()
                                              : 0;
@@ -1691,8 +1715,8 @@ void FomodInstallerDialog::on_screenshotExpand_clicked()
       continue;
     }
 
-    QString temp = QDir::tempPath() + "/" + m_FomodPath + "/" +
-                   QDir::fromNativeSeparators(screenshotFileName);
+    QString temp =
+        tempArchivePath(joinArchivePath(m_FomodPath, screenshotFileName));
     carouselImages.push_back(std::pair<QString, QString>(choice->text(), temp));
 
     // Focus the screenshot carousel on the user's selected choice (or the first if

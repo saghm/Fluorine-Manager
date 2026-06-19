@@ -216,7 +216,7 @@ InstallerFomod::install(GuessedValue<QString>& modName,
     try {
       std::shared_ptr<const IFileTree> fomodTree = findFomodDirectory(tree);
 
-      QString fomodPath = fomodTree->parent()->path();
+      QString fomodPath = fomodTree->parent()->path("/");
       QString fomodDirName = fomodTree->name();
       FomodInstallerDialog dialog(
           this, modName, fomodPath, fomodDirName,

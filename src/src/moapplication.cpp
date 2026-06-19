@@ -852,8 +852,9 @@ QString styleSheetFontSizeOverride(int fontSize)
 QString resolveStyleSheetUrl(const QString& url, const QString& baseDir)
 {
   const QString trimmed = url.trimmed();
+  const QUrl parsed(trimmed);
   if (trimmed.isEmpty() || trimmed.startsWith(':') || trimmed.startsWith('/') ||
-      trimmed.contains("://")) {
+      !parsed.scheme().isEmpty()) {
     return trimmed;
   }
 

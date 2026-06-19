@@ -1796,17 +1796,21 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
 
   std::string realPath = snap.real_path;
   const bool writable  = isWritableOpen(fi->flags);
+  const bool truncateOnOpen = writable && ((fi->flags & O_TRUNC) != 0);
   bool isBacking       = snap.is_backing;
   bool cowPending      = false;
   bool isTracked       = false;
+  uint64_t openSize    = snap.size;
+  auto openMtime       = snap.mtime;
 
   // Write strategy:
   //   1. Files already in staging/overwrite → open R/W directly.
   //   2. Tracked files (user moved from Overwrite to a mod) → open R/W
   //      in-place so writes go back to the user's dedicated mod folder.
-  //   3. Existing mod/data-dir files → open R/W in place.
-  //   4. Base-game backing files → open R/O and COW to staging only on the
-  //      first actual write().
+  //   3. Existing mod/data-dir/base-game files → open R/O and COW to staging
+  //      on the first actual write().
+  //   4. O_TRUNC on a COW source must materialize + truncate immediately so
+  //      the caller sees normal POSIX open(..., O_TRUNC) semantics.
   //
   // This matches upstream USVFS behavior more closely than the previous
   // conservative "copy everything writable into overwrite" approach.
@@ -1832,10 +1836,20 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
     if (!trackedMod.empty()) {
       // Tracked file — open R/W in-place in the mod folder.
       const std::string modFilePath = trackedMod + "/" + path;
-      fd = open(modFilePath.c_str(), O_RDWR);
+      int openFlags = O_RDWR | O_CLOEXEC;
+      if (truncateOnOpen) {
+        openFlags |= O_TRUNC;
+      }
+      fd = open(modFilePath.c_str(), openFlags);
       if (fd >= 0) {
         realPath  = modFilePath;
         isTracked = true;
+        if (truncateOnOpen) {
+          openSize = 0;
+          openMtime = std::chrono::system_clock::now();
+          updateFileNodeKnown(ctx, path, realPath, originForPath(ctx, realPath),
+                              openSize, openMtime);
+        }
       } else {
         // Mod file disappeared — fall through to normal handling
         trackedMod.clear();
@@ -1844,18 +1858,49 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
 
     if (fd < 0 && alreadyStaged) {
       // Already in staging/overwrite — open R/W directly.
-      fd = open(realPath.c_str(), O_RDWR);
-    } else if (fd < 0 && isBacking) {
-      // Backing file — open R/O, defer COW to first write().
+      int openFlags = O_RDWR | O_CLOEXEC;
+      if (truncateOnOpen) {
+        openFlags |= O_TRUNC;
+      }
+      fd = open(realPath.c_str(), openFlags);
+      if (fd >= 0 && truncateOnOpen) {
+        openSize = 0;
+        openMtime = std::chrono::system_clock::now();
+        updateFileNodeKnown(ctx, path, realPath, originForPath(ctx, realPath),
+                            openSize, openMtime);
+      }
+    } else if (fd < 0 && truncateOnOpen) {
+      try {
+        std::string newPath;
+        if (isBacking && ctx->backing_dir_fd >= 0) {
+          newPath = ctx->overwrite->copyOnWriteFromFd(ctx->backing_dir_fd, path);
+        } else {
+          newPath = ctx->overwrite->copyOnWrite(realPath, path);
+        }
+
+        fd = open(newPath.c_str(), O_RDWR | O_CLOEXEC | O_TRUNC);
+        if (fd >= 0) {
+          realPath    = newPath;
+          isBacking   = false;
+          cowPending  = false;
+          openSize    = 0;
+          openMtime   = std::chrono::system_clock::now();
+          updateFileNodeKnown(ctx, path, newPath, originForPath(ctx, newPath),
+                              openSize, openMtime);
+        }
+      } catch (...) {
+        fuse_reply_err(req, EIO);
+        return;
+      }
+    } else if (fd < 0) {
+      // Existing mod/base-game file — open R/O, defer COW to first write().
       if (ctx->backing_dir_fd >= 0) {
-        fd = openat(ctx->backing_dir_fd, realPath.c_str(), O_RDONLY);
+        fd = isBacking ? openat(ctx->backing_dir_fd, realPath.c_str(), O_RDONLY | O_CLOEXEC)
+                       : open(realPath.c_str(), O_RDONLY | O_CLOEXEC);
       } else {
-        fd = open(realPath.c_str(), O_RDONLY);
+        fd = open(realPath.c_str(), O_RDONLY | O_CLOEXEC);
       }
       cowPending = true;
-    } else if (fd < 0) {
-      // Existing mod/data-dir file — write in place.
-      fd = open(realPath.c_str(), O_RDWR);
     }
     if (fd < 0) {
       fuse_reply_err(req, errno != 0 ? errno : EIO);
@@ -1879,8 +1924,8 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
     of.cow_pending   = cowPending;
     of.is_tracked    = isTracked;
     of.relative_path = path;
-    of.virtual_size  = snap.size;
-    of.virtual_mtime = snap.mtime;
+    of.virtual_size  = openSize;
+    of.virtual_mtime = openMtime;
     ctx->open_files[fh] = std::move(of);
   }
 
@@ -2010,9 +2055,9 @@ void mo2_write(fuse_req_t req, fuse_ino_t /*ino*/, const char* buf, size_t size,
     return;
   }
 
-  // Lazy COW applies only to backing-game files. Existing mod files should
-  // stay in place so config writes update the source mod rather than creating
-  // a shadow copy in overwrite.
+  // Lazy COW applies to any existing VFS source that is not already staging,
+  // overwrite, or an explicitly tracked custom-output file. This preserves
+  // mod files and lets generated output land in staging/overwrite.
   if (cowPending) {
     ctx->cow_write_count.fetch_add(1, std::memory_order_relaxed);
     try {
@@ -2375,13 +2420,20 @@ void mo2_setattr(fuse_req_t req, fuse_ino_t ino, struct stat* attr, int to_set,
       }
     }
 
-    // COW only for backing files: copy to staging before truncating.
-    // Tracked files, staging files, and existing mod files are truncated
-    // in place.
+    // COW any non-staging source before truncating. Tracked files and already
+    // staged/overwrite files are truncated in place.
     const std::string stagedPath = ctx->overwrite->stagingPath(path);
-    if (targetIsBacking &&
-        fs::path(target).lexically_normal().string() !=
-            fs::path(stagedPath).lexically_normal().string()) {
+    const std::string overwritePath = ctx->overwrite->overwritePath(path);
+    const bool alreadyWritableTarget =
+        fs::path(target).lexically_normal().string() ==
+            fs::path(stagedPath).lexically_normal().string() ||
+        fs::path(target).lexically_normal().string() ==
+            fs::path(overwritePath).lexically_normal().string();
+    const bool trackedTarget =
+        ctx->tracked_writes != nullptr &&
+        !ctx->tracked_writes->modFolderFor(path).empty() &&
+        !targetIsBacking;
+    if (!alreadyWritableTarget && !trackedTarget) {
       try {
         if (targetIsBacking && ctx->backing_dir_fd >= 0) {
           target = ctx->overwrite->copyOnWriteFromFd(ctx->backing_dir_fd, path);

@@ -17,8 +17,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Auto-detect container runtime
 if command -v podman >/dev/null 2>&1; then
     DOCKER=podman
+    VOLUME_SUFFIX=",Z"
 elif command -v docker >/dev/null 2>&1; then
     DOCKER=docker
+    VOLUME_SUFFIX=""
 else
     echo "ERROR: Neither podman nor docker found in PATH"
     exit 1
@@ -53,8 +55,8 @@ mkdir -p "${CCACHE_DIR}"
 if [ "${BUILD_MODE}" = "shell" ]; then
     echo "=== Dropping into build container shell ==="
     exec ${DOCKER} run --rm -it \
-        -v "${SCRIPT_DIR}:/src:rw" \
-        -v "${CCACHE_DIR}:/ccache:rw" \
+        -v "${SCRIPT_DIR}:/src:rw${VOLUME_SUFFIX}" \
+        -v "${CCACHE_DIR}:/ccache:rw${VOLUME_SUFFIX}" \
         -e CCACHE_DIR=/ccache \
         -w /src \
         --device /dev/fuse \
@@ -68,8 +70,8 @@ echo "=== Starting build (mode: ${BUILD_MODE}) ==="
 # Defaults to all available cores.
 BUILD_JOBS="${BUILD_JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)}"
 ${DOCKER} run --rm \
-    -v "${SCRIPT_DIR}:/src:rw" \
-    -v "${CCACHE_DIR}:/ccache:rw" \
+    -v "${SCRIPT_DIR}:/src:rw${VOLUME_SUFFIX}" \
+    -v "${CCACHE_DIR}:/ccache:rw${VOLUME_SUFFIX}" \
     -e CCACHE_DIR=/ccache \
     -e BUILD_MODE="${BUILD_MODE}" \
     -e BUILD_JOBS="${BUILD_JOBS}" \
