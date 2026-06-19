@@ -79,6 +79,7 @@ private slots:
 private:
   QFileSystemWatcher m_styleWatcher;
   QString m_defaultStyle;
+  QString m_defaultFontFamily;
   std::unique_ptr<env::ModuleNotification> m_modules;
 
   std::unique_ptr<Instance> m_instance;

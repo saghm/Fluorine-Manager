@@ -595,6 +595,11 @@ public:
   int qssFontSize() const;
   void setQssFontSize(int size);
 
+  // UI font family override; empty means use the bundled DejaVu Sans
+  //
+  QString fontFamily() const;
+  void setFontFamily(const QString& family);
+
   // whether to use collapsible separators when possible
   //
   bool collapsibleSeparators(Qt::SortOrder order) const;
