@@ -1930,11 +1930,7 @@ void mo2_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
   }
 
   fi->fh = fh;
-  // Read-only mod/game files are immutable during a session, so keeping the
-  // page cache is safe and fast. Writable handles can remap the same VFS inode
-  // from a mod file to a staged copy, and repeated INI API calls need to read
-  // the just-written staged content rather than stale cached pages.
-  fi->keep_cache = writable ? 0 : 1;
+  fi->keep_cache = 1;
 
   fuse_reply_open(req, fi);
 }
@@ -2219,7 +2215,7 @@ void mo2_create(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t mode
   }
 
   fi->fh         = fh;
-  fi->keep_cache = 0;
+  fi->keep_cache = 1;
 
   struct fuse_entry_param e;
   std::memset(&e, 0, sizeof(e));
