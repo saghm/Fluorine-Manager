@@ -4,11 +4,24 @@
 #include <QString>
 #include <functional>
 
+struct SlrUpdateInfo
+{
+  bool installed = false;
+  bool updateAvailable = false;
+  QString localBuildId;
+  QString remoteBuildId;
+  QString error;
+};
+
 /// Returns true if the SLR `run` script is present and executable.
 __attribute__((visibility("default"))) bool isSlrInstalled();
 
 /// Returns the path to the SLR `run` script, or empty if not installed.
 __attribute__((visibility("default"))) QString getSlrRunScript();
+
+/// Check the remote SLR BUILD_ID without downloading or replacing anything.
+__attribute__((visibility("default")))
+SlrUpdateInfo checkSlrUpdate(const int* cancelFlag = nullptr);
 
 /// Download and install SteamLinuxRuntime_4 (steamrt4, ~200 MB).
 /// Skips if already at the latest version (BUILD_ID check).

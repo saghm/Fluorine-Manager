@@ -3,9 +3,11 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QNetworkRequest>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QProcess>
+#include <QTemporaryDir>
 #include <QTimer>
 #include <QEventLoop>
 #include <uibase/log.h>
@@ -44,7 +46,13 @@ QByteArray httpGet(const QString& url, const int* cancelFlag,
                    const QString& destFile = {})
 {
   QNetworkAccessManager mgr;
-  QNetworkReply* reply = mgr.get(QNetworkRequest(QUrl(url)));
+  QNetworkRequest request{QUrl(url)};
+  request.setRawHeader("User-Agent", "Fluorine-Manager/slr");
+  request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                       QNetworkRequest::NoLessSafeRedirectPolicy);
+  request.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
+
+  QNetworkReply* reply = mgr.get(request);
   QEventLoop loop;
 
   QFile outFile;
@@ -91,6 +99,9 @@ QByteArray httpGet(const QString& url, const int* cancelFlag,
     outFile.close();
 
   if (reply->error() != QNetworkReply::NoError) {
+    MOBase::log::warn("SLR download request failed: {} ({})",
+                      url,
+                      reply->errorString());
     reply->deleteLater();
     if (!destFile.isEmpty())
       QFile::remove(destFile);
@@ -99,6 +110,70 @@ QByteArray httpGet(const QString& url, const int* cancelFlag,
 
   reply->deleteLater();
   return inMemoryBuf;
+}
+
+QString readLocalBuildId()
+{
+  QFile f(localBuildIdPath());
+  if (!f.open(QIODevice::ReadOnly)) {
+    return {};
+  }
+  return QString::fromUtf8(f.readAll()).trimmed();
+}
+
+bool writeLocalBuildId(const QString& buildId)
+{
+  QFile f(localBuildIdPath());
+  if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+    return false;
+  }
+  f.write(buildId.toUtf8());
+  f.write("\n");
+  return true;
+}
+
+bool makeExecutable(const QString& path)
+{
+  return QFile::setPermissions(path,
+                               QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                                   QFileDevice::ExeOwner | QFileDevice::ReadGroup |
+                                   QFileDevice::ExeGroup | QFileDevice::ReadOther |
+                                   QFileDevice::ExeOther);
+}
+
+bool replaceRuntimeAtomically(const QString& stagedRuntimeDir, QString& err)
+{
+  const QString installDir   = slrInstallDir();
+  const QString extractedDir = installDir + "/" + EXTRACTED_DIR;
+  const QString backupDir    = installDir + "/" + EXTRACTED_DIR + ".previous";
+
+  if (!QFileInfo::exists(stagedRuntimeDir + "/run")) {
+    err = QStringLiteral("staged runtime is missing run script");
+    return false;
+  }
+  makeExecutable(stagedRuntimeDir + "/run");
+
+  QDir().mkpath(installDir);
+  QDir(backupDir).removeRecursively();
+
+  bool hadPrevious = QFileInfo::exists(extractedDir);
+  if (hadPrevious && !QDir().rename(extractedDir, backupDir)) {
+    err = QStringLiteral("failed to move existing runtime aside");
+    return false;
+  }
+
+  if (!QDir().rename(stagedRuntimeDir, extractedDir)) {
+    if (hadPrevious) {
+      QDir().rename(backupDir, extractedDir);
+    }
+    err = QStringLiteral("failed to install staged runtime");
+    return false;
+  }
+
+  if (hadPrevious) {
+    QDir(backupDir).removeRecursively();
+  }
+  return true;
 }
 
 }  // namespace
@@ -198,6 +273,24 @@ QString getSlrRunScript()
   return isSlrInstalled() ? slrRunScriptPath() : QString();
 }
 
+SlrUpdateInfo checkSlrUpdate(const int* cancelFlag)
+{
+  SlrUpdateInfo info;
+  info.installed    = isSlrInstalled();
+  info.localBuildId = readLocalBuildId();
+
+  const QByteArray remoteBuildIdRaw = httpGet(
+      QStringLiteral("%1/BUILD_ID.txt").arg(QLatin1String(BASE_URL)), cancelFlag);
+  if (remoteBuildIdRaw.isEmpty()) {
+    info.error = QStringLiteral("Failed to fetch SLR BUILD_ID");
+    return info;
+  }
+
+  info.remoteBuildId    = QString::fromUtf8(remoteBuildIdRaw).trimmed();
+  info.updateAvailable = info.installed && info.localBuildId != info.remoteBuildId;
+  return info;
+}
+
 QString downloadSlr(const std::function<void(float)>& progressCb,
                     const std::function<void(const QString&)>& statusCb,
                     const int* cancelFlag)
@@ -208,20 +301,12 @@ QString downloadSlr(const std::function<void(float)>& progressCb,
   // 1. Check for updates.
   status(QStringLiteral("Checking Steam Linux Runtime version..."));
 
-  const QByteArray remoteBuildIdRaw = httpGet(
-      QStringLiteral("%1/BUILD_ID.txt").arg(QLatin1String(BASE_URL)), cancelFlag);
-  if (remoteBuildIdRaw.isEmpty())
-    return QStringLiteral("Failed to fetch SLR BUILD_ID");
+  const SlrUpdateInfo updateInfo = checkSlrUpdate(cancelFlag);
+  if (!updateInfo.error.isEmpty())
+    return updateInfo.error;
 
-  const QString remoteBuildId = QString::fromUtf8(remoteBuildIdRaw).trimmed();
-
-  // Read local BUILD_ID.
-  QString localBuildId;
-  {
-    QFile f(localBuildIdPath());
-    if (f.open(QIODevice::ReadOnly))
-      localBuildId = QString::fromUtf8(f.readAll()).trimmed();
-  }
+  const QString remoteBuildId = updateInfo.remoteBuildId;
+  const QString localBuildId  = updateInfo.localBuildId;
 
   if (localBuildId == remoteBuildId && isSlrInstalled()) {
     MOBase::log::info("Steam Linux Runtime is already up to date");
@@ -241,7 +326,12 @@ QString downloadSlr(const std::function<void(float)>& progressCb,
 
   const QString installDir = slrInstallDir();
   QDir().mkpath(installDir);
-  const QString archivePath = installDir + "/" + ARCHIVE_NAME;
+
+  QTemporaryDir stagingRoot(installDir + "/slr-update-XXXXXX");
+  if (!stagingRoot.isValid()) {
+    return QStringLiteral("Failed to create SLR staging directory");
+  }
+  const QString archivePath = stagingRoot.filePath(ARCHIVE_NAME);
 
   // 2. Download.
   status(QStringLiteral("Downloading Steam Linux Runtime (steamrt4, ~200 MB)..."));
@@ -254,12 +344,9 @@ QString downloadSlr(const std::function<void(float)>& progressCb,
 
   // 3. Extract.
   status(QStringLiteral("Extracting Steam Linux Runtime..."));
-  const QString extractedDir = installDir + "/" + EXTRACTED_DIR;
-  if (QFileInfo::exists(extractedDir))
-    QDir(extractedDir).removeRecursively();
 
   QProcess tar;
-  tar.setWorkingDirectory(installDir);
+  tar.setWorkingDirectory(stagingRoot.path());
   tar.start(QStringLiteral("tar"), {QStringLiteral("xJf"), archivePath});
   tar.waitForFinished(600000);
   QFile::remove(archivePath);
@@ -267,8 +354,14 @@ QString downloadSlr(const std::function<void(float)>& progressCb,
   if (tar.exitStatus() != QProcess::NormalExit || tar.exitCode() != 0)
     return QStringLiteral("tar extraction failed (exit code %1)").arg(tar.exitCode());
 
-  if (!QFileInfo::exists(slrRunScriptPath()))
+  const QString stagedRuntimeDir = stagingRoot.filePath(EXTRACTED_DIR);
+  if (!QFileInfo::exists(stagedRuntimeDir + "/run"))
     return QStringLiteral("Extraction succeeded but run script not found");
+
+  QString replaceError;
+  if (!replaceRuntimeAtomically(stagedRuntimeDir, replaceError)) {
+    return replaceError;
+  }
 
   // 4. Inject xrandr into the container (steamrt4 ships without it, but
   // Proton-GE and several protonfixes invoke xrandr during launch).
@@ -276,10 +369,8 @@ QString downloadSlr(const std::function<void(float)>& progressCb,
   installXrandrAssets(cancelFlag, statusCb);
 
   // 5. Save BUILD_ID.
-  {
-    QFile f(localBuildIdPath());
-    if (f.open(QIODevice::WriteOnly))
-      f.write(remoteBuildId.toUtf8());
+  if (!writeLocalBuildId(remoteBuildId)) {
+    MOBase::log::warn("Failed to write SLR BUILD_ID marker");
   }
 
   MOBase::log::info("Steam Linux Runtime installed successfully");

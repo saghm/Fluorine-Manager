@@ -2264,7 +2264,6 @@ void MainWindow::readSettings()
   s.geometry().restoreState(ui->splitter);
   s.geometry().restoreState(ui->categoriesSplitter);
   ui->menuBar->show();
-  ui->toolBar->show();
   s.geometry().restoreVisibility(ui->statusBar);
 
   FilterWidget::setOptions(s.interface().filterOptions());
@@ -2421,15 +2420,11 @@ void MainWindow::on_startButton_clicked()
   });
 
   // Pre-check: Proton launches always use SLR. Native Linux executables skip
-  // this branch entirely. downloadSlr() short-circuits on BUILD_ID match, so
-  // once SLR is current this is a single HTTP GET; no UI is shown unless the
-  // runtime actually needs (re)downloading.
+  // this branch entirely. Startup update checks offer SLR updates separately;
+  // launch only blocks when no managed runtime exists yet.
   if (selectedExecutable->useProton()) {
     const bool freshInstall = !isSlrInstalled();
     // Only show the heavyweight progress dialog on a fresh install.
-    // Up-to-date checks happen quietly in the background here so we don't
-    // block launch on a remote BUILD_ID fetch — the up-to-date case is
-    // handled at startup by OrganizerCore::checkForSlrUpdates().
     if (freshInstall) {
       auto* progress = new QProgressDialog(
           tr("Downloading Steam Linux Runtime (~200 MB)...\n"

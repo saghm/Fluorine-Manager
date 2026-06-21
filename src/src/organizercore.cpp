@@ -58,15 +58,20 @@
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QFutureWatcher>
 #include <QMessageBox>
 #include <QNetworkInterface>
+#include <QPointer>
 #include <QProcess>
+#include <QProgressDialog>
+#include <QPushButton>
 #include <QRegularExpression>
 #include <QTemporaryFile>
 #include <QTextStream>
 #include <QTimer>
 #include <QUrl>
 #include <QWidget>
+#include <QtConcurrent/QtConcurrentRun>
 
 #include <QtDebug>
 #include <QtGlobal>  // for qUtf8Printable, etc
@@ -76,6 +81,7 @@
 #include <cstring>  // for memset, wcsrchr
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <atomic>
 #include <exception>
 #include <functional>
 #include <memory>
@@ -96,6 +102,7 @@ static env::CoreDumpTypes g_coreDumpType = env::CoreDumpTypes::Mini;
 
 namespace
 {
+std::atomic<bool> s_slrUpdateCheckInProgress{false};
 
 QString uniqueFilePath(const QDir& dir, const QString& fileName)
 {
@@ -125,6 +132,104 @@ QString uniqueFilePath(const QDir& dir, const QString& fileName)
       suffix.isEmpty()
           ? QStringLiteral("%1_%2").arg(base, timestamp)
           : QStringLiteral("%1_%2.%3").arg(base, timestamp, suffix));
+}
+
+void installSlrUpdate(QWidget* parent, const SlrUpdateInfo& info);
+
+void promptSlrUpdate(QWidget* parent, const SlrUpdateInfo& info)
+{
+  if (parent == nullptr) {
+    parent = qApp->activeWindow();
+  }
+
+  QMessageBox box(parent);
+  box.setIcon(QMessageBox::Information);
+  box.setWindowTitle(QObject::tr("Steam Linux Runtime Update"));
+  box.setText(QObject::tr("A Steam Linux Runtime update is available."));
+  box.setInformativeText(
+      QObject::tr("Current build: %1\nLatest build: %2\n\n"
+                  "You can update now, be reminded later, or skip this build.")
+          .arg(info.localBuildId.isEmpty() ? QObject::tr("unknown") : info.localBuildId,
+               info.remoteBuildId));
+
+  QPushButton* updateButton =
+      box.addButton(QObject::tr("Update Now"), QMessageBox::AcceptRole);
+  box.addButton(QObject::tr("Remind Me Later"), QMessageBox::RejectRole);
+  QPushButton* skipButton =
+      box.addButton(QObject::tr("Skip This Version"), QMessageBox::DestructiveRole);
+  box.setDefaultButton(updateButton);
+
+  box.exec();
+
+  if (box.clickedButton() == updateButton) {
+    installSlrUpdate(parent, info);
+  } else if (box.clickedButton() == skipButton) {
+    QSettings globalSettings = GlobalSettings::settings();
+    globalSettings.setValue(QStringLiteral("SteamLinuxRuntime/skipped_build_id"),
+                            info.remoteBuildId);
+  }
+}
+
+void installSlrUpdate(QWidget* parent, const SlrUpdateInfo& info)
+{
+  if (parent == nullptr) {
+    parent = qApp->activeWindow();
+  }
+
+  auto* progress = new QProgressDialog(
+      QObject::tr("Updating Steam Linux Runtime...\n"
+                  "Current build: %1\nLatest build: %2")
+          .arg(info.localBuildId.isEmpty() ? QObject::tr("unknown") : info.localBuildId,
+               info.remoteBuildId),
+      QObject::tr("Cancel"), 0, 0, parent);
+  progress->setWindowTitle(QObject::tr("Steam Linux Runtime"));
+  progress->setWindowModality(Qt::WindowModal);
+  progress->setMinimumDuration(0);
+
+  auto* cancelFlag = new int(0);
+  QObject::connect(progress, &QProgressDialog::canceled, progress, [cancelFlag] {
+    *cancelFlag = 1;
+  });
+
+  auto* watcher = new QFutureWatcher<QString>(progress);
+  QObject::connect(watcher, &QFutureWatcher<QString>::finished, progress,
+                   [watcher, progress, cancelFlag] {
+                     progress->close();
+                     const QString err = watcher->result();
+                     watcher->deleteLater();
+                     progress->deleteLater();
+
+                     if (*cancelFlag != 0) {
+                       delete cancelFlag;
+                       return;
+                     }
+
+                     if (!err.isEmpty()) {
+                       MOBase::log::warn("SLR update failed: {}", err);
+                       QMessageBox::warning(
+                           qApp->activeWindow(),
+                           QObject::tr("Steam Linux Runtime"),
+                           QObject::tr("Steam Linux Runtime update failed:\n%1\n\n"
+                                       "The existing runtime was kept.")
+                               .arg(err));
+                     } else {
+                       QSettings globalSettings = GlobalSettings::settings();
+                       globalSettings.remove(
+                           QStringLiteral("SteamLinuxRuntime/skipped_build_id"));
+                       MOBase::log::info("Steam Linux Runtime updated successfully");
+                       QMessageBox::information(
+                           qApp->activeWindow(),
+                           QObject::tr("Steam Linux Runtime"),
+                           QObject::tr("Steam Linux Runtime updated successfully."));
+                     }
+                     delete cancelFlag;
+                   });
+
+  int* cancelPtr = cancelFlag;
+  watcher->setFuture(QtConcurrent::run([cancelPtr]() -> QString {
+    return downloadSlr(nullptr, nullptr, cancelPtr);
+  }));
+  progress->show();
 }
 
 }  // namespace
@@ -470,11 +575,9 @@ void OrganizerCore::checkForUpdates()
 
 void OrganizerCore::checkForSlrUpdates()
 {
-  // SLR auto-update: only relevant if SLR is already installed. The first-
-  // install case is handled at game launch in MainWindow, where the user gets
-  // a progress dialog. Here we silently background-fetch a newer steamrt4
-  // image when one exists; downloadSlr() short-circuits on BUILD_ID match so
-  // the cost is one HTTP GET when already up-to-date.
+  // SLR updates are offered at startup but remain user-controlled. The first
+  // install case is still handled at game launch, where Proton cannot proceed
+  // without a runtime.
   if (!m_Settings.checkForUpdates()) {
     return;
   }
@@ -485,11 +588,56 @@ void OrganizerCore::checkForSlrUpdates()
     return;
   }
 
-  // Fire and forget on a detached thread. No UI; result is logged.
-  std::thread([]() {
-    const QString err = downloadSlr(nullptr, nullptr, nullptr);
-    if (!err.isEmpty()) {
-      MOBase::log::warn("SLR update check failed: {}", err);
+  bool expected = false;
+  if (!s_slrUpdateCheckInProgress.compare_exchange_strong(expected, true)) {
+    return;
+  }
+
+  QPointer<OrganizerCore> self(this);
+  std::thread([self]() {
+    const SlrUpdateInfo info = checkSlrUpdate();
+    if (!self) {
+      s_slrUpdateCheckInProgress = false;
+      return;
+    }
+
+    const bool invoked = QMetaObject::invokeMethod(self, [self, info]() {
+      if (!self) {
+        s_slrUpdateCheckInProgress = false;
+        return;
+      }
+
+      s_slrUpdateCheckInProgress = false;
+
+      if (!info.error.isEmpty()) {
+        MOBase::log::warn("SLR update check failed: {}", info.error);
+        return;
+      }
+
+      if (!info.updateAvailable) {
+        MOBase::log::debug("Steam Linux Runtime is up to date ({})",
+                           info.localBuildId);
+        return;
+      }
+
+      QSettings globalSettings = GlobalSettings::settings();
+      const QString skippedBuild =
+          globalSettings.value(QStringLiteral("SteamLinuxRuntime/skipped_build_id"))
+              .toString();
+      if (skippedBuild == info.remoteBuildId) {
+        MOBase::log::debug("Skipping SLR update prompt for ignored build {}",
+                           info.remoteBuildId);
+        return;
+      }
+
+      QWidget* parent = nullptr;
+      if (self->m_UserInterface) {
+        parent = self->m_UserInterface->mainWindow();
+      }
+      promptSlrUpdate(parent, info);
+    }, Qt::QueuedConnection);
+    if (!invoked) {
+      s_slrUpdateCheckInProgress = false;
     }
   }).detach();
 }
