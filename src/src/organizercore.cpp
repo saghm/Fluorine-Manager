@@ -104,6 +104,12 @@ namespace
 {
 std::atomic<bool> s_slrUpdateCheckInProgress{false};
 
+QSettings globalSettings()
+{
+  return QSettings(QStringLiteral("Mod Organizer Team"),
+                   QStringLiteral("Mod Organizer"));
+}
+
 QString uniqueFilePath(const QDir& dir, const QString& fileName)
 {
   QString candidate = dir.filePath(fileName);
@@ -164,9 +170,9 @@ void promptSlrUpdate(QWidget* parent, const SlrUpdateInfo& info)
   if (box.clickedButton() == updateButton) {
     installSlrUpdate(parent, info);
   } else if (box.clickedButton() == skipButton) {
-    QSettings globalSettings = GlobalSettings::settings();
-    globalSettings.setValue(QStringLiteral("SteamLinuxRuntime/skipped_build_id"),
-                            info.remoteBuildId);
+    QSettings settings = globalSettings();
+    settings.setValue(QStringLiteral("SteamLinuxRuntime/skipped_build_id"),
+                      info.remoteBuildId);
   }
 }
 
@@ -213,8 +219,8 @@ void installSlrUpdate(QWidget* parent, const SlrUpdateInfo& info)
                                        "The existing runtime was kept.")
                                .arg(err));
                      } else {
-                       QSettings globalSettings = GlobalSettings::settings();
-                       globalSettings.remove(
+                       QSettings settings = globalSettings();
+                       settings.remove(
                            QStringLiteral("SteamLinuxRuntime/skipped_build_id"));
                        MOBase::log::info("Steam Linux Runtime updated successfully");
                        QMessageBox::information(
@@ -620,9 +626,9 @@ void OrganizerCore::checkForSlrUpdates()
         return;
       }
 
-      QSettings globalSettings = GlobalSettings::settings();
+      QSettings settings = globalSettings();
       const QString skippedBuild =
-          globalSettings.value(QStringLiteral("SteamLinuxRuntime/skipped_build_id"))
+          settings.value(QStringLiteral("SteamLinuxRuntime/skipped_build_id"))
               .toString();
       if (skippedBuild == info.remoteBuildId) {
         MOBase::log::debug("Skipping SLR update prompt for ignored build {}",
