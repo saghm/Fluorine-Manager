@@ -46,6 +46,12 @@ void setupSettingsLayout(Ui::SettingsDialog& ui, QWidget* dialog)
         QObject::tr("Update preferences for this setup. Installing an update changes "
                     "the app and restarts it immediately."), "version channel stable nightly releases");
   }
+  if (auto* clf3 = ui.tabWidget->findChild<QWidget*>("clf3Tab")) {
+    navigation->addSection(clf3, QObject::tr("CLF3"),
+        QObject::tr("Install performance and default paths for CLF3 modlist installs. "
+                    "Stored in wabbajack.ini and shared across instances."),
+        "downloads workers threads extraction performance concurrent cache");
+  }
   navigation->addSection(ui.diagnosticsTab, QObject::tr("Diagnostics"),
       QObject::tr("Logs and crash reporting preferences for this library setup."),
       "troubleshooting debug errors warnings dumps");

@@ -797,8 +797,12 @@ void Clf3InstallerDialog::buildUi()
           &Clf3InstallerDialog::cancelInstall);
   connect(m_close, &QPushButton::clicked, this, &QDialog::accept);
 
-  m_downloads->setText(QStandardPaths::writableLocation(QStandardPaths::DownloadLocation)
-                       + QStringLiteral("/Fluorine/modlists"));
+  const QString configuredDownloadDir =
+      Clf3InstallUtils::loadDefaultDownloadDir().trimmed();
+  m_downloads->setText(!configuredDownloadDir.isEmpty()
+                           ? configuredDownloadDir
+                           : QStandardPaths::writableLocation(QStandardPaths::DownloadLocation)
+                                 + QStringLiteral("/Fluorine/modlists"));
 }
 
 void Clf3InstallerDialog::loadGallery(bool refresh)
@@ -1428,8 +1432,9 @@ void Clf3InstallerDialog::startInstall()
   m_log->setVisible(false);
   m_cancel->setEnabled(true);
   m_close->setEnabled(false);
+  Clf3Tuning tuning = Clf3InstallUtils::loadPerfTuning();
   m_controller.startInstall(m_source->text(), m_downloads->text(), m_output->text(),
-                            m_game->text(), m_machineName);
+                            m_game->text(), m_machineName, tuning);
 }
 
 bool Clf3InstallerDialog::savePendingJob(const QString& stage)

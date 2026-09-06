@@ -9,6 +9,17 @@
 #include <QStringList>
 #include <QTimer>
 
+#include <optional>
+
+struct Clf3Tuning
+{
+  std::optional<int> concurrentDownloads;
+  std::optional<int> installWorkers;
+  std::optional<int> bsaWorkers;
+  std::optional<int> sevenzipWorkers;
+  std::optional<QString> extractStrategy;
+};
+
 class Clf3ProcessController : public QObject
 {
   Q_OBJECT
@@ -20,9 +31,16 @@ public:
 
   QString enginePath() const;
   bool isRunning() const;
+  static QStringList buildInstallArguments(const QString& source,
+                                           const QString& downloads,
+                                           const QString& output,
+                                           const QString& game,
+                                           const QString& machineName,
+                                           const Clf3Tuning& tuning);
   void startInstall(const QString& source, const QString& downloads,
                     const QString& output, const QString& game,
-                    const QString& machineName = {});
+                    const QString& machineName = {},
+                    const Clf3Tuning& tuning    = {});
   void sendNexusUrls(const QString& requestId, const QStringList& urls);
   void sendManualFile(const QString& requestId, const QString& path);
   void startCollectionPlan(const QString& sourceUrl, const QString& gameVersion = {},

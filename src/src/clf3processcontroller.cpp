@@ -110,18 +110,44 @@ bool Clf3ProcessController::isRunning() const
   return m_preparing || m_process.state() != QProcess::NotRunning;
 }
 
-void Clf3ProcessController::startInstall(const QString& source,
-                                         const QString& downloads,
-                                         const QString& output,
-                                         const QString& game,
-                                         const QString& machineName)
+QStringList Clf3ProcessController::buildInstallArguments(
+    const QString& source, const QString& downloads, const QString& output,
+    const QString& game, const QString& machineName, const Clf3Tuning& tuning)
 {
   QStringList arguments{QStringLiteral("install"), source, downloads, output};
   if (!game.isEmpty()) arguments << QStringLiteral("--game") << game;
   arguments << QStringLiteral("--jackify") << QStringLiteral("--hosted");
   if (!machineName.isEmpty())
     arguments << QStringLiteral("--machine-name") << machineName;
-  begin(arguments, false);
+  if (tuning.concurrentDownloads && *tuning.concurrentDownloads >= 1)
+    arguments << QStringLiteral("--concurrent")
+              << QString::number(*tuning.concurrentDownloads);
+  if (tuning.installWorkers && *tuning.installWorkers >= 1)
+    arguments << QStringLiteral("--install-workers")
+              << QString::number(*tuning.installWorkers);
+  if (tuning.bsaWorkers && *tuning.bsaWorkers >= 1)
+    arguments << QStringLiteral("--bsa-workers")
+              << QString::number(*tuning.bsaWorkers);
+  if (tuning.sevenzipWorkers && *tuning.sevenzipWorkers >= 1)
+    arguments << QStringLiteral("--sevenzip-workers")
+              << QString::number(*tuning.sevenzipWorkers);
+  if (tuning.extractStrategy
+      && (*tuning.extractStrategy == QStringLiteral("streaming")
+          || *tuning.extractStrategy == QStringLiteral("phased")))
+    arguments << QStringLiteral("--extract") << *tuning.extractStrategy;
+  return arguments;
+}
+
+void Clf3ProcessController::startInstall(const QString& source,
+                                         const QString& downloads,
+                                         const QString& output,
+                                         const QString& game,
+                                         const QString& machineName,
+                                         const Clf3Tuning& tuning)
+{
+  begin(buildInstallArguments(source, downloads, output, game, machineName,
+                              tuning),
+        false);
 }
 
 QProcessEnvironment Clf3ProcessController::engineEnvironment()
@@ -254,7 +280,7 @@ void Clf3ProcessController::begin(const QStringList& arguments, bool collectionP
   m_arguments = arguments;
   if (!qEnvironmentVariableIsEmpty("FLUORINE_CLF3_PATH") ||
       (collectionPlanning && !m_managedEnginePath.isEmpty())) {
-    m_process.start(enginePath(), arguments, QIODevice::ReadWrite);
+    m_process.start(enginePath(), m_arguments, QIODevice::ReadWrite);
   } else {
     m_preparing = true;
     m_engineManager.prepare();

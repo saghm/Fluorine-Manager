@@ -13,6 +13,29 @@
 
 namespace Clf3InstallUtils
 {
+namespace
+{
+std::optional<int> tunedWorker(const QSettings& settings, const char* key)
+{
+  const QVariant value =
+      settings.value(QStringLiteral("clf3/perf/") + QLatin1String(key));
+  if (value.isNull() || !value.isValid()) return std::nullopt;
+  const int count = value.toInt();
+  if (count < 1) return std::nullopt;
+  return count;
+}
+
+void saveWorker(QSettings& settings, const char* key, std::optional<int> value)
+{
+  const QString name =
+      QStringLiteral("clf3/perf/") + QLatin1String(key);
+  if (value && *value >= 1)
+    settings.setValue(name, *value);
+  else
+    settings.remove(name);
+}
+}  // namespace
+
 std::unique_ptr<QSettings> openSettings(const QString& configRoot)
 {
   QString root = configRoot;
@@ -38,6 +61,57 @@ std::unique_ptr<QSettings> openSettings(const QString& configRoot)
     settings->sync();
   }
   return settings;
+}
+
+Clf3Tuning loadPerfTuning(const QString& configRoot)
+{
+  const auto settings = openSettings(configRoot);
+  Clf3Tuning tuning;
+  tuning.concurrentDownloads = tunedWorker(*settings, "concurrent");
+  tuning.installWorkers      = tunedWorker(*settings, "install_workers");
+  tuning.bsaWorkers          = tunedWorker(*settings, "bsa_workers");
+  tuning.sevenzipWorkers     = tunedWorker(*settings, "sevenzip_workers");
+  const QString extract =
+      settings->value(QStringLiteral("clf3/perf/extract")).toString();
+  if (extract == QStringLiteral("streaming")
+      || extract == QStringLiteral("phased"))
+    tuning.extractStrategy = extract;
+  return tuning;
+}
+
+void savePerfTuning(const Clf3Tuning& tuning, const QString& configRoot)
+{
+  auto settings = openSettings(configRoot);
+  saveWorker(*settings, "concurrent", tuning.concurrentDownloads);
+  saveWorker(*settings, "install_workers", tuning.installWorkers);
+  saveWorker(*settings, "bsa_workers", tuning.bsaWorkers);
+  saveWorker(*settings, "sevenzip_workers", tuning.sevenzipWorkers);
+  if (tuning.extractStrategy
+      && (*tuning.extractStrategy == QStringLiteral("streaming")
+          || *tuning.extractStrategy == QStringLiteral("phased")))
+    settings->setValue(QStringLiteral("clf3/perf/extract"),
+                       *tuning.extractStrategy);
+  else
+    settings->remove(QStringLiteral("clf3/perf/extract"));
+  settings->sync();
+}
+
+QString loadDefaultDownloadDir(const QString& configRoot)
+{
+  return openSettings(configRoot)
+      ->value(QStringLiteral("clf3/perf/default_download_dir"))
+      .toString();
+}
+
+void saveDefaultDownloadDir(const QString& path, const QString& configRoot)
+{
+  auto settings = openSettings(configRoot);
+  if (path.trimmed().isEmpty())
+    settings->remove(QStringLiteral("clf3/perf/default_download_dir"));
+  else
+    settings->setValue(QStringLiteral("clf3/perf/default_download_dir"),
+                       path);
+  settings->sync();
 }
 
 QVector<SpaceRequirement> combineSpaceRequirements(

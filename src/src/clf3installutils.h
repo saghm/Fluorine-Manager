@@ -1,5 +1,7 @@
 #pragma once
 
+#include "clf3processcontroller.h"
+
 #include <QString>
 #include <QVector>
 #include <QSettings>
@@ -9,6 +11,15 @@ namespace Clf3InstallUtils
 {
 // Explicit application-owned store; independent of QApplication organization metadata.
 std::unique_ptr<QSettings> openSettings(const QString& configRoot = {});
+
+// Install performance tuning, stored instance-independently in wabbajack.ini.
+// Absent values mean the corresponding CLF3 flag is omitted.
+Clf3Tuning loadPerfTuning(const QString& configRoot = {});
+void savePerfTuning(const Clf3Tuning& tuning, const QString& configRoot = {});
+
+// Default download cache directory for new installs. Empty when unconfigured.
+QString loadDefaultDownloadDir(const QString& configRoot = {});
+void saveDefaultDownloadDir(const QString& path, const QString& configRoot = {});
 
 struct SpaceRequirement
 {
