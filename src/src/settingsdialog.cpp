@@ -18,6 +18,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "settingsdialog.h"
+#include "settingsdialogclf3.h"
 #include "settingsdialogdiagnostics.h"
 #include "settingsdialoggeneral.h"
 #include "settingsdialogmodlist.h"
@@ -53,6 +54,7 @@ SettingsDialog::SettingsDialog(PluginContainer* pluginContainer, Settings& setti
       new PluginsSettingsTab(settings, m_pluginContainer, *this)));
   m_tabs.push_back(
       std::unique_ptr<SettingsTab>(new ProtonSettingsTab(settings, *this)));
+  m_tabs.push_back(std::unique_ptr<SettingsTab>(new Clf3SettingsTab(settings, *this)));
 }
 
 PluginContainer* SettingsDialog::pluginContainer()
