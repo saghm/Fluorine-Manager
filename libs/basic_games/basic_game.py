@@ -17,49 +17,7 @@ from .basic_features.basic_save_game_info import (
     BasicGameSaveGame,
     BasicGameSaveGameInfo,
 )
-
-
-def _find_wine_userprofile() -> str | None:
-    """On Linux, find the Wine/Proton user profile directory inside the prefix.
-
-    Returns the host path equivalent of %USERPROFILE% (e.g.
-    ``<prefix>/drive_c/users/steamuser``) or *None* if no valid prefix is
-    found.
-    """
-    if platform.system() == "Windows":
-        return None
-
-    candidates: list[str] = []
-
-    # 1. Fluorine data prefix (shared by native and Flatpak builds)
-    fluorine_pfx = os.path.expanduser(
-        "~/.local/share/fluorine/Prefix/pfx"
-    )
-    candidates.append(fluorine_pfx)
-
-    # 2. Fluorine config prefix_path
-    try:
-        config_dir = os.environ.get(
-            "XDG_CONFIG_HOME", os.path.join(str(Path.home()), ".config")
-        )
-        cfg_path = os.path.join(config_dir, "fluorine", "config.json")
-        if os.path.isfile(cfg_path):
-            import json
-
-            with open(cfg_path, "r") as f:
-                cfg = json.load(f)
-            pfx = cfg.get("prefix_path", "")
-            if pfx:
-                candidates.append(pfx)
-    except Exception:
-        pass
-
-    for pfx in candidates:
-        user_dir = os.path.join(pfx, "drive_c", "users", "steamuser")
-        if os.path.isdir(user_dir):
-            return user_dir
-
-    return None
+from .wine_paths import find_wine_userprofile as _find_wine_userprofile
 
 
 def replace_variables(value: str, game: BasicGame) -> str:
@@ -74,7 +32,7 @@ def replace_variables(value: str, game: BasicGame) -> str:
         )
     if value.find("%USERPROFILE%") != -1:
         if platform.system() != "Windows":
-            wine_profile = _find_wine_userprofile()
+            wine_profile = _find_wine_userprofile(getattr(game, "_organizer", None))
             if wine_profile:
                 value = value.replace("%USERPROFILE%", wine_profile)
             else:

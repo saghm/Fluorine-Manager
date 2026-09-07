@@ -2,7 +2,9 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QTemporaryDir>
+#include <QSettings>
 #include <gtest/gtest.h>
 
 namespace
@@ -15,6 +17,70 @@ FluorineConfig makePrefix(const QString& root)
   return config;
 }
 }  // namespace
+
+class PrefixResolution : public ::testing::Test
+{
+protected:
+  QTemporaryDir temporary;
+  QByteArray oldConfigHome;
+  QString instanceFile;
+
+  void SetUp() override
+  {
+    ASSERT_TRUE(temporary.isValid());
+    oldConfigHome = qgetenv("XDG_CONFIG_HOME");
+    qputenv("XDG_CONFIG_HOME", temporary.path().toUtf8());
+    instanceFile = QDir(temporary.path()).filePath("ModOrganizer.ini");
+  }
+
+  void TearDown() override
+  {
+    if (oldConfigHome.isNull()) {
+      qunsetenv("XDG_CONFIG_HOME");
+    } else {
+      qputenv("XDG_CONFIG_HOME", oldConfigHome);
+    }
+  }
+};
+
+TEST_F(PrefixResolution, GlobalConfigWinsAndNormalizesCompatibilityParent)
+{
+  auto config = makePrefix(QDir(temporary.path()).filePath("configured"));
+  const QString expected = config.prefix_path;
+  config.prefix_path = QFileInfo(expected).absolutePath();
+  ASSERT_TRUE(config.save());
+  QSettings instance(instanceFile, QSettings::IniFormat);
+  instance.setValue("fluorine/prefix_path", "/not-selected");
+  instance.sync();
+  EXPECT_EQ(FluorineConfig::resolvedPrefixPath(instanceFile), expected);
+}
+
+TEST_F(PrefixResolution, ExplicitInstancePrefixWinsOverLegacyDetection)
+{
+  const auto config = makePrefix(QDir(temporary.path()).filePath("instance"));
+  QSettings instance(instanceFile, QSettings::IniFormat);
+  instance.setValue("Settings/proton_prefix_path", "/external-manager");
+  instance.setValue("fluorine/prefix_path", QFileInfo(config.prefix_path).absolutePath());
+  instance.sync();
+  EXPECT_EQ(FluorineConfig::resolvedPrefixPath(instanceFile), config.prefix_path);
+}
+
+TEST_F(PrefixResolution, MissingExplicitPrefixDoesNotSwitchToLegacySaves)
+{
+  const QString missing = QDir(temporary.path()).filePath("missing");
+  const auto legacy = makePrefix(QDir(temporary.path()).filePath("legacy"));
+  QSettings instance(instanceFile, QSettings::IniFormat);
+  instance.setValue("fluorine/prefix_path", missing);
+  instance.setValue("Settings/proton_prefix_path", legacy.prefix_path);
+  instance.sync();
+  EXPECT_EQ(FluorineConfig::resolvedPrefixPath(instanceFile), missing);
+}
+
+TEST_F(PrefixResolution, NoConfigurationDoesNotResolveCurrentDirectory)
+{
+  EXPECT_TRUE(FluorineConfig::resolvedPrefixPath(instanceFile).isEmpty());
+  EXPECT_TRUE(FluorineConfig::resolvedPrefixPath({}).isEmpty());
+}
 
 TEST(FluorineConfigOwnership, RefusesUnmarkedCustomPrefix)
 {

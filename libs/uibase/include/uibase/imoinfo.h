@@ -624,6 +624,11 @@ public:
    */
   virtual bool onPluginDisabled(const QString& pluginName,
                                 std::function<void()> const& func) = 0;
+
+  /** Active Wine prefix used for Windows launches, or empty when unavailable.
+   * Appended for Fluorine plugins; existing implementations can use the default.
+   */
+  virtual QString winePrefixPath() const { return {}; }
 };
 
 }  // namespace MOBase

@@ -383,6 +383,7 @@ public:
   MOBase::IModRepositoryBridge* createNexusBridge() const;
   QString profileName() const;
   QString profilePath() const;
+  QString winePrefixPath() const;
   QString downloadsPath() const;
   QString overwritePath() const;
   QString basePath() const;

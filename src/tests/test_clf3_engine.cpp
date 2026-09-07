@@ -1,4 +1,6 @@
 #include "../src/clf3enginemanager.h"
+#include "../src/clf3galleryloader.h"
+#include <QScopeGuard>
 
 #include <QCryptographicHash>
 #include <QDir>
@@ -98,10 +100,16 @@ protected:
   {
     const QString output = directory.filePath("fixture.zip");
     QProcess process;
-    process.start("python3", {"-c",
-        "import sys,zipfile\nwith zipfile.ZipFile(sys.argv[1],'w') as z:\n"
-        " z.writestr('clf3', '#!/bin/sh\\necho clf3 '+sys.argv[2]+'\\n')\n"
-        " z.writestr('7zz', '#!/bin/sh\\nexit 0\\n')\n", output, tag});
+    process.start("python3", {"-c", R"PY(
+import sys, zipfile
+with zipfile.ZipFile(sys.argv[1], 'w') as z:
+    z.writestr('clf3', '''#!/bin/sh
+if [ "$1" = gallery ]; then
+    printf '%s' '{"modlists":[],"installed_games":["SkyrimSE"]}'
+else
+    echo clf3 ''' + sys.argv[2] + '\nfi\n')
+    z.writestr('7zz', '#!/bin/sh\nexit 0\n')
+)PY", output, tag});
     EXPECT_TRUE(process.waitForFinished(5000));
     EXPECT_EQ(process.exitCode(), 0);
     QFile file(output);
@@ -142,6 +150,27 @@ TEST_F(Clf3Engine, DownloadsVerifiesAndCachesLatestRelease)
   EXPECT_EQ(ready.last().first().toString(), path);
   Clf3EngineManager restarted(nullptr, &network, directory.filePath("cache"));
   EXPECT_EQ(restarted.cachedEnginePath(), path);
+}
+
+TEST_F(Clf3Engine, GalleryDownloadsEngineBeforeFirstCommand)
+{
+  const bool hadOverride = qEnvironmentVariableIsSet("FLUORINE_CLF3_PATH");
+  const auto previous = qgetenv("FLUORINE_CLF3_PATH");
+  const auto restore = qScopeGuard([&] {
+    if (hadOverride) qputenv("FLUORINE_CLF3_PATH", previous);
+    else qunsetenv("FLUORINE_CLF3_PATH");
+  });
+  qunsetenv("FLUORINE_CLF3_PATH");
+  queue(archive());
+  Clf3GalleryLoader loader(nullptr, &network, directory.filePath("fresh-gallery"));
+  QSignalSpy loaded(&loader, &Clf3GalleryLoader::loaded);
+  QSignalSpy errors(&loader, &Clf3GalleryLoader::failed);
+  loader.load();
+  ASSERT_TRUE(loaded.wait(10000));
+  EXPECT_TRUE(errors.isEmpty());
+  EXPECT_EQ(network.requests.size(), 2);
+  EXPECT_EQ(qvariant_cast<QJsonDocument>(loaded.first().first()).object()
+                .value("installed_games").toArray().first().toString(), "SkyrimSE");
 }
 
 TEST_F(Clf3Engine, NewReleaseReplacesManifestAndKeepsExistingExecutable)

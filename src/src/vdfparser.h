@@ -73,7 +73,7 @@ struct AppManifest {
 };
 
 /// Parse a VDF file content into a root VdfValue (Object).
-VdfValue parseVdf(const QString& content);
+__attribute__((visibility("default"))) VdfValue parseVdf(const QString& content);
 
 /// Parse libraryfolders.vdf and return the list of library paths.
 QStringList parseLibraryFolders(const QString& content);

@@ -34,6 +34,7 @@ public:  // IOrganizer interface
   QString instanceName() const override;
   QString profileName() const override;
   QString profilePath() const override;
+  QString winePrefixPath() const override;
   QString downloadsPath() const override;
   QString overwritePath() const override;
   QString basePath() const override;

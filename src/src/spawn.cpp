@@ -328,47 +328,8 @@ void pruneExtraDrives(const QString& prefixPath)
 
 QString resolvePrefixPath()
 {
-  // The Fluorine config is authoritative: it's the prefix the user
-  // explicitly created through Settings > Proton and that Fluorine itself
-  // initialises with wineboot/DLL installs. Always prefer it.
-  if (auto cfg = FluorineConfig::load(); cfg.has_value() && cfg->prefixExists()) {
-    MOBase::log::debug("resolvePrefixPath: using Fluorine config prefix '{}'",
-                       cfg->prefix_path);
-    return cfg->prefix_path.trimmed();
-  }
-
   const Settings* settings = Settings::maybeInstance();
-  if (settings == nullptr) {
-    return {};
-  }
-
-  // Fallbacks, in priority order. `fluorine/prefix_path` is set only by
-  // explicit user action (CLI `--prefix` or the instance creation wizard),
-  // so we trust it above the `Settings/*` keys that game-detection can
-  // populate automatically with an external manager's prefix (Heroic,
-  // Bottles, Lutris). Those external prefixes are fine as discovery hints
-  // but must not silently override the user's chosen Fluorine prefix —
-  // see issue #52.
-  const QSettings instanceSettings(settings->filename(), QSettings::IniFormat);
-  const QString explicitPath =
-      instanceSettings.value("fluorine/prefix_path").toString().trimmed();
-  if (!explicitPath.isEmpty()) {
-    MOBase::log::debug("resolvePrefixPath: using explicit fluorine/prefix_path '{}'",
-                       explicitPath);
-    return explicitPath;
-  }
-
-  const QString fallback = firstExistingSetting(
-      instanceSettings, {"Settings/proton_prefix_path", "Settings/prefix_path",
-                         "Proton/prefix_path"});
-  if (!fallback.isEmpty()) {
-    MOBase::log::warn(
-        "resolvePrefixPath: falling back to auto-detected prefix '{}' — this "
-        "may point at an external manager's prefix (Heroic/Bottles). Create a "
-        "Fluorine prefix in Settings > Proton to override.",
-        fallback);
-  }
-  return fallback;
+  return FluorineConfig::resolvedPrefixPath(settings ? settings->filename() : QString());
 }
 
 QString resolveProtonPath()

@@ -28,6 +28,10 @@ public:
   static bool isSetup();
   static std::optional<QString> prefixPath();
 
+  // The same configured prefix for launching, save deployment and plugins.
+  // Accepts either a pfx directory or its compatibility-data parent.
+  static QString resolvedPrefixPath(const QString& instanceSettingsFile);
+
 private:
   static QString configFilePath();
 };

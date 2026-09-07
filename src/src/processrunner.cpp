@@ -5,6 +5,7 @@
 #include "iuserinterface.h"
 #include "organizercore.h"
 #include "vfsbackend.h"
+#include "steamcloudsync.h"
 
 #include <iplugingame.h>
 #include <log.h>
@@ -16,6 +17,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QMetaObject>
+#include <QMessageBox>
 #include <QPointer>
 #include <QProcess>
 #include <QSettings>
@@ -1198,6 +1200,28 @@ std::optional<ProcessRunner::Results> ProcessRunner::runBinary()
   const auto* game = m_core.managedGame();
   auto& settings   = m_core.settings();
 
+  QWidget* parent = (m_ui ? m_ui->mainWindow() : nullptr);
+  const QString appId = m_sp.steamAppID.trimmed().isEmpty()
+                            ? game->steamAPPId() : m_sp.steamAppID;
+  if (m_sp.useProton && m_sp.useSteam
+      && SteamCloud::supported(appId, m_sp.binary.fileName())
+      && SteamCloudSync::optIn(parent, settings.filename())) {
+    const auto profile = m_core.currentProfile();
+    if (!profile || profile->localSavesEnabled() || profile->name() != m_profileName) {
+      QMessageBox::warning(parent, QObject::tr("Steam Cloud"),
+          QObject::tr("Automatic Cyberpunk cloud sync currently requires the active profile "
+                      "with profile-specific saves disabled. Steam Cloud has one save collection "
+                      "per account/game; separate profile save collections are not supported yet."));
+      return Error;
+    }
+    m_cloudSync = std::make_shared<SteamCloudSync>(parent, settings.filename(),
+        game->gameDirectory().absolutePath(), game->savesDirectory().absolutePath());
+    if (!m_cloudSync->prepare()) { m_cloudSync.reset(); return Error; }
+    // Hold the UI and the cloud-session lock through process-tree exit and cleanup.
+    m_waitFlags |= ForceWait | TriggerRefresh;
+    m_lockReason = UILocker::LockUI;
+  }
+
   // FUSE makes an executable stored under mods/ visible at its virtual game
   // path before adjustForVirtualized runs. USVFS is installed by the Windows
   // helper later, so its request must contain that virtual target from the
@@ -1229,8 +1253,6 @@ std::optional<ProcessRunner::Results> ProcessRunner::runBinary()
     m_core.unmountVFS();
   };
 
-  QWidget* parent = (m_ui ? m_ui->mainWindow() : nullptr);
-
   m_sp.gameDirectory = game->gameDirectory();
 
   if (m_sp.steamAppID.trimmed().isEmpty()) {
@@ -1258,6 +1280,10 @@ std::optional<ProcessRunner::Results> ProcessRunner::runBinary()
     adjustForVirtualized(game, m_sp, settings);
   }
 
+  if (m_cloudSync && !m_cloudSync->markLaunching()) {
+    abortPreparedLaunch();
+    return Error;
+  }
   m_handle.reset(reinterpret_cast<HANDLE>(
       static_cast<intptr_t>(startBinary(parent, m_sp))));
 
@@ -1418,6 +1444,11 @@ ProcessRunner::Results ProcessRunner::postRun()
       loop.exec();
       log::debug("process runner: refresh is done");
     }
+  }
+
+  if (m_cloudSync) {
+    m_cloudSync->finish(r == Completed && m_exitCode == 0);
+    m_cloudSync.reset();
   }
 
   return r;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "clf3processcontroller.h"
+#include "clf3galleryloader.h"
 
 #include <QDialog>
 #include <QHash>
@@ -67,8 +68,10 @@ private:
   };
 
   Clf3ProcessController m_controller;
-  QProcess m_galleryProcess;
-  QByteArray m_galleryOutput;
+  Clf3GalleryLoader m_galleryLoader;
+  bool m_galleryLoaded{false};
+  QLabel* m_galleryStatus{};
+  QPushButton* m_refreshGallery{};
   QVector<QJsonObject> m_gallery;
   QSet<QString> m_installedGames;
   QStringList m_allMods;
@@ -134,6 +137,7 @@ private:
 
   void buildUi();
   void loadGallery(bool refresh = false);
+  void connectNexus();
   void populateGallery();
   void updateGameFilter();
   void queueThumbnail(const QJsonObject& item);

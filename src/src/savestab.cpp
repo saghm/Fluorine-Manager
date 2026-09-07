@@ -1,6 +1,8 @@
 #include "savestab.h"
 #include "activatemodsdialog.h"
 #include "organizercore.h"
+#include "steamcloudsync.h"
+#include "settings.h"
 #include "ui_mainwindow.h"
 #include <iplugingame.h>
 #include <isavegameinfowidget.h>
@@ -9,7 +11,9 @@
 #include <report.h>
 
 #include <QFile>
+#include <QDesktopServices>
 #include <QTextStream>
+#include <QSettings>
 
 using namespace MOBase;
 
@@ -356,12 +360,68 @@ void SavesTab::deleteSavegame()
 void SavesTab::onContextMenu(const QPoint& pos)
 {
   QItemSelectionModel* selection = ui.list->selectionModel();
+  QMenu menu;
 
-  if (!selection->hasSelection()) {
-    return;
+  if (m_core.managedGame()->steamAPPId().trimmed() == "1091500") {
+    QSettings settings(m_core.settings().filename(), QSettings::IniFormat);
+    auto* cloud = menu.addAction(tr("Automatic Steam Cloud sync (Cyberpunk, experimental)"));
+    cloud->setCheckable(true);
+    cloud->setChecked(settings.value(SteamCloud::setting, false).toBool());
+    connect(cloud, &QAction::triggered, this, [this](bool enabled) {
+      QSettings settings(m_core.settings().filename(), QSettings::IniFormat);
+      if (enabled) {
+        settings.remove(SteamCloud::setting);
+        settings.sync();
+        SteamCloudSync::optIn(m_window, m_core.settings().filename());
+      } else {
+        settings.setValue(SteamCloud::setting, false);
+        settings.sync();
+        QMessageBox::information(m_window, tr("Automatic cloud sync disabled"),
+            tr("Fluorine will no longer request cloud sync on launch or exit. "
+               "The shared save-folder link remains, and Steam may still synchronize it independently. "
+               "Restart Steam normally to disable its debugging interface."));
+      }
+    });
+    menu.addAction(tr("Steam Cloud status…"), [this] {
+      QSettings settings(m_core.settings().filename(), QSettings::IniFormat);
+      QMessageBox::information(m_window, tr("Steam Cloud"),
+          settings.value("fluorine/steam_cloud_status", tr("No automatic sync has run yet.")).toString()
+              + tr("\n\nLatest pre-download backup: %1\nBackups are retained until you remove them.")
+                    .arg(settings.value("fluorine/steam_cloud_backup", tr("None")).toString()));
+    });
+    menu.addSeparator();
   }
 
-  QMenu menu;
+  menu.addAction(tr("Open active save folder..."), [this] {
+    const QString path = currentSavesDir().absolutePath();
+    if (!QDir(path).exists()) {
+      QMessageBox::information(m_window, tr("Save folder"),
+                               tr("The active save folder does not exist yet:\n%1")
+                                   .arg(path));
+      return;
+    }
+    QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+  });
+  menu.addAction(tr("Save location details..."), [this] {
+    const QString prefix = m_core.winePrefixPath();
+    const QString active = currentSavesDir().absolutePath();
+    const QString declared = m_core.managedGame()->savesDirectory().absolutePath();
+    const bool local = m_core.currentProfile()->localSavesEnabled();
+    log::info("Save locations: prefix='{}', game='{}', active='{}', profileSaves={}",
+              prefix, declared, active, local);
+    QMessageBox::information(
+        m_window, tr("Save location details"),
+        tr("Wine prefix: %1\nGame save folder: %2\nActive save folder: %3\n\n%4")
+            .arg(prefix.isEmpty() ? tr("None") : prefix, declared, active,
+                 local ? tr("Profile-specific saves are enabled. During play, the "
+                            "profile's saves can hide files copied into the prefix.")
+                       : tr("Profile-specific saves are disabled.")));
+  });
+  if (!selection->hasSelection()) {
+    menu.exec(ui.list->viewport()->mapToGlobal(pos));
+    return;
+  }
+  menu.addSeparator();
 
   auto info = m_core.gameFeatures().gameFeature<SaveGameInfo>();
   if (info != nullptr) {

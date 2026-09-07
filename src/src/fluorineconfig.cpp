@@ -8,6 +8,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QStandardPaths>
+#include <QSettings>
 #include <QThread>
 #include <uibase/log.h>
 
@@ -63,6 +64,35 @@ std::optional<FluorineConfig> FluorineConfig::load()
   cfg.created     = obj.value("created").toString();
 
   return cfg;
+}
+
+QString FluorineConfig::resolvedPrefixPath(const QString& instanceSettingsFile)
+{
+  const auto normalize = [](const QString& value) -> QString {
+    if (value.trimmed().isEmpty()) {
+      return {};
+    }
+    QDir dir(value.trimmed());
+    if (!dir.exists("drive_c") && dir.exists("pfx/drive_c")) {
+      return dir.absoluteFilePath("pfx");
+    }
+    return dir.absolutePath();
+  };
+
+  if (auto cfg = load(); cfg && cfg->prefixExists()) {
+    return normalize(cfg->prefix_path);
+  }
+  if (!instanceSettingsFile.isEmpty()) {
+    const QSettings settings(instanceSettingsFile, QSettings::IniFormat);
+    for (const auto* key : {"fluorine/prefix_path", "Settings/proton_prefix_path",
+                            "Settings/prefix_path", "Proton/prefix_path"}) {
+      const QString value = settings.value(key).toString().trimmed();
+      if (!value.isEmpty()) {
+        return normalize(value);
+      }
+    }
+  }
+  return {};
 }
 
 bool FluorineConfig::save() const

@@ -13,6 +13,7 @@ class OrganizerCore;
 class IUserInterface;
 class Executable;
 class MOShortcut;
+class SteamCloudSync;
 
 // handles spawning a process and waiting for it, including setting up the lock
 // widget if required
@@ -154,6 +155,7 @@ public:
 
 private:
   OrganizerCore& m_core;
+  std::shared_ptr<SteamCloudSync> m_cloudSync;
   IUserInterface* m_ui;
   spawn::SpawnParameters m_sp;
   QString m_customOverwrite;

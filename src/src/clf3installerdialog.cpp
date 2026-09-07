@@ -7,6 +7,8 @@
 #include "knowngames.h"
 #include "nexusinterface.h"
 #include "nxmaccessmanager.h"
+#include "settings.h"
+#include "settingsdialognexus.h"
 #include "wabbajackpostinstall.h"
 
 #include <QApplication>
@@ -408,8 +410,73 @@ Clf3InstallerDialog::Clf3InstallerDialog(QWidget* parent)
             QTimer::singleShot(0, this, &Clf3InstallerDialog::beginNextNexus);
           });
 
+  connect(&m_galleryLoader, &Clf3GalleryLoader::statusChanged,
+          m_galleryStatus, &QLabel::setText);
+  connect(&m_galleryLoader, &Clf3GalleryLoader::failed, this,
+          [this](const QString& error) {
+    m_refreshGallery->setEnabled(true);
+    m_galleryStatus->setText(error);
+    if (!m_galleryLoaded) {
+      m_resultCount->setText(tr("Gallery unavailable"));
+      m_details->setText(tr("Could not load the gallery. Retry with Refresh, or select "
+                            "a local .wabbajack file or its URL."));
+    }
+  });
+  connect(&m_galleryLoader, &Clf3GalleryLoader::loaded, this,
+          [this](const QJsonDocument& document) {
+            m_galleryLoaded = true;
+            m_refreshGallery->setEnabled(true);
+            m_galleryStatus->setText(tr("Gallery loaded."));
+            m_gallery.clear();
+            m_installedGames.clear();
+            m_allMods.clear();
+            m_modsPerList.clear();
+            const QJsonArray modlists = document.isObject()
+                                             ? document.object().value("modlists").toArray()
+                                             : document.array();
+            if (document.isObject()) {
+              for (const auto& game : document.object().value("installed_games").toArray())
+                m_installedGames.insert(game.toString().toLower());
+              const auto searchIndex = document.object().value("search_index").toObject();
+              for (const auto& mod : searchIndex.value("AllMods").toArray())
+                m_allMods.push_back(mod.toString());
+              const auto modsPerList = searchIndex.value("ModsPerList").toObject();
+              for (auto it = modsPerList.begin(); it != modsPerList.end(); ++it) {
+                QSet<QString> mods;
+                for (const auto& mod : it.value().toArray())
+                  mods.insert(mod.toString().toLower());
+                m_modsPerList.insert(it.key().toLower(), std::move(mods));
+              }
+            }
+            for (const auto& value : modlists)
+              if (value.isObject()) m_gallery.push_back(value.toObject());
+            updateGameFilter();
+            for (QLineEdit* edit : {m_includeMods, m_excludeMods}) {
+              auto* previous = edit->completer();
+              auto* completer = new QCompleter(m_allMods, edit);
+              completer->setCaseSensitivity(Qt::CaseInsensitive);
+              completer->setCompletionMode(QCompleter::PopupCompletion);
+              completer->setFilterMode(Qt::MatchContains);
+              completer->setMaxVisibleItems(12);
+              edit->setCompleter(completer);
+              if (previous) previous->deleteLater();
+              edit->setEnabled(!m_allMods.isEmpty());
+            }
+            populateGallery();
+          });
   loadGallery();
-  QTimer::singleShot(0, this, &Clf3InstallerDialog::offerResume);
+  QTimer::singleShot(0, this, [this] {
+    if (NexusInterface::instance().getAPIUserAccount().type() == APIUserAccountTypes::None) {
+      NexusOAuthTokens tokens;
+      const bool hasOAuth = GlobalSettings::nexusOAuthTokens(tokens);
+      const bool hasKey = GlobalSettings::nexusApiKey(tokens.apiKey);
+      if (hasOAuth || hasKey)
+        NexusInterface::instance().getAccessManager()->apiCheck(tokens);
+      else
+        connectNexus();
+    }
+    offerResume();
+  });
 }
 
 Clf3InstallerDialog::~Clf3InstallerDialog()
@@ -442,10 +509,18 @@ void Clf3InstallerDialog::buildUi()
   headingFont.setBold(true);
   heading->setFont(headingFont);
   browseLayout->addWidget(heading);
+  auto* nexusConnect = new QPushButton(tr("Connect to Nexus…"));
+  browseLayout->addWidget(nexusConnect, 0, Qt::AlignLeft);
+  connect(nexusConnect, &QPushButton::clicked, this, &Clf3InstallerDialog::connectNexus);
+  m_galleryStatus = new QLabel;
+  m_galleryStatus->setWordWrap(true);
+  m_galleryStatus->setTextFormat(Qt::PlainText);
+  browseLayout->addWidget(m_galleryStatus);
   auto* searchRow = new QHBoxLayout;
   m_search        = new QLineEdit;
   m_search->setPlaceholderText(tr("Search title, author, or game…"));
   auto* refresh = new QPushButton(tr("Refresh"));
+  m_refreshGallery = refresh;
   searchRow->addWidget(m_search, 1);
   searchRow->addWidget(refresh);
   browseLayout->addLayout(searchRow);
@@ -698,64 +773,48 @@ void Clf3InstallerDialog::buildUi()
 
 void Clf3InstallerDialog::loadGallery(bool refresh)
 {
-  if (m_galleryProcess.state() != QProcess::NotRunning) return;
-  m_galleryOutput.clear();
-  m_details->setText(tr("Loading the Wabbajack gallery…"));
-  QStringList args{QStringLiteral("gallery"), QStringLiteral("--host-metadata")};
-  if (refresh) args << QStringLiteral("--refresh");
-  connect(&m_galleryProcess, &QProcess::readyReadStandardOutput, this, [this] {
-    m_galleryOutput += m_galleryProcess.readAllStandardOutput();
-  }, Qt::SingleShotConnection);
-  connect(&m_galleryProcess,
-          qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-          [this](int code, QProcess::ExitStatus) {
-            m_galleryOutput += m_galleryProcess.readAllStandardOutput();
-            if (code != 0) {
-              m_details->setText(tr("The gallery is unavailable. You can still select a local "
-                                    ".wabbajack file or paste its URL."));
-              return;
-            }
-            const auto document = QJsonDocument::fromJson(m_galleryOutput);
-            m_gallery.clear();
-            m_installedGames.clear();
-            m_allMods.clear();
-            m_modsPerList.clear();
-            const QJsonArray modlists = document.isObject()
-                                             ? document.object().value("modlists").toArray()
-                                             : document.array();
-            if (document.isObject()) {
-              for (const auto& game : document.object().value("installed_games").toArray())
-                m_installedGames.insert(game.toString().toLower());
-              const auto searchIndex = document.object().value("search_index").toObject();
-              for (const auto& mod : searchIndex.value("AllMods").toArray())
-                m_allMods.push_back(mod.toString());
-              const auto modsPerList = searchIndex.value("ModsPerList").toObject();
-              for (auto it = modsPerList.begin(); it != modsPerList.end(); ++it) {
-                QSet<QString> mods;
-                for (const auto& mod : it.value().toArray())
-                  mods.insert(mod.toString().toLower());
-                m_modsPerList.insert(it.key().toLower(), std::move(mods));
-              }
-            }
-            for (const auto& value : modlists)
-              if (value.isObject()) m_gallery.push_back(value.toObject());
-            updateGameFilter();
-            for (QLineEdit* edit : {m_includeMods, m_excludeMods}) {
-              auto* completer = new QCompleter(m_allMods, edit);
-              completer->setCaseSensitivity(Qt::CaseInsensitive);
-              completer->setCompletionMode(QCompleter::PopupCompletion);
-              completer->setFilterMode(Qt::MatchContains);
-              completer->setMaxVisibleItems(12);
-              edit->setCompleter(completer);
-              edit->setEnabled(!m_allMods.isEmpty());
-            }
-            populateGallery();
-          }, Qt::SingleShotConnection);
-  m_galleryProcess.start(m_controller.enginePath(), args);
+  if (m_galleryLoader.isBusy()) return;
+  m_refreshGallery->setEnabled(false);
+  if (!m_galleryLoaded) {
+    m_resultCount->setText(tr("Loading…"));
+    m_installedOnly->setEnabled(false);
+    m_installedOnly->setText(tr("Installed games only (waiting for gallery)"));
+  }
+  m_galleryLoader.load(refresh);
+}
+
+void Clf3InstallerDialog::connectNexus()
+{
+  QDialog dialog(this);
+  dialog.setWindowTitle(tr("Connect to Nexus"));
+  dialog.resize(580, 360);
+  auto* layout = new QVBoxLayout(&dialog);
+  auto* explanation = new QLabel(tr("Connect your Nexus account to download mods. "
+                                    "You can skip this and browse the gallery without signing in."));
+  explanation->setWordWrap(true);
+  layout->addWidget(explanation);
+  auto* buttons = new QHBoxLayout;
+  auto* connectButton = new QPushButton(tr("Connect to Nexus"));
+  auto* manualButton = new QPushButton(tr("Enter API key manually"));
+  auto* disconnectButton = new QPushButton(tr("Disconnect"));
+  buttons->addWidget(connectButton);
+  buttons->addWidget(manualButton);
+  buttons->addWidget(disconnectButton);
+  layout->addLayout(buttons);
+  auto* log = new QListWidget;
+  layout->addWidget(log);
+  auto* close = new QDialogButtonBox(QDialogButtonBox::Close);
+  layout->addWidget(close);
+  connect(close, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+  NexusConnectionUI connection(&dialog, Settings::maybeInstance(), connectButton,
+                               disconnectButton, manualButton, log);
+  dialog.exec();
+  updatePreflightSummary();
 }
 
 void Clf3InstallerDialog::populateGallery()
 {
+  if (!m_galleryLoaded) return;
   const QString query = m_search->text().trimmed();
   const QSet<QString> requiredMods = requestedMods(m_includeMods->text());
   const QSet<QString> excludedMods = requestedMods(m_excludeMods->text());
@@ -867,6 +926,11 @@ void Clf3InstallerDialog::populateGallery()
 
 void Clf3InstallerDialog::updateGameFilter()
 {
+  if (!m_galleryLoaded) {
+    m_installedOnly->setEnabled(false);
+    m_installedOnly->setText(tr("Installed games only (waiting for gallery)"));
+    return;
+  }
   const QString selected = m_gameFilter->currentData().toString();
   QList<QPair<QString, QString>> games;
   QSet<QString> seen;
@@ -1298,7 +1362,14 @@ void Clf3InstallerDialog::showConfiguration()
 void Clf3InstallerDialog::startInstall()
 {
   if (m_controller.isRunning() || m_postInstallRunning) return;
+  // A local/cached-only list may still be installed after skipping connection.
+  if (!GlobalSettings::hasNexusOAuthTokens() && !GlobalSettings::hasNexusApiKey()
+      && NexusInterface::instance().getAPIUserAccount().type() == APIUserAccountTypes::None)
+    connectNexus();
   if (!checkInstallation()) return;
+  // The installer uses the same cache; do not run two engine updaters at once.
+  m_galleryLoader.cancel();
+  m_refreshGallery->setEnabled(true);
   m_stopping = false;
   m_deferredClose.reset();
   m_createdInstanceDir.clear();
@@ -1566,6 +1637,10 @@ void Clf3InstallerDialog::beginNextNexus()
 {
   if (m_stopping || m_currentNexus || m_nexusQueue.isEmpty()) return;
   m_currentNexus = m_nexusQueue.dequeue();
+  if (NexusInterface::instance().getAPIUserAccount().type() == APIUserAccountTypes::None) {
+    connectNexus();
+    if (m_stopping || !m_currentNexus) return;
+  }
   const auto account = NexusInterface::instance().getAPIUserAccount();
   if (account.type() == APIUserAccountTypes::None) {
     const QString requestId = m_currentNexus->requestId;
@@ -1776,6 +1851,7 @@ void Clf3InstallerDialog::done(int result)
     }
     return;
   }
+  m_galleryLoader.cancel();
   QDialog::done(result);
 }
 
@@ -1888,7 +1964,7 @@ void Clf3InstallerDialog::updatePreflightSummary()
               "Actual peak usage may be higher; cached files may reduce what is needed.");
   const auto account = NexusInterface::instance().getAPIUserAccount();
   if (account.type() == APIUserAccountTypes::None)
-    lines << tr("Nexus: not signed in. Sign in through Fluorine settings before installing a list "
+    lines << tr("Nexus: not signed in. Use Connect to Nexus in the gallery before installing a list "
                 "that needs new Nexus downloads. Cached and public downloads can still be used.");
   else if (account.type() == APIUserAccountTypes::Premium)
     lines << tr("Nexus: Premium account connected.");

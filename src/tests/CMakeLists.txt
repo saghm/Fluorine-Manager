@@ -14,6 +14,10 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/prefix_safety_tests.cmake)
 # Python regression tests
 # ---------------------------------------------------------------------------
 add_test(
+    NAME test_wine_paths
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_wine_paths.py
+)
+add_test(
     NAME test_openmw_cfg
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_openmw_cfg.py
 )
@@ -612,7 +616,9 @@ find_package(Qt6 REQUIRED COMPONENTS Test)
 add_executable(test_clf3_install EXCLUDE_FROM_ALL
     test_clf3_install.cpp
     test_clf3_engine.cpp
+    test_clf3_gallery.cpp
     ${CMAKE_SOURCE_DIR}/src/src/clf3enginemanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/clf3galleryloader.cpp
     ${CMAKE_SOURCE_DIR}/src/src/clf3processcontroller.cpp
     ${CMAKE_SOURCE_DIR}/src/src/clf3installutils.cpp
 )
@@ -651,8 +657,19 @@ target_link_libraries(test_executable_options PRIVATE
 )
 add_test(NAME test_executable_options COMMAND test_executable_options)
 
+find_package(Qt6 REQUIRED COMPONENTS Widgets WebSockets Network)
+add_executable(test_steam_cloud EXCLUDE_FROM_ALL
+    test_steam_cloud.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/steamcloudsync.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/vdfparser.cpp
+)
+set_target_properties(test_steam_cloud PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
+target_link_libraries(test_steam_cloud PRIVATE Qt6::Widgets Qt6::Network Qt6::WebSockets GTest::gtest)
+add_test(NAME test_steam_cloud COMMAND test_steam_cloud)
+set_tests_properties(test_steam_cloud PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 add_custom_target(fluorine-tests
-    DEPENDS test_esptk_tes3 test_bsatk_extraction test_executable_options
+    DEPENDS test_esptk_tes3 test_bsatk_extraction test_executable_options test_steam_cloud
             test_plugincompatibility test_pefileutils test_curatedguide
             test_metainiutils test_fomoddependency
             test_vfs_backend

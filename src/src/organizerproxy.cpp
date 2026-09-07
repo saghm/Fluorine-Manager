@@ -105,6 +105,11 @@ QString OrganizerProxy::profilePath() const
   return m_Proxied->profilePath();
 }
 
+QString OrganizerProxy::winePrefixPath() const
+{
+  return m_Proxied->winePrefixPath();
+}
+
 QString OrganizerProxy::downloadsPath() const
 {
   return m_Proxied->downloadsPath();

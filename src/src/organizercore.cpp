@@ -293,30 +293,7 @@ QString resolveWinePrefixPath(const Settings& settings,
     return {};
   }
 
-  if (auto cfg = FluorineConfig::load(); cfg.has_value() && cfg->prefixExists()) {
-    return cfg->prefix_path.trimmed();
-  }
-
-  // Same precedence rule as spawn.cpp's resolvePrefixPath: explicit
-  // fluorine/prefix_path wins over the legacy Settings/* keys, which may
-  // have been auto-populated with an external manager's prefix (Heroic,
-  // Bottles). Without this, switching instances or rebuilding the Fluorine
-  // config can silently drop us onto the wrong prefix (issue #52).
-  const QSettings instanceSettings(settings.filename(), QSettings::IniFormat);
-  const QString explicitPath =
-      instanceSettings.value("fluorine/prefix_path").toString().trimmed();
-  if (!explicitPath.isEmpty()) {
-    return explicitPath;
-  }
-  for (const auto& key : {"Settings/proton_prefix_path", "Settings/prefix_path",
-                           "Proton/prefix_path"}) {
-    const QString value = instanceSettings.value(key).toString().trimmed();
-    if (!value.isEmpty()) {
-      return value;
-    }
-  }
-
-  return {};
+  return FluorineConfig::resolvedPrefixPath(settings.filename());
 }
 
 QString resolveWineDataDirName(const IPluginGame* managedGame)
@@ -1308,6 +1285,11 @@ QString OrganizerCore::profilePath() const
 QString OrganizerCore::downloadsPath() const
 {
   return QDir::fromNativeSeparators(m_Settings.paths().downloads());
+}
+
+QString OrganizerCore::winePrefixPath() const
+{
+  return resolveWinePrefixPath(m_Settings, managedGame());
 }
 
 QString OrganizerCore::overwritePath() const
