@@ -402,6 +402,79 @@ TEST_F(Clf3Process, FailsStartupHandshakeInsteadOfWaitingForever)
   EXPECT_FALSE(controller.isRunning());
 }
 
+TEST(Clf3Collections, ChildEnvironmentDoesNotContainAccountCredentials)
+{
+  const auto name = QByteArray("NEXUS_API_KEY");
+  const bool existed = qEnvironmentVariableIsSet(name.constData());
+  const auto previous = qgetenv(name.constData());
+  qputenv(name.constData(), "fixture-secret");
+  const auto environment = Clf3ProcessController::engineEnvironment();
+  EXPECT_FALSE(environment.contains("NEXUS_API_KEY"));
+  EXPECT_TRUE(environment.contains("PATH"));
+  if (existed) qputenv(name.constData(), previous);
+  else qunsetenv(name.constData());
+}
+
+TEST_F(Clf3Process, CollectionPlanningNegotiatesCapabilitiesAndHasSeparateCompletion)
+{
+  engine(R"(printf '%s\n' '{"type":"hello","protocol_version":1,"engine_version":"test","job_id":"job","capabilities":["collection_plan_v1"]}'
+read -r acknowledgement
+[[ "$acknowledgement" == *collection_plan_v1* ]] || exit 41
+printf '%s\n' '{"type":"collection_revision_required","job_id":"job","request_id":"request","locator":{"domain":"skyrimspecialedition","slug":"qfftpq","revision":12}}'
+read -r package
+[[ "$package" == *collection_package_result* ]] || exit 42
+[[ "$package" != *api_key* ]] || exit 43
+printf '%s\n' '{"type":"collection_plan_ready","job_id":"job","request_id":"request","plan":{"plan_schema_version":1,"name":"Fixture"}}'
+)", false);
+  QSignalSpy plans(&controller, &Clf3ProcessController::collectionPlanReady);
+  QSignalSpy installed(&controller, &Clf3ProcessController::completed);
+  QSignalSpy failure(&controller, &Clf3ProcessController::failed);
+  QObject::connect(&controller, &Clf3ProcessController::collectionRevisionRequired,
+          &controller, [this](const QString& job, const QString& request, const QJsonObject& locator) {
+    controller.sendCollectionPackage(job, request, locator, 1, directory.filePath("collection.7z"));
+  });
+  controller.startCollectionPlan("https://www.nexusmods.com/games/skyrimspecialedition/collections/qfftpq/revisions/12");
+  ASSERT_TRUE(plans.wait(3000));
+  EXPECT_EQ(plans.count(), 1);
+  EXPECT_TRUE(installed.isEmpty());
+  EXPECT_TRUE(failure.isEmpty());
+  EXPECT_FALSE(controller.isRunning());
+}
+
+TEST_F(Clf3Process, CollectionRejectsOldEngineBeforeRequestingPackage)
+{
+  engine("read -r ignored\n");
+  QSignalSpy failure(&controller, &Clf3ProcessController::failed);
+  QSignalSpy requested(&controller, &Clf3ProcessController::collectionRevisionRequired);
+  controller.startCollectionPlan("https://www.nexusmods.com/games/skyrimspecialedition/collections/qfftpq");
+  ASSERT_TRUE(failure.wait(3000));
+  EXPECT_EQ(failure.count(), 1);
+  EXPECT_TRUE(requested.isEmpty());
+}
+
+TEST_F(Clf3Process, CollectionCancellationDiscardsLatePackageResponse)
+{
+  engine(R"(printf '%s\n' '{"type":"hello","protocol_version":1,"engine_version":"test","job_id":"job","capabilities":["collection_plan_v1"]}'
+read -r acknowledgement
+printf '%s\n' '{"type":"collection_revision_required","job_id":"job","request_id":"request","locator":{"domain":"skyrimspecialedition","slug":"qfftpq","revision":12}}'
+read -r response
+[[ "$response" == *cancel* && "$response" == *job* ]] || exit 44
+printf '%s\n' '{"type":"collection_cancelled","job_id":"job"}'
+)", false);
+  QSignalSpy cancelled(&controller, &Clf3ProcessController::cancelled);
+  QSignalSpy plans(&controller, &Clf3ProcessController::collectionPlanReady);
+  QSignalSpy failure(&controller, &Clf3ProcessController::failed);
+  QObject::connect(&controller, &Clf3ProcessController::collectionRevisionRequired,
+          &controller, [this](const QString& job, const QString& request, const QJsonObject& locator) {
+    controller.cancel();
+    controller.sendCollectionPackage(job, request, locator, 1, directory.filePath("collection.7z"));
+  });
+  controller.startCollectionPlan("https://www.nexusmods.com/games/skyrimspecialedition/collections/qfftpq");
+  ASSERT_TRUE(cancelled.wait(3000));
+  EXPECT_TRUE(plans.isEmpty());
+  EXPECT_TRUE(failure.isEmpty());
+}
+
 int main(int argc, char** argv)
 {
   QCoreApplication application(argc, argv);

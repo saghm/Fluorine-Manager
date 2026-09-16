@@ -1,4 +1,5 @@
 #include "clf3processcontroller.h"
+#include "clf3processenvironment.h"
 
 #include <QFileInfo>
 #include <QJsonArray>
@@ -49,7 +50,7 @@ Clf3ProcessController::Clf3ProcessController(QObject* parent)
   });
   connect(&m_process, &QProcess::started, this, [this] {
     if (m_cancelRequested) {
-      send({{"type", "cancel"}});
+      if (!m_collectionPlanning) send({{"type", "cancel"}});
     } else {
       m_handshakeTimer.start(30000);
     }
@@ -82,7 +83,8 @@ Clf3ProcessController::Clf3ProcessController(QObject* parent)
                               ? tr("CLF3 crashed during installation.")
                               : tr("CLF3 exited with code %1 without a successful installation.").arg(code));
             } else {
-              emit completed(m_result);
+              if (m_collectionPlanning) emit collectionPlanReady(m_result);
+              else emit completed(m_result);
             }
           });
 }
@@ -106,6 +108,31 @@ void Clf3ProcessController::startInstall(const QString& source,
                                          const QString& game,
                                          const QString& machineName)
 {
+  QStringList arguments{QStringLiteral("install"), source, downloads, output};
+  if (!game.isEmpty()) arguments << QStringLiteral("--game") << game;
+  arguments << QStringLiteral("--jackify") << QStringLiteral("--hosted");
+  if (!machineName.isEmpty())
+    arguments << QStringLiteral("--machine-name") << machineName;
+  begin(arguments, false);
+}
+
+QProcessEnvironment Clf3ProcessController::engineEnvironment()
+{
+  return clf3EngineEnvironment();
+}
+
+void Clf3ProcessController::startCollectionPlan(const QString& sourceUrl,
+                                               const QString& gameVersion,
+                                               bool allOptional)
+{
+  QStringList arguments{"collection", "hosted-plan", sourceUrl};
+  if (!gameVersion.isEmpty()) arguments << "--game-version" << gameVersion;
+  if (allOptional) arguments << "--all-optional";
+  begin(arguments, true);
+}
+
+void Clf3ProcessController::begin(const QStringList& arguments, bool collectionPlanning)
+{
   if (isRunning()) return;
   m_stdoutBuffer.clear();
   m_stderrBuffer.clear();
@@ -116,12 +143,11 @@ void Clf3ProcessController::startInstall(const QString& source,
   m_handshakeTimer.stop();
   m_completed       = false;
   m_cancelRequested = false;
-
-  QStringList arguments{QStringLiteral("install"), source, downloads, output};
-  if (!game.isEmpty()) arguments << QStringLiteral("--game") << game;
-  arguments << QStringLiteral("--jackify") << QStringLiteral("--hosted");
-  if (!machineName.isEmpty())
-    arguments << QStringLiteral("--machine-name") << machineName;
+  m_collectionPlanning = collectionPlanning;
+  m_collectionJob.clear();
+  m_collectionRequest.clear();
+  m_collectionPackageSent = false;
+  m_process.setProcessEnvironment(engineEnvironment());
   m_arguments = arguments;
   if (!qEnvironmentVariableIsEmpty("FLUORINE_CLF3_PATH")) {
     m_process.start(enginePath(), arguments, QIODevice::ReadWrite);
@@ -129,6 +155,29 @@ void Clf3ProcessController::startInstall(const QString& source,
     m_preparing = true;
     m_engineManager.prepare();
   }
+}
+
+void Clf3ProcessController::sendCollectionPackage(const QString& jobId,
+                                                   const QString& requestId,
+                                                   const QJsonObject& locator,
+                                                   int schemaId,
+                                                   const QString& packagePath)
+{
+  if (!m_collectionPlanning || m_cancelRequested || m_completed || jobId != m_collectionJob
+      || requestId != m_collectionRequest || requestId.isEmpty() || m_collectionPackageSent) return;
+  send({{"type", "collection_package_result"}, {"job_id", jobId},
+        {"request_id", requestId}, {"locator", locator}, {"schema_id", schemaId},
+        {"package_path", packagePath}});
+  m_collectionPackageSent = true;
+}
+
+void Clf3ProcessController::rejectCollectionRequest(const QString& jobId,
+                                                    const QString& requestId)
+{
+  if (!m_collectionPlanning || m_cancelRequested || m_completed || jobId != m_collectionJob
+      || requestId != m_collectionRequest || requestId.isEmpty() || m_collectionPackageSent) return;
+  send({{"type", "collection_request_failed"}, {"job_id", jobId}, {"request_id", requestId}});
+  m_collectionPackageSent = true;
 }
 
 void Clf3ProcessController::sendNexusUrls(const QString& requestId,
@@ -166,7 +215,9 @@ void Clf3ProcessController::cancel()
     return;
   }
   m_handshakeTimer.stop();
-  send({{"type", "cancel"}});
+  if (m_collectionPlanning) {
+    if (!m_collectionJob.isEmpty()) send({{"type", "cancel"}, {"job_id", m_collectionJob}});
+  } else send({{"type", "cancel"}});
   m_cancelTimer.start(5000);
 }
 
@@ -211,12 +262,29 @@ void Clf3ProcessController::handleEvent(const QJsonObject& event)
   if (m_cancelRequested) {
     // A cancellation during process startup must still unblock the host handshake.
     if (type == "hello") {
-      send({{"type", "hello_ack"}, {"protocol_version", ProtocolVersion}});
-      send({{"type", "cancel"}});
+      if (m_collectionPlanning) {
+        m_collectionJob = event.value("job_id").toString();
+        send({{"type", "cancel"}, {"job_id", m_collectionJob}});
+      } else {
+        send({{"type", "hello_ack"}, {"protocol_version", ProtocolVersion}});
+        send({{"type", "cancel"}});
+      }
     }
     return;
   }
+  if (m_collectionPlanning && type != "hello" && !type.startsWith("collection_")) {
+    m_failure = tr("CLF3 returned an event outside the negotiated Collections protocol.");
+    m_completed = true;
+    m_process.kill();
+    return;
+  }
   if (type == "hello") {
+    if (m_collectionPlanning && !m_collectionJob.isEmpty()) {
+      m_failure = tr("CLF3 repeated the Collections handshake.");
+      m_completed = true;
+      m_process.kill();
+      return;
+    }
     m_handshakeTimer.stop();
     const int protocol = event.value("protocol_version").toInt();
     if (protocol != ProtocolVersion) {
@@ -226,8 +294,57 @@ void Clf3ProcessController::handleEvent(const QJsonObject& event)
       m_process.kill();
       return;
     }
-    send({{"type", "hello_ack"}, {"protocol_version", ProtocolVersion}});
+    if (m_collectionPlanning) {
+      m_collectionJob = event.value("job_id").toString();
+      if (m_collectionJob.isEmpty() || !event.value("capabilities").toArray().contains("collection_plan_v1")) {
+        m_failure = tr("This CLF3 engine does not support collection planning.");
+        m_completed = true;
+        m_process.kill();
+        return;
+      }
+      send({{"type", "hello_ack"}, {"protocol_version", ProtocolVersion},
+            {"capabilities", QJsonArray{"collection_plan_v1"}}});
+    } else send({{"type", "hello_ack"}, {"protocol_version", ProtocolVersion}});
     emit engineReady(event.value("engine_version").toString());
+  } else if (m_collectionPlanning && type.startsWith("collection_")) {
+    if (event.value("job_id").toString() != m_collectionJob || m_collectionJob.isEmpty()) {
+      m_failure = tr("CLF3 returned a collection event for a different job.");
+      m_completed = true;
+      m_process.kill();
+    } else if (type == "collection_revision_required") {
+      if (!m_collectionRequest.isEmpty()) {
+        m_failure = tr("CLF3 sent an overlapping collection request.");
+        m_completed = true;
+        m_process.kill();
+        return;
+      }
+      m_collectionRequest = event.value("request_id").toString();
+      if (m_collectionRequest.isEmpty()) {
+        m_failure = tr("CLF3 returned a collection request without an identity.");
+        m_completed = true;
+        m_process.kill();
+        return;
+      }
+      emit collectionRevisionRequired(m_collectionJob, m_collectionRequest,
+                                      event.value("locator").toObject());
+    } else if (type == "collection_plan_ready") {
+      if (!m_collectionPackageSent || event.value("request_id").toString() != m_collectionRequest
+          || !event.value("plan").isObject()
+          || event.value("plan").toObject().value("plan_schema_version").toInt() != 1) {
+        m_failure = tr("CLF3 returned an invalid or unsolicited collection plan.");
+        m_completed = true;
+        m_process.kill();
+        return;
+      }
+      m_completed = true;
+      m_result = event.value("plan").toObject();
+    } else if (type == "collection_failed") {
+      m_failure = event.value("message").toString(tr("Collection planning failed."));
+      m_completed = true;
+    } else if (type == "collection_cancelled") {
+      m_cancelRequested = true;
+      m_completed = true;
+    }
   } else if (type == "PhaseChange" || type == "phase_changed") {
     emit phaseChanged(event.value("phase").toString());
   } else if (type == "plan_ready") {

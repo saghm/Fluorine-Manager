@@ -1,4 +1,5 @@
 #include "clf3galleryloader.h"
+#include "clf3processenvironment.h"
 
 #include <QFileInfo>
 #include <QJsonArray>
@@ -74,6 +75,7 @@ void Clf3GalleryLoader::start(const QString& path)
   QStringList arguments{"gallery", "--host-metadata"};
   if (m_refresh) arguments << "--refresh";
   m_timeout.start(180000);
+  m_process.setProcessEnvironment(clf3EngineEnvironment());
   m_process.start(path, arguments);
 }
 

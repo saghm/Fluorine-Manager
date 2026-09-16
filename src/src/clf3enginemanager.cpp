@@ -1,4 +1,5 @@
 #include "clf3enginemanager.h"
+#include "clf3processenvironment.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -80,6 +81,7 @@ Clf3EngineManager::Clf3EngineManager(QObject* parent,
       }
       m_probing = true;
       m_timeout.start(30000);
+      m_process.setProcessEnvironment(clf3EngineEnvironment());
       m_process.start(m_staging->filePath("package/clf3"), {"--version"});
     }
   });
@@ -251,6 +253,7 @@ void Clf3EngineManager::extractRelease()
       ? QStringList{"-o", m_download.fileName(), "clf3", "7zz", "-d", destination}
       : QStringList{"e", m_download.fileName(), "clf3", "7zz", "-o" + destination, "-y"};
   m_timeout.start(60000);
+  m_process.setProcessEnvironment(clf3EngineEnvironment());
   m_process.start(extractor, args);
 }
 

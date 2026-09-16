@@ -5,6 +5,7 @@
 #include <QJsonObject>
 #include <QObject>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QStringList>
 #include <QTimer>
 
@@ -24,6 +25,13 @@ public:
                     const QString& machineName = {});
   void sendNexusUrls(const QString& requestId, const QStringList& urls);
   void sendManualFile(const QString& requestId, const QString& path);
+  void startCollectionPlan(const QString& sourceUrl, const QString& gameVersion = {},
+                           bool allOptional = false);
+  void sendCollectionPackage(const QString& jobId, const QString& requestId,
+                             const QJsonObject& locator, int schemaId,
+                             const QString& packagePath);
+  void rejectCollectionRequest(const QString& jobId, const QString& requestId);
+  static QProcessEnvironment engineEnvironment();
   void rejectRequest(const QString& requestId, const QString& reason);
   void cancel();
 
@@ -54,6 +62,8 @@ signals:
   void completed(QJsonObject stats);
   void failed(QString reason);
   void cancelled();
+  void collectionRevisionRequired(QString jobId, QString requestId, QJsonObject locator);
+  void collectionPlanReady(QJsonObject plan);
 
 private:
   Clf3EngineManager m_engineManager;
@@ -70,9 +80,14 @@ private:
   QString m_failure;
   bool m_completed{false};
   bool m_cancelRequested{false};
+  bool m_collectionPlanning{false};
+  QString m_collectionJob;
+  QString m_collectionRequest;
+  bool m_collectionPackageSent{false};
 
   void consumeStdout();
   void consumeStderr();
   void handleEvent(const QJsonObject& event);
   void send(const QJsonObject& command);
+  void begin(const QStringList& arguments, bool collectionPlanning);
 };
