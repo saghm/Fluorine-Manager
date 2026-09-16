@@ -55,6 +55,7 @@ struct SpawnParameters
   bool useProton = true;
   bool useTerminal = false;
   bool useSteam = true;
+  QString environment;
   int stdOut       = -1;
   int stdErr       = -1;
   // When both are set and unprivileged user namespaces are available,

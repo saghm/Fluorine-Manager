@@ -28,8 +28,7 @@ Steam DRM setting still applies.
 FUSE remains the default. Each instance can optionally use the experimental
 USVFS backend for Wine/Proton executables from **Settings > Wine/Proton > VFS**.
 Native Linux launches still use FUSE, and games such as OpenMW that provide
-their own VFS are unchanged. See the
-[USVFS backend design and benchmarking guide](docs/usvfs-backend.md).
+their own VFS are unchanged.
 
 ## Installing and Running
 Download the latest zip from the [releases](https://github.com/SulfurNitride/Fluorine-Manager/releases) and after you download it.
@@ -106,5 +105,5 @@ programs.nix-ld.libraries = with pkgs; [
 ```text
 libs/      MO2 sub-libraries
 src/       Main organizer source
-docs/      Notes and tracking
+docs/      User documentation
 ```

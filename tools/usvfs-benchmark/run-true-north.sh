@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Repeatable warm-cache True North smoke/benchmark run for Fluorine's USVFS
-# backend. See docs/usvfs-optimization-lab.md before changing this procedure.
+# backend. See tools/usvfs-benchmark/README.md for the operator procedure.
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 portable_dir="${repo_root}/build/fluorine-manager"

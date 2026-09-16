@@ -1,9 +1,7 @@
 # USVFS benchmark tools
 
 This directory contains the reproducible Fluorine/True North benchmark harness.
-The experiment design, candidate ledger and all decisions live in
-[`docs/usvfs-optimization-lab.md`](../../docs/usvfs-optimization-lab.md); this
-file is the operator runbook.
+This file is the operator runbook.
 
 ## Required order
 

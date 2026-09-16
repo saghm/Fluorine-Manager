@@ -334,6 +334,20 @@
                  </property>
                 </widget>
                </item>
+               <item row="4" column="0">
+                <widget class="QLabel" name="environmentLabel">
+                 <property name="text"><string>Environment</string></property>
+                 <property name="buddy"><cstring>environment</cstring></property>
+                </widget>
+               </item>
+               <item row="4" column="1">
+                <widget class="QPlainTextEdit" name="environment">
+                 <property name="maximumHeight"><number>85</number></property>
+                 <property name="placeholderText"><string>PROTON_ENABLE_WAYLAND=0</string></property>
+                 <property name="toolTip"><string>One NAME=value per line. These values override matching global launch variables for this executable. Other global settings and wrapper commands still apply. Leave blank to inherit everything. Values are literal; do not add shell quotes or %command%.</string></property>
+                 <property name="tabChangesFocus"><bool>true</bool></property>
+                </widget>
+               </item>
               </layout>
              </item>
              <item>
@@ -555,6 +569,7 @@ Right now the only case I know of where this needs to be overwritten is for the 
   <tabstop>workingDirectory</tabstop>
   <tabstop>browseWorkingDirectory</tabstop>
   <tabstop>arguments</tabstop>
+  <tabstop>environment</tabstop>
   <tabstop>overwriteSteamAppID</tabstop>
   <tabstop>steamAppID</tabstop>
   <tabstop>createFilesInMod</tabstop>

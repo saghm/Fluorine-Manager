@@ -517,7 +517,9 @@ bool startWithEnv(const QString& program, const QStringList& arguments,
 
   process->start();
   if (!process->waitForStarted(5000)) {
+    MOBase::log::error("Failed to start '{}': {}", program, process->errorString());
     delete process;
+    errno = EIO;  // QProcess does not preserve the child execve errno here.
     return false;
   }
 
@@ -810,6 +812,12 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
                                << m_prefixPath << m_bindMountSource
                                << m_bindMountTarget;
 
+  const QString guardDir = QDir(QCoreApplication::applicationDirPath()).filePath("locale");
+  const bool useLocaleGuard = m_useSteamDrm &&
+      QFileInfo::exists(guardDir + "/x86_64/libfluorine_locale.so") &&
+      QFileInfo::exists(guardDir + "/i386/libfluorine_locale.so");
+  bool insideSlr = false;
+
   // If SLR is enabled, wrap the whole proton invocation inside the
   // pressure-vessel container provided by SteamLinuxRuntime_sniper.
   // The `run` script accepts `-- <command> [args...]` and re-executes the
@@ -822,6 +830,14 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
       MOBase::log::info("SLR: wrapping launch with {}", runScript);
       // Build: [wrappers] run_script [--filesystem=...] -- proton_script protonArgs
       QStringList slrArgs;
+      insideSlr = true;
+      if (useLocaleGuard) {
+        // pressure-vessel replaces host LD_LIBRARY_PATH. Pass explicit modules
+        // so it exposes both ABIs and constructs the container's preload path.
+        slrArgs << QStringLiteral("--ld-preload=%1/x86_64/libfluorine_locale.so:abi=x86_64-linux-gnu").arg(guardDir)
+                << QStringLiteral("--ld-preload=%1/i386/libfluorine_locale.so:abi=i386-linux-gnu").arg(guardDir);
+        pressureVesselImportantPaths << guardDir;
+      }
 
       // Expose the managed game root.  Extenders frequently live below a
       // nested bin directory but load assets/modules from the root.
@@ -965,35 +981,6 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
     }
   }
 
-  // Ensure Wine's Unix codepage is UTF-8 so non-ASCII filenames (CJK,
-  // Cyrillic, accented Latin) round-trip correctly between Linux FS and
-  // Win32 WCHAR APIs.  Wine picks the codepage from LC_ALL > LC_CTYPE >
-  // LANG via nl_langinfo(CODESET); a C/POSIX locale collapses to CP1252
-  // and makes MSVC std::filesystem throw "Invalid name" on CJK entries
-  // (WineHQ#46039, Proton#3434).  Steam's pressure-vessel can strip the
-  // user's locale, so we override only if no UTF-8 locale is already set
-  // — keeps de_DE.UTF-8, ja_JP.UTF-8 etc. intact for users who have them.
-  {
-    const auto isUtf8 = [](const QString& v) {
-      return v.contains("UTF-8", Qt::CaseInsensitive) ||
-             v.contains("UTF8", Qt::CaseInsensitive);
-    };
-    const QString lcAll   = env.value("LC_ALL");
-    const QString lcCtype = env.value("LC_CTYPE");
-    const QString lang    = env.value("LANG");
-    const bool haveUtf8 =
-        (!lcAll.isEmpty() && isUtf8(lcAll)) ||
-        (lcAll.isEmpty() && !lcCtype.isEmpty() && isUtf8(lcCtype)) ||
-        (lcAll.isEmpty() && lcCtype.isEmpty() && isUtf8(lang));
-    if (!haveUtf8) {
-      MOBase::log::info("Locale not UTF-8 (LC_ALL='{}', LC_CTYPE='{}', "
-                        "LANG='{}'); forcing C.UTF-8 for Wine",
-                        lcAll, lcCtype, lang);
-      env.insert("LC_ALL", "C.UTF-8");
-      env.insert("LANG", "C.UTF-8");
-    }
-  }
-
   // Force-disable DXVK graphics-pipeline-library.  GPL causes very long shader
   // compile stalls on first launch for heavily modded Bethesda games and the
   // benefit is modest for us.  We write a small dxvk.conf into the prefix and
@@ -1016,6 +1003,45 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
 
   for (auto it = m_envVars.cbegin(); it != m_envVars.cend(); ++it) {
     env.insert(it.key(), it.value());
+  }
+
+  // Resolve locale after user overrides, then carry it through both Proton's
+  // HOST_LC_ALL restoration and steamclient's later setenv("LC_ALL", "C").
+  // Merely setting LC_ALL before Proton cannot fix that second transition.
+  const auto isUtf8 = [](const QString& value) {
+    return value.contains("UTF-8", Qt::CaseInsensitive) ||
+           value.contains("UTF8", Qt::CaseInsensitive);
+  };
+  QString locale;
+  for (const char* key : {"LC_ALL", "LC_CTYPE", "LANG"}) {
+    const QString value = env.value(key);
+    if (!value.isEmpty()) {
+      locale = isUtf8(value) ? value : QStringLiteral("C.UTF-8");
+      break;
+    }
+  }
+  if (locale.isEmpty()) locale = QStringLiteral("C.UTF-8");
+  env.insert("LC_ALL", locale);
+  env.insert("HOST_LC_ALL", locale);
+  if (!isUtf8(env.value("LANG"))) env.insert("LANG", locale);
+
+  if (useLocaleGuard) {
+    // Preserve the C locale's numeric conventions when Steam requests it,
+    // while retaining a UTF-8 filename encoding.
+    env.insert("FLUORINE_WINE_UTF8", "C.UTF-8");
+    if (!insideSlr) {
+      // A bare soname lets each ELF loader choose its matching architecture.
+      // $LIB alone is ambiguous across distros ("lib" can mean 32 or 64 bit).
+      const QString guard = QStringLiteral("libfluorine_locale.so");
+      const QString search = guardDir + "/x86_64:" + guardDir + "/i386";
+      const QString libraryPath = env.value("LD_LIBRARY_PATH");
+      env.insert("LD_LIBRARY_PATH", libraryPath.isEmpty() ? search : search + ":" + libraryPath);
+      const QString preload = env.value("LD_PRELOAD");
+      env.insert("LD_PRELOAD", preload.isEmpty() ? guard : guard + ":" + preload);
+    }
+    MOBase::log::info("Preserving Wine UTF-8 locale '{}' through Steam launch", locale);
+  } else if (m_useSteamDrm) {
+    MOBase::log::warn("Wine locale guard is missing from '{}'; Steam may override UTF-8", guardDir);
   }
 
   if (m_useSLR) {

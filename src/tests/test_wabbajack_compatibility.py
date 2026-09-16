@@ -1,6 +1,5 @@
 import json
 import unittest
-from datetime import date
 from pathlib import Path
 
 
@@ -8,7 +7,6 @@ ROOT = Path(__file__).resolve().parents[2]
 CATALOG = (
     ROOT / "src" / "src" / "resources" / "wabbajack-compatibility" / "catalog.json"
 )
-INVENTORY = ROOT / "docs" / "modlist-compatibility-inventory.json"
 
 
 class CompatibilityCatalogTest(unittest.TestCase):
@@ -85,34 +83,6 @@ class CompatibilityCatalogTest(unittest.TestCase):
             self.assertNotIn("create-verified-stock-game", profile.get("actions", []))
             if profile["gameRoot"] == "authored-stock-game":
                 self.assertTrue(profile.get("stockGameFolder"))
-
-    def test_adapter_inventory_enforces_maintenance_window(self):
-        inventory = json.loads(INVENTORY.read_text(encoding="utf-8"))
-        policy = inventory["candidate_policy"]
-        cutoff = date.fromisoformat(policy["activity_cutoff"])
-        self.assertEqual(policy["maintenance_window_months"], 12)
-        exceptions = {
-            candidate["machine_name"].lower()
-            for candidate in inventory["maintenance_exceptions"]
-        }
-
-        active_names = set()
-        for candidate in inventory["adapter_candidates"]:
-            active_names.add(candidate["machine_name"].lower())
-            if candidate["machine_name"].lower() not in exceptions:
-                self.assertGreaterEqual(
-                    date.fromisoformat(candidate["last_activity"]), cutoff
-                )
-
-        stale_names = {
-            candidate["machine_name"].lower()
-            for candidate in inventory["excluded_stale_candidates"]
-        }
-        for candidate in inventory["excluded_stale_candidates"]:
-            self.assertLess(date.fromisoformat(candidate["last_activity"]), cutoff)
-        self.assertEqual(stale_names, {"fotw"})
-        self.assertTrue(active_names.isdisjoint(stale_names))
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -83,6 +83,12 @@ public:
   bool hide() const override;
   bool useProton() const;
   bool useTerminal() const;
+  const QString& environment() const { return m_environment; }
+  Executable& environment(const QString& text)
+  {
+    m_environment = text;
+    return *this;
+  }
   bool useSteam() const { return m_useSteam; }
   Executable& useSteam(bool enabled)
   {
@@ -100,6 +106,7 @@ private:
   QString m_workingDirectory;
   Flags m_flags = UseProton;
   bool m_useSteam = true;
+  QString m_environment;
 };
 
 /*!

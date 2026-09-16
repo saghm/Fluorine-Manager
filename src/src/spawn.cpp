@@ -23,6 +23,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "envmodule.h"
 #include "fluorineconfig.h"
 #include "protonlauncher.h"
+#include "launchenvironment.h"
 #include "settings.h"
 #include "shared/appconfig.h"
 #include "vfsbackend.h"
@@ -368,6 +369,13 @@ int spawn(const SpawnParameters& sp, pid_t& processId)
 
   logSpawning(sp, bin + " " + sp.arguments);
 
+  QString environmentError;
+  const auto environment = parseExecutableEnvironment(sp.environment, &environmentError);
+  if (!environment) {
+    log::error("Invalid executable environment: {}", environmentError);
+    return EINVAL;
+  }
+
   uint32_t steamAppId = parseSteamAppId(sp.steamAppID);
   ProtonLauncher launcher;
   launcher.setBinary(bin)
@@ -407,9 +415,12 @@ int spawn(const SpawnParameters& sp, pid_t& processId)
     }
 
     const QString protonPath = resolveProtonPath();
-    if (!protonPath.isEmpty()) {
-      launcher.setProtonPath(protonPath);
+    if (protonPath.isEmpty()) {
+      log::error("Use Proton is enabled, but no Proton version is configured. "
+                 "Select a version in Settings > Wine/Proton.");
+      return ENOENT;
     }
+    launcher.setProtonPath(protonPath);
 
     const QString wrapper =
         QSettings().value("fluorine/launch_wrapper").toString().trimmed();
@@ -457,6 +468,9 @@ int spawn(const SpawnParameters& sp, pid_t& processId)
     MOBase::log::info("Launching executable directly without Proton");
   }
 
+  for (auto it = environment->cbegin(); it != environment->cend(); ++it) {
+    launcher.addEnvVar(it.key(), it.value());
+  }
   launcher.setUseTerminal(sp.useTerminal);
 
   const auto [ok, pid] = launcher.launch();
@@ -539,7 +553,8 @@ bool startSteam(QWidget* parent)
   SpawnParameters sp;
   sp.binary = QFileInfo(steamPath);
 
-  pid_t pid    = -1;
+  sp.useProton = false;
+  pid_t pid = -1;
   const auto e = spawn(sp, pid);
 
   if (e != 0) {
@@ -642,6 +657,38 @@ bool checkBlacklist(QWidget* parent, const SpawnParameters& sp, Settings& settin
 
 pid_t startBinary(QWidget* parent, const SpawnParameters& sp)
 {
+  QString environmentError;
+  if (!parseExecutableEnvironment(sp.environment, &environmentError)) {
+    QMessageBox::critical(parent, QObject::tr("Invalid environment variables"),
+                          environmentError);
+    return -1;
+  }
+  if (!sp.useProton) {
+    QFile binary(sp.binary.absoluteFilePath());
+    if (binary.open(QIODevice::ReadOnly) && binary.peek(2) == "MZ") {
+      QMessageBox::critical(parent, QObject::tr("Windows executable requires Proton"),
+          QObject::tr("'%1' is a Windows executable. Enable Use Proton for it in "
+                      "Edit Executables, then select an installed Proton version "
+                      "in Settings > Wine/Proton.").arg(sp.binary.fileName()));
+      return -1;
+    }
+  }
+  if (sp.useProton) {
+    QString protonScript = resolveProtonPath();
+    if (QFileInfo(protonScript).isDir()) {
+      protonScript = QDir(protonScript).filePath(QStringLiteral("proton"));
+    }
+    if (protonScript.isEmpty() || !QFileInfo(protonScript).isFile() ||
+        !QFileInfo(protonScript).isExecutable()) {
+      QMessageBox::critical(parent, QObject::tr("Proton is not available"),
+          QObject::tr("This executable is configured to use Proton, but the selected "
+                      "Proton launcher is missing or cannot be executed.\n\n"
+                      "Select an installed version in Settings > Wine/Proton. "
+                      "For a native Linux application, turn off Use Proton in "
+                      "Edit Executables."));
+      return -1;
+    }
+  }
   pid_t pid    = -1;
   const auto e = spawn::spawn(sp, pid);
 

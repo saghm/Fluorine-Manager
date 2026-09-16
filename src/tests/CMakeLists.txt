@@ -635,6 +635,7 @@ set_tests_properties(test_clf3_install PROPERTIES TIMEOUT 90)
 add_executable(test_executable_options EXCLUDE_FROM_ALL
     test_executable_options.cpp
     ${CMAKE_SOURCE_DIR}/src/src/executableslist.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/launchenvironment.cpp
 )
 set_target_properties(test_executable_options PROPERTIES
     AUTOMOC OFF
@@ -657,6 +658,37 @@ target_link_libraries(test_executable_options PRIVATE
 )
 add_test(NAME test_executable_options COMMAND test_executable_options)
 
+add_executable(test_launch_environment EXCLUDE_FROM_ALL
+    test_launch_environment.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/protonlauncher.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/launchenvironment.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/vfsbackend.cpp)
+set_target_properties(test_launch_environment PROPERTIES AUTOMOC OFF CXX_STANDARD 23)
+target_include_directories(test_launch_environment PRIVATE ${CMAKE_SOURCE_DIR}/src/src)
+target_compile_options(test_launch_environment PRIVATE
+    "-idirafter" "${CMAKE_SOURCE_DIR}/libs/uibase/include/uibase")
+target_link_libraries(test_launch_environment PRIVATE Qt6::Core mo2::uibase GTest::gtest)
+add_test(NAME test_launch_environment COMMAND test_launch_environment)
+
+add_test(NAME test_locale_guard
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_locale_guard.py
+            ${CMAKE_BINARY_DIR}/src/src/locale)
+
+add_executable(test_conflict_sorting EXCLUDE_FROM_ALL
+    test_conflict_sorting.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/modinfodialogconflictsmodels.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/modinfodialogconflictsmodels.h)
+set_target_properties(test_conflict_sorting PROPERTIES AUTOMOC ON CXX_STANDARD 23)
+target_include_directories(test_conflict_sorting PRIVATE ${CMAKE_SOURCE_DIR}/src/src)
+target_compile_options(test_conflict_sorting PRIVATE -ffunction-sections -fdata-sections
+    "-idirafter" "${CMAKE_SOURCE_DIR}/libs/uibase/include/uibase")
+target_precompile_headers(test_conflict_sorting PRIVATE <QtWidgets> <QSettings>
+    <boost/shared_ptr.hpp> <uibase/windows_compat.h>)
+target_link_options(test_conflict_sorting PRIVATE -Wl,--gc-sections)
+target_link_libraries(test_conflict_sorting PRIVATE Qt6::Widgets mo2::uibase GTest::gtest)
+add_test(NAME test_conflict_sorting COMMAND test_conflict_sorting)
+set_tests_properties(test_conflict_sorting PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 find_package(Qt6 REQUIRED COMPONENTS Widgets WebSockets Network)
 add_executable(test_steam_cloud EXCLUDE_FROM_ALL
     test_steam_cloud.cpp
@@ -670,6 +702,8 @@ set_tests_properties(test_steam_cloud PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=of
 
 add_custom_target(fluorine-tests
     DEPENDS test_esptk_tes3 test_bsatk_extraction test_executable_options test_steam_cloud
+            test_conflict_sorting test_launch_environment
+            fluorine_locale_x86_64 fluorine_locale_i386
             test_plugincompatibility test_pefileutils test_curatedguide
             test_metainiutils test_fomoddependency
             test_vfs_backend

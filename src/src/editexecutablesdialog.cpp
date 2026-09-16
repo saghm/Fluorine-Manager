@@ -18,6 +18,8 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "editexecutablesdialog.h"
+#include "launchenvironment.h"
+#include <QPlainTextEdit>
 #include "filedialogmemory.h"
 #include "forcedloaddialog.h"
 #include "modlist.h"
@@ -106,6 +108,9 @@ EditExecutablesDialog::EditExecutablesDialog(OrganizerCore& oc, int sel,
     save();
   });
   connect(ui->arguments, &QLineEdit::textChanged, [&] {
+    save();
+  });
+  connect(ui->environment, &QPlainTextEdit::textChanged, [&] {
     save();
   });
   connect(ui->steamAppID, &QLineEdit::textChanged, [&] {
@@ -245,6 +250,15 @@ bool EditExecutablesDialog::commitChanges()
     return false;
   }
 
+  for (const auto& exe : newExecutables) {
+    QString error;
+    if (!parseExecutableEnvironment(exe.environment(), &error)) {
+      QMessageBox::warning(this, tr("Invalid environment variables"),
+                           tr("%1: %2").arg(exe.title(), error));
+      return false;
+    }
+  }
+
   auto profile = m_organizerCore.currentProfile();
 
   // remove all the custom overwrites and forced libraries
@@ -380,6 +394,8 @@ void EditExecutablesDialog::clearEdits()
   ui->browseWorkingDirectory->setEnabled(false);
   ui->arguments->clear();
   ui->arguments->setEnabled(false);
+  ui->environment->clear();
+  ui->environment->setEnabled(false);
   ui->overwriteSteamAppID->setEnabled(false);
   ui->overwriteSteamAppID->setChecked(false);
   ui->steamAppID->setEnabled(false);
@@ -413,6 +429,7 @@ void EditExecutablesDialog::setEdits(const Executable& e)
   ui->binary->setText(QDir::toNativeSeparators(e.binaryInfo().filePath()));
   ui->workingDirectory->setText(QDir::toNativeSeparators(e.workingDirectory()));
   ui->arguments->setText(e.arguments());
+  ui->environment->setPlainText(e.environment());
   ui->overwriteSteamAppID->setChecked(!e.steamAppID().isEmpty());
   ui->steamAppID->setEnabled(!e.steamAppID().isEmpty());
   ui->steamAppID->setText(e.steamAppID());
@@ -462,6 +479,7 @@ void EditExecutablesDialog::setEdits(const Executable& e)
   ui->workingDirectory->setEnabled(true);
   ui->browseWorkingDirectory->setEnabled(true);
   ui->arguments->setEnabled(true);
+  ui->environment->setEnabled(true);
   ui->overwriteSteamAppID->setEnabled(true);
   ui->useApplicationIcon->setEnabled(true);
   ui->createFilesInMod->setEnabled(true);
@@ -517,6 +535,7 @@ void EditExecutablesDialog::save()
   e->binaryInfo(QFileInfo(ui->binary->text()));
   e->workingDirectory(ui->workingDirectory->text());
   e->arguments(ui->arguments->text());
+  e->environment(ui->environment->toPlainText());
   e->useSteam(ui->useSteam->isChecked());
 
   if (ui->overwriteSteamAppID->isChecked()) {

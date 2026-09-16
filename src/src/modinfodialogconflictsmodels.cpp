@@ -210,14 +210,14 @@ void ConflictListModel::sort(int colIndex, Qt::SortOrder order)
   emit layoutAboutToBeChanged({}, QAbstractItemModel::VerticalSortHint);
 
   const auto oldList = persistentIndexList();
-  std::vector<std::pair<const ConflictItem*, int>> oldItems;
+  std::vector<std::pair<MOShared::FileIndex, int>> oldItems;
 
   const auto itemCount = oldList.size();
   oldItems.reserve(static_cast<std::size_t>(itemCount));
 
   for (int i = 0; i < itemCount; ++i) {
     const QModelIndex& index = oldList[i];
-    oldItems.emplace_back(itemFromIndex(index), index.column());
+    oldItems.emplace_back(itemFromIndex(index)->fileIndex(), index.column());
   }
 
   doSort();
@@ -227,7 +227,11 @@ void ConflictListModel::sort(int colIndex, Qt::SortOrder order)
 
   for (int i = 0; i < itemCount; ++i) {
     const auto& pair = oldItems[static_cast<std::size_t>(i)];
-    newList.append(indexFromItem(pair.first, pair.second));
+    const auto item = std::find_if(m_items.cbegin(), m_items.cend(), [&](const auto& i) {
+      return i.fileIndex() == pair.first;
+    });
+    newList.append(item == m_items.cend() ? QModelIndex{}
+                                        : indexFromItem(&*item, pair.second));
   }
 
   changePersistentIndexList(oldList, newList);
@@ -274,20 +278,18 @@ void ConflictListModel::doSort()
 
   const auto& col = m_columns[c];
 
-  // avoids branching on sort order while sorting
-  auto sortAsc = [&](const auto& a, const auto& b) {
-    return (naturalCompare((a.*col.getText)(), (b.*col.getText)()) < 0);
-  };
-
-  auto sortDesc = [&](const auto& a, const auto& b) {
-    return (naturalCompare((a.*col.getText)(), (b.*col.getText)()) > 0);
-  };
-
-  if (m_sortOrder == Qt::AscendingOrder) {
-    std::sort(m_items.begin(), m_items.end(), sortAsc);
-  } else {
-    std::sort(m_items.begin(), m_items.end(), sortDesc);
-  }
+  const bool conflictColumn = col.getText == &ConflictItem::before ||
+                              col.getText == &ConflictItem::after;
+  std::stable_sort(m_items.begin(), m_items.end(), [&](const auto& a, const auto& b) {
+    const QString& left = (a.*col.getText)();
+    const QString& right = (b.*col.getText)();
+    // Keep useful conflict entries above blank cells in either direction.
+    if (conflictColumn && left.isEmpty() != right.isEmpty()) {
+      return !left.isEmpty();
+    }
+    const int comparison = naturalCompare(left, right);
+    return m_sortOrder == Qt::AscendingOrder ? comparison < 0 : comparison > 0;
+  });
 }
 
 OverwriteConflictListModel::OverwriteConflictListModel(QTreeView* tree)

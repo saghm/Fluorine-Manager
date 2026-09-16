@@ -107,6 +107,7 @@ void ExecutablesList::load(const MOBase::IPluginGame* game, const Settings& s)
                       .arguments(map["arguments"].toString())
                       .steamAppID(map["steamAppID"].toString())
                       .useSteam(!map.contains("useSteam") || map["useSteam"].toBool())
+                      .environment(map["environment"].toString())
                       .workingDirectory(map["workingDirectory"].toString())
                       .flags(flags));
   }
@@ -138,6 +139,7 @@ void ExecutablesList::store(Settings& s)
     map["useProton"]            = item.useProton();
     map["useTerminal"]          = item.useTerminal();
     map["useSteam"]             = item.useSteam();
+    map["environment"]          = item.environment();
 
     v.push_back(std::move(map));
   }
@@ -525,4 +527,5 @@ void Executable::mergeFrom(const Executable& other)
   m_workingDirectory = other.workingDirectory();
   m_flags            = other.flags();
   m_useSteam         = other.useSteam();
+  m_environment      = other.environment();
 }

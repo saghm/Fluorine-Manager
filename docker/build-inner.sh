@@ -141,6 +141,10 @@ else
     exit 1
 fi
 
+# Architecture-selected locale protection for Proton's Steam bridge.
+mkdir -p "${OUT_DIR}/locale"
+cp -a build/src/src/locale/{x86_64,i386} "${OUT_DIR}/locale/"
+
 # Build Wine's audio PE modules with FAudio embedded. Prefix setup installs
 # the patched current release after DXSETUP; 26.02 remains a rollback baseline.
 bash /src/docker/build-faudio.sh "${OUT_DIR}/faudio"
