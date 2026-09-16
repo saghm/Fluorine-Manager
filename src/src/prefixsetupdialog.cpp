@@ -82,6 +82,9 @@ PrefixSetupDialog::PrefixSetupDialog(const QString& prefixPath,
           this, &PrefixSetupDialog::onProgressChanged, Qt::QueuedConnection);
   connect(m_runner, &PrefixSetupRunner::finished,
           this, &PrefixSetupDialog::onFinished, Qt::QueuedConnection);
+  connect(m_runner, &PrefixSetupRunner::protonPathChanged,
+          this, [this](const QString& path) { m_protonPath = path; },
+          Qt::QueuedConnection);
 
   // Clean up worker thread when dialog closes.
   connect(m_workerThread, &QThread::finished, m_runner, &QObject::deleteLater);

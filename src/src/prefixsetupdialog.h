@@ -30,6 +30,7 @@ public:
 
   /// True if all steps succeeded.
   bool succeeded() const { return m_allSucceeded; }
+  QString protonPath() const { return m_protonPath; }
 
 protected:
   void showEvent(QShowEvent* event) override;

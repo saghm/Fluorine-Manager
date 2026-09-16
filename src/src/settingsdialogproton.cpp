@@ -275,6 +275,7 @@ void ProtonSettingsTab::onFuseAllowOtherClicked(bool checked)
 
 void ProtonSettingsTab::populateProtons()
 {
+  const QSignalBlocker blocker(ui->protonVersionCombo);
   ui->protonVersionCombo->clear();
 
   const auto protonList = findSteamProtons();
@@ -292,7 +293,14 @@ void ProtonSettingsTab::populateProtons()
   }
 
   if (auto cfg = FluorineConfig::load(); cfg.has_value()) {
-    const int idx = ui->protonVersionCombo->findText(cfg->proton_name);
+    if (QFileInfo::exists(cfg->proton_path + "/fluorine-faudio-runtime.txt") &&
+        ui->protonVersionCombo->findData(cfg->proton_path, Qt::UserRole + 1) < 0) {
+      ui->protonVersionCombo->addItem(cfg->proton_name);
+      ui->protonVersionCombo->setItemData(ui->protonVersionCombo->count() - 1,
+                                         cfg->proton_path, Qt::UserRole + 1);
+    }
+    const int idx = ui->protonVersionCombo->findData(cfg->proton_path,
+                                                     Qt::UserRole + 1);
     if (idx >= 0) {
       ui->protonVersionCombo->setCurrentIndex(idx);
     } else if (ui->protonVersionCombo->count() > 0) {
@@ -724,8 +732,8 @@ void ProtonSettingsTab::runPrefixSetupDialog(uint32_t appId,
     FluorineConfig cfg;
     cfg.app_id      = appId;
     cfg.prefix_path = prefixPath;
-    cfg.proton_name = protonName;
-    cfg.proton_path = protonPath;
+    cfg.proton_name = QFileInfo(dialog.protonPath()).fileName();
+    cfg.proton_path = dialog.protonPath();
     cfg.created     = QDateTime::currentDateTime().toString(Qt::ISODate);
 
     if (!cfg.save()) {
@@ -737,6 +745,7 @@ void ProtonSettingsTab::runPrefixSetupDialog(uint32_t appId,
     ui->protonStatusLabel->setText(tr("Prefix setup incomplete"));
   }
 
+  populateProtons();
   refreshState();
 }
 

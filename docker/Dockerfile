@@ -10,7 +10,7 @@ ENV PATH="/opt/rust/cargo/bin:${PATH}"
 # Python comes from uv (python-build-standalone), not apt.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Build essentials
-    build-essential cmake meson ninja-build ccache mingw-w64 \
+    build-essential cmake meson ninja-build ccache mingw-w64 bison flex \
     git curl wget file binutils patchelf pkg-config ca-certificates \
     fonts-dejavu-core \
     # Library dependencies
@@ -149,3 +149,7 @@ RUN uv pip install --system --break-system-packages \
     rm -rf /tmp/libloot /tmp/libloot-wheels
 
 WORKDIR /build
+
+# Native sanitizer probes exercise the bundled FAudio queue code during builds.
+RUN apt-get update && apt-get install -y --no-install-recommends libsdl2-dev \
+    && rm -rf /var/lib/apt/lists/*

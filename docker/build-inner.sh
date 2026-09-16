@@ -3,6 +3,10 @@ set -euo pipefail
 
 BUILD_PY="${BUILD_PYTHON:-$(command -v python3)}"
 
+if [ "${BUILD_MODE:-tarball}" = faudio ]; then
+    exec bash /src/docker/build-faudio.sh /src/build/faudio-staging
+fi
+
 # ── Build ──
 PYBIND11_DIR="$("${BUILD_PY}" -c 'import pybind11; print(pybind11.get_cmake_dir())' 2>/dev/null || true)"
 
@@ -136,6 +140,12 @@ else
     echo "ERROR: Wine-side USVFS runtime was not built"
     exit 1
 fi
+
+# Build Wine's audio PE modules with FAudio embedded. Prefix setup installs
+# the patched current release after DXSETUP; 26.02 remains a rollback baseline.
+bash /src/docker/build-faudio.sh "${OUT_DIR}/faudio"
+rm -rf "${RUNDIR}/faudio"
+cp -a "${OUT_DIR}/faudio" "${RUNDIR}/faudio"
 
 # wrestool/icotool no longer needed — icon extraction is built into the C++ PE parser
 
@@ -312,7 +322,7 @@ done
 QT6_BIN_DIR=""
 for _candidate in \
     "${Qt6_DIR:-}/bin" \
-    "/opt/qt6/6.11.1/gcc_64/bin" \
+    "/opt/qt6/6.11.2/gcc_64/bin" \
     "/usr/lib/qt6/bin"; do
     if [ -d "${_candidate}" ]; then
         QT6_BIN_DIR="${_candidate}"
@@ -337,7 +347,7 @@ done
 QT6_PLUGIN_DIR=""
 for _candidate in \
     "${Qt6_DIR:-}/plugins" \
-    "/opt/qt6/6.11.1/gcc_64/plugins" \
+    "/opt/qt6/6.11.2/gcc_64/plugins" \
     "/usr/lib/x86_64-linux-gnu/qt6/plugins"; do
     if [ -d "${_candidate}" ]; then
         QT6_PLUGIN_DIR="${_candidate}"
@@ -374,7 +384,7 @@ fi
 
 # Qt WebEngine has a helper executable and data files outside the ordinary
 # plugin tree. Keep their relative layout stable and point Qt at it at launch.
-QT6_ROOT="${Qt6_DIR:-/opt/qt6/6.11.1/gcc_64}"
+QT6_ROOT="${Qt6_DIR:-/opt/qt6/6.11.2/gcc_64}"
 if [ ! -x "${QT6_ROOT}/libexec/QtWebEngineProcess" ]; then
     echo "ERROR: QtWebEngineProcess is missing from ${QT6_ROOT}"
     exit 1

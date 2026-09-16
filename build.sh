@@ -210,7 +210,7 @@ cd "${SCRIPT_DIR}"
 REQUESTED_MODE="${1:-tarball}"
 BUILD_MODE="${REQUESTED_MODE}"
 case "${REQUESTED_MODE}" in
-    tarball|installer|all|test|shell) ;;
+    tarball|installer|all|test|shell|faudio) ;;
     usvfs)
         BUILD_MODE=tarball
         echo "=== Testing Fluorine before candidate packaging ==="
@@ -219,12 +219,13 @@ case "${REQUESTED_MODE}" in
         prepare_usvfs_candidate "$@"
         ;;
     *)
-        echo "Usage: ./build.sh [tarball|installer|all|test|shell|usvfs [RUN_ID]]"
+        echo "Usage: ./build.sh [tarball|installer|all|test|faudio|shell|usvfs [RUN_ID]]"
         echo ""
         echo "  tarball    Build portable .tar.gz"
         echo "  installer  Build self-extracting .bin installer"
         echo "  all        Build tarball + installer"
         echo "  test       Build and run the standalone test suite"
+        echo "  faudio     Build and verify the bundled x86/x64 audio modules"
         echo "  shell      Drop into build container"
         echo "  usvfs      Test and package the exact green USVFS commit/run"
         exit 1
@@ -269,6 +270,7 @@ ${DOCKER} run --rm \
     -e FLUORINE_BUILD_NUMBER="${FLUORINE_BUILD_NUMBER:-}" \
     -e FLUORINE_BUILD_TIMESTAMP="${FLUORINE_BUILD_TIMESTAMP:-}" \
     -e FLUORINE_BUILD_COMMIT="${FLUORINE_BUILD_COMMIT:-}" \
+    -e FLUORINE_FAUDIO_LATEST_TAG="${FLUORINE_FAUDIO_LATEST_TAG:-}" \
     -e FLUORINE_USVFS_RUNTIME_DIR="${FLUORINE_USVFS_RUNTIME_DIR:-}" \
     -e FLUORINE_USVFS_PROVENANCE="${FLUORINE_USVFS_PROVENANCE:-}" \
     -w /src \
@@ -283,6 +285,15 @@ echo "=== Done ==="
 echo "Build outputs:"
 ls -ldh build/fluorine-manager build/fluorine-manager.bin 2>/dev/null || echo "  (none found)"
 echo "Staging: build/staging/"
+
+if [[ "${REQUESTED_MODE}" =~ ^(tarball|installer|all)$ ]]; then
+    for variant in safe latest; do
+        faudio_dir="build/staging/faudio/${variant}"
+        test -f "${faudio_dir}/version.txt"
+        (cd "${faudio_dir}" && sha256sum -c sha256sums.txt >/dev/null)
+        echo "FAudio ${variant}: $(sed -n 's/^faudio=//p' "${faudio_dir}/version.txt") verified."
+    done
+fi
 
 if [ "${REQUESTED_MODE}" = "usvfs" ]; then
     for candidate_file in usvfs_x64.dll usvfs_x86.dll; do

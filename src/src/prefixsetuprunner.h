@@ -42,6 +42,7 @@ public:
   void cancel() { m_cancelled.storeRelease(1); }
 
 signals:
+  void protonPathChanged(const QString& path);
   void stepStarted(int index);
   void stepFinished(int index, bool success, const QString& error);
   void logMessage(const QString& text);
@@ -100,6 +101,8 @@ private:
   bool stepDriveCleanup();
   bool stepD3DCompiler47();
   bool stepDirectXRuntime();
+  bool installFAudioRuntime();
+  bool applyFAudioOverrides();
   bool stepVisualCppRuntimes();
   bool stepDotNetRuntimes();
   bool stepDotNetInstall(const QString& url, const QString& name,
@@ -183,6 +186,7 @@ private:
   QString m_slrRunScript;
   QString m_winetricksPath;
   QString m_7zzPath;
+  QStringList m_faudioDlls;
 
   QVector<SetupStep> m_steps;
 
