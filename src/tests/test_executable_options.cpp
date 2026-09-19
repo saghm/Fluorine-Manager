@@ -69,3 +69,22 @@ TEST(ExecutableOptions, InvalidEnvironmentRejectsTheWholeInput)
   }
   EXPECT_TRUE(parseExecutableEnvironment(" \n\r\n")->isEmpty());
 }
+
+TEST(ExecutableOptions, TrayBehaviorDoesNotChangePinOrShortcutIcon)
+{
+  Executable program("Game");
+  program.flags(Executable::UseProton | Executable::UseApplicationIcon |
+                Executable::ShowInToolbar);
+  program.flags(program.flags() | Executable::MinimizeToSystemTray);
+  EXPECT_TRUE(program.minimizeToSystemTray());
+  program.flags(program.flags() & ~Executable::MinimizeToSystemTray);
+  EXPECT_FALSE(program.minimizeToSystemTray());
+  EXPECT_TRUE(program.usesOwnIcon());
+  EXPECT_TRUE(program.isShownOnToolbar());
+  EXPECT_TRUE(program.useProton());
+
+  program.flags(Executable::MinimizeToSystemTray);
+  EXPECT_TRUE(program.minimizeToSystemTray());
+  EXPECT_FALSE(program.usesOwnIcon());
+  EXPECT_FALSE(program.isShownOnToolbar());
+}

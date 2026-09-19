@@ -380,7 +380,10 @@ Shortcut::Shortcut(const Executable& exe) : Shortcut()
   if (m_icon.isEmpty()) {
     QString const iconBase = sanitizeDesktopName(m_instanceName) + "-" +
                        sanitizeDesktopName(m_name);
-    m_icon = installIcon(iconBase, exePath);
+    // Keep the Fluorine fallback separate so newly-created shortcuts do not
+    // reuse cached program artwork when the icon preference is disabled.
+    m_icon = exe.usesOwnIcon() ? installIcon(iconBase, exePath)
+                              : installIcon(iconBase + "-fluorine");
   }
 
   m_workingDirectory = QFileInfo(m_target).absolutePath();

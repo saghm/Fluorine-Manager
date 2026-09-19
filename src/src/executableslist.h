@@ -48,7 +48,7 @@ public:
     ShowInToolbar        = 0x02,
     UseApplicationIcon   = 0x04,
     Hide                 = 0x08,
-    MinimizeToSystemTray = 0x16,
+    MinimizeToSystemTray = 0x10,
     UseProton            = 0x20,
     UseTerminal          = 0x40
   };
