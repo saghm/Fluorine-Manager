@@ -5,6 +5,7 @@ find_package(GTest REQUIRED)
 find_package(SQLite3 REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
 add_test(NAME test_bundle_launcher
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_bundle_launcher.py)
 add_test(NAME test_build_dependency_repair
@@ -731,6 +732,15 @@ target_link_libraries(test_settings_navigation PRIVATE Qt6::Widgets GTest::gtest
 add_test(NAME test_settings_navigation COMMAND test_settings_navigation)
 set_tests_properties(test_settings_navigation PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+add_executable(test_fluorine_menu_bar EXCLUDE_FROM_ALL
+    test_fluorine_menu_bar.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/fluorinemenubar.cpp)
+set_target_properties(test_fluorine_menu_bar PROPERTIES AUTOMOC OFF CXX_STANDARD 23)
+target_include_directories(test_fluorine_menu_bar PRIVATE ${CMAKE_SOURCE_DIR}/src/src)
+target_link_libraries(test_fluorine_menu_bar PRIVATE Qt6::Widgets Qt6::Test GTest::gtest)
+add_test(NAME test_fluorine_menu_bar COMMAND test_fluorine_menu_bar)
+set_tests_properties(test_fluorine_menu_bar PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 add_executable(test_library_setup_panel EXCLUDE_FROM_ALL
     test_library_setup_panel.cpp
     ${CMAKE_SOURCE_DIR}/src/src/librarysetuppanel.cpp
@@ -752,8 +762,8 @@ set_tests_properties(test_library_setup_panel PROPERTIES ENVIRONMENT "QT_QPA_PLA
 
 add_custom_target(fluorine-tests
     DEPENDS test_esptk_tes3 test_bsatk_extraction test_executable_options test_steam_cloud
-            test_conflict_sorting test_launch_environment test_game_artwork
-            test_settings_navigation test_library_setup_panel
+            test_conflict_sorting test_launch_environment test_game_artwork test_settings_navigation
+            test_fluorine_menu_bar test_library_setup_panel
             fluorine_locale_x86_64 fluorine_locale_i386
             test_plugincompatibility test_pefileutils test_curatedguide
             test_metainiutils test_fomoddependency

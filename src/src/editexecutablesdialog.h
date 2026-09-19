@@ -213,6 +213,7 @@ private:
   void fillList();
   static QListWidgetItem* createListItem(const Executable& exe);
   void updateUI(const QListWidgetItem* item, const Executable* e);
+  void updateLibraryAvailability();
   void clearEdits();
   void setEdits(const Executable& e);
   void setButtons(const QListWidgetItem* item, const Executable* e);

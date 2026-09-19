@@ -24,6 +24,7 @@ public:
 
   void setSelection(const std::vector<ModListSortProxy::Criteria>& criteria);
   void clearSelection();
+  void setSpecialFilter(int category, bool enabled, bool inverse = false);
   void refresh();
 
 signals:

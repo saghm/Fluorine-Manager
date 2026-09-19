@@ -13,9 +13,6 @@ public:
   void update() override;
 
 private:
-  void addLanguages();
-  void selectLanguage();
-
   void resetDialogs();
 
   void onEditCategories();

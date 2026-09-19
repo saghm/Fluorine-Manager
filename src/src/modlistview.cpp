@@ -1,6 +1,8 @@
 #include "modlistview.h"
 
 #include <algorithm>
+#include <array>
+#include <QMenu>
 
 #include <QMimeData>
 #include <QProxyStyle>
@@ -34,6 +36,19 @@
 
 using namespace MOBase;
 using namespace MOShared;
+
+namespace
+{
+constexpr std::array MainModColumns{ModList::COL_NAME, ModList::COL_CONFLICTFLAGS,
+    ModList::COL_FLAGS, ModList::COL_CATEGORY, ModList::COL_VERSION,
+    ModList::COL_PRIORITY, ModList::COL_NOTES};
+
+bool isMainModColumn(int column)
+{
+  return std::find(MainModColumns.begin(), MainModColumns.end(), column) !=
+         MainModColumns.end();
+}
+} // namespace
 
 // delegate to remove indentation for mods when using collapsible
 // separator
@@ -142,7 +157,22 @@ ModListView::ModListView(QWidget* parent)
       m_scrollbar(new ModListViewMarkingScrollBar(this))
 {
   setVerticalScrollBar(m_scrollbar);
-  MOBase::setCustomizableColumns(this);
+  header()->setSectionsMovable(true);
+  header()->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(header(), &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+    if (!model()) return;
+    QMenu menu(this);
+    for (const auto column : MainModColumns) {
+      if (column == ModList::COL_NAME) continue;
+      auto* action = menu.addAction(model()->headerData(column, Qt::Horizontal).toString());
+      action->setCheckable(true);
+      action->setChecked(!header()->isSectionHidden(column));
+      connect(action, &QAction::toggled, this, [this, column](bool checked) {
+        header()->setSectionHidden(column, !checked);
+      });
+    }
+    menu.exec(header()->viewport()->mapToGlobal(pos));
+  });
   setAutoExpandDelay(750);
 
   setItemDelegate(new ModListStyledItemDelegate(this));
@@ -484,17 +514,11 @@ void ModListView::onModInstalled(const QString& modName)
 
 void ModListView::onModFilterActive(bool filterActive)
 {
-  ui.clearFilters->setVisible(filterActive);
-  if (filterActive) {
-    setStyleSheet("QTreeView { border: 2px ridge #f00; }");
-    ui.counter->setStyleSheet("QLCDNumber { border: 2px ridge #f00; }");
-  } else if (ui.groupBy->currentIndex() != GroupBy::NONE) {
-    setStyleSheet("QTreeView { border: 2px ridge #337733; }");
-    ui.counter->setStyleSheet("");
-  } else {
-    setStyleSheet("");
-    ui.counter->setStyleSheet("");
-  }
+  ui.clearFilters->setEnabled(filterActive);
+  ui.filtersButton->setText(filterActive ? tr("Filters •") : tr("Filters"));
+  // Filtering is a normal view state; the checked filters and result count
+  // explain it without an error-colored border.
+  ui.currentCategory->setVisible(filterActive);
 }
 
 ModListView::ModCounters ModListView::counters() const
@@ -543,7 +567,10 @@ void ModListView::updateModCount()
 {
   const auto c = counters();
 
-  ui.counter->display(c.visible.active);
+  const QString enabled = tr("%1 of %2 mods enabled").arg(c.active).arg(c.regular);
+  ui.counter->setText(m_sortProxy->isFilterActive()
+      ? tr("%1 · %2 shown").arg(enabled).arg(c.visible.regular + c.visible.foreign + c.visible.backup)
+      : enabled);
   ui.counter->setToolTip(tr("<table cellspacing=\"5\">"
                             "<tr><th>Type</th><th>All</th><th>Visible</th>"
                             "<tr><td>Enabled mods:&emsp;</td><td align=right>%1 / "
@@ -728,6 +755,7 @@ void ModListView::updateGroupByProxy()
 void ModListView::applyDefaultHeaderState()
 {
   // hide these columns by default
+  header()->setSectionHidden(ModList::COL_AUTHOR, true);
   header()->setSectionHidden(ModList::COL_CONTENT, true);
   header()->setSectionHidden(ModList::COL_MODID, true);
   header()->setSectionHidden(ModList::COL_UPLOADER, true);
@@ -756,11 +784,18 @@ void ModListView::forceHeaderVisibilityRefresh()
 
 void ModListView::syncColumnVisibilityFromHeader()
 {
-  if (m_sortProxy == nullptr) {
+  if (m_sortProxy == nullptr || m_restoringHeaderState) {
     return;
   }
 
+  // Saved MO2 layouts may still contain retired display columns. Keep the
+  // model's indices and metadata intact, but do not restore those columns.
+  const QSignalBlocker blocker(header());
+  header()->setSectionHidden(ModList::COL_NAME, false);
   for (int column = 0; column <= ModList::COL_LASTCOLUMN; ++column) {
+    if (!isMainModColumn(column)) {
+      header()->setSectionHidden(column, true);
+    }
     m_sortProxy->setColumnVisible(
         column, !header()->isSectionHidden(column) && header()->sectionSize(column) > 0);
   }
@@ -779,7 +814,12 @@ void ModListView::setup(OrganizerCore& core, CategoryFactory& factory, MainWindo
         mwui->activeModsCounter,
         mwui->modFilterEdit,
         mwui->currentCategoryLabel,
-        mwui->clearFiltersButton,
+        mwui->modFiltersButton,
+        mwui->actionClearFilters,
+        mwui->actionFilterEnabled,
+        mwui->actionFilterDisabled,
+        mwui->actionFilterConflicts,
+        mwui->actionFilterUpdates,
         mwui->filtersSeparators,
         mwui->fomodReviewsButton,
         mwui->espList};
@@ -928,7 +968,16 @@ void ModListView::setup(OrganizerCore& core, CategoryFactory& factory, MainWindo
   });
   connect(ui.filter, &QLineEdit::textChanged, m_sortProxy,
           &ModListSortProxy::updateFilter);
-  connect(ui.clearFilters, &QPushButton::clicked, [=, this]() {
+  const auto quickFilter = [this](QAction* action, int category, bool inverse = false) {
+    connect(action, &QAction::triggered, this, [this, category, inverse](bool checked) {
+      m_filters->setSpecialFilter(category, checked, inverse);
+    });
+  };
+  quickFilter(ui.quickEnabled, CategoryFactory::Checked);
+  quickFilter(ui.quickDisabled, CategoryFactory::Checked, true);
+  quickFilter(ui.quickConflicts, CategoryFactory::Conflict);
+  quickFilter(ui.quickUpdates, CategoryFactory::UpdateAvailable);
+  connect(ui.clearFilters, &QAction::triggered, [=, this]() {
     ui.filter->clear();
     m_filters->clearSelection();
   });
@@ -959,6 +1008,10 @@ void ModListView::restoreState(const Settings& s)
   // prevent the name-column from being hidden
   header()->setSectionHidden(ModList::COL_NAME, false);
   syncColumnVisibilityFromHeader();
+
+  if (!isMainModColumn(header()->sortIndicatorSection())) {
+    sortByColumn(ModList::COL_PRIORITY, Qt::AscendingOrder);
+  }
 
   s.widgets().restoreTreeExpandState(this);
 
@@ -1399,28 +1452,43 @@ void ModListView::onFiltersCriteria(
   updateFomodReviewButton();
   setFilterCriteria(criteria);
 
-  QString label = "?";
+  const auto selected = [&](int id, bool inverse = false) {
+    return std::any_of(criteria.begin(), criteria.end(), [&](const auto& criterion) {
+      return criterion.type == ModListSortProxy::TypeSpecial &&
+             criterion.id == id && criterion.inverse == inverse;
+    });
+  };
+  const auto check = [](QAction* action, bool checked) {
+    const QSignalBlocker blocker(action);
+    action->setChecked(checked);
+  };
+  check(ui.quickEnabled, selected(CategoryFactory::Checked));
+  check(ui.quickDisabled, selected(CategoryFactory::Checked, true));
+  check(ui.quickConflicts, selected(CategoryFactory::Conflict));
+  check(ui.quickUpdates, selected(CategoryFactory::UpdateAvailable));
 
-  if (criteria.empty()) {
-    label = "";
-  } else if (criteria.size() == 1) {
-    const auto& c = criteria[0];
-
-    if (c.type == ModListSortProxy::TypeContent) {
-      const auto* content = m_core->modDataContents().findById(c.id);
-      label               = content ? content->name() : QString();
+  QStringList names;
+  for (const auto& criterion : criteria) {
+    QString name;
+    if (criterion.type == ModListSortProxy::TypeContent) {
+      const auto* content = m_core->modDataContents().findById(criterion.id);
+      name = content ? content->name() : tr("Content");
     } else {
-      label = m_categories->getCategoryNameByID(c.id);
+      name = m_categories->getCategoryNameByID(criterion.id);
+      if (criterion.type == ModListSortProxy::TypeSpecial &&
+          name.startsWith('<') && name.endsWith('>')) {
+        name = name.mid(1, name.size() - 2);
+      }
     }
-
-    if (label.isEmpty()) {
-      log::error("category {}:{} not found", c.type, c.id);
-    }
-  } else {
-    label = tr("<Multiple>");
+    names << (criterion.inverse ? tr("Not %1").arg(name) : name);
   }
+  ui.currentCategory->setText(names.isEmpty() ? QString()
+      : names.size() == 1 ? tr("Filter: %1").arg(names.first())
+                          : tr("%1 filters · %2").arg(names.size())
+                                .arg(m_sortProxy->filterMode() == ModListSortProxy::FilterAnd
+                                     ? tr("Match all") : tr("Match any")));
+  ui.currentCategory->setToolTip(names.join(" · ").toHtmlEscaped());
 
-  ui.currentCategory->setText(label);
 }
 
 void ModListView::dragEnterEvent(QDragEnterEvent* event)

@@ -88,7 +88,9 @@ list(APPEND ORGANIZER_QRC ${CMAKE_CURRENT_SOURCE_DIR}/gameartwork.qrc)
 list(APPEND ORGANIZER_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/gameartwork.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/librarysetuppanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/fluorinemenubar.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/settingsnavigation.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/settingsdialoglayout.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/gamelibrarywidget.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/clf3enginemanager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/clf3galleryloader.cpp
@@ -104,7 +106,9 @@ list(APPEND ORGANIZER_SOURCES
 list(APPEND ORGANIZER_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/gameartwork.h
     ${CMAKE_CURRENT_SOURCE_DIR}/librarysetuppanel.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/fluorinemenubar.h
     ${CMAKE_CURRENT_SOURCE_DIR}/settingsnavigation.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/settingsdialoglayout.h
     ${CMAKE_CURRENT_SOURCE_DIR}/gamelibrarywidget.h
     ${CMAKE_CURRENT_SOURCE_DIR}/clf3enginemanager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/clf3galleryloader.h

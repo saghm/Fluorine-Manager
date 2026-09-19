@@ -19,6 +19,8 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "editexecutablesdialog.h"
 #include "launchenvironment.h"
+#include "settingsnavigation.h"
+#include "vfsbackend.h"
 #include <QPlainTextEdit>
 #include "filedialogmemory.h"
 #include "forcedloaddialog.h"
@@ -58,7 +60,17 @@ EditExecutablesDialog::EditExecutablesDialog(OrganizerCore& oc, int sel,
       m_executablesList(*oc.executablesList()) 
 {
   ui->setupUi(this);
-  ui->splitter->setSizes({200, 1});
+  setMinimumSize(760, 460);
+  ui->splitter->setSizes({210, 720});
+  auto* detailsLayout = ui->executableDetailsLayout;
+  const int advancedIndex = detailsLayout->indexOf(ui->executableAdvanced);
+  detailsLayout->removeWidget(ui->executableAdvanced);
+  detailsLayout->insertWidget(advancedIndex,
+      new SettingsFoldout(tr("Advanced"), ui->executableAdvanced, ui->executableDetails));
+  if (const auto profile = m_organizerCore.currentProfile()) {
+    ui->profileOptionsGroup->setTitle(tr("Profile: %1").arg(profile->name()));
+  }
+  ui->buttons->button(QDialogButtonBox::Ok)->setText(tr("Save"));
   ui->splitter->setStretchFactor(0, 0);
   ui->splitter->setStretchFactor(1, 1);
 
@@ -130,6 +142,7 @@ EditExecutablesDialog::EditExecutablesDialog(OrganizerCore& oc, int sel,
   });
   connect(ui->useProton, &QCheckBox::toggled, [&] {
     save();
+    updateLibraryAvailability();
   });
   connect(ui->useSteam, &QCheckBox::toggled, [&] {
     save();
@@ -367,6 +380,37 @@ void EditExecutablesDialog::updateUI(const QListWidgetItem* item, const Executab
   }
 
   setButtons(item, e);
+  updateLibraryAvailability();
+}
+
+void EditExecutablesDialog::updateLibraryAvailability()
+{
+  const auto* executable = selectedExe();
+  const auto* game = m_organizerCore.managedGame();
+  const QSettings settings(m_organizerCore.settings().filename(), QSettings::IniFormat);
+  const auto backend = parseVfsBackend(
+      settings.value(kVfsBackendSetting, QStringLiteral("fuse")).toString());
+  const bool available = executable && game &&
+      useUsvfsForLaunch(backend, executable->useProton(), game->usesVFS());
+  ui->forceLoadLibraries->setEnabled(available);
+  ui->configureLibraries->setEnabled(available && ui->forceLoadLibraries->isChecked());
+
+  if (!executable) {
+    ui->librarySupportHint->setText(tr("Select a program to configure DLL loading."));
+  } else if (!game || !game->usesVFS()) {
+    ui->librarySupportHint->setText(
+        tr("This game manages its own mod filesystem. These DLL settings are not applied."));
+  } else if (!executable->useProton()) {
+    ui->librarySupportHint->setText(
+        tr("DLL loading is for Windows programs run through Proton. Stored settings are kept."));
+  } else if (backend != VfsBackend::Usvfs) {
+    ui->librarySupportHint->setText(
+        tr("This setup uses FUSE. DLL loading requires USVFS in Settings → Compatibility. "
+           "Stored settings are kept."));
+  } else {
+    ui->librarySupportHint->setText(
+        tr("Load configured DLLs when this Windows program starts. Only needed for specific tools or mods."));
+  }
 }
 
 void EditExecutablesDialog::setButtons(const QListWidgetItem* item, const Executable* e)
@@ -787,7 +831,7 @@ void EditExecutablesDialog::on_forceLoadLibraries_toggled(bool checked)
     return;
   }
 
-  ui->configureLibraries->setEnabled(ui->forceLoadLibraries->isChecked());
+  updateLibraryAvailability();
   save();
 }
 

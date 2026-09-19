@@ -197,9 +197,6 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 using namespace MOBase;
 using namespace MOShared;
 
-const QSize SmallToolbarSize(24, 24);
-const QSize MediumToolbarSize(32, 32);
-const QSize LargeToolbarSize(42, 36);
 
 QString UnmanagedModName()
 {
@@ -309,9 +306,7 @@ MainWindow::MainWindow(Settings& settings, OrganizerCore& organizerCore,
 
   ui->logList->setCore(m_OrganizerCore);
 
-  setupToolbar();
-  toggleMO2EndorseState();
-  toggleUpdateAction();
+  setupMenus();
 
   TaskProgressManager::instance().tryCreateTaskbar();
 
@@ -369,19 +364,40 @@ MainWindow::MainWindow(Settings& settings, OrganizerCore& organizerCore,
   resizeLists(pluginListAdjusted);
 
   QMenu* linkMenu = new QMenu(this);
-  m_LinkToolbar   = linkMenu->addAction(QIcon(":/MO/gui/link"), tr("Toolbar and Menu"),
-                                        this, SLOT(linkToolbar()));
-  m_LinkDesktop   = linkMenu->addAction(QIcon(":/MO/gui/link"), tr("Desktop"), this,
+  linkMenu->addAction(ui->actionModify_Executables);
+  linkMenu->addSeparator();
+  m_LinkRunMenu   = linkMenu->addAction(QIcon(":/MO/gui/link"), tr("Pin to Run menu"),
+                                        this, SLOT(linkRunMenu()));
+  m_LinkDesktop   = linkMenu->addAction(QIcon(":/MO/gui/link"), tr("Desktop shortcut"), this,
                                         SLOT(linkDesktop()));
   m_LinkStartMenu = linkMenu->addAction(QIcon(":/MO/gui/link"),
-                                        tr("Application Launcher"), this,
+                                        tr("Application menu shortcut"), this,
                                         SLOT(linkMenu()));
   ui->linkButton->setMenu(linkMenu);
+  connect(linkMenu, &QMenu::aboutToShow, this, &MainWindow::updateLaunchMenu);
 
   ui->listOptionsBtn->setMenu(
       new ModListGlobalContextMenu(m_OrganizerCore, ui->modList, this));
 
   ui->openFolderMenu->setMenu(openFolderMenu());
+
+  auto* profileMenu = new QMenu(this);
+  profileMenu->addAction(ui->actionAdd_Profile);
+  profileMenu->addSeparator();
+  profileMenu->addAction(ui->actionBackupModList);
+  profileMenu->addAction(ui->actionRestoreModList);
+  ui->profileActionsButton->setMenu(profileMenu);
+
+  auto* filtersMenu = new QMenu(this);
+  filtersMenu->addAction(ui->actionFilterEnabled);
+  filtersMenu->addAction(ui->actionFilterDisabled);
+  filtersMenu->addAction(ui->actionFilterConflicts);
+  filtersMenu->addAction(ui->actionFilterUpdates);
+  filtersMenu->addSeparator();
+  filtersMenu->addAction(ui->actionShowFilters);
+  filtersMenu->addSeparator();
+  filtersMenu->addAction(ui->actionClearFilters);
+  ui->modFiltersButton->setMenu(filtersMenu);
 
   // don't allow mouse wheel to switch grouping, too many people accidentally
   // turn on grouping and then don't understand what happened
@@ -437,11 +453,6 @@ MainWindow::MainWindow(Settings& settings, OrganizerCore& organizerCore,
           SLOT(windowTutorialFinished(QString)));
   connect(ui->tabWidget, SIGNAL(currentChanged(int)), &TutorialManager::instance(),
           SIGNAL(tabChanged(int)));
-  connect(ui->toolBar, SIGNAL(customContextMenuRequested(QPoint)), this,
-          SLOT(toolBar_customContextMenuRequested(QPoint)));
-  connect(ui->menuToolbars, &QMenu::aboutToShow, [&] {
-    updateToolbarMenu();
-  });
   connect(ui->menuView, &QMenu::aboutToShow, [&] {
     updateViewMenu();
   });
@@ -511,7 +522,6 @@ MainWindow::MainWindow(Settings& settings, OrganizerCore& organizerCore,
   if (auto* fu = m_OrganizerCore.fluorineUpdater()) {
     connect(fu, &FluorineUpdater::updateAvailable, this,
             [this](const FluorineUpdater::ReleaseInfo& info) {
-              m_FluorineUpdatePending = true;
               updateAvailable();
 
               const QString releaseId =
@@ -563,13 +573,6 @@ MainWindow::MainWindow(Settings& settings, OrganizerCore& organizerCore,
 
   ui->profileBox->setCurrentText(m_OrganizerCore.currentProfile()->name());
 
-  if (settings.archiveParsing()) {
-    ui->dataTabShowFromArchives->setCheckState(Qt::Checked);
-    ui->dataTabShowFromArchives->setEnabled(true);
-  } else {
-    ui->dataTabShowFromArchives->setCheckState(Qt::Unchecked);
-    ui->dataTabShowFromArchives->setEnabled(false);
-  }
 
   QApplication::instance()->installEventFilter(this);
 
@@ -630,9 +633,7 @@ void MainWindow::resetActionIcons()
   // given the same name as the action, which makes it pick up the icon
   // specified in the .qss file
   //
-  // that icon is then given to the widget used by the QAction (if it's some
-  // sort of button, which typically happens on the toolbar) _and_ to the
-  // QAction itself, which is used in the menu bar
+  // that icon is then given to the QAction used in the menu bar
 
   // clearing the notification, will be set below if the stylesheet has set
   // anything for it
@@ -658,13 +659,6 @@ void MainWindow::resetActionIcons()
       continue;
     }
 
-    // button associated with the action on the toolbar
-    QWidget* actionWidget = ui->toolBar->widgetForAction(action);
-
-    if (auto* actionButton = dynamic_cast<QAbstractButton*>(actionWidget)) {
-      actionButton->setIcon(icon);
-    }
-
     // the action's icon is used by the menu bar
     action->setIcon(icon);
 
@@ -687,9 +681,9 @@ void MainWindow::resetButtonIcons()
       "preferences-system", QIcon(":/MO/gui/settings")));
   ui->openFolderMenu->setIcon(
       QIcon::fromTheme("folder-open", QIcon(":/MO/gui/open_folder")));
-  ui->restoreModsButton->setIcon(
+  ui->actionRestoreModList->setIcon(
       QIcon::fromTheme("edit-undo", QIcon(":/MO/gui/restore")));
-  ui->saveModsButton->setIcon(
+  ui->actionBackupModList->setIcon(
       QIcon::fromTheme("document-save", QIcon(":/MO/gui/backup")));
   ui->restoreButton->setIcon(
       QIcon::fromTheme("edit-undo", QIcon(":/MO/gui/restore")));
@@ -697,8 +691,6 @@ void MainWindow::resetButtonIcons()
 
   ui->listOptionsBtn->setIconSize(QSize(16, 16));
   ui->openFolderMenu->setIconSize(QSize(16, 16));
-  ui->restoreModsButton->setIconSize(QSize(16, 16));
-  ui->saveModsButton->setIconSize(QSize(16, 16));
   ui->restoreButton->setIconSize(QSize(16, 16));
   ui->saveButton->setIconSize(QSize(16, 16));
 }
@@ -807,143 +799,56 @@ void MainWindow::resizeEvent(QResizeEvent* event)
   QMainWindow::resizeEvent(event);
 }
 
-void MainWindow::setupToolbar()
+void MainWindow::setupMenus()
 {
   setupActionMenu(ui->actionModPage);
   setupActionMenu(ui->actionTool);
-  setupActionMenu(ui->actionHelp);
-  setupActionMenu(ui->actionEndorseMO);
-
+  connect(ui->actionHelp, &QAction::triggered, this, &MainWindow::helpTriggered);
   createHelpMenu();
-  createEndorseMenu();
-
-  // find last separator, add a spacer just before it so the icons are
-  // right-aligned
-  m_linksSeparator = nullptr;
-  for (auto* a : ui->toolBar->actions()) {
-    if (a->isSeparator()) {
-      m_linksSeparator = a;
-    }
-  }
-
-  if (m_linksSeparator) {
-    auto* spacer = new QWidget(ui->toolBar);
-    spacer->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Preferred);
-    ui->toolBar->insertWidget(m_linksSeparator, spacer);
-
-  } else {
-    log::warn("no separator found on the toolbar, icons won't be right-aligned");
-  }
 
   if (!InstanceManager::singleton().allowedToChangeInstance()) {
     ui->actionChange_Game->setVisible(false);
   }
 }
 
-void MainWindow::setupActionMenu(QAction* a)
+void MainWindow::setupActionMenu(QAction* action)
 {
-  a->setMenu(new QMenu(this));
-
-  auto* w = ui->toolBar->widgetForAction(a);
-  if (auto* tb = dynamic_cast<QToolButton*>(w))
-    tb->setPopupMode(QToolButton::InstantPopup);
+  action->setMenu(new QMenu(this));
 }
 
 void MainWindow::updatePinnedExecutables()
 {
-  for (auto* a : ui->toolBar->actions()) {
-    if (a->objectName().startsWith("custom__")) {
-      ui->toolBar->removeAction(a);
-      a->deleteLater();
-    }
-  }
-
+  // Keep the existing pin setting so saved launch shortcuts survive the
+  // move from the toolbar to Tools > Run.
   ui->menuRun->clear();
-
-  bool hasLinks = false;
 
   for (const auto& exe : *m_OrganizerCore.executablesList()) {
     if (!exe.hide() && exe.isShownOnToolbar()) {
-      hasLinks = true;
-
-      QAction* exeAction =
-          new QAction(iconForExecutable(exe.binaryInfo().filePath()), exe.title());
-
-      exeAction->setObjectName(QString("custom__") + exe.title());
-      exeAction->setStatusTip(exe.binaryInfo().filePath());
-
-      if (!connect(exeAction, SIGNAL(triggered()), this, SLOT(startExeAction()))) {
-        log::debug("failed to connect trigger?");
-      }
-
-      if (m_linksSeparator) {
-        ui->toolBar->insertAction(m_linksSeparator, exeAction);
-      } else {
-        // separator wasn't found, add it to the end
-        ui->toolBar->addAction(exeAction);
-      }
-
-      ui->menuRun->addAction(exeAction);
+      auto* action = new QAction(iconForExecutable(exe.binaryInfo().filePath()),
+                                 exe.title(), ui->menuRun);
+      action->setObjectName(QString("custom__") + exe.title());
+      action->setStatusTip(exe.binaryInfo().filePath());
+      connect(action, &QAction::triggered, this, &MainWindow::startExeAction);
+      ui->menuRun->addAction(action);
     }
   }
 
-  // don't show the menu if there are no links
-  ui->menuRun->menuAction()->setVisible(hasLinks);
-}
-
-void MainWindow::updateToolbarMenu()
-{
-  ui->actionMainMenuToggle->setChecked(ui->menuBar->isVisible());
-  ui->actionToolBarMainToggle->setChecked(ui->toolBar->isVisible());
-  ui->actionStatusBarToggle->setChecked(ui->statusBar->isVisible());
-
-  ui->actionToolBarSmallIcons->setChecked(ui->toolBar->iconSize() == SmallToolbarSize);
-  ui->actionToolBarMediumIcons->setChecked(ui->toolBar->iconSize() ==
-                                           MediumToolbarSize);
-  ui->actionToolBarLargeIcons->setChecked(ui->toolBar->iconSize() == LargeToolbarSize);
-
-  ui->actionToolBarIconsOnly->setChecked(ui->toolBar->toolButtonStyle() ==
-                                         Qt::ToolButtonIconOnly);
-  ui->actionToolBarTextOnly->setChecked(ui->toolBar->toolButtonStyle() ==
-                                        Qt::ToolButtonTextOnly);
-  ui->actionToolBarIconsAndText->setChecked(ui->toolBar->toolButtonStyle() ==
-                                            Qt::ToolButtonTextUnderIcon);
+  ui->menuRun->menuAction()->setVisible(!ui->menuRun->isEmpty());
 }
 
 void MainWindow::updateViewMenu()
 {
   ui->actionViewLog->setChecked(ui->logDock->isVisible());
+  ui->actionStatusBarToggle->setChecked(ui->statusBar->isVisible());
 }
 
 QMenu* MainWindow::createPopupMenu()
 {
-  auto* m = new QMenu;
-
-  // add all the actions from the toolbars menu
-  for (auto* a : ui->menuToolbars->actions()) {
-    m->addAction(a);
-  }
-
-  m->addSeparator();
-
-  // other actions
-  m->addAction(ui->actionViewLog);
-
-  // make sure the actions are updated
-  updateToolbarMenu();
+  auto* menu = new QMenu(this);
+  menu->addAction(ui->actionViewLog);
+  menu->addAction(ui->actionStatusBarToggle);
   updateViewMenu();
-
-  return m;
-}
-
-void MainWindow::on_actionMainMenuToggle_triggered()
-{
-  ui->menuBar->setVisible(!ui->menuBar->isVisible());
-}
-
-void MainWindow::on_actionToolBarMainToggle_triggered()
-{
-  ui->toolBar->setVisible(!ui->toolBar->isVisible());
+  return menu;
 }
 
 void MainWindow::on_actionStatusBarToggle_triggered()
@@ -951,61 +856,13 @@ void MainWindow::on_actionStatusBarToggle_triggered()
   ui->statusBar->setVisible(!ui->statusBar->isVisible());
 }
 
-void MainWindow::on_actionToolBarSmallIcons_triggered()
-{
-  setToolbarSize(SmallToolbarSize);
-}
-
-void MainWindow::on_actionToolBarMediumIcons_triggered()
-{
-  setToolbarSize(MediumToolbarSize);
-}
-
-void MainWindow::on_actionToolBarLargeIcons_triggered()
-{
-  setToolbarSize(LargeToolbarSize);
-}
-
-void MainWindow::on_actionToolBarIconsOnly_triggered()
-{
-  setToolbarButtonStyle(Qt::ToolButtonIconOnly);
-}
-
-void MainWindow::on_actionToolBarTextOnly_triggered()
-{
-  setToolbarButtonStyle(Qt::ToolButtonTextOnly);
-}
-
-void MainWindow::on_actionToolBarIconsAndText_triggered()
-{
-  setToolbarButtonStyle(Qt::ToolButtonTextUnderIcon);
-}
-
 void MainWindow::on_actionViewLog_triggered()
 {
   ui->logDock->setVisible(!ui->logDock->isVisible());
 }
 
-void MainWindow::setToolbarSize(const QSize& s)
-{
-  for (auto* tb : findChildren<QToolBar*>()) {
-    tb->setIconSize(s);
-  }
-}
-
-void MainWindow::setToolbarButtonStyle(Qt::ToolButtonStyle s)
-{
-  for (auto* tb : findChildren<QToolBar*>()) {
-    tb->setToolButtonStyle(s);
-  }
-}
-
 void MainWindow::on_centralWidget_customContextMenuRequested(const QPoint& pos)
 {
-  // this allows for getting the context menu even if both the menubar and all
-  // the toolbars are hidden; an alternative is the Alt key handled in
-  // keyPressEvent() below
-
   // the custom context menu event bubbles up to here if widgets don't actually
   // process this, which would show the menu when right-clicking button, labels,
   // etc.
@@ -1017,7 +874,8 @@ void MainWindow::on_centralWidget_customContextMenuRequested(const QPoint& pos)
     return;
   }
 
-  createPopupMenu()->exec(ui->centralWidget->mapToGlobal(pos));
+  std::unique_ptr<QMenu> menu(createPopupMenu());
+  menu->exec(ui->centralWidget->mapToGlobal(pos));
 }
 
 void MainWindow::scheduleCheckForProblems()
@@ -1073,13 +931,6 @@ void MainWindow::updateProblemsButton()
 
   // setting the icon on the action (shown on the menu)
   ui->actionNotifications->setIcon(final);
-
-  // setting the icon on the toolbar button
-  if (auto* actionWidget = ui->toolBar->widgetForAction(ui->actionNotifications)) {
-    if (auto* button = dynamic_cast<QAbstractButton*>(actionWidget)) {
-      button->setIcon(final);
-    }
-  }
 
   // updating the status bar, may be null very early when MO is starting
   if (ui->statusBar) {
@@ -1155,25 +1006,6 @@ void MainWindow::about()
       .exec();
 }
 
-void MainWindow::createEndorseMenu()
-{
-  auto* menu = ui->actionEndorseMO->menu();
-  if (!menu) {
-    // shouldn't happen
-    return;
-  }
-
-  menu->clear();
-
-  QAction* endorseAction = new QAction(tr("Endorse"), menu);
-  connect(endorseAction, SIGNAL(triggered()), this, SLOT(actionEndorseMO()));
-  menu->addAction(endorseAction);
-
-  QAction* wontEndorseAction = new QAction(tr("Won't Endorse"), menu);
-  connect(wontEndorseAction, SIGNAL(triggered()), this, SLOT(actionWontEndorseMO()));
-  menu->addAction(wontEndorseAction);
-}
-
 void MainWindow::createHelpMenu()
 {
   //: Translation strings for tutorial names
@@ -1182,18 +1014,9 @@ void MainWindow::createHelpMenu()
       {"Conflict Resolution", QT_TR_NOOP("Conflict Resolution")},
       {"Overview", QT_TR_NOOP("Overview")}};
 
-  auto* menu = ui->actionHelp->menu();
-  if (!menu) {
-    // this happens on startup because languageChanged() (which calls this) is
-    // called before the menus are actually created
-    return;
-  }
-
+  auto* menu = ui->menuHelp;
   menu->clear();
-
-  QAction* helpAction = new QAction(tr("Help on UI"), menu);
-  connect(helpAction, SIGNAL(triggered()), this, SLOT(helpTriggered()));
-  menu->addAction(helpAction);
+  menu->addAction(ui->actionHelp);
 
   QAction* wikiAction = new QAction(tr("Documentation"), menu);
   connect(wikiAction, SIGNAL(triggered()), this, SLOT(wikiTriggered()));
@@ -1255,7 +1078,10 @@ void MainWindow::createHelpMenu()
   }
 
   menu->addMenu(tutorialMenu);
-  menu->addAction(tr("About"), this, SLOT(about()));
+  menu->addSeparator();
+  menu->addAction(ui->actionUpdate);
+  menu->addSeparator();
+  menu->addAction(tr("About Fluorine Manager"), this, SLOT(about()));
   menu->addAction(tr("About Qt"), qApp, SLOT(aboutQt()));
 }
 
@@ -1311,7 +1137,7 @@ bool MainWindow::shouldStartTutorial()
 
   QMessageBox dlg(
       QMessageBox::Question, tr("Show tutorial?"),
-      tr("You are starting Mod Organizer for the first time. "
+      tr("You are starting Fluorine Manager for the first time. "
          "Do you want to show a tutorial of its basic features? If you choose "
          "no you can always start the tutorial from the \"Help\" menu."),
       QMessageBox::Yes | QMessageBox::No);
@@ -1358,12 +1184,10 @@ void MainWindow::showEvent(QShowEvent* event)
         }
       } else {
         log::error("{} missing", firstStepsTutorial);
-        QPoint pos = ui->toolBar->mapToGlobal(QPoint());
-        pos.rx() += ui->toolBar->width() / 2;
-        pos.ry() += ui->toolBar->height();
-        QWhatsThis::showText(pos,
-                             QObject::tr("Please use \"Help\" from the toolbar to get "
-                                         "usage instructions to all elements"));
+        const QPoint pos = ui->menuBar->mapToGlobal(
+            QPoint(ui->menuBar->width() / 2, ui->menuBar->height()));
+        QWhatsThis::showText(pos, tr("Use Help > Help on UI for information "
+                                    "about the interface."));
       }
       if (!m_OrganizerCore.managedGame()->getSupportURL().isEmpty()) {
         QMessageBox::information(this, tr("Game Support Wiki"),
@@ -1803,15 +1627,8 @@ void MainWindow::updateModPageMenu()
       registeredSources << gameName;
   }
 
-  // No mod page plugin and the menu was visible
-  bool const keepOriginalAction =
-      modPagePlugins.empty() && registeredSources.length() <= 1;
-  if (keepOriginalAction) {
-    ui->toolBar->insertAction(ui->actionAdd_Profile, ui->actionNexus);
-  } else {
-    ui->toolBar->removeAction(ui->actionNexus);
-  }
-  ui->actionModPage->setVisible(!keepOriginalAction);
+  ui->actionModPage->setVisible(!modPagePlugins.empty() ||
+                                !registeredSources.empty());
 }
 
 void MainWindow::startExeAction()
@@ -1865,6 +1682,10 @@ void MainWindow::on_profileBox_currentIndexChanged(int index)
     return;
   }
 
+  if (index < 0 || index >= ui->profileBox->count()) {
+    return;
+  }
+
   int const previousIndex = m_OldProfileIndex;
   m_OldProfileIndex = index;
 
@@ -1880,52 +1701,6 @@ void MainWindow::on_profileBox_currentIndexChanged(int index)
   if (previousIndex == -1 && m_OrganizerCore.currentProfile() != nullptr &&
       m_OrganizerCore.currentProfile()->exists() &&
       ui->profileBox->currentText() == m_OrganizerCore.currentProfile()->name()) {
-    return;
-  }
-
-  // ensure the new index is valid
-  if (index < 0 || index >= ui->profileBox->count()) {
-    log::debug("invalid profile index, using last profile");
-    ui->profileBox->setCurrentIndex(ui->profileBox->count() - 1);
-  }
-
-  // handle <manage> item
-  if (ui->profileBox->currentIndex() == 0) {
-    // remember the profile name that was selected before, previousIndex can't
-    // be used again because adding/deleting profiles will change the order
-    // in the list
-    const QString previousName = ui->profileBox->itemText(previousIndex);
-
-    // show the dialog
-    ProfilesDialog dlg(previousName, m_OrganizerCore, this);
-    dlg.exec();
-
-    // check if the user clicked 'select' to select another profile
-    std::optional<QString> newSelection = dlg.selectedProfile();
-
-    // refresh the profile box; this loops until there is at least one profile
-    // available, which shouldn't really happen because the dialog won't allow
-    // it
-    //
-    // the `false` to refreshProfiles() is so it doesn't try to select the
-    // profile in the list because 1) it's done just below, and 2) it might be
-    // wrong profile if there's something in newSelection
-    while (!refreshProfiles(false)) {
-      ProfilesDialog dlg(previousName, m_OrganizerCore, this);
-      dlg.exec();
-      newSelection = dlg.selectedProfile();
-    }
-
-    // note that setCurrentText() is recursive, it will re-execute this function
-    if (newSelection) {
-      ui->profileBox->setCurrentText(*newSelection);
-    } else {
-      ui->profileBox->setCurrentText(previousName);
-    }
-
-    // nothing else to do because setCurrentText() is recursive and will
-    // have re-executed on_profileBox_currentIndexChanged() again, doing all
-    // the stuff below for the new selection
     return;
   }
 
@@ -1956,7 +1731,6 @@ bool MainWindow::refreshProfiles(bool selectProfile, QString newProfile)
 
   profileBox->blockSignals(true);
   profileBox->clear();
-  profileBox->addItem(QObject::tr("<Manage...>"));
 
   QDir profilesDir(Settings::instance().paths().profiles());
   profilesDir.setFilter(QDir::AllDirs | QDir::NoDotAndDotDot);
@@ -1974,26 +1748,23 @@ bool MainWindow::refreshProfiles(bool selectProfile, QString newProfile)
     }
   }
 
-  // now select one of the profiles, preferably the one that was selected before
+  // Adding the first item selects it while signals are blocked. Clear that
+  // selection so choosing even the first profile activates it after a refresh.
+  profileBox->setCurrentIndex(-1);
   profileBox->blockSignals(false);
 
-  if (selectProfile) {
-    if (profileBox->count() > 1) {
-      if (newProfile.isEmpty()) {
-        profileBox->setCurrentText(currentProfileName);
-      } else {
-        profileBox->setCurrentText(newProfile);
-      }
-      if (profileBox->currentIndex() == 0) {
-        profileBox->setCurrentIndex(1);
-      }
-    }
+  if (selectProfile && profileBox->count() > 0) {
+    const auto name = newProfile.isEmpty() ? currentProfileName : newProfile;
+    const int index = profileBox->findText(name, Qt::MatchExactly);
+    profileBox->setCurrentIndex(index >= 0 ? index : 0);
   }
-  return profileBox->count() > 1;
+  return profileBox->count() > 0;
 }
 
 void MainWindow::refreshExecutablesList()
 {
+  const QString previousTitle = ui->executablesListBox->currentText();
+  const int previousIndex = ui->executablesListBox->currentIndex();
   QAbstractItemModel* model = ui->executablesListBox->model();
 
   auto add = [&](const QString& title, const QFileInfo& binary) {
@@ -2013,8 +1784,6 @@ void MainWindow::refreshExecutablesList()
 
   ui->executablesListBox->setEnabled(false);
   ui->executablesListBox->clear();
-
-  add(tr("<Edit...>"), {});
 
   auto shouldSkipInLaunchDropdown = [](const Executable& exe) {
     const QString title = exe.title().trimmed();
@@ -2038,14 +1807,12 @@ void MainWindow::refreshExecutablesList()
     add(exe.title(), exe.binaryInfo());
   }
 
-  if (ui->executablesListBox->count() == 1) {
-    // all executables are hidden, add an empty one to at least be able to
-    // switch to edit
-    add(tr("(no executables)"), QFileInfo(":badfile"));
-  }
-
-  ui->executablesListBox->setCurrentIndex(1);
+  const int previous = ui->executablesListBox->findText(previousTitle, Qt::MatchExactly);
+  const int count = ui->executablesListBox->count();
+  const int fallback = count > 0 ? std::clamp(previousIndex, 0, count - 1) : -1;
+  ui->executablesListBox->setCurrentIndex(previous >= 0 ? previous : fallback);
   ui->executablesListBox->setEnabled(true);
+  on_executablesListBox_currentIndexChanged(ui->executablesListBox->currentIndex());
 }
 
 static bool BySortValue(const std::pair<UINT32, QTreeWidgetItem*>& LHS,
@@ -2301,7 +2068,6 @@ void MainWindow::readSettings()
 
   s.geometry().restoreState(this);
   s.geometry().restoreDocks(this);
-  s.geometry().restoreToolbars(this);
   s.geometry().restoreState(ui->splitter);
   s.geometry().restoreState(ui->categoriesSplitter);
   ui->menuBar->show();
@@ -2310,13 +2076,16 @@ void MainWindow::readSettings()
   FilterWidget::setOptions(s.interface().filterOptions());
 
   {
-    // special case in case someone puts 0 in the INI
-    auto v = s.widgets().index(ui->executablesListBox);
-    if (!v || v == 0) {
-      v = 1;
+    int index = 0;
+    if (const auto title = s.widgets().selection(ui->executablesListBox)) {
+      index = ui->executablesListBox->findText(*title, Qt::MatchExactly);
+    } else if (const auto legacy = s.widgets().index(ui->executablesListBox)) {
+      // Older versions included an Edit entry before the first program.
+      index = *legacy - 1;
     }
-
-    ui->executablesListBox->setCurrentIndex(*v);
+    const int count = ui->executablesListBox->count();
+    ui->executablesListBox->setCurrentIndex(
+        count > 0 ? std::clamp(index, 0, count - 1) : -1);
   }
 
   s.widgets().restoreIndex(ui->tabWidget);
@@ -2327,7 +2096,6 @@ void MainWindow::readSettings()
     s.geometry().restoreVisibility(ui->categoriesGroup, false);
     const auto v = ui->categoriesGroup->isVisible();
     setCategoryListVisible(v);
-    ui->displayCategoriesBtn->setChecked(v);
   }
 
   if (s.network().useProxy()) {
@@ -2402,7 +2170,6 @@ void MainWindow::storeSettings()
   s.geometry().saveDocks(this);
 
   s.geometry().saveVisibility(ui->statusBar);
-  s.geometry().saveToolbars(this);
   s.geometry().saveState(ui->splitter);
   s.geometry().saveState(ui->categoriesSplitter);
   s.geometry().saveMainWindowMonitor(this);
@@ -2412,7 +2179,7 @@ void MainWindow::storeSettings()
   s.geometry().saveState(ui->downloadView->header());
   s.geometry().saveState(ui->savegameList->header());
 
-  s.widgets().saveIndex(ui->executablesListBox);
+  s.widgets().saveSelection(ui->executablesListBox);
   s.widgets().saveIndex(ui->tabWidget);
 
   m_DataTab->saveState(s);
@@ -2534,25 +2301,10 @@ bool MainWindow::modifyExecutablesDialog(int selection)
   return result;
 }
 
-void MainWindow::on_executablesListBox_currentIndexChanged(int index)
+void MainWindow::on_executablesListBox_currentIndexChanged(int)
 {
-  if (!ui->executablesListBox->isEnabled()) {
-    return;
-  }
-
-  const int previousIndex = (m_OldExecutableIndex > 0 ? m_OldExecutableIndex : 1);
-
-  m_OldExecutableIndex = index;
-
-  if (index == 0) {
-    modifyExecutablesDialog(previousIndex - 1);
-    const auto newCount = ui->executablesListBox->count();
-
-    if (previousIndex >= 0 && previousIndex < newCount) {
-      ui->executablesListBox->setCurrentIndex(previousIndex);
-    } else {
-      ui->executablesListBox->setCurrentIndex(newCount - 1);
-    }
+  if (ui->executablesListBox->isEnabled()) {
+    ui->startButton->setEnabled(getSelectedExecutable() != nullptr);
   }
 }
 
@@ -2563,7 +2315,7 @@ void MainWindow::helpTriggered()
 
 void MainWindow::wikiTriggered()
 {
-  shell::Open(QUrl("https://modorganizer2.github.io/"));
+  shell::Open(QUrl("https://github.com/SulfurNitride/Fluorine-Manager/blob/main/docs/FAQ.md"));
 }
 
 void MainWindow::gameSupportTriggered()
@@ -2573,12 +2325,12 @@ void MainWindow::gameSupportTriggered()
 
 void MainWindow::discordTriggered()
 {
-  shell::Open(QUrl("https://discord.gg/ewUVAqyrQX"));
+  shell::Open(QUrl("https://discord.gg/9JWQzSeUWt"));
 }
 
 void MainWindow::issueTriggered()
 {
-  shell::Open(QUrl("https://github.com/Modorganizer2/modorganizer/issues"));
+  shell::Open(QUrl("https://github.com/SulfurNitride/Fluorine-Manager/issues"));
 }
 
 void MainWindow::tutorialTriggered()
@@ -2638,16 +2390,13 @@ void MainWindow::on_actionAdd_Profile_triggered()
 
 void MainWindow::on_actionModify_Executables_triggered()
 {
-  const auto sel = (m_OldExecutableIndex > 0 ? m_OldExecutableIndex - 1 : 0);
-
-  if (modifyExecutablesDialog(sel)) {
-    const auto newCount = ui->executablesListBox->count();
-    if (m_OldExecutableIndex >= 0 && m_OldExecutableIndex < newCount) {
-      ui->executablesListBox->setCurrentIndex(m_OldExecutableIndex);
-    } else {
-      ui->executablesListBox->setCurrentIndex(newCount - 1);
-    }
-  }
+  const auto& executables = *m_OrganizerCore.executablesList();
+  const QString selected = ui->executablesListBox->currentText();
+  const auto it = std::find_if(executables.begin(), executables.end(),
+                               [&](const auto& exe) { return exe.title() == selected; });
+  const int index = it == executables.end()
+                        ? 0 : static_cast<int>(std::distance(executables.begin(), it));
+  modifyExecutablesDialog(index);
 }
 
 void MainWindow::refresherProgress(const DirectoryRefreshProgress* p)
@@ -2910,18 +2659,18 @@ QMenu* MainWindow::openFolderMenu()
 
   // MO-specific folders that are not directly related to modding and are either
   // in the installation folder or the instance
-  FolderMenu->addAction(tr("Open MO2 Install folder"), this, SLOT(openInstallFolder()));
-  FolderMenu->addAction(tr("Open MO2 Plugins folder"), this, SLOT(openPluginsFolder()));
-  FolderMenu->addAction(tr("Open MO2 Stylesheets folder"), this,
+  FolderMenu->addAction(tr("Open Fluorine Install folder"), this, SLOT(openInstallFolder()));
+  FolderMenu->addAction(tr("Open Fluorine Plugins folder"), this, SLOT(openPluginsFolder()));
+  FolderMenu->addAction(tr("Open Fluorine Stylesheets folder"), this,
                         SLOT(openStylesheetsFolder()));
-  FolderMenu->addAction(tr("Open MO2 Logs folder"), [=, this] {
+  FolderMenu->addAction(tr("Open Fluorine Logs folder"), [=, this] {
     LogList::openLogsFolder();
   });
 
   return FolderMenu;
 }
 
-void MainWindow::linkToolbar()
+void MainWindow::linkRunMenu()
 {
   Executable* exe = getSelectedExecutable();
   if (!exe) {
@@ -2946,9 +2695,14 @@ void MainWindow::linkMenu()
   }
 }
 
-void MainWindow::on_linkButton_pressed()
+void MainWindow::updateLaunchMenu()
 {
   const Executable* exe = getSelectedExecutable();
+  m_LinkRunMenu->setEnabled(exe != nullptr);
+  m_LinkDesktop->setEnabled(exe != nullptr);
+  if (m_LinkStartMenu) {
+    m_LinkStartMenu->setEnabled(exe != nullptr);
+  }
   if (!exe) {
     return;
   }
@@ -2958,7 +2712,7 @@ void MainWindow::on_linkButton_pressed()
 
   env::Shortcut const shortcut(*exe);
 
-  m_LinkToolbar->setIcon(exe->isShownOnToolbar() ? removeIcon : addIcon);
+  m_LinkRunMenu->setIcon(exe->isShownOnToolbar() ? removeIcon : addIcon);
 
   m_LinkDesktop->setIcon(shortcut.exists(env::Shortcut::Desktop) ? removeIcon
                                                                  : addIcon);
@@ -3045,10 +2799,10 @@ void MainWindow::on_actionSettings_triggered()
   const auto state = settings.archiveParsing();
   if (state != oldArchiveParsing) {
     if (!state) {
-      ui->dataTabShowFromArchives->setCheckState(Qt::Unchecked);
+      ui->dataTabShowFromArchives->setChecked(false);
       ui->dataTabShowFromArchives->setEnabled(false);
     } else {
-      ui->dataTabShowFromArchives->setCheckState(Qt::Checked);
+      ui->dataTabShowFromArchives->setChecked(true);
       ui->dataTabShowFromArchives->setEnabled(true);
     }
     m_OrganizerCore.refresh();
@@ -3071,11 +2825,7 @@ void MainWindow::on_actionSettings_triggered()
     m_OrganizerCore.cycleDiagnostics();
   }
 
-  toggleMO2EndorseState();
-
   if (oldCheckForUpdates != settings.checkForUpdates()) {
-    toggleUpdateAction();
-
     if (settings.checkForUpdates()) {
       m_OrganizerCore.checkForUpdates();
     }
@@ -3112,15 +2862,6 @@ void MainWindow::categoriesSaved()
         mod->setCategory(category, false);
     }
   }
-}
-
-void MainWindow::on_actionNexus_triggered()
-{
-  const IPluginGame* game = m_OrganizerCore.managedGame();
-  QString gameName        = game->gameShortName();
-  if (game->gameNexusName().isEmpty() && game->primarySources().count())
-    gameName = game->primarySources()[0];
-  shell::Open(QUrl(NexusInterface::instance().getGameURL(gameName)));
 }
 
 void MainWindow::installTranslator(const QString& name)
@@ -3161,8 +2902,6 @@ void MainWindow::languageChange(const QString& newLanguage)
   }
   ui->retranslateUi(this);
   log::debug("loaded language {}", newLanguage);
-
-  ui->profileBox->setItemText(0, QObject::tr("<Manage...>"));
 
   createHelpMenu();
 
@@ -3291,91 +3030,14 @@ void MainWindow::motdReceived(const QString& motd)
 
 void MainWindow::on_actionUpdate_triggered()
 {
-  // Fluorine has its own updater (Settings → Updates). The MO2 self-updater
-  // is no-op'd (see SelfUpdater::testForUpdate). Open the Updates tab so
-  // the user can see the release info and trigger Install & restart.
-  if (m_FluorineUpdatePending) {
-    Settings& settings = m_OrganizerCore.settings();
-    SettingsDialog dialog(&m_PluginContainer, settings, this);
-    dialog.selectTabByLabel(tr("Updates"));
-    dialog.exec();
-    return;
-  }
-  m_OrganizerCore.startMOUpdate();
+  SettingsDialog dialog(&m_PluginContainer, m_OrganizerCore.settings(), this);
+  dialog.selectTabByLabel(tr("Updates"));
+  dialog.exec();
 }
 
 void MainWindow::on_actionExit_triggered()
 {
   ExitModOrganizer();
-}
-
-void MainWindow::actionEndorseMO()
-{
-  if (QMessageBox::question(this, tr("Endorse Mod Organizer"),
-                            tr("Do you want to endorse Mod Organizer on Nexus now?"),
-                            QMessageBox::Yes | QMessageBox::No) == QMessageBox::Yes) {
-    NexusInterface::instance().requestToggleEndorsement(
-        QString::fromStdWString(AppConfig::mo2NexusGameId()),
-        AppConfig::mo2NexusModId(), m_OrganizerCore.getVersion().string(), true, this,
-        QVariant(), QString());
-  }
-}
-
-void MainWindow::actionWontEndorseMO()
-{
-  if (QMessageBox::question(
-          this, tr("Abstain from Endorsing Mod Organizer"),
-          tr("Are you sure you want to abstain from endorsing Mod Organizer 2?\n"
-             "You will have to visit the mod page on the Nexus Tools site to change "
-             "your mind."),
-          QMessageBox::Yes | QMessageBox::No) == QMessageBox::Yes) {
-    NexusInterface::instance().requestToggleEndorsement(
-        QString::fromStdWString(AppConfig::mo2NexusGameId()),
-        AppConfig::mo2NexusModId(), m_OrganizerCore.getVersion().string(), false, this,
-        QVariant(), QString());
-  }
-}
-
-void MainWindow::toggleMO2EndorseState()
-{
-  const auto& s = m_OrganizerCore.settings();
-
-  if (!s.nexus().endorsementIntegration()) {
-    ui->actionEndorseMO->setVisible(false);
-    return;
-  }
-
-  ui->actionEndorseMO->setVisible(true);
-
-  bool enabled = false;
-  QString text;
-
-  switch (s.nexus().endorsementState()) {
-  case EndorsementState::Accepted: {
-    text = tr("Thank you for endorsing MO2! :)");
-    break;
-  }
-
-  case EndorsementState::Refused: {
-    text = tr("Please reconsider endorsing MO2 on Nexus!");
-    break;
-  }
-
-  case EndorsementState::NoDecision: {
-    enabled = true;
-    break;
-  }
-  }
-
-  ui->actionEndorseMO->menu()->setEnabled(enabled);
-  ui->actionEndorseMO->setToolTip(text);
-  ui->actionEndorseMO->setStatusTip(text);
-}
-
-void MainWindow::toggleUpdateAction()
-{
-  const auto& s = m_OrganizerCore.settings();
-  ui->actionUpdate->setVisible(s.checkForUpdates());
 }
 
 void MainWindow::nxmEndorsementsAvailable(QVariant userData, QVariant resultData, int)
@@ -3420,8 +3082,6 @@ void MainWindow::nxmEndorsementsAvailable(QVariant userData, QVariant resultData
       if (result->second.first == AppConfig::mo2NexusModId()) {
         m_OrganizerCore.settings().nexus().setEndorsementState(
             endorsementStateFromString(result->second.second));
-
-        toggleMO2EndorseState();
         break;
       }
     }
@@ -3772,7 +3432,6 @@ void MainWindow::nxmEndorsementToggled(QString, int, QVariant, QVariant resultDa
   }
 
   m_OrganizerCore.settings().nexus().setEndorsementState(s);
-  toggleMO2EndorseState();
 
   if (!disconnect(sender(),
                   SIGNAL(nxmEndorsementToggled(QString, int, QVariant, QVariant, int)),
@@ -4042,52 +3701,16 @@ void MainWindow::setCategoryListVisible(bool visible)
 {
   if (visible) {
     ui->categoriesGroup->show();
-    ui->displayCategoriesBtn->setText(ToQString(L"\u00ab"));
+    ui->actionShowFilters->setChecked(true);
   } else {
     ui->categoriesGroup->hide();
-    ui->displayCategoriesBtn->setText(ToQString(L"\u00bb"));
+    ui->actionShowFilters->setChecked(false);
   }
 }
 
-void MainWindow::on_displayCategoriesBtn_toggled(bool checked)
+void MainWindow::on_actionShowFilters_toggled(bool checked)
 {
   setCategoryListVisible(checked);
-}
-
-void MainWindow::removeFromToolbar(QAction* action)
-{
-  const auto& title = action->text();
-  auto& list        = *m_OrganizerCore.executablesList();
-
-  auto itor = list.find(title);
-  if (itor == list.end()) {
-    log::warn("removeFromToolbar(): executable '{}' not found", title);
-    return;
-  }
-
-  itor->setShownOnToolbar(false);
-  updatePinnedExecutables();
-}
-
-void MainWindow::toolBar_customContextMenuRequested(const QPoint& point)
-{
-  QAction* action = ui->toolBar->actionAt(point);
-
-  if (action != nullptr) {
-    if (action->objectName().startsWith("custom_")) {
-      QMenu menu;
-      menu.addAction(tr("Remove '%1' from the toolbar").arg(action->text()),
-                     [&, action]() {
-                       removeFromToolbar(action);
-                     });
-      menu.exec(ui->toolBar->mapToGlobal(point));
-      return;
-    }
-  }
-
-  // did not click a link button, show the default context menu
-  auto* m = createPopupMenu();
-  m->exec(ui->toolBar->mapToGlobal(point));
 }
 
 Executable* MainWindow::getSelectedExecutable()
@@ -4315,7 +3938,7 @@ void MainWindow::on_restoreButton_clicked()
   }
 }
 
-void MainWindow::on_saveModsButton_clicked()
+void MainWindow::on_actionBackupModList_triggered()
 {
   m_OrganizerCore.currentProfile()->writeModlistNow(true);
   QDateTime const now = QDateTime::currentDateTime();
@@ -4324,7 +3947,7 @@ void MainWindow::on_saveModsButton_clicked()
   }
 }
 
-void MainWindow::on_restoreModsButton_clicked()
+void MainWindow::on_actionRestoreModList_triggered()
 {
   QString const modlistName = m_OrganizerCore.currentProfile()->getModlistFileName();
   QString const choice      = queryRestore(modlistName);

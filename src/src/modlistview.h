@@ -6,7 +6,6 @@
 #include <vector>
 
 #include <QDragEnterEvent>
-#include <QLCDNumber>
 #include <QLabel>
 #include <QTreeView>
 
@@ -19,6 +18,8 @@ namespace Ui
 class MainWindow;
 }
 
+class QAction;
+class QToolButton;
 class CategoryFactory;
 class FilterList;
 class OrganizerCore;
@@ -207,12 +208,17 @@ private:  // private structures
     QComboBox* groupBy;
 
     // the mod counter
-    QLCDNumber* counter;
+    QLabel* counter;
 
     // filters related
     QLineEdit* filter;
     QLabel* currentCategory;
-    QPushButton* clearFilters;
+    QToolButton* filtersButton;
+    QAction* clearFilters;
+    QAction* quickEnabled;
+    QAction* quickDisabled;
+    QAction* quickConflicts;
+    QAction* quickUpdates;
     QComboBox* filterSeparators;
     QPushButton* fomodReviews;
 

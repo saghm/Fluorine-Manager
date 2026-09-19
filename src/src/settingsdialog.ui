@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>820</width>
-    <height>592</height>
+    <width>1080</width>
+    <height>740</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -65,191 +65,19 @@
             <number>0</number>
            </property>
            <item>
-            <widget class="QGroupBox" name="groupBox_61">
-             <property name="title">
-              <string>Language</string>
-             </property>
-             <layout class="QGridLayout" name="gridLayout_3">
-              <property name="leftMargin">
-               <number>9</number>
-              </property>
-              <property name="topMargin">
-               <number>9</number>
-              </property>
-              <property name="rightMargin">
-               <number>9</number>
-              </property>
-              <property name="bottomMargin">
-               <number>9</number>
-              </property>
-              <item row="0" column="2">
-               <spacer name="horizontalSpacer_4">
-                <property name="orientation">
-                 <enum>Qt::Horizontal</enum>
-                </property>
-                <property name="sizeHint" stdset="0">
-                 <size>
-                  <width>40</width>
-                  <height>20</height>
-                 </size>
-                </property>
-               </spacer>
-              </item>
-              <item row="0" column="1">
-               <widget class="LinkLabel" name="label_33">
-                <property name="toolTip">
-                 <string notr="true">https://discord.gg/ewUVAqyrQX</string>
-                </property>
-                <property name="text">
-                 <string>&lt;a href=&quot;https://discord.gg/ewUVAqyrQX&quot;&gt;Help translate Mod Organizer on Discord&lt;/a&gt;</string>
-                </property>
-                <property name="openExternalLinks">
-                 <bool>true</bool>
-                </property>
-               </widget>
-              </item>
-              <item row="0" column="0">
-               <widget class="QComboBox" name="languageBox">
-                <property name="toolTip">
-                 <string>The language of the user interface.</string>
-                </property>
-                <property name="whatsThis">
-                 <string>The language of the user interface.</string>
-                </property>
-               </widget>
-              </item>
-             </layout>
-            </widget>
-           </item>
-           <item>
-            <widget class="QGroupBox" name="groupBox_5">
-             <property name="title">
-              <string>Download List</string>
-             </property>
-             <layout class="QVBoxLayout" name="verticalLayout_2">
-              <item>
-               <widget class="QCheckBox" name="showMetaBox">
-                <property name="toolTip">
-                 <string>Show meta information instead of file names in the download list.</string>
-                </property>
-                <property name="whatsThis">
-                 <string>Show meta information instead of file names in the download list.</string>
-                </property>
-                <property name="text">
-                 <string>Show meta information</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QCheckBox" name="compactBox">
-                <property name="toolTip">
-                 <string>Make the download list more compact.</string>
-                </property>
-                <property name="whatsThis">
-                 <string>Make the download list more compact.</string>
-                </property>
-                <property name="text">
-                 <string>Compact list</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QCheckBox" name="hideDownloadInstallBox">
-                <property name="toolTip">
-                 <string>Automatically hide downloads after successful installation.</string>
-                </property>
-                <property name="whatsThis">
-                 <string>Automatically hide downloads after successful installation.</string>
-                </property>
-                <property name="text">
-                 <string>Hide downloads after installation</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QCheckBox" name="showDownloadNotificationsBox">
-                <property name="toolTip">
-                 <string>Show notifications when downloads complete or fail.</string>
-                </property>
-                <property name="whatsThis">
-                 <string>Show notifications when downloads complete or fail.</string>
-                </property>
-                <property name="text">
-                 <string>Show notifications for completed or failed downloads</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QCheckBox" name="enableArchiveParsingBox">
-                <property name="toolTip">
-                 <string>Enable parsing of Archives. This is an Experimental Feature. Has negative effects on performance and known incorrectness.</string>
-                </property>
-                <property name="whatsThis">
-                 <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;By default, MO will parse archive files (BSA, BA2) to calculate conflicts between the contents of the archive files and other loose files. This process has a noticeable cost in performance.&lt;/p&gt;&lt;p&gt;This feature should not be confused with the archive management feature offered by MO1. MO2 will only show conflicts with archives and will NOT load them into the game or program.&lt;/p&gt;&lt;p&gt;If you disable this feature, MO will only display conflicts between loose files.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-                </property>
-                <property name="text">
-                 <string>Enable archives parsing (experimental)</string>
-                </property>
-                <property name="checked">
-                 <bool>true</bool>
-                </property>
-               </widget>
-              </item>
-             </layout>
-            </widget>
-           </item>
-           <item>
-            <widget class="QGroupBox" name="groupBox_6">
-             <property name="title">
-              <string>Updates</string>
-             </property>
-             <layout class="QVBoxLayout" name="verticalLayout_3" stretch="0,0">
-              <item>
-               <widget class="QCheckBox" name="checkForUpdates">
-                <property name="toolTip">
-                 <string>Check for Mod Organizer updates on Github on startup.</string>
-                </property>
-                <property name="whatsThis">
-                 <string>Check for Mod Organizer updates on Github on startup.</string>
-                </property>
-                <property name="text">
-                 <string>Check for updates</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QCheckBox" name="usePrereleaseBox">
-                <property name="toolTip">
-                 <string>Update to non-stable releases.</string>
-                </property>
-                <property name="whatsThis">
-                 <string>Update to non-stable releases.</string>
-                </property>
-                <property name="text">
-                 <string>Update to beta versions</string>
-                </property>
-               </widget>
-              </item>
-             </layout>
-            </widget>
-           </item>
-           <item>
             <widget class="QGroupBox" name="groupBox_8">
-             <property name="title">
-              <string>Profile Defaults</string>
-             </property>
              <layout class="QVBoxLayout" name="verticalLayout_11">
               <item>
                <widget class="QCheckBox" name="localINIs">
                 <property name="text">
-                 <string>Local INIs</string>
+                 <string>Keep game configuration files separate for each profile</string>
                 </property>
                </widget>
               </item>
               <item>
                <widget class="QCheckBox" name="localSaves">
                 <property name="text">
-                 <string>Local Saves</string>
+                 <string>Keep saves separate for each profile</string>
                 </property>
                </widget>
               </item>
@@ -261,13 +89,13 @@
                </widget>
               </item>
              </layout>
+             <property name="title">
+              <string>New profile defaults</string>
+             </property>
             </widget>
            </item>
            <item>
             <widget class="QGroupBox" name="groupBox_9">
-             <property name="title">
-              <string>Miscellaneous</string>
-             </property>
              <layout class="QVBoxLayout" name="verticalLayout_14">
               <property name="leftMargin">
                <number>9</number>
@@ -297,7 +125,7 @@
               <item>
                <widget class="QCheckBox" name="changeGameConfirmation">
                 <property name="text">
-                 <string>Show confirmation when changing instance</string>
+                 <string>Confirm before switching library setups</string>
                 </property>
                </widget>
               </item>
@@ -310,7 +138,7 @@
                  <string>Show the menubar when the Alt key is pressed</string>
                 </property>
                 <property name="text">
-                 <string>Show menubar when pressing Alt</string>
+                 <string>Show the menu bar when pressing Alt</string>
                 </property>
                </widget>
               </item>
@@ -325,6 +153,19 @@
                </widget>
               </item>
              </layout>
+             <property name="title">
+              <string>Interface</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="generalActionsNote">
+             <property name="text">
+              <string>Tools · Changes to categories and saved dialog choices take effect immediately.</string>
+             </property>
+             <property name="wordWrap">
+              <bool>true</bool>
+             </property>
             </widget>
            </item>
            <item>
@@ -357,7 +198,7 @@
                  <string>Reset all choices made in dialogs.</string>
                 </property>
                 <property name="text">
-                 <string>Reset Dialog Choices</string>
+                 <string>Reset dialog choices…</string>
                 </property>
                </widget>
               </item>
@@ -370,7 +211,7 @@
                  <string>Modify the categories available to arrange your mods.</string>
                 </property>
                 <property name="text">
-                 <string>Configure Mod Categories</string>
+                 <string>Edit mod categories…</string>
                 </property>
                </widget>
               </item>
@@ -411,7 +252,7 @@
      </widget>
      <widget class="QWidget" name="tab">
       <attribute name="title">
-       <string>Theme</string>
+       <string>Appearance</string>
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_20">
        <item>
@@ -464,30 +305,30 @@
             <property name="maximum">
              <number>48</number>
             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLabel" name="fontFamilyLabel">
-             <property name="text">
-              <string>Font</string>
-             </property>
-             <property name="buddy">
-              <cstring>fontFamilyCombo</cstring>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QComboBox" name="fontFamilyCombo">
-             <property name="minimumContentsLength">
-              <number>20</number>
-             </property>
-             <property name="toolTip">
-              <string>UI font family. Default uses the bundled DejaVu Sans font.</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <spacer name="horizontalSpacer_5">
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="fontFamilyLabel">
+            <property name="text">
+             <string>Font</string>
+            </property>
+            <property name="buddy">
+             <cstring>fontFamilyCombo</cstring>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="fontFamilyCombo">
+            <property name="minimumContentsLength">
+             <number>20</number>
+            </property>
+            <property name="toolTip">
+             <string>UI font family. Default uses the bundled DejaVu Sans font.</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer_5">
             <property name="orientation">
              <enum>Qt::Horizontal</enum>
             </property>
@@ -588,6 +429,22 @@
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_19">
        <item>
+        <widget class="QCheckBox" name="enableArchiveParsingBox">
+         <property name="whatsThis">
+          <string>Inspect files inside game archives when checking conflicts. This can slow down large mod lists and may report incomplete results. It does not change which archives the game loads.</string>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+         <property name="text">
+          <string>Inspect files inside game archives (experimental)</string>
+         </property>
+         <property name="toolTip">
+          <string>Include archive contents when checking mod conflicts. This experimental feature can slow down large mod lists and may report incomplete results.</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <widget class="QWidget" name="widget_11" native="true">
          <layout class="QVBoxLayout" name="verticalLayout_21">
           <property name="leftMargin">
@@ -620,33 +477,30 @@
           </item>
           <item>
            <widget class="QCheckBox" name="displayForeignBox">
-            <property name="toolTip">
-             <string>Disable this to no longer display mods installed outside MO in the mod list (left pane). Assets from those mods will then be treated as having lowest mod priority together with the original game content.</string>
-            </property>
             <property name="whatsThis">
-             <string>By default Mod Organizer will display esp+bsa bundles installed with foreign tools as mods (left pane). This allows you to control their priority in relation to other mods. This is particularly useful if you also use Steam Workshop to install mods.
-However, if you installed loose file mods outside MO which conflict with BSAs also installed outside MO those conflicts can't be resolved correctly.
-
-If you disable this feature, MO will only display official DLCs this way. Please note that plugins (esps, esms, and esls) displayed in the right pane are completely unaffected by this feature.</string>
-            </property>
-            <property name="text">
-             <string>Display mods installed outside MO</string>
+             <string>Show mods installed outside Fluorine in the mod list. Conflicts involving loose files and archives installed by other tools may not be resolved correctly.</string>
             </property>
             <property name="checked">
              <bool>true</bool>
+            </property>
+            <property name="text">
+             <string>Show mods installed outside Fluorine</string>
+            </property>
+            <property name="toolTip">
+             <string>Show mods installed outside Fluorine in the mod list. When hidden, their files are treated as original game content with the lowest priority.</string>
             </property>
            </widget>
           </item>
           <item>
            <widget class="QCheckBox" name="saveFiltersBox">
-            <property name="toolTip">
-             <string>Save the current filters when closing MO2 and restore them on startup.</string>
-            </property>
             <property name="whatsThis">
-             <string>Save the current filters when closing MO2 and restore them on startup.</string>
+             <string>Restore this library setup’s selected mod filters when Fluorine starts.</string>
             </property>
             <property name="text">
-             <string>Remember selected filters after restarting MO</string>
+             <string>Remember selected filters after restarting Fluorine</string>
+            </property>
+            <property name="toolTip">
+             <string>Restore this library setup’s selected mod filters when Fluorine starts.</string>
             </property>
            </widget>
           </item>
@@ -1053,21 +907,21 @@ If you disable this feature, MO will only display official DLCs this way. Please
          <item row="11" column="0">
           <widget class="QLabel" name="label_29">
            <property name="text">
-            <string>Managed Game</string>
+            <string>Game executable</string>
            </property>
           </widget>
          </item>
          <item row="0" column="0">
           <widget class="QLabel" name="label_25">
            <property name="text">
-            <string>Base Directory</string>
+            <string>Library setup folder</string>
            </property>
           </widget>
          </item>
          <item row="9" column="0" colspan="3">
           <widget class="QLabel" name="label_26">
            <property name="text">
-            <string>Use %BASE_DIR% to refer to the Base Directory.</string>
+            <string>Use %BASE_DIR% to refer to the library setup folder.</string>
            </property>
           </widget>
          </item>
@@ -1096,7 +950,7 @@ If you disable this feature, MO will only display official DLCs this way. Please
        <item>
         <widget class="QLabel" name="label_23">
          <property name="text">
-          <string> All directories must be writable.</string>
+          <string>These locations belong to the current library setup. Storage folders must be writable.</string>
          </property>
         </widget>
        </item>
@@ -1104,7 +958,7 @@ If you disable this feature, MO will only display official DLCs this way. Please
      </widget>
      <widget class="QWidget" name="nexusTab">
       <attribute name="title">
-       <string>Nexus</string>
+       <string>Downloads &amp; Nexus</string>
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_4" stretch="0">
        <item>
@@ -1135,6 +989,67 @@ If you disable this feature, MO will only display official DLCs this way. Please
            <bool>false</bool>
           </property>
           <layout class="QVBoxLayout" name="verticalLayout_34">
+           <item>
+            <widget class="QGroupBox" name="groupBox_5">
+             <layout class="QVBoxLayout" name="verticalLayout_2">
+              <item>
+               <widget class="QCheckBox" name="showMetaBox">
+                <property name="toolTip">
+                 <string>Show meta information instead of file names in the download list.</string>
+                </property>
+                <property name="whatsThis">
+                 <string>Show meta information instead of file names in the download list.</string>
+                </property>
+                <property name="text">
+                 <string>Show meta information</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QCheckBox" name="compactBox">
+                <property name="toolTip">
+                 <string>Make the download list more compact.</string>
+                </property>
+                <property name="whatsThis">
+                 <string>Make the download list more compact.</string>
+                </property>
+                <property name="text">
+                 <string>Compact list</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QCheckBox" name="hideDownloadInstallBox">
+                <property name="toolTip">
+                 <string>Automatically hide downloads after successful installation.</string>
+                </property>
+                <property name="whatsThis">
+                 <string>Automatically hide downloads after successful installation.</string>
+                </property>
+                <property name="text">
+                 <string>Hide downloads after installation</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QCheckBox" name="showDownloadNotificationsBox">
+                <property name="toolTip">
+                 <string>Show notifications when downloads complete or fail.</string>
+                </property>
+                <property name="whatsThis">
+                 <string>Show notifications when downloads complete or fail.</string>
+                </property>
+                <property name="text">
+                 <string>Show notifications for completed or failed downloads</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+             <property name="title">
+              <string>Download list · This library setup</string>
+             </property>
+            </widget>
+           </item>
            <property name="leftMargin">
             <number>0</number>
            </property>
@@ -1151,9 +1066,6 @@ If you disable this feature, MO will only display official DLCs this way. Please
             <layout class="QHBoxLayout" name="horizontalLayout_17">
              <item>
               <widget class="QGroupBox" name="groupBox_2">
-               <property name="title">
-                <string>Nexus Account</string>
-               </property>
                <layout class="QFormLayout" name="formLayout">
                 <property name="horizontalSpacing">
                  <number>10</number>
@@ -1173,6 +1085,9 @@ If you disable this feature, MO will only display official DLCs this way. Please
                   <property name="text">
                    <string notr="true">id</string>
                   </property>
+                  <property name="settingsSearchExclude" stdset="0">
+                   <bool>true</bool>
+                  </property>
                  </widget>
                 </item>
                 <item row="1" column="0">
@@ -1186,6 +1101,9 @@ If you disable this feature, MO will only display official DLCs this way. Please
                  <widget class="QLabel" name="nexusName">
                   <property name="text">
                    <string notr="true">name</string>
+                  </property>
+                  <property name="settingsSearchExclude" stdset="0">
+                   <bool>true</bool>
                   </property>
                  </widget>
                 </item>
@@ -1201,9 +1119,15 @@ If you disable this feature, MO will only display official DLCs this way. Please
                   <property name="text">
                    <string notr="true">account</string>
                   </property>
+                  <property name="settingsSearchExclude" stdset="0">
+                   <bool>true</bool>
+                  </property>
                  </widget>
                 </item>
                </layout>
+               <property name="title">
+                <string>Nexus account · All library setups</string>
+               </property>
               </widget>
              </item>
              <item>
@@ -1227,6 +1151,9 @@ If you disable this feature, MO will only display official DLCs this way. Please
                   <property name="text">
                    <string notr="true">daily requests</string>
                   </property>
+                  <property name="settingsSearchExclude" stdset="0">
+                   <bool>true</bool>
+                  </property>
                  </widget>
                 </item>
                 <item row="1" column="0">
@@ -1241,6 +1168,9 @@ If you disable this feature, MO will only display official DLCs this way. Please
                   <property name="text">
                    <string notr="true">hourly requests</string>
                   </property>
+                  <property name="settingsSearchExclude" stdset="0">
+                   <bool>true</bool>
+                  </property>
                  </widget>
                 </item>
                </layout>
@@ -1250,9 +1180,6 @@ If you disable this feature, MO will only display official DLCs this way. Please
            </item>
            <item>
             <widget class="QGroupBox" name="nexusBox">
-             <property name="title">
-              <string>Nexus Connection</string>
-             </property>
              <layout class="QHBoxLayout" name="horizontalLayout_15">
               <item>
                <widget class="QWidget" name="widget_9" native="true">
@@ -1342,6 +1269,9 @@ If you disable this feature, MO will only display official DLCs this way. Please
                </widget>
               </item>
              </layout>
+             <property name="title">
+              <string>Account actions · Immediate</string>
+             </property>
             </widget>
            </item>
            <item>
@@ -1364,9 +1294,6 @@ If you disable this feature, MO will only display official DLCs this way. Please
            </item>
            <item>
             <widget class="QGroupBox" name="settingsBox">
-             <property name="title">
-              <string>Options</string>
-             </property>
              <layout class="QHBoxLayout" name="horizontalLayout_10">
               <property name="leftMargin">
                <number>9</number>
@@ -1461,14 +1388,14 @@ If you disable this feature, MO will only display official DLCs this way. Please
                    <item>
                     <widget class="QPushButton" name="associateButton">
                      <property name="text">
-                      <string>Associate NXM Links</string>
+                      <string>Handle Nexus download links</string>
                      </property>
                     </widget>
                    </item>
                    <item>
                     <widget class="QPushButton" name="removeAssociationButton">
                      <property name="text">
-                      <string>Remove NXM Association</string>
+                      <string>Stop handling Nexus links</string>
                      </property>
                     </widget>
                    </item>
@@ -1480,7 +1407,7 @@ If you disable this feature, MO will only display official DLCs this way. Please
                     <string>Remove cache and cookies.</string>
                    </property>
                    <property name="text">
-                    <string>Clear Cache</string>
+                    <string>Clear download cache</string>
                    </property>
                   </widget>
                  </item>
@@ -1488,6 +1415,9 @@ If you disable this feature, MO will only display official DLCs this way. Please
                </widget>
               </item>
              </layout>
+             <property name="title">
+              <string>Nexus preferences · This library setup</string>
+             </property>
             </widget>
            </item>
            <item>
@@ -1631,7 +1561,7 @@ If you disable this feature, MO will only display official DLCs this way. Please
                  <item>
                   <widget class="QLineEdit" name="pluginFilterEdit">
                    <property name="placeholderText">
-                    <string/>
+                    <string>Filter plugins…</string>
                    </property>
                   </widget>
                  </item>
@@ -1728,7 +1658,10 @@ If you disable this feature, MO will only display official DLCs this way. Please
                   <item row="3" column="0">
                    <widget class="QCheckBox" name="enabledCheckbox">
                     <property name="text">
-                     <string>Enabled</string>
+                     <string>Enabled (applies immediately)</string>
+                    </property>
+                    <property name="toolTip">
+                     <string>Enable or disable this plugin immediately. Some plugins require a restart. Cancel does not undo this action.</string>
                     </property>
                    </widget>
                   </item>
@@ -1769,11 +1702,11 @@ If you disable this feature, MO will only display official DLCs this way. Please
                </item>
                <item>
                 <widget class="QLabel" name="noPluginLabel">
-                 <property name="text">
-                  <string>No plugin found.</string>
-                 </property>
                  <property name="alignment">
                   <set>Qt::AlignCenter</set>
+                 </property>
+                 <property name="text">
+                  <string>No matching plugins.</string>
                  </property>
                 </widget>
                </item>
@@ -1790,273 +1723,359 @@ If you disable this feature, MO will only display official DLCs this way. Please
             <verstretch>1</verstretch>
            </sizepolicy>
           </property>
-          <property name="title">
-           <string>Blacklisted Plugins (use &lt;del&gt; to remove):</string>
-          </property>
           <layout class="QVBoxLayout" name="verticalLayout_16">
            <item>
             <widget class="QListWidget" name="pluginBlacklist"/>
            </item>
           </layout>
+          <property name="title">
+           <string>Blocked plugins (press Delete to remove)</string>
+          </property>
          </widget>
         </widget>
        </item>
-     </layout>
+      </layout>
      </widget>
      <widget class="QWidget" name="protonTab">
       <attribute name="title">
-       <string>Wine/Proton</string>
+       <string>Compatibility</string>
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_37">
        <item>
-        <widget class="QGroupBox" name="groupBox_62">
-         <property name="title">
-          <string>Fluorine Setup</string>
+        <widget class="QScrollArea" name="compatibilityScrollArea">
+         <property name="widgetResizable">
+          <bool>true</bool>
          </property>
-         <layout class="QGridLayout" name="gridLayout_37">
-          <item row="0" column="0">
-           <widget class="QLabel" name="label_62">
-            <property name="text">
-             <string>Proton Version:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="1" colspan="3">
-           <widget class="QComboBox" name="protonVersionCombo"/>
-          </item>
-          <item row="1" column="0">
-           <widget class="QLabel" name="label_63">
-            <property name="text">
-             <string>Prefix Location:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="1" colspan="2">
-           <widget class="QLineEdit" name="prefixLocationEdit"/>
-          </item>
-          <item row="1" column="3">
-           <widget class="QPushButton" name="prefixLocationBrowseButton">
-            <property name="text">
-             <string>Browse...</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="0">
-           <widget class="QPushButton" name="createPrefixButton">
-            <property name="text">
-             <string>Set Up Fluorine</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="1">
-           <widget class="QPushButton" name="deletePrefixButton">
-            <property name="text">
-             <string>Delete Prefix</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="2">
-           <widget class="QPushButton" name="recreatePrefixButton">
-            <property name="text">
-             <string>Recreate Prefix</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="3">
-           <widget class="QPushButton" name="openPrefixFolderButton">
-            <property name="text">
-             <string>Open Prefix Folder</string>
-            </property>
-           </widget>
-          </item>
-          <item row="3" column="0" colspan="4">
-           <widget class="QPushButton" name="winetricksButton">
-            <property name="text">
-             <string>Winetricks</string>
-            </property>
-            <property name="toolTip">
-             <string>Open the Winetricks GUI to install Windows libraries and components into the prefix.</string>
-            </property>
-           </widget>
-          </item>
-          <item row="4" column="0" colspan="4">
-           <widget class="QPushButton" name="downloadSLRButton">
-            <property name="text">
-             <string>Download Steam Linux Runtime</string>
-            </property>
-            <property name="toolTip">
-             <string>Download SteamLinuxRuntime_4 (steamrt4, ~200 MB) from Valve's servers. Provides GStreamer, 32-bit libs, and an FHS environment for non-FHS distros (NixOS, etc.). Required for the "Use SLR" option in the Instance Manager and for Proton 11+.</string>
-            </property>
-           </widget>
-          </item>
-          <item row="6" column="0">
-           <widget class="QLabel" name="label_64">
-            <property name="text">
-             <string>Status:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="6" column="1" colspan="3">
-           <widget class="QLabel" name="protonStatusLabel">
-            <property name="text">
-             <string>No Prefix</string>
-            </property>
-           </widget>
-          </item>
-          <item row="7" column="0" colspan="4">
-           <widget class="QProgressBar" name="protonProgressBar">
-            <property name="value">
-             <number>0</number>
-            </property>
-           </widget>
-          </item>
-          <item row="8" column="0" colspan="4">
-           <widget class="QPushButton" name="toggleInstallLog">
-            <property name="text">
-             <string>Show Install Log</string>
-            </property>
-            <property name="checkable">
-             <bool>true</bool>
-            </property>
-            <property name="checked">
-             <bool>false</bool>
-            </property>
-           </widget>
-          </item>
-          <item row="9" column="0" colspan="4">
-           <widget class="QTextEdit" name="nakInstallLog">
-            <property name="readOnly">
-             <bool>true</bool>
-            </property>
-            <property name="visible">
-             <bool>false</bool>
-            </property>
-            <property name="maximumHeight">
-             <number>200</number>
-            </property>
-            <property name="font">
-             <font>
-              <family>monospace</family>
-              <pointsize>9</pointsize>
-             </font>
-            </property>
-           </widget>
-          </item>
-         </layout>
+         <property name="frameShape">
+          <enum>QFrame::NoFrame</enum>
+         </property>
+         <widget class="QWidget" name="compatibilityScrollContents">
+          <layout class="QVBoxLayout" name="compatibilityScrollContentsLayout">
+           <item>
+            <widget class="QGroupBox" name="groupBox_62">
+             <layout class="QGridLayout" name="gridLayout_37">
+              <item row="0" column="0">
+               <widget class="QLabel" name="label_64">
+                <property name="text">
+                 <string>Status:</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1" colspan="3">
+               <widget class="QLabel" name="protonStatusLabel">
+                <property name="text">
+                 <string>Not set up</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="0">
+               <widget class="QLabel" name="label_62">
+                <property name="text">
+                 <string>Proton:</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1" colspan="3">
+               <widget class="QComboBox" name="protonVersionCombo"/>
+              </item>
+              <item row="3" column="0" colspan="4">
+               <widget class="QPushButton" name="createPrefixButton">
+                <property name="text">
+                 <string>Set up now</string>
+                </property>
+                <property name="toolTip">
+                 <string>Create Fluorine’s Windows environment now, using the selected Proton version and prefix folder.</string>
+                </property>
+               </widget>
+              </item>
+              <item row="4" column="0" colspan="4">
+               <widget class="QLabel" name="runtimeSetupNote">
+                <property name="wordWrap">
+                 <bool>true</bool>
+                </property>
+                <property name="text">
+                 <string>Proton is shared across your library.</string>
+                </property>
+               </widget>
+              </item>
+              <item row="5" column="0" colspan="4">
+               <widget class="QProgressBar" name="protonProgressBar">
+                <property name="value">
+                 <number>0</number>
+                </property>
+               </widget>
+              </item>
+             </layout>
+             <property name="title">
+              <string>Windows setup</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QWidget" name="advancedCompatibilityContent">
+             <layout class="QVBoxLayout" name="advancedCompatibilityContentLayout">
+              <item>
+               <widget class="QGroupBox" name="groupBox_65">
+                <layout class="QVBoxLayout" name="verticalLayout_39">
+                 <item>
+                  <layout class="QFormLayout" name="vfsBackendLayout">
+                   <item row="0" column="0">
+                    <widget class="QLabel" name="vfsBackendLabel">
+                     <property name="text">
+                      <string>Backend:</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="0" column="1">
+                    <widget class="QComboBox" name="vfsBackendComboBox">
+                     <property name="toolTip">
+                      <string>Select the virtual filesystem used by Windows executables in this library setup. Native Linux executables continue to use FUSE. USVFS is experimental and requires the bundled Wine-side helper.</string>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </item>
+                 <item>
+                  <widget class="QLabel" name="vfsBackendDescriptionLabel">
+                   <property name="wordWrap">
+                    <bool>true</bool>
+                   </property>
+                   <property name="text">
+                    <string>Applies to Windows programs in this library setup. Native Linux programs keep their current behavior.</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+                <property name="title">
+                 <string>Mod filesystem</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QGroupBox" name="groupBox_64">
+                <layout class="QVBoxLayout" name="verticalLayout_38">
+                 <item>
+                  <layout class="QHBoxLayout" name="horizontalLayout_14">
+                   <item>
+                    <widget class="QLabel" name="label_65">
+                     <property name="text">
+                      <string>Wrapper Command:</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QLineEdit" name="launchWrapperEdit"/>
+                   </item>
+                  </layout>
+                 </item>
+                </layout>
+                <property name="title">
+                 <string>Launch wrapper</string>
+                </property>
+                <property name="toolTip">
+                 <string>This launch wrapper applies across all library setups.</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QWidget" name="experimentalFilesystemGroup">
+                <layout class="QVBoxLayout" name="experimentalFilesystemGroupLayout">
+                 <item>
+                  <widget class="QLabel" name="experimentalFilesystemNote">
+                   <property name="wordWrap">
+                    <bool>true</bool>
+                   </property>
+                   <property name="text">
+                    <string>Experimental options for this library setup</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QCheckBox" name="usvfsExactQueryExhaustionCheckBox">
+                   <property name="text">
+                    <string>Skip exhausted exact directory queries (experimental)</string>
+                   </property>
+                   <property name="toolTip">
+                    <string>Removes a redundant backing-directory continuation query after an exact virtual match. Disabled by default after a visual asset regression; enable only for one-at-a-time comparison testing.</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QCheckBox" name="usvfsSharedContextCheckBox">
+                   <property name="text">
+                    <string>Use recursive shared context locking (experimental)</string>
+                   </property>
+                   <property name="toolTip">
+                    <string>Allows concurrent read-labelled USVFS operations after the audited write paths are separated. Disabled by default; synthetic concurrency improves, but Skyrim startup was neutral.</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QCheckBox" name="fuseAllowOtherCheckBox">
+                   <property name="text">
+                    <string>Allow other users to access FUSE mounts (allow_other)</string>
+                   </property>
+                   <property name="toolTip">
+                    <string>Allow other users, including root, to access this library setup's FUSE mounts, subject to file permissions. Applies to the next mount. If needed, enabling this option offers to configure /etc/fuse.conf using administrator authentication. Disabled by default. Does not affect USVFS launches.</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QLabel" name="cacheScopeNote">
+                   <property name="wordWrap">
+                    <bool>true</bool>
+                   </property>
+                   <property name="text">
+                    <string>Troubleshooting · All library setups</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QCheckBox" name="disableVfsCacheCheckBox">
+                   <property name="text">
+                    <string>Disable VFS cache (diagnostic)</string>
+                   </property>
+                   <property name="toolTip">
+                    <string>Zeroes the mod filesystem's kernel-facing cache timeouts instead of caching aggressively. Use this to test whether a "stale file" or "won't save" report is actually a VFS caching bug before chasing one — it is not meant to stay on, and will noticeably slow down modded games with large modlists.</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </widget>
+              </item>
+             </layout>
+            </widget>
+           </item>
+           <item>
+            <widget class="QWidget" name="protonMaintenanceContent">
+             <layout class="QVBoxLayout" name="protonMaintenanceContentLayout">
+              <item>
+               <layout class="QGridLayout" name="maintenancePrefixLayout">
+                <item row="0" column="0">
+                 <widget class="QLabel" name="label_63">
+                  <property name="text">
+                   <string>Prefix folder:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="0" column="1">
+                 <widget class="QLineEdit" name="prefixLocationEdit"/>
+                </item>
+                <item row="0" column="2">
+                 <widget class="QPushButton" name="prefixLocationBrowseButton">
+                  <property name="text">
+                   <string>Browse...</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+              <item>
+               <widget class="QLabel" name="maintenanceNote">
+                <property name="wordWrap">
+                 <bool>true</bool>
+                </property>
+                <property name="text">
+                 <string>Maintenance actions take effect immediately.</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <layout class="QGridLayout" name="prefixMaintenanceButtons">
+                <item row="0" column="0">
+                 <widget class="QPushButton" name="openPrefixFolderButton">
+                  <property name="text">
+                   <string>Open Prefix Folder</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="0" column="1">
+                 <widget class="QPushButton" name="winetricksButton">
+                  <property name="text">
+                   <string>Winetricks</string>
+                  </property>
+                  <property name="toolTip">
+                   <string>Open the Winetricks GUI to install Windows libraries and components into the prefix.</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="1" column="0">
+                 <widget class="QPushButton" name="recreatePrefixButton">
+                  <property name="text">
+                   <string>Recreate Prefix</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="1" column="1">
+                 <widget class="QPushButton" name="deletePrefixButton">
+                  <property name="text">
+                   <string>Delete Prefix</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+              <item>
+               <widget class="QPushButton" name="downloadSLRButton">
+                <property name="text">
+                 <string>Download Steam Linux Runtime</string>
+                </property>
+                <property name="toolTip">
+                 <string>Install the Steam Linux Runtime used by supported Proton versions. This action downloads and installs the runtime immediately.</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="toggleInstallLog">
+                <property name="checkable">
+                 <bool>true</bool>
+                </property>
+                <property name="checked">
+                 <bool>false</bool>
+                </property>
+                <property name="text">
+                 <string>Show setup log</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QTextEdit" name="nakInstallLog">
+                <property name="readOnly">
+                 <bool>true</bool>
+                </property>
+                <property name="visible">
+                 <bool>false</bool>
+                </property>
+                <property name="maximumHeight">
+                 <number>200</number>
+                </property>
+                <property name="font">
+                 <font>
+                  <family>monospace</family>
+                  <pointsize>9</pointsize>
+                 </font>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </widget>
+           </item>
+           <item>
+            <spacer name="compatibilitySpacer">
+             <property name="orientation">
+              <enum>Qt::Vertical</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>20</width>
+               <height>40</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+          </layout>
+         </widget>
         </widget>
-       </item>
-       <item>
-        <widget class="QGroupBox" name="groupBox_64">
-         <property name="title">
-          <string>Launch Settings</string>
-         </property>
-         <layout class="QVBoxLayout" name="verticalLayout_38">
-          <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_14">
-            <item>
-             <widget class="QLabel" name="label_65">
-              <property name="text">
-               <string>Wrapper Command:</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLineEdit" name="launchWrapperEdit"/>
-            </item>
-           </layout>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
-        <widget class="QGroupBox" name="groupBox_65">
-         <property name="title">
-          <string>VFS</string>
-         </property>
-         <layout class="QVBoxLayout" name="verticalLayout_39">
-          <item>
-           <layout class="QFormLayout" name="vfsBackendLayout">
-            <item row="0" column="0">
-             <widget class="QLabel" name="vfsBackendLabel">
-              <property name="text">
-               <string>Wine/Proton backend:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="0" column="1">
-             <widget class="QComboBox" name="vfsBackendComboBox">
-              <property name="toolTip">
-               <string>Select the virtual filesystem used by Windows executables in this instance. Native Linux executables continue to use FUSE. USVFS is experimental and requires the bundled Wine-side helper.</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-          <item>
-           <widget class="QLabel" name="vfsBackendDescriptionLabel">
-            <property name="text">
-             <string>USVFS hooks Windows filesystem APIs inside Wine/Proton. FUSE remains active for native Linux executables; games such as OpenMW that manage their own VFS remain unchanged.</string>
-            </property>
-            <property name="wordWrap">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QCheckBox" name="usvfsExactQueryExhaustionCheckBox">
-            <property name="text">
-             <string>Skip exhausted exact directory queries (experimental)</string>
-            </property>
-            <property name="toolTip">
-             <string>Removes a redundant backing-directory continuation query after an exact virtual match. Disabled by default after a visual asset regression; enable only for one-at-a-time comparison testing.</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QCheckBox" name="usvfsSharedContextCheckBox">
-            <property name="text">
-             <string>Use recursive shared context locking (experimental)</string>
-            </property>
-            <property name="toolTip">
-             <string>Allows concurrent read-labelled USVFS operations after the audited write paths are separated. Disabled by default; synthetic concurrency improves, but Skyrim startup was neutral.</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QCheckBox" name="fuseAllowOtherCheckBox">
-            <property name="text">
-             <string>Allow other users to access FUSE mounts (allow_other)</string>
-            </property>
-            <property name="toolTip">
-             <string>Allow other users, including root, to access this instance's FUSE mounts, subject to file permissions. Applies to the next mount. If needed, enabling this option offers to configure /etc/fuse.conf using administrator authentication. Disabled by default. Does not affect USVFS launches.</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QCheckBox" name="disableVfsCacheCheckBox">
-            <property name="text">
-             <string>Disable VFS cache (diagnostic)</string>
-            </property>
-            <property name="toolTip">
-             <string>Zeroes the mod filesystem's kernel-facing cache timeouts instead of caching aggressively. Use this to test whether a "stale file" or "won't save" report is actually a VFS caching bug before chasing one — it is not meant to stay on, and will noticeably slow down modded games with large modlists.</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
-        <spacer name="verticalSpacer_16">
-         <property name="orientation">
-          <enum>Qt::Vertical</enum>
-         </property>
-         <property name="sizeHint" stdset="0">
-          <size>
-           <width>20</width>
-           <height>40</height>
-          </size>
-         </property>
-        </spacer>
        </item>
       </layout>
      </widget>
@@ -2087,12 +2106,12 @@ If you disable this feature, MO will only display official DLCs this way. Please
           <item row="0" column="1">
            <widget class="QComboBox" name="logLevelBox">
             <property name="toolTip">
-             <string>Decides the amount of data printed to &quot;ModOrganizer.log&quot;</string>
+             <string>Decides the amount of data printed to "ModOrganizer.log"</string>
             </property>
             <property name="whatsThis">
              <string>
-                                    Decides the amount of data printed to &quot;ModOrganizer.log&quot;.
-                                    &quot;Debug&quot; produces very useful information for finding problems. There is usually no noteworthy performance impact but the file may become rather large. If this is a problem you may prefer the &quot;Info&quot; level for regular use. On the &quot;Error&quot; level the log file usually remains empty.
+                                    Decides the amount of data printed to "ModOrganizer.log".
+                                    "Debug" produces very useful information for finding problems. There is usually no noteworthy performance impact but the file may become rather large. If this is a problem you may prefer the "Info" level for regular use. On the "Error" level the log file usually remains empty.
                                 </string>
             </property>
            </widget>
@@ -2112,10 +2131,10 @@ If you disable this feature, MO will only display official DLCs this way. Please
             <property name="whatsThis">
              <string>
                                     Decides which type of crash dumps are collected when injected processes crash.
-                                    &quot;None&quot; Disables the generation of crash dumps by MO.
-                                    &quot;Mini&quot; Default level which generates small dumps (only stack traces).
-                                    &quot;Data&quot; Much larger dumps with additional information which may be need (also data segments).
-                                    &quot;Full&quot; Even larger dumps with a full memory dump of the process.
+                                    "None" Disables the generation of crash dumps by MO.
+                                    "Mini" Default level which generates small dumps (only stack traces).
+                                    "Data" Much larger dumps with additional information which may be need (also data segments).
+                                    "Full" Even larger dumps with a full memory dump of the process.
                                 </string>
             </property>
            </widget>
@@ -2135,7 +2154,7 @@ If you disable this feature, MO will only display official DLCs this way. Please
             <property name="whatsThis">
              <string>
                                     Maximum number of crash dumps to keep on disk. Use 0 for unlimited.
-                                    Set &quot;Crash Dumps&quot; above to None to disable crash dump collection.
+                                    Set "Crash Dumps" above to None to disable crash dump collection.
                                 </string>
             </property>
            </widget>
@@ -2150,8 +2169,8 @@ If you disable this feature, MO will only display official DLCs this way. Please
          </property>
          <property name="text">
           <string>
-                            Logs and crash dumps are stored under your current instance in the &lt;a href=&quot;LOGS_FULL_PATH&quot;&gt;LOGS_DIR&lt;/a&gt;
-                            and &lt;a href=&quot;DUMPS_FULL_PATH&quot;&gt;DUMPS_DIR&lt;/a&gt; folders.
+                            Logs and crash dumps are stored under your current library setup in the &lt;a href="LOGS_FULL_PATH"&gt;LOGS_DIR&lt;/a&gt;
+                            and &lt;a href="DUMPS_FULL_PATH"&gt;DUMPS_DIR&lt;/a&gt; folders.
                             Sending logs and/or crash dumps to the developers can help investigate issues.
                             It is recommended to compress large log and dmp files before sending.
                         </string>
@@ -2190,7 +2209,7 @@ If you disable this feature, MO will only display official DLCs this way. Please
       <enum>Qt::Horizontal</enum>
      </property>
      <property name="standardButtons">
-      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Save</set>
      </property>
     </widget>
    </item>
@@ -2209,8 +2228,6 @@ If you disable this feature, MO will only display official DLCs this way. Please
   </customwidget>
  </customwidgets>
  <tabstops>
-  <tabstop>languageBox</tabstop>
-  <tabstop>usePrereleaseBox</tabstop>
   <tabstop>baseDirEdit</tabstop>
   <tabstop>browseBaseDirBtn</tabstop>
   <tabstop>downloadDirEdit</tabstop>

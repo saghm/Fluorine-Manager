@@ -27,6 +27,7 @@ private:
   void updateVersionColor();
   void updateWebpage();
   void updateTracking();
+  void updateMetadata();
 
   void refreshData(int modID);
   bool tryRefreshData(int modID);

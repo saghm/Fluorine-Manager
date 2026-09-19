@@ -29,6 +29,7 @@ UpdatesSettingsTab::UpdatesSettingsTab(Settings& s, SettingsDialog& d)
   // tab; moving it to its own tab keeps General uncluttered and gives us
   // room for "Check now" + "Install & restart" buttons with progress.
   QWidget* page = new QWidget(ui->tabWidget);
+  page->setObjectName("updatesTab");
   auto* layout  = new QVBoxLayout(page);
 
   // --- Current build info ------------------------------------------------
@@ -49,6 +50,7 @@ UpdatesSettingsTab::UpdatesSettingsTab(Settings& s, SettingsDialog& d)
   if (!timestamp.isEmpty())
     buildLine += QStringLiteral("  timestamp=%1").arg(timestamp);
   m_buildInfoLabel = new QLabel(buildLine, infoGroup);
+  m_buildInfoLabel->setWordWrap(true);
   m_buildInfoLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
   infoLayout->addRow(tr("Build:"), m_buildInfoLabel);
 

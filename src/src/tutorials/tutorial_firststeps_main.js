@@ -3,8 +3,8 @@ function getTutorialSteps()
 {
   return [
     function() {
-        tutorial.text = qsTr("Welcome to the Mod Organizer Tutorial! This will guide you through the most common "
-                           + "features of MO2.\n\n"
+        tutorial.text = qsTr("Welcome to the Fluorine Manager Tutorial! This will guide you through the most common "
+                           + "features of Fluorine.\n\n"
                            + "It is highly recommended for first-time users to complete the tutorial from beginning "
                            + "to end to properly demonstrate key components of the tool.")
         waitForClick()
@@ -12,13 +12,13 @@ function getTutorialSteps()
 
     function() {
         tutorial.text = qsTr("Before we continue with the step-by-step tutorial, here are a few ways you can receive "
-                           + "help with Mod Organizer.")
+                           + "help with Fluorine Manager.")
         waitForClick()
     },
 
     function() {
-        tutorial.text = qsTr("The highlighted button will display potential problems detected with your setup and may "
-                           + "suggest solutions. (Click it and then close the window to proceed.)")
+        tutorial.text = qsTr("View > Notifications displays potential problems detected with your setup and may "
+                           + "suggest solutions. (Open Notifications and then close the window to proceed.)")
         if (tutorialControl.waitForAction("actionNotifications")) {
             tutorial.text += qsTr("\n\nIt appears you have one now, however you can hold off on clearing it until after "
                                 + "completing the tutorial.")
@@ -30,20 +30,15 @@ function getTutorialSteps()
     },
 
     function() {
-        console.log("next")
-        tutorial.text = qsTr("This button contains additional information about the application, links to other sources "
-                           + "of help, and further tutorials. (Open the menu to proceed.)")
-        if (tutorialControl.waitForAction("actionHelp")) {
-          highlightAction("actionHelp", true)
-        } else {
-          console.error("help button broken")
-          waitForClick()
-        }
+        tutorial.text = qsTr("The Help menu contains documentation, support links, and tutorials. "
+                           + "Use Help on UI to learn about individual controls.")
+        highlightItem("menuBar", false)
+        waitForClick()
     },
 
     function() {
         unhighlight()
-        tutorial.text = qsTr("Finally, there are tooltips and extra information available all across Mod Organizer. If "
+        tutorial.text = qsTr("Finally, there are tooltips and extra information available all across Fluorine Manager. If "
                            + "there is a control you don't understand, please try hovering over it for a short "
                            + "description. Alternatively, you can use \"Help on UI\" from the Help menu to click on "
                            + "some controls and get a comprehensive explanation.")
@@ -51,15 +46,15 @@ function getTutorialSteps()
     },
 
     function() {
-        tutorial.text = qsTr("This list displays all mods installed through MO2. It also displays installed DLCs and "
-                           + "any 'unmanaged' mods installed outside MO2. You have limited control over those.")
+        tutorial.text = qsTr("This list displays all mods installed through Fluorine. It also displays installed DLCs and "
+                           + "any 'unmanaged' mods installed outside Fluorine. You have limited control over those.")
         highlightItem("modList", false)
         waitForClick()
     },
 
     function() {
         tutorial.text = qsTr("Before we start installing mods, let's have a quick look at the settings. (Open the "
-                           + "settings dialog to proceed via the highlighted button.)")
+                           + "settings dialog from Tools > Settings to proceed.)")
         manager.activateTutorial("SettingsDialog", "tutorial_firststeps_settings.js")
         if (tutorialControl.waitForAction("actionSettings")) {
             highlightAction("actionSettings", true)
@@ -77,21 +72,15 @@ function getTutorialSteps()
     },
 
     function() {
-        tutorial.text = qsTr("There are a few ways to get mods into Mod Organizer. "
-                           + "If you associated MO with NXM links in the settings you can now use your regular browser to send downloads from Nexus to MO. "
-                           + "Click on \"Nexus\" to open nexus, find a mod and click the green download buttons on Nexus saying \"Download with Manager\".")
-        if (tutorialControl.waitForAction("actionNexus") &&
-            tutorialControl.waitForAction("actionModPage")) {
-            highlightAction("actionNexus", true)
-            highlightAction("actionModPage", true)
-        } else {
-          console.error("browser action broken")
-          waitForClick()
-        }
+        tutorial.text = qsTr("Use File > Mod Websites to find mods in your browser. "
+                           + "If you associated Fluorine with NXM links in Settings, "
+                           + "Download with Manager on Nexus sends downloads to Fluorine.")
+        highlightItem("menuBar", false)
+        waitForClick()
     },
 
     function() {
-        tutorial.text = qsTr("You can also install mods from disk using the \"Install Mod\" button.")
+        tutorial.text = qsTr("You can also install mods from disk using File > Install Mod from Archive.")
         highlightAction("actionInstallMod", false)
         waitForClick()
     },

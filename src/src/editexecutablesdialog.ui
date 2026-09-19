@@ -6,12 +6,12 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>710</width>
-    <height>440</height>
+    <width>980</width>
+    <height>640</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Modify Executables</string>
+   <string>Executables</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
@@ -211,336 +211,490 @@
           </item>
          </layout>
         </widget>
-        <widget class="QWidget" name="widget" native="true">
-         <layout class="QVBoxLayout" name="verticalLayout_2">
-          <property name="leftMargin">
-           <number>0</number>
-          </property>
-          <property name="topMargin">
-           <number>0</number>
-          </property>
-          <property name="rightMargin">
-           <number>0</number>
-          </property>
-          <property name="bottomMargin">
-           <number>0</number>
-          </property>
-          <item>
-           <widget class="QWidget" name="widget_4" native="true">
-            <layout class="QVBoxLayout" name="verticalLayout_5">
-             <property name="leftMargin">
-              <number>0</number>
+        <widget class="QScrollArea" name="executableDetailsScroll">
+         <property name="widgetResizable">
+          <bool>true</bool>
+         </property>
+         <property name="frameShape">
+          <enum>QFrame::NoFrame</enum>
+         </property>
+         <property name="horizontalScrollBarPolicy">
+          <enum>Qt::ScrollBarAlwaysOff</enum>
+         </property>
+         <widget class="QWidget" name="executableDetails">
+          <layout class="QVBoxLayout" name="executableDetailsLayout">
+           <property name="spacing">
+            <number>12</number>
+           </property>
+           <property name="leftMargin">
+            <number>0</number>
+           </property>
+           <property name="topMargin">
+            <number>0</number>
+           </property>
+           <property name="bottomMargin">
+            <number>0</number>
+           </property>
+           <property name="rightMargin">
+            <number>8</number>
+           </property>
+           <item>
+            <widget class="QLabel" name="executableScopeHint">
+             <property name="text">
+              <string>Output and DLL loading are saved per profile. Other settings apply to this program across profiles.</string>
              </property>
-             <property name="topMargin">
-              <number>0</number>
+             <property name="wordWrap">
+              <bool>true</bool>
              </property>
-             <property name="rightMargin">
-              <number>0</number>
+            </widget>
+           </item>
+           <item>
+            <widget class="QGroupBox" name="programGroup">
+             <property name="title">
+              <string>Program</string>
              </property>
-             <property name="bottomMargin">
-              <number>10</number>
+             <layout class="QVBoxLayout" name="programGroupLayout">
+              <item>
+               <layout class="QFormLayout" name="formLayout">
+                <item row="0" column="0">
+                 <widget class="QLabel" name="label_3">
+                  <property name="text">
+                   <string>Name</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="0" column="1">
+                 <widget class="QLineEdit" name="title">
+                  <property name="toolTip">
+                   <string>Name of the executable. This is only for display purposes.</string>
+                  </property>
+                  <property name="whatsThis">
+                   <string>Name of the executable. This is only for display purposes.</string>
+                  </property>
+                  <property name="placeholderText">
+                   <string>Name shown in the launcher</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="1" column="0">
+                 <widget class="QLabel" name="label">
+                  <property name="text">
+                   <string>Program</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="1" column="1">
+                 <layout class="QHBoxLayout" name="horizontalLayout" stretch="1,0">
+                  <item>
+                   <widget class="QLineEdit" name="binary">
+                    <property name="toolTip">
+                     <string>Binary to run</string>
+                    </property>
+                    <property name="whatsThis">
+                     <string>Binary to run</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QPushButton" name="browseBinary">
+                    <property name="toolTip">
+                     <string>Browse filesystem</string>
+                    </property>
+                    <property name="whatsThis">
+                     <string>Browse filesystem for the executable to run.</string>
+                    </property>
+                    <property name="text">
+                     <string>Browse…</string>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </item>
+                <item row="2" column="0">
+                 <widget class="QLabel" name="label_2">
+                  <property name="text">
+                   <string>Arguments</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="2" column="1">
+                 <widget class="QLineEdit" name="arguments">
+                  <property name="toolTip">
+                   <string>Arguments to pass to the application</string>
+                  </property>
+                  <property name="whatsThis">
+                   <string>Arguments to pass to the application</string>
+                  </property>
+                  <property name="placeholderText">
+                   <string>Optional command-line arguments</string>
+                  </property>
+                 </widget>
+                </item>
+                <property name="bottomMargin">
+                 <number>0</number>
+                </property>
+               </layout>
+              </item>
+             </layout>
+            </widget>
+           </item>
+           <item>
+            <widget class="QGroupBox" name="launchGroup">
+             <property name="title">
+              <string>Launch</string>
              </property>
-             <item>
-              <layout class="QFormLayout" name="formLayout">
-               <property name="bottomMargin">
-                <number>20</number>
-               </property>
-               <item row="0" column="0">
-                <widget class="QLabel" name="label_3">
-                 <property name="text">
-                  <string>Title</string>
-                 </property>
-                </widget>
-               </item>
-               <item row="0" column="1">
-                <widget class="QLineEdit" name="title">
-                 <property name="toolTip">
-                  <string>Name of the executable. This is only for display purposes.</string>
-                 </property>
-                 <property name="whatsThis">
-                  <string>Name of the executable. This is only for display purposes.</string>
-                 </property>
-                </widget>
-               </item>
-               <item row="1" column="0">
-                <widget class="QLabel" name="label">
-                 <property name="text">
-                  <string>Binary</string>
-                 </property>
-                </widget>
-               </item>
-               <item row="1" column="1">
-                <layout class="QHBoxLayout" name="horizontalLayout" stretch="1,0">
+             <layout class="QVBoxLayout" name="launchGroupLayout">
+              <item>
+               <widget class="QCheckBox" name="useProton">
+                <property name="toolTip">
+                 <string>Launch this executable through Proton (Wine compatibility layer). Disable for native Linux executables.</string>
+                </property>
+                <property name="checked">
+                 <bool>true</bool>
+                </property>
+                <property name="text">
+                 <string>Run with Proton</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QCheckBox" name="useSteam">
+                <property name="toolTip">
+                 <string>Allow Fluorine to start Steam and use Steam integration for this executable. Disable for tools that do not require Steam, such as xEdit. The instance Steam DRM setting still applies.</string>
+                </property>
+                <property name="checked">
+                 <bool>true</bool>
+                </property>
+                <property name="text">
+                 <string>Use Steam integration</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="launchHint">
+                <property name="text">
+                 <string>Use Proton for Windows programs. Steam integration is only needed for games or tools that require Steam.</string>
+                </property>
+                <property name="wordWrap">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </widget>
+           </item>
+           <item>
+            <widget class="QGroupBox" name="outputGroup">
+             <property name="title">
+              <string>Output · this profile</string>
+             </property>
+             <layout class="QVBoxLayout" name="outputGroupLayout">
+              <item>
+               <layout class="QHBoxLayout" name="horizontalLayout_9" stretch="0,1">
+                <item>
+                 <widget class="QCheckBox" name="createFilesInMod">
+                  <property name="toolTip">
+                   <string>If this is enabled, new files are created in the specified mod instead of the "Overwrite" mod.</string>
+                  </property>
+                  <property name="text">
+                   <string>Send generated files to a mod</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QComboBox" name="mods">
+                  <property name="enabled">
+                   <bool>false</bool>
+                  </property>
+                  <property name="editable">
+                   <bool>true</bool>
+                  </property>
+                  <property name="minimumContentsLength">
+                   <number>12</number>
+                  </property>
+                  <property name="sizeAdjustPolicy">
+                   <enum>QComboBox::AdjustToMinimumContentsLengthWithIcon</enum>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+              <item>
+               <widget class="QLabel" name="outputModHint">
+                <property name="text">
+                 <string>New files normally go to Overwrite. Choose a mod to keep this program’s generated files together.</string>
+                </property>
+                <property name="wordWrap">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </widget>
+           </item>
+           <item>
+            <widget class="QGroupBox" name="behaviorGroup">
+             <property name="title">
+              <string>Window and launcher</string>
+             </property>
+             <layout class="QVBoxLayout" name="behaviorGroupLayout">
+              <item>
+               <widget class="QCheckBox" name="minimizeToSystemTray">
+                <property name="text">
+                 <string>Minimize to system tray while running</string>
+                </property>
+                <property name="toolTip">
+                 <string>Hide Fluorine in the system tray while this program runs, then restore it when the program finishes.</string>
+                </property>
+                <property name="whatsThis">
+                 <string>Hide Fluorine in the system tray while this program runs, then restore it when the program finishes.</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QCheckBox" name="hide">
+                <property name="toolTip">
+                 <string>This executable will not appear in the list or the Run menu. It will still be visible in this dialog.</string>
+                </property>
+                <property name="whatsThis">
+                 <string>This executable will not appear in the list or the Run menu. It will still be visible in this dialog.</string>
+                </property>
+                <property name="text">
+                 <string>Hide from the launcher</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </widget>
+           </item>
+           <item>
+            <widget class="QWidget" name="executableAdvanced">
+             <layout class="QVBoxLayout" name="executableAdvancedLayout">
+              <property name="leftMargin">
+               <number>0</number>
+              </property>
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <property name="rightMargin">
+               <number>0</number>
+              </property>
+              <property name="bottomMargin">
+               <number>0</number>
+              </property>
+              <item>
+               <widget class="QGroupBox" name="launchOverridesGroup">
+                <property name="title">
+                 <string>Launch overrides</string>
+                </property>
+                <layout class="QVBoxLayout" name="launchOverridesGroupLayout">
                  <item>
-                  <widget class="QLineEdit" name="binary">
-                   <property name="toolTip">
-                    <string>Binary to run</string>
+                  <layout class="QFormLayout" name="launchOverridesForm">
+                   <property name="rowWrapPolicy">
+                    <enum>QFormLayout::WrapLongRows</enum>
                    </property>
-                   <property name="whatsThis">
-                    <string>Binary to run</string>
-                   </property>
-                  </widget>
+                   <item row="0" column="0">
+                    <widget class="QLabel" name="label_4">
+                     <property name="text">
+                      <string>Working folder</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="0" column="1">
+                    <layout class="QHBoxLayout" name="horizontalLayout_6" stretch="1,0">
+                     <item>
+                      <widget class="QLineEdit" name="workingDirectory">
+                       <property name="placeholderText">
+                        <string>Optional working folder</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item>
+                      <widget class="QPushButton" name="browseWorkingDirectory">
+                       <property name="text">
+                        <string>Browse…</string>
+                       </property>
+                      </widget>
+                     </item>
+                    </layout>
+                   </item>
+                   <item row="1" column="0">
+                    <widget class="QLabel" name="environmentLabel">
+                     <property name="text">
+                      <string>Environment</string>
+                     </property>
+                     <property name="buddy">
+                      <cstring>environment</cstring>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="1" column="1">
+                    <widget class="QPlainTextEdit" name="environment">
+                     <property name="maximumHeight">
+                      <number>85</number>
+                     </property>
+                     <property name="placeholderText">
+                      <string>PROTON_ENABLE_WAYLAND=0</string>
+                     </property>
+                     <property name="toolTip">
+                      <string>One NAME=value per line. These values override matching global launch variables for this executable. Other global settings and wrapper commands still apply. Leave blank to inherit everything. Values are literal; do not add shell quotes or %command%.</string>
+                     </property>
+                     <property name="tabChangesFocus">
+                      <bool>true</bool>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
                  </item>
                  <item>
-                  <widget class="QPushButton" name="browseBinary">
+                  <layout class="QHBoxLayout" name="horizontalLayout_5">
+                   <item>
+                    <widget class="QCheckBox" name="overwriteSteamAppID">
+                     <property name="text">
+                      <string>Override Steam AppID</string>
+                     </property>
+                     <property name="toolTip">
+                      <string>Use another Steam game or tool ID for this program. Leave the override off to use the managed game’s AppID.</string>
+                     </property>
+                     <property name="whatsThis">
+                      <string>Use another Steam game or tool ID for this program. Leave the override off to use the managed game’s AppID.</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QLineEdit" name="steamAppID">
+                     <property name="enabled">
+                      <bool>false</bool>
+                     </property>
+                     <property name="placeholderText">
+                      <string>Leave unchecked to use the game’s AppID</string>
+                     </property>
+                     <property name="toolTip">
+                      <string>Use another Steam game or tool ID for this program. Leave the override off to use the managed game’s AppID.</string>
+                     </property>
+                     <property name="whatsThis">
+                      <string>Use another Steam game or tool ID for this program. Leave the override off to use the managed game’s AppID.</string>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </item>
+                 <item>
+                  <widget class="QCheckBox" name="useTerminal">
                    <property name="toolTip">
-                    <string>Browse filesystem</string>
-                   </property>
-                   <property name="whatsThis">
-                    <string>Browse filesystem for the executable to run.</string>
+                    <string>Open a terminal window showing the executable's output. Useful for debugging.</string>
                    </property>
                    <property name="text">
-                    <string>...</string>
+                    <string>Open in terminal</string>
                    </property>
                   </widget>
                  </item>
                 </layout>
-               </item>
-               <item row="2" column="0">
-                <widget class="QLabel" name="label_4">
-                 <property name="text">
-                  <string>Start in</string>
-                 </property>
-                </widget>
-               </item>
-               <item row="2" column="1">
-                <layout class="QHBoxLayout" name="horizontalLayout_6" stretch="1,0">
+               </widget>
+              </item>
+              <item>
+               <widget class="QGroupBox" name="profileOptionsGroup">
+                <property name="title">
+                 <string>This profile</string>
+                </property>
+                <layout class="QVBoxLayout" name="profileOptionsGroupLayout">
                  <item>
-                  <widget class="QLineEdit" name="workingDirectory"/>
+                  <widget class="QLabel" name="profileOptionsHint">
+                   <property name="text">
+                    <string>DLL loading is saved separately for each profile.</string>
+                   </property>
+                   <property name="wordWrap">
+                    <bool>true</bool>
+                   </property>
+                  </widget>
                  </item>
                  <item>
-                  <widget class="QPushButton" name="browseWorkingDirectory">
+                  <layout class="QHBoxLayout" name="horizontalLayout_8">
+                   <item>
+                    <widget class="QCheckBox" name="forceLoadLibraries">
+                     <property name="text">
+                      <string>Force load libraries</string>
+                     </property>
+                     <property name="toolTip">
+                      <string>Load configured DLLs into Windows processes through USVFS. This does not apply to FUSE or native Linux programs.</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <spacer name="horizontalSpacer_2">
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                     <property name="sizeHint" stdset="0">
+                      <size>
+                       <width>40</width>
+                       <height>20</height>
+                      </size>
+                     </property>
+                    </spacer>
+                   </item>
+                   <item>
+                    <widget class="QPushButton" name="configureLibraries">
+                     <property name="enabled">
+                      <bool>false</bool>
+                     </property>
+                     <property name="text">
+                      <string>Configure Libraries</string>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </item>
+                 <item>
+                  <widget class="QLabel" name="librarySupportHint">
                    <property name="text">
-                    <string>...</string>
+                    <string>Configured DLLs can be loaded into Windows processes when using USVFS.</string>
+                   </property>
+                   <property name="wordWrap">
+                    <bool>true</bool>
                    </property>
                   </widget>
                  </item>
                 </layout>
-               </item>
-               <item row="3" column="0">
-                <widget class="QLabel" name="label_2">
-                 <property name="text">
-                  <string>Arguments</string>
-                 </property>
-                </widget>
-               </item>
-               <item row="3" column="1">
-                <widget class="QLineEdit" name="arguments">
-                 <property name="toolTip">
-                  <string>Arguments to pass to the application</string>
-                 </property>
-                 <property name="whatsThis">
-                  <string>Arguments to pass to the application</string>
-                 </property>
-                </widget>
-               </item>
-               <item row="4" column="0">
-                <widget class="QLabel" name="environmentLabel">
-                 <property name="text"><string>Environment</string></property>
-                 <property name="buddy"><cstring>environment</cstring></property>
-                </widget>
-               </item>
-               <item row="4" column="1">
-                <widget class="QPlainTextEdit" name="environment">
-                 <property name="maximumHeight"><number>85</number></property>
-                 <property name="placeholderText"><string>PROTON_ENABLE_WAYLAND=0</string></property>
-                 <property name="toolTip"><string>One NAME=value per line. These values override matching global launch variables for this executable. Other global settings and wrapper commands still apply. Leave blank to inherit everything. Values are literal; do not add shell quotes or %command%.</string></property>
-                 <property name="tabChangesFocus"><bool>true</bool></property>
-                </widget>
-               </item>
-              </layout>
-             </item>
-             <item>
-              <layout class="QHBoxLayout" name="horizontalLayout_5">
-               <item>
-                <widget class="QCheckBox" name="overwriteSteamAppID">
-                 <property name="toolTip">
-                  <string>Allow the Steam AppID to be used for this executable to be changed.</string>
-                 </property>
-                 <property name="whatsThis">
-                  <string>Allow the Steam AppID to be used for this executable to be changed.
-Every game/tool distributed through Steam has a unique ID. MO needs to know this ID to start those programs directly, otherwise the program is started by steam and then MO will not work. By default, MO will use the AppID for the game.
-Right now the only case I know of where this needs to be overwritten is for the Skyrim Creation Kit which has its own AppID. This overwrite is already preconfigured.</string>
-                 </property>
-                 <property name="text">
-                  <string>Overwrite Steam AppID</string>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QLineEdit" name="steamAppID">
-                 <property name="enabled">
-                  <bool>false</bool>
-                 </property>
-                 <property name="toolTip">
-                  <string>Steam AppID to use for this executable that differs from the games AppID.</string>
-                 </property>
-                 <property name="whatsThis">
-                  <string>Steam AppID to use for this executable that differs from the games AppID.
-Every game/tool distributed through Steam has a unique ID. MO needs to know this ID to start those programs directly, otherwise the program is started by steam and then MO will not work. By default, MO will use the AppID for the game (usually 72850).
-Right now the only case I know of where this needs to be overwritten is for the Skyrim Creation Kit which has its own AppID (usually 202480). This overwrite is already preconfigured.</string>
-                 </property>
-                </widget>
-               </item>
-              </layout>
-             </item>
-             <item>
-              <layout class="QHBoxLayout" name="horizontalLayout_9" stretch="0,1">
-               <item>
-                <widget class="QCheckBox" name="createFilesInMod">
-                 <property name="toolTip">
-                  <string>If this is enabled, new files are created in the specified mod instead of the &quot;Overwrite&quot; mod.</string>
-                 </property>
-                 <property name="text">
-                  <string>Create files in mod instead of overwrite (*)</string>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QComboBox" name="mods">
-                 <property name="enabled">
-                  <bool>false</bool>
-                 </property>
-                 <property name="editable">
-                  <bool>true</bool>
-                 </property>
-                </widget>
-               </item>
-              </layout>
-             </item>
-             <item>
-              <layout class="QHBoxLayout" name="horizontalLayout_8">
-               <item>
-                <widget class="QCheckBox" name="forceLoadLibraries">
-                 <property name="toolTip">
-                  <string>If this is enabled, the configured libraries will be automatically loaded when this executable is launched.</string>
-                 </property>
-                 <property name="text">
-                  <string>Force load libraries (*)</string>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <spacer name="horizontalSpacer_2">
-                 <property name="orientation">
-                  <enum>Qt::Horizontal</enum>
-                 </property>
-                 <property name="sizeHint" stdset="0">
-                  <size>
-                   <width>40</width>
-                   <height>20</height>
-                  </size>
-                 </property>
-                </spacer>
-               </item>
-               <item>
-                <widget class="QPushButton" name="configureLibraries">
-                 <property name="enabled">
-                  <bool>false</bool>
-                 </property>
-                 <property name="text">
-                  <string>Configure Libraries</string>
-                 </property>
-                </widget>
-               </item>
-              </layout>
-             </item>
-             <item>
-              <widget class="QCheckBox" name="useApplicationIcon">
-               <property name="text">
-                <string>Use application's icon for desktop shortcuts</string>
-               </property>
-              </widget>
-             </item>
-			       <item>
-              <widget class="QCheckBox" name="minimizeToSystemTray">
-               <property name="toolTip">
-                <string>Mod Organizer will minimize to the system tray while this executable is running. It will reappear after it finishes.</string>
-               </property>
-               <property name="whatsThis">
-                <string>Mod Organizer will minimize to the system tray while this executable is running. It will reappear after it finishes.</string>
-               </property>
-               <property name="text">
-                <string>Minimize to system tray while running</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QCheckBox" name="hide">
-               <property name="toolTip">
-                <string>This executable will not appear in the list, on the toolbar or in the menu. It will still be visible in this dialog.</string>
-               </property>
-               <property name="whatsThis">
-                <string>This executable will not appear in the list, on the toolbar or in the menu. It will still be visible in this dialog.</string>
-               </property>
-               <property name="text">
-                <string>Hide in user interface</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QCheckBox" name="useProton">
-               <property name="toolTip">
-                <string>Launch this executable through Proton (Wine compatibility layer). Disable for native Linux executables.</string>
-               </property>
-               <property name="text">
-                <string>Use Proton</string>
-               </property>
-               <property name="checked">
-                <bool>true</bool>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QCheckBox" name="useSteam">
-               <property name="toolTip">
-                <string>Allow Fluorine to start Steam and use Steam integration for this executable. Disable for tools that do not require Steam, such as xEdit. The instance Steam DRM setting still applies.</string>
-               </property>
-               <property name="text">
-                <string>Use Steam</string>
-               </property>
-               <property name="checked">
-                <bool>true</bool>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QCheckBox" name="useTerminal">
-               <property name="toolTip">
-                <string>Open a terminal window showing the executable's output. Useful for debugging.</string>
-               </property>
-               <property name="text">
-                <string>Open in terminal</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLabel" name="label_5">
-               <property name="text">
-                <string>(*) Profile specific</string>
-               </property>
-               <property name="margin">
-                <number>5</number>
-               </property>
-              </widget>
-             </item>
-            </layout>
-           </widget>
-          </item>
-          <item>
-           <spacer name="verticalSpacer">
-            <property name="orientation">
-             <enum>Qt::Vertical</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>20</width>
-              <height>40</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
-         </layout>
+               </widget>
+              </item>
+              <item>
+               <widget class="QGroupBox" name="shortcutOptionsGroup">
+                <property name="title">
+                 <string>Shortcuts</string>
+                </property>
+                <layout class="QVBoxLayout" name="shortcutOptionsGroupLayout">
+                 <item>
+                  <widget class="QCheckBox" name="useApplicationIcon">
+                   <property name="text">
+                    <string>Use application's icon for desktop shortcuts</string>
+                   </property>
+                   <property name="toolTip">
+                    <string>Use the program’s icon when available. Otherwise shortcuts use Fluorine’s icon.</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </widget>
+              </item>
+             </layout>
+            </widget>
+           </item>
+           <item>
+            <spacer name="detailsSpacer">
+             <property name="orientation">
+              <enum>Qt::Vertical</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>0</width>
+               <height>0</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+          </layout>
+         </widget>
         </widget>
        </widget>
       </item>
@@ -566,17 +720,23 @@ Right now the only case I know of where this needs to be overwritten is for the 
   <tabstop>title</tabstop>
   <tabstop>binary</tabstop>
   <tabstop>browseBinary</tabstop>
+  <tabstop>arguments</tabstop>
+  <tabstop>useProton</tabstop>
+  <tabstop>useSteam</tabstop>
+  <tabstop>createFilesInMod</tabstop>
+  <tabstop>mods</tabstop>
+  <tabstop>minimizeToSystemTray</tabstop>
+  <tabstop>hide</tabstop>
   <tabstop>workingDirectory</tabstop>
   <tabstop>browseWorkingDirectory</tabstop>
-  <tabstop>arguments</tabstop>
   <tabstop>environment</tabstop>
   <tabstop>overwriteSteamAppID</tabstop>
   <tabstop>steamAppID</tabstop>
-  <tabstop>createFilesInMod</tabstop>
-  <tabstop>mods</tabstop>
   <tabstop>forceLoadLibraries</tabstop>
   <tabstop>configureLibraries</tabstop>
+  <tabstop>useTerminal</tabstop>
   <tabstop>useApplicationIcon</tabstop>
+  <tabstop>buttons</tabstop>
  </tabstops>
  <resources>
   <include location="resources.qrc"/>

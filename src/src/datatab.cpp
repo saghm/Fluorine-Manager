@@ -10,6 +10,8 @@
 #include <report.h>
 
 #include <QMessageBox>
+#include <QMenu>
+#include <QSignalBlocker>
 #include <QSettings>
 #include <utility.h>
 
@@ -37,6 +39,7 @@ DataTab::DataTab(OrganizerCore& core, PluginContainer& pc, QWidget* parent,
   m_filter.setUseSourceSort(true);
   m_filter.setFilterColumn(FileTreeModel::FileName);
   m_filter.setEdit(mwui->dataTabFilter);
+  mwui->dataTabFilter->setPlaceholderText(tr("Search files…"));
   m_filter.setList(mwui->dataTree);
   m_filter.setUpdateDelay(true);
 
@@ -48,14 +51,25 @@ DataTab::DataTab(OrganizerCore& core, PluginContainer& pc, QWidget* parent,
     ensureFullyLoaded();
   });
 
-  connect(ui.browseVFS, &QPushButton::clicked, [&] {
+  connect(ui.browseVFS, &QAction::triggered, [&] {
     onBrowseVFS();
   });
-  connect(ui.browseRootBuilder, &QPushButton::clicked, [&] {
+  connect(ui.browseRootBuilder, &QAction::triggered, [&] {
     onBrowseRootBuilder();
   });
 
-  // Hide Root Builder button if the feature is disabled for this instance.
+  auto* foldersMenu = new QMenu(mwui->dataFoldersButton);
+  foldersMenu->addAction(ui.browseVFS);
+  foldersMenu->addAction(ui.browseRootBuilder);
+  mwui->dataFoldersButton->setMenu(foldersMenu);
+
+  auto* filtersMenu = new QMenu(mwui->dataFiltersButton);
+  filtersMenu->addAction(ui.conflicts);
+  filtersMenu->addAction(ui.archives);
+  filtersMenu->addAction(ui.hiddenFiles);
+  mwui->dataFiltersButton->setMenu(filtersMenu);
+
+  // Hide Root Builder action if the feature is disabled for this instance.
   {
     bool rbEnabled = true;
     if (const auto* s = Settings::maybeInstance()) {
@@ -69,15 +83,15 @@ DataTab::DataTab(OrganizerCore& core, PluginContainer& pc, QWidget* parent,
     onRefresh();
   });
 
-  connect(ui.conflicts, &QCheckBox::toggled, [&] {
+  connect(ui.conflicts, &QAction::toggled, [&] {
     onConflicts();
   });
 
-  connect(ui.archives, &QCheckBox::toggled, [&] {
+  connect(ui.archives, &QAction::toggled, [&] {
     onArchives();
   });
 
-  connect(ui.hiddenFiles, &QCheckBox::toggled, [&] {
+  connect(ui.hiddenFiles, &QAction::toggled, [&] {
     onHiddenFiles();
   });
 
@@ -104,12 +118,12 @@ DataTab::DataTab(OrganizerCore& core, PluginContainer& pc, QWidget* parent,
 void DataTab::saveState(Settings& s) const
 {
   s.geometry().saveState(ui.tree->header());
-  s.widgets().saveChecked(ui.conflicts);
-  s.widgets().saveChecked(ui.archives);
-  s.widgets().saveChecked(ui.hiddenFiles);
+  s.widgets().saveChecked(ui.conflicts, m_parent);
+  s.widgets().saveChecked(ui.archives, m_parent);
+  s.widgets().saveChecked(ui.hiddenFiles, m_parent);
 }
 
-void DataTab::restoreState(const Settings& s) const
+void DataTab::restoreState(const Settings& s)
 {
   s.geometry().restoreState(ui.tree->header());
 
@@ -117,9 +131,19 @@ void DataTab::restoreState(const Settings& s) const
   // widget state, for whatever reason
   ui.tree->setSortingEnabled(true);
 
-  s.widgets().restoreChecked(ui.conflicts);
-  s.widgets().restoreChecked(ui.archives);
-  s.widgets().restoreChecked(ui.hiddenFiles);
+  {
+    const QSignalBlocker conflicts(ui.conflicts);
+    const QSignalBlocker archives(ui.archives);
+    const QSignalBlocker hiddenFiles(ui.hiddenFiles);
+    s.widgets().restoreChecked(ui.conflicts, m_parent);
+    ui.archives->setEnabled(s.archiveParsing());
+    ui.archives->setChecked(s.archiveParsing());
+    if (ui.archives->isEnabled()) {
+      s.widgets().restoreChecked(ui.archives, m_parent);
+    }
+    s.widgets().restoreChecked(ui.hiddenFiles, m_parent);
+  }
+  updateOptions();
 }
 
 void DataTab::activated()

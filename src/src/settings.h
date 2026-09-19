@@ -30,6 +30,8 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #undef interface
 #endif
 
+class QAction;
+
 namespace MOBase
 {
 class IPlugin;
@@ -198,6 +200,10 @@ public:
   void saveIndex(const QComboBox* cb);
   void restoreIndex(QComboBox* cb, std::optional<int> def = {}) const;
 
+  // Selected combo text survives insertion and reordering of its items.
+  std::optional<QString> selection(const QComboBox* cb) const;
+  void saveSelection(const QComboBox* cb);
+
   // selected tab index for a tab widget
   //
   std::optional<int> index(const QTabWidget* w) const;
@@ -209,6 +215,10 @@ public:
   std::optional<bool> checked(const QAbstractButton* w) const;
   void saveChecked(const QAbstractButton* w);
   void restoreChecked(QAbstractButton* w, std::optional<bool> def = {}) const;
+
+  // Menu actions retain the former checkbox settings for the owner window.
+  void saveChecked(const QAction* action, const QWidget* owner);
+  void restoreChecked(QAction* action, const QWidget* owner) const;
 
   // returns the remembered button for a question dialog, or NoButton if the
   // user hasn't saved the choice

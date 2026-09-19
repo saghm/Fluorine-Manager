@@ -5,6 +5,7 @@
 #include "settings.h"
 #include "ui_modinfodialog.h"
 #include <log.h>
+#include <QLocale>
 #include <utility.h>
 #include <versioninfo.h>
 
@@ -75,6 +76,7 @@ void NexusTab::cleanup()
 
 void NexusTab::clear()
 {
+  ui->modMetadata->clear();
   ui->modID->clear();
   ui->sourceGame->clear();
   ui->version->clear();
@@ -92,6 +94,7 @@ void NexusTab::update()
   clear();
 
   ui->modID->setText(QString("%1").arg(mod().nexusId()));
+  updateMetadata();
 
   QString const gameName = mod().gameName();
   ui->sourceGame->addItem(core().managedGame()->gameName(),
@@ -120,6 +123,18 @@ void NexusTab::update()
                           (mod().endorsedState() == EndorsedState::ENDORSED_NEVER));
 
   setHasData(mod().nexusId() >= 0);
+}
+
+void NexusTab::updateMetadata()
+{
+  const auto value = [this](const QString& text) {
+    return text.isEmpty() ? tr("Unknown") : text;
+  };
+  const auto installed = mod().creationTime();
+  ui->modMetadata->setText(tr("Author: %1\nUploader: %2\nInstalled: %3")
+      .arg(value(mod().author()), value(mod().uploader()),
+           installed.isValid() ? QLocale().toString(installed.toLocalTime(), QLocale::ShortFormat)
+                               : tr("Unknown")));
 }
 
 void NexusTab::firstActivation()
@@ -213,6 +228,7 @@ bool NexusTab::tryRefreshData(int modID)
 
 void NexusTab::onModChanged()
 {
+  updateMetadata();
   m_requestStarted = false;
 
   const QString nexusDescription = mod().getNexusDescription();

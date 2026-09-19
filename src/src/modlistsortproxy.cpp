@@ -494,14 +494,15 @@ bool ModListSortProxy::filterMatchesMod(ModInfo::Ptr info, bool enabled) const
           foundKeyword = true;
         }
 
+        // Metadata remains searchable even when it has no main-table column.
         // Search by author
-        if (!foundKeyword && m_EnabledColumns[ModList::COL_AUTHOR] &&
+        if (!foundKeyword &&
             info->author().contains(currentKeyword, Qt::CaseInsensitive)) {
           foundKeyword = true;
         }
 
         // Search by uploader
-        if (!foundKeyword && m_EnabledColumns[ModList::COL_UPLOADER] &&
+        if (!foundKeyword &&
             info->uploader().contains(currentKeyword, Qt::CaseInsensitive)) {
           foundKeyword = true;
         }
@@ -524,7 +525,7 @@ bool ModListSortProxy::filterMatchesMod(ModInfo::Ptr info, bool enabled) const
         }
 
         // Search by Nexus ID
-        if (!foundKeyword && m_EnabledColumns[ModList::COL_MODID]) {
+        if (!foundKeyword) {
           bool ok;
           int const filterID = currentKeyword.toInt(&ok);
           if (ok) {

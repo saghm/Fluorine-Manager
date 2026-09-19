@@ -85,11 +85,11 @@ function getTutorialSteps() {
             }
         },
         function() {
-            tutorial.text = qsTr("In the \"Data\" tab, if you check the highlighted control, the tree will only show "
+            tutorial.text = qsTr("In the \"Data\" tab, open Filters and check Conflicts only. The tree will only show "
                                + "conflicted files. In the right column, it displays which mod is currently providing "
                                + "the file (due to having the highest priority), and if you hover your mouse over that "
                                + "info, it will list which other mods contain it.")
-            highlightItem("dataTabShowOnlyConflicts", false)
+            highlightItem("dataFiltersButton", false)
             waitForClick()
         },
         function() {

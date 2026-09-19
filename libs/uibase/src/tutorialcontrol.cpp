@@ -31,6 +31,8 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <QFile>
 #include <QGraphicsObject>
 #include <QImage>
+#include <QMenu>
+#include <functional>
 #include <QMenuBar>
 #include <QMouseEvent>
 #include <QQmlContext>
@@ -213,26 +215,63 @@ QRect TutorialControl::getRect(const QString& widgetName)
   }
 }
 
-QRect TutorialControl::getActionRect(const QString& widgetName)
+QRect TutorialControl::getActionRect(const QString& actionName)
 {
-  if (m_TargetControl != nullptr) {
-    QToolBar* toolBar = m_TargetControl->findChild<QToolBar*>("toolBar");
-    foreach (QAction* action, toolBar->actions()) {
-      if (action->objectName() == widgetName) {
-        return toolBar->actionGeometry(action);
+  if (!m_TargetControl) {
+    return {};
+  }
+
+  if (auto* toolbar = m_TargetControl->findChild<QToolBar*>("toolBar")) {
+    for (auto* action : toolbar->actions()) {
+      if (action->objectName() == actionName) {
+        return toolbar->actionGeometry(action);
       }
     }
   }
-  return QRect();
+
+  auto* menuBar = m_TargetControl->findChild<QMenuBar*>("menuBar");
+  if (!menuBar) {
+    return {};
+  }
+
+  // A closed menu has no usable action geometry. Highlight the top-level
+  // menu containing the requested action, including nested tool menus.
+  const std::function<bool(QMenu*)> containsAction = [&](QMenu* menu) {
+    for (auto* action : menu->actions()) {
+      if (action->objectName() == actionName ||
+          (action->menu() && containsAction(action->menu()))) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  for (auto* action : menuBar->actions()) {
+    if (action->objectName() == actionName ||
+        (action->menu() && containsAction(action->menu()))) {
+      QRect rect = menuBar->actionGeometry(action);
+      rect.moveTopLeft(menuBar->mapTo(m_TargetControl, rect.topLeft()));
+      return rect;
+    }
+  }
+  return {};
 }
 
-QRect TutorialControl::getMenuRect(const QString&)
+QRect TutorialControl::getMenuRect(const QString& actionName)
 {
-  if (m_TargetControl != nullptr) {
-    QMenuBar* menuBar = m_TargetControl->findChild<QMenuBar*>("menuBar");
-    return menuBar->geometry();
+  // Only toolbar-relative geometry needs the menu height added to it.
+  if (m_TargetControl) {
+    auto* toolbar = m_TargetControl->findChild<QToolBar*>("toolBar");
+    auto* menuBar = m_TargetControl->findChild<QMenuBar*>("menuBar");
+    if (toolbar && menuBar) {
+      for (auto* action : toolbar->actions()) {
+        if (action->objectName() == actionName) {
+          return menuBar->geometry();
+        }
+      }
+    }
   }
-  return QRect();
+  return {};
 }
 
 void TutorialControl::nextTutorialStepProxy()

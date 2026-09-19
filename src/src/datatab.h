@@ -3,7 +3,7 @@
 
 #include "modinfo.h"
 #include "modinfodialogfwd.h"
-#include <QCheckBox>
+#include <QAction>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QTreeWidget>
@@ -32,7 +32,7 @@ public:
           Ui::MainWindow* ui);
 
   void saveState(Settings& s) const;
-  void restoreState(const Settings& s) const;
+  void restoreState(const Settings& s);
   void activated();
 
   // if the data tab is currently visible, trigger an update of the
@@ -52,12 +52,12 @@ private:
     QTabWidget* tabs;
     QWidget* tab;
     QPushButton* refresh;
-    QPushButton* browseVFS;
-    QPushButton* browseRootBuilder;
+    QAction* browseVFS;
+    QAction* browseRootBuilder;
     QTreeView* tree;
-    QCheckBox* conflicts;
-    QCheckBox* archives;
-    QCheckBox* hiddenFiles;
+    QAction* conflicts;
+    QAction* archives;
+    QAction* hiddenFiles;
   };
 
   OrganizerCore& m_core;

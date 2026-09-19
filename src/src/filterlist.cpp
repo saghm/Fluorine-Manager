@@ -367,6 +367,19 @@ void FilterList::setSelection(const std::vector<Criteria>& criteria)
   }
 }
 
+void FilterList::setSpecialFilter(int category, bool enabled, bool inverse)
+{
+  for (int i = 0; i < ui->filters->topLevelItemCount(); ++i) {
+    auto* item = dynamic_cast<CriteriaItem*>(ui->filters->topLevelItem(i));
+    if (item && item->type() == ModListSortProxy::TypeSpecial && item->id() == category) {
+      item->setState(!enabled ? CriteriaItem::Inactive
+                             : inverse ? CriteriaItem::Inverted : CriteriaItem::Active);
+      break;
+    }
+  }
+  checkCriteria();
+}
+
 void FilterList::clearSelection()
 {
   for (int i = 0; i < ui->filters->topLevelItemCount(); ++i) {
@@ -443,4 +456,5 @@ void FilterList::onOptionsChanged()
       ui->filtersSeparators->currentData().toInt());
 
   emit optionsChanged(mode, separators);
+  checkCriteria();
 }
