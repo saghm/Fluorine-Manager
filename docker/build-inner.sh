@@ -62,6 +62,11 @@ cmake -S . -B build -G Ninja \
     -DFLUORINE_BUILD_COMMIT="${FLUORINE_BUILD_COMMIT}" \
     "${CMAKE_EXTRA_ARGS[@]}"
 
+# An existing object with an empty dependency record will not rebuild when a
+# header changes. Mixing class layouts from those stale objects can crash at
+# runtime even though linking succeeds. Let Ninja regenerate those objects.
+"${BUILD_PY}" /src/docker/repair-ninja-deps.py build
+
 # CLF3 is downloaded and updated by Fluorine at installation time.
 
 if [ "${BUILD_MODE:-tarball}" = "test" ]; then
@@ -278,7 +283,9 @@ echo "Bundling shared library dependencies..."
 # Libraries that MUST come from the host (glibc, GPU drivers, etc.)
 SKIP_PATTERN="linux-vdso|ld-linux|libc\.so|libm\.so|libdl\.so|librt\.so|libpthread|libresolv|libnss|libgcc_s|libstdc\+\+"
 # GPU/graphics drivers must be host-provided
-SKIP_PATTERN="${SKIP_PATTERN}|libGL\.so|libEGL|libGLX|libGLdispatch|libdrm|libvulkan|libX11|libxcb|libwayland-client|libwayland-server|libwayland-cursor|libwayland-egl|libxkbcommon"
+# GBM loads the host's Mesa/DRI backend and must match it too. Bundling the
+# builder's libgbm makes Wayland look for drivers under the builder's libdir.
+SKIP_PATTERN="${SKIP_PATTERN}|libGL\.so|libEGL|libGLX|libGLdispatch|libgbm|libdrm|libvulkan|libX11|libxcb|libwayland-client|libwayland-server|libwayland-cursor|libwayland-egl|libxkbcommon"
 # libpython — user provides via system Python; do not bundle.
 SKIP_PATTERN="${SKIP_PATTERN}|libpython"
 # OpenSSL should come from the host so we don't pin users to a stale TLS stack.
@@ -725,11 +732,6 @@ if [ "${HERE_REAL}" != "${DST_REAL}" ]; then
             exit 1
         fi
 
-        # Do not retain stale bundled OpenSSL runtimes from older releases.
-        # TLS should resolve against the host so certificate handling can be
-        # updated by the OS instead of being pinned to our old package.
-        rm -f "${BIN_DST}"/lib/libssl.so* "${BIN_DST}"/lib/libcrypto.so* 2>/dev/null || true
-
         # Refresh the manifest at the destination so the next update has it.
         cp -af "${MANIFEST}" "${BIN_DST}/fluorine-manifest.txt"
         echo "${CURRENT_VER}" > "${MARKER}"
@@ -742,6 +744,12 @@ if [ "${HERE_REAL}" != "${DST_REAL}" ]; then
     fi
 fi
 
+# Overlay updates preserve files within lib/, including runtimes retired from
+# the bundle. Remove these known legacy copies even when launching directly
+# from the installed directory or when the bundle version has not changed.
+# GBM must match the host's Mesa/DRI drivers; TLS uses the host OpenSSL runtime.
+rm -f "${BIN_DST}"/lib/libgbm.so* \
+      "${BIN_DST}"/lib/libssl.so* "${BIN_DST}"/lib/libcrypto.so* 2>/dev/null || true
 # ── Install icon + desktop file for Wayland taskbar/decoration ──
 ICON_SRC="${BIN_DST}/icons/com.fluorine.manager.png"
 ICON_DST="${HOME}/.local/share/icons/hicolor/256x256/apps/com.fluorine.manager.png"
