@@ -124,6 +124,11 @@ void FluorineUpdater::checkForUpdates(Channel channel)
   req.setRawHeader("User-Agent", "Fluorine-Manager/updater");
   req.setRawHeader("Accept", "application/vnd.github+json");
   req.setRawHeader("X-GitHub-Api-Version", "2022-11-28");
+  // Qt 6.11.2's HTTP/2 reader can read the closed TLS socket when GitHub
+  // closes an idle connection, producing a warning ~30 s after a successful
+  // startup check. Use HTTP/1.1 for these small metadata requests; HTTPS and
+  // certificate verification remain enabled, and mod downloads are unaffected.
+  req.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
   req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                    QNetworkRequest::NoLessSafeRedirectPolicy);
 
