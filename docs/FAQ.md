@@ -41,4 +41,19 @@ To use a portable install you can run this as an example. `flatpak run com.fluor
 
 And all the buttons like associate with mod manager downloads button and MO2 OAuth also works.
 
+## Does UTF-8 Support Change My Game's Language?
+
+Fluorine uses UTF-8 for Wine's Linux filenames so mods can contain names from
+multiple languages at once. It preserves the language and region in your locale
+(for example, `ja_JP.SJIS` becomes `ja_JP.UTF-8`) and uses `C.UTF-8` when the
+locale is empty, `C`, or `POSIX`. Separate message-language preferences remain
+intact, and Steam can supply the game's language when no locale override is set.
+
+To explicitly select a Wine locale for an executable, set
+`HOST_LC_ALL=ja_JP.UTF-8` (or another language's UTF-8 locale) in its environment
+variables. This is [Proton's locale override](https://github.com/ValveSoftware/Proton#runtime-config-options).
+It does not install game translations or fonts. Fluorine prepares this environment
+before launch and marks it with `SteamEnv=1` so Steam does not reset it to ASCII;
+no locale preload helper or system-wide locale change is needed.
+
 FAQ is going to be updated with more info in the future.

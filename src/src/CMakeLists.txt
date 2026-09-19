@@ -139,10 +139,6 @@ add_executable(organizer
     ${ORGANIZER_UI}
     ${ORGANIZER_QRC})
 
-add_subdirectory("${CMAKE_SOURCE_DIR}/tools/locale_guard"
-                 "${CMAKE_BINARY_DIR}/locale_guard")
-add_dependencies(organizer fluorine_locale_x86_64 fluorine_locale_i386)
-
 set_target_properties(organizer PROPERTIES
     OUTPUT_NAME "ModOrganizer"
     AUTOMOC ON

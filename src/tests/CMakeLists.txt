@@ -675,10 +675,6 @@ target_compile_options(test_launch_environment PRIVATE
 target_link_libraries(test_launch_environment PRIVATE Qt6::Core mo2::uibase GTest::gtest)
 add_test(NAME test_launch_environment COMMAND test_launch_environment)
 
-add_test(NAME test_locale_guard
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_locale_guard.py
-            ${CMAKE_BINARY_DIR}/src/src/locale)
-
 add_executable(test_conflict_sorting EXCLUDE_FROM_ALL
     test_conflict_sorting.cpp
     ${CMAKE_SOURCE_DIR}/src/src/modinfodialogconflictsmodels.cpp
@@ -764,7 +760,6 @@ add_custom_target(fluorine-tests
     DEPENDS test_esptk_tes3 test_bsatk_extraction test_executable_options test_steam_cloud
             test_conflict_sorting test_launch_environment test_game_artwork test_settings_navigation
             test_fluorine_menu_bar test_library_setup_panel
-            fluorine_locale_x86_64 fluorine_locale_i386
             test_plugincompatibility test_pefileutils test_curatedguide
             test_metainiutils test_fomoddependency
             test_vfs_backend

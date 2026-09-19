@@ -1,6 +1,7 @@
 #include "protonlauncher.h"
 
 #include "fluorinepaths.h"
+#include "launchenvironment.h"
 #include "steamdetection.h"
 #include "slrmanager.h"
 #include "vfsbackend.h"
@@ -812,12 +813,6 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
                                << m_prefixPath << m_bindMountSource
                                << m_bindMountTarget;
 
-  const QString guardDir = QDir(QCoreApplication::applicationDirPath()).filePath("locale");
-  const bool useLocaleGuard = m_useSteamDrm &&
-      QFileInfo::exists(guardDir + "/x86_64/libfluorine_locale.so") &&
-      QFileInfo::exists(guardDir + "/i386/libfluorine_locale.so");
-  bool insideSlr = false;
-
   // If SLR is enabled, wrap the whole proton invocation inside the
   // pressure-vessel container provided by SteamLinuxRuntime_sniper.
   // The `run` script accepts `-- <command> [args...]` and re-executes the
@@ -830,15 +825,6 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
       MOBase::log::info("SLR: wrapping launch with {}", runScript);
       // Build: [wrappers] run_script [--filesystem=...] -- proton_script protonArgs
       QStringList slrArgs;
-      insideSlr = true;
-      if (useLocaleGuard) {
-        // pressure-vessel replaces host LD_LIBRARY_PATH. Pass explicit modules
-        // so it exposes both ABIs and constructs the container's preload path.
-        slrArgs << QStringLiteral("--ld-preload=%1/x86_64/libfluorine_locale.so:abi=x86_64-linux-gnu").arg(guardDir)
-                << QStringLiteral("--ld-preload=%1/i386/libfluorine_locale.so:abi=i386-linux-gnu").arg(guardDir);
-        pressureVesselImportantPaths << guardDir;
-      }
-
       // Expose the managed game root.  Extenders frequently live below a
       // nested bin directory but load assets/modules from the root.
       if (!m_gameDirectory.isEmpty() && QFileInfo::exists(m_gameDirectory)) {
@@ -1005,43 +991,15 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
     env.insert(it.key(), it.value());
   }
 
-  // Resolve locale after user overrides, then carry it through both Proton's
-  // HOST_LC_ALL restoration and steamclient's later setenv("LC_ALL", "C").
-  // Merely setting LC_ALL before Proton cannot fix that second transition.
-  const auto isUtf8 = [](const QString& value) {
-    return value.contains("UTF-8", Qt::CaseInsensitive) ||
-           value.contains("UTF8", Qt::CaseInsensitive);
-  };
-  QString locale;
-  for (const char* key : {"LC_ALL", "LC_CTYPE", "LANG"}) {
-    const QString value = env.value(key);
-    if (!value.isEmpty()) {
-      locale = isUtf8(value) ? value : QStringLiteral("C.UTF-8");
-      break;
-    }
-  }
-  if (locale.isEmpty()) locale = QStringLiteral("C.UTF-8");
-  env.insert("LC_ALL", locale);
-  env.insert("HOST_LC_ALL", locale);
-  if (!isUtf8(env.value("LANG"))) env.insert("LANG", locale);
-
-  if (useLocaleGuard) {
-    // Preserve the C locale's numeric conventions when Steam requests it,
-    // while retaining a UTF-8 filename encoding.
-    env.insert("FLUORINE_WINE_UTF8", "C.UTF-8");
-    if (!insideSlr) {
-      // A bare soname lets each ELF loader choose its matching architecture.
-      // $LIB alone is ambiguous across distros ("lib" can mean 32 or 64 bit).
-      const QString guard = QStringLiteral("libfluorine_locale.so");
-      const QString search = guardDir + "/x86_64:" + guardDir + "/i386";
-      const QString libraryPath = env.value("LD_LIBRARY_PATH");
-      env.insert("LD_LIBRARY_PATH", libraryPath.isEmpty() ? search : search + ":" + libraryPath);
-      const QString preload = env.value("LD_PRELOAD");
-      env.insert("LD_PRELOAD", preload.isEmpty() ? guard : guard + ":" + preload);
-    }
-    MOBase::log::info("Preserving Wine UTF-8 locale '{}' through Steam launch", locale);
-  } else if (m_useSteamDrm) {
-    MOBase::log::warn("Wine locale guard is missing from '{}'; Steam may override UTF-8", guardDir);
+  prepareProtonLocale(env);
+  if (m_useSteamDrm) {
+    // Fluorine has already assembled the launch environment. Without this
+    // Steam marker, native steamclient reapplies its launch defaults during
+    // Steam API initialization, including LC_ALL=C. Wine's child processes
+    // then interpret Unix filenames as ASCII, even though their Windows
+    // environment still reports UTF-8. Keep the Steam/DRM bridge enabled,
+    // but prevent that second environment setup (as Steam's own launcher does).
+    env.insert("SteamEnv", "1");
   }
 
   if (m_useSLR) {

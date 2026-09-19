@@ -58,12 +58,21 @@ class BundleLauncherTests(unittest.TestCase):
             (lib / name).write_text("obsolete bundled runtime")
         (lib / "libgbm.so").symlink_to("libgbm.so.1")
         (lib / "custom-plugin.so").write_text("user file")
+        for arch in ["x86_64", "i386"]:
+            locale = self.installed / "locale" / arch
+            locale.mkdir(parents=True, exist_ok=True)
+            (locale / "libfluorine_locale.so").write_text("retired interposer")
+            (locale / "custom-file").write_text("user file")
 
     def assert_clean(self):
         lib = self.installed / "lib"
         for pattern in ["libgbm.so*", "libssl.so*", "libcrypto.so*"]:
             self.assertEqual(list(lib.glob(pattern)), [])
         self.assertEqual((lib / "custom-plugin.so").read_text(), "user file")
+        for arch in ["x86_64", "i386"]:
+            locale = self.installed / "locale" / arch
+            self.assertFalse((locale / "libfluorine_locale.so").exists())
+            self.assertEqual((locale / "custom-file").read_text(), "user file")
 
     def test_upgrade_removes_retired_libraries_and_preserves_user_files(self):
         self.seed_legacy_files()

@@ -146,10 +146,6 @@ else
     exit 1
 fi
 
-# Architecture-selected locale protection for Proton's Steam bridge.
-mkdir -p "${OUT_DIR}/locale"
-cp -a build/src/src/locale/{x86_64,i386} "${OUT_DIR}/locale/"
-
 # Build Wine's audio PE modules with FAudio embedded. Prefix setup installs
 # the patched current release after DXSETUP; 26.02 remains a rollback baseline.
 bash /src/docker/build-faudio.sh "${OUT_DIR}/faudio"
@@ -750,6 +746,10 @@ fi
 # GBM must match the host's Mesa/DRI drivers; TLS uses the host OpenSSL runtime.
 rm -f "${BIN_DST}"/lib/libgbm.so* \
       "${BIN_DST}"/lib/libssl.so* "${BIN_DST}"/lib/libcrypto.so* 2>/dev/null || true
+# SteamEnv now preserves Proton's environment without an LD_PRELOAD interposer.
+rm -f "${BIN_DST}/locale/x86_64/libfluorine_locale.so" \
+      "${BIN_DST}/locale/i386/libfluorine_locale.so" 2>/dev/null || true
+
 # ── Install icon + desktop file for Wayland taskbar/decoration ──
 ICON_SRC="${BIN_DST}/icons/com.fluorine.manager.png"
 ICON_DST="${HOME}/.local/share/icons/hicolor/256x256/apps/com.fluorine.manager.png"
