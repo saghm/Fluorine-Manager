@@ -5,8 +5,11 @@
 #include <QFile>
 #include <QTemporaryDir>
 #include <QThread>
+#include <boost/program_options.hpp>
 #include <gtest/gtest.h>
 #include <uibase/log.h>
+#include <locale>
+#include <vector>
 
 // Avoid probing the user's Steam installation in a launch test. The launcher
 // and the subprocess/environment handling themselves are the production code.
@@ -14,6 +17,34 @@ QString findSteamPath() { return {}; }
 static QString slrRunScript;
 QString getSlrRunScript() { return slrRunScript; }
 QString fluorineDataDir() { return {}; }
+
+TEST(LaunchArguments, UnicodeAndQuotedArgumentsSurviveCommandLineParsing)
+{
+  struct RestoreLocale {
+    std::locale previous = std::locale();
+    ~RestoreLocale() { std::locale::global(previous); }
+  } restore;
+  std::locale::global(std::locale::classic());
+  const std::vector<std::string> expected{
+      "fluorine-manager", "日本語/中文-한국어.exe", "Русский/العربية/हिन्दी/🚀",
+      "café with spaces", R"("Z:\game files\Oblivion.exe" --flag="a b")",
+      "an'apostrophe", "trailing\\", "tab\there", "$(literal);$HOME"};
+  auto input = expected;
+  std::vector<char*> argv;
+  for (auto& argument : input) argv.push_back(argument.data());
+  const auto commandLine = commandLineFromUtf8Arguments(argv.size(), argv.data());
+  const auto actual = boost::program_options::split_unix(
+      QString::fromStdWString(commandLine).toStdString());
+  EXPECT_EQ(actual, expected);
+  namespace po = boost::program_options;
+  po::options_description options;
+  options.add_options()("arguments", po::value<std::vector<std::string>>());
+  po::positional_options_description positional;
+  positional.add("arguments", -1);
+  po::variables_map values;
+  po::store(po::command_line_parser(actual).options(options).positional(positional).run(), values);
+  EXPECT_EQ(values["arguments"].as<std::vector<std::string>>(), expected);
+}
 
 TEST(ProtonLocale, NeutralFallbacksUseUnicode)
 {

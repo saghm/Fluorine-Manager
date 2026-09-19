@@ -2,6 +2,7 @@
 #include "env.h"
 #include "fluorinepaths.h"
 #include "instancemanager.h"
+#include "launchenvironment.h"
 #include "loglist.h"
 #include "memorydiagnostics.h"
 #include "moapplication.h"
@@ -142,23 +143,7 @@ int run(int argc, char* argv[])
 
   cl::CommandLine cl;
 
-  // Build a wstring from argv for the CommandLine parser. Each argument must
-  // be quoted so that po::split_unix() round-trips correctly when paths
-  // contain spaces.
-  std::wstring cmdLine;
-  for (int i = 0; i < argc; ++i) {
-    if (i > 0)
-      cmdLine += L' ';
-    std::string arg(argv[i]);
-    std::wstring const warg(arg.begin(), arg.end());
-    if (warg.find(L' ') != std::wstring::npos) {
-      cmdLine += L'"';
-      cmdLine += warg;
-      cmdLine += L'"';
-    } else {
-      cmdLine += warg;
-    }
-  }
+  const auto cmdLine = commandLineFromUtf8Arguments(argc, argv);
   if (auto r = cl.process(cmdLine)) {
     return *r;
   }

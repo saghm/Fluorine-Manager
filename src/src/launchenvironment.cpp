@@ -3,6 +3,19 @@
 #include <QCoreApplication>
 #include <QRegularExpression>
 
+std::wstring commandLineFromUtf8Arguments(int argc, char* const argv[])
+{
+  QStringList arguments;
+  for (int i = 0; i < argc; ++i) {
+    QString argument = QString::fromUtf8(argv[i]);
+    argument.replace('\\', "\\\\");
+    argument.replace('"', "\\\"");
+    argument.replace('\'', "\\'");
+    arguments.append('"' + argument + '"');
+  }
+  return arguments.join(' ').toStdWString();
+}
+
 namespace
 {
 QString utf8Locale(QString locale)

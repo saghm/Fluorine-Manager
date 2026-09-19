@@ -64,13 +64,10 @@ std::optional<int> CommandLine::process(const std::wstring& line)
 {
   m_originalLine = line;
   try {
-    // Convert wstring args to vector<wstring> for compatibility with
-    // wcommand_line_parser.
-    auto narrow_args = po::split_unix(QString::fromStdWString(line).toStdString());
-    std::vector<std::wstring> args;
-    for (const auto& a : narrow_args) {
-      args.push_back(QString::fromStdString(a).toStdWString());
-    }
+    // Linux arguments and our string-valued options are UTF-8. The wide
+    // parser converts values back through the process's locale, which is
+    // still C before QApplication starts and cannot represent these paths.
+    auto args = po::split_unix(QString::fromStdWString(line).toStdString());
     if (!args.empty()) {
       // remove program name
       args.erase(args.begin());
@@ -79,7 +76,7 @@ std::optional<int> CommandLine::process(const std::wstring& line)
     // parsing the first part of the command line, including global options and
     // command name, but not the rest, which will be collected below
 
-    auto parsed = po::wcommand_line_parser(args)
+    auto parsed = po::command_line_parser(args)
                       .options(m_allOptions)
                       .positional(m_positional)
                       .allow_unregistered()
@@ -111,7 +108,7 @@ std::optional<int> CommandLine::process(const std::wstring& line)
             if (!c->legacy()) {
               // parse the the remainder of the command line according to the
               // command's options
-              po::wcommand_line_parser parser(opts);
+              po::command_line_parser parser(opts);
 
               auto co = c->allOptions();
               parser.options(co);
@@ -134,7 +131,11 @@ std::optional<int> CommandLine::process(const std::wstring& line)
               po::notify(m_vm);
             }
 
-            c->set(line, m_vm, opts);
+            std::vector<std::wstring> untouched;
+            for (const auto& option : opts) {
+              untouched.push_back(QString::fromStdString(option).toStdWString());
+            }
+            c->set(line, m_vm, std::move(untouched));
             m_command = c.get();
 
             return runEarly();
@@ -161,7 +162,7 @@ std::optional<int> CommandLine::process(const std::wstring& line)
     }
 
     if (!opts.empty()) {
-      const auto qs = QString::fromStdWString(opts[0]);
+      const auto qs = QString::fromStdString(opts[0]);
 
       if (qs.startsWith("--")) {
         // assume that for something like `ModOrganizer.exe --bleh`, it's just
@@ -189,7 +190,7 @@ std::optional<int> CommandLine::process(const std::wstring& line)
       opts.erase(opts.begin());
 
       for (auto&& o : opts) {
-        m_untouched.push_back(QString::fromStdWString(o));
+        m_untouched.push_back(QString::fromStdString(o));
       }
     }
 

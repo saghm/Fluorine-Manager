@@ -668,11 +668,13 @@ add_executable(test_launch_environment EXCLUDE_FROM_ALL
     ${CMAKE_SOURCE_DIR}/src/src/protonlauncher.cpp
     ${CMAKE_SOURCE_DIR}/src/src/launchenvironment.cpp
     ${CMAKE_SOURCE_DIR}/src/src/vfsbackend.cpp)
+find_package(Boost CONFIG REQUIRED COMPONENTS program_options)
 set_target_properties(test_launch_environment PROPERTIES AUTOMOC OFF CXX_STANDARD 23)
 target_include_directories(test_launch_environment PRIVATE ${CMAKE_SOURCE_DIR}/src/src)
 target_compile_options(test_launch_environment PRIVATE
     "-idirafter" "${CMAKE_SOURCE_DIR}/libs/uibase/include/uibase")
-target_link_libraries(test_launch_environment PRIVATE Qt6::Core mo2::uibase GTest::gtest)
+target_link_libraries(test_launch_environment PRIVATE
+    Qt6::Core mo2::uibase Boost::program_options GTest::gtest)
 add_test(NAME test_launch_environment COMMAND test_launch_environment)
 
 add_executable(test_conflict_sorting EXCLUDE_FROM_ALL
