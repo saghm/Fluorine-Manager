@@ -14,6 +14,7 @@
 #include <gamebryolocalsavegames.h>
 #include <gamebryosavegameinfo.h>
 #include <pluginsetting.h>
+#include <utility.h>
 
 #include <QCoreApplication>
 #include <QDir>
@@ -32,6 +33,17 @@ using namespace MOBase;
 const unsigned int GameFallout4::PROBLEM_TEST_FILE;
 
 GameFallout4::GameFallout4() {}
+
+QIcon GameFallout4::gameIcon() const
+{
+  // Some Fallout4.exe releases contain the Skyrim dragon as their application
+  // icon. The official launcher carries Fallout's Vault Boy artwork.
+  const QString launcher = gameDirectory().absoluteFilePath("Fallout4Launcher.exe");
+  if (isInstalled() && QFileInfo::exists(launcher)) {
+    return MOBase::iconForExecutable(launcher);
+  }
+  return GameGamebryo::gameIcon();
+}
 
 bool GameFallout4::init(IOrganizer* moInfo)
 {

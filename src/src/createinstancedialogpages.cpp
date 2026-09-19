@@ -7,6 +7,8 @@
 #include "shared/appconfig.h"
 #include "ui_createinstancedialog.h"
 #include <QFileDialog>
+#include <QSignalBlocker>
+#include <QTimer>
 #include <iplugingame.h>
 #include <report.h>
 #include <utility.h>
@@ -256,16 +258,34 @@ GamePage::Game::Game(IPluginGame* g) : game(g), installed(g->isInstalled())
 GamePage::GamePage(CreateInstanceDialog& dlg) : Page(dlg)
 {
   createGames();
-  fillList();
-
+  for (auto& game : m_games) {
+    createGameItem(game.get());
+  }
   m_filter.setEdit(ui->gamesFilter);
-
-  QObject::connect(&m_filter, &FilterWidget::changed, [&] {
+  QObject::connect(&m_filter, &FilterWidget::changed, &m_connections, [this] {
     fillList();
   });
-  QObject::connect(ui->showAllGames, &QCheckBox::clicked, [&] {
+  QObject::connect(ui->gamesScope, &QComboBox::currentIndexChanged, &m_connections, [this] {
     fillList();
   });
+  QObject::connect(ui->games, &QListWidget::currentItemChanged, &m_connections, [this] {
+    updateSelection();
+  });
+  QObject::connect(ui->games, &QListWidget::itemActivated, &m_connections,
+                   [this](QListWidgetItem*) {
+    if (m_highlighted) {
+      select(m_highlighted->game);
+    }
+  });
+  QObject::connect(ui->browseGameFolder, &QPushButton::clicked, &m_connections, [this] {
+    selectCustom();
+  });
+  QObject::connect(ui->locateSelectedGame, &QPushButton::clicked, &m_connections, [this] {
+    if (m_highlighted) {
+      select(m_highlighted->game);
+    }
+  });
+  QTimer::singleShot(0, &m_connections, [this] { fillList(); });
 }
 
 bool GamePage::ready() const
@@ -347,12 +367,16 @@ void GamePage::select(IPluginGame* game, const QString& dir)
 
   // select this plugin, if any
   m_selection = checked;
+  if (checked) {
+    checked->confirmed = true;
+  }
 
-  // update the button associated with it in case the paths have changed
-  updateButton(checked);
+  // Refresh the card in case the installation path changed.
+  updateItem(checked);
+  fillList();
 
-  // toggle it on
-  selectButton(checked);
+  // Select the matching card.
+  selectItem(checked);
 
   updateNavigation();
 
@@ -368,15 +392,15 @@ void GamePage::selectCustom()
       &m_dlg, QObject::tr("Find game installation"), {}, {});
 
   if (path.isEmpty()) {
-    // reselect the previous button
-    selectButton(m_selection);
+    // Restore the previous selection.
+    selectItem(m_selection);
     return;
   }
 
   // Microsoft store games are not supported
   if (detectMicrosoftStore(path) && !confirmMicrosoftStore(path, nullptr)) {
-    // reselect the previous button
-    selectButton(m_selection);
+    // Restore the previous selection.
+    selectItem(m_selection);
     return;
   }
 
@@ -390,8 +414,8 @@ void GamePage::selectCustom()
       // select it
       select(g->game);
 
-      // update the button because the path has changed
-      updateButton(g.get());
+      // Update the card because the path changed.
+      updateItem(g.get());
 
       return;
     }
@@ -400,8 +424,8 @@ void GamePage::selectCustom()
   // warning to the user
   warnUnrecognized(path);
 
-  // reselect the previous button
-  selectButton(m_selection);
+  // Restore the previous selection.
+  selectItem(m_selection);
 }
 
 void GamePage::warnUnrecognized(const QString& path)
@@ -464,166 +488,99 @@ GamePage::Game* GamePage::findGame(IPluginGame* game)
   return nullptr;
 }
 
-void GamePage::createGameButton(Game* g)
+void GamePage::createGameItem(Game* g)
 {
-  g->button = new QCommandLinkButton;
-  g->button->setCheckable(true);
-  g->button->setIconSize(QSize(24, 24));
-
-  updateButton(g);
-
-  QObject::connect(g->button, &QAbstractButton::clicked, [g, this] {
-    select(g->game);
-  });
-}
-
-void GamePage::addButton(QAbstractButton* b)
-{
-  auto* ly = static_cast<QVBoxLayout*>(ui->games->layout());
-
-  // insert before the stretch
-  ly->insertWidget(ly->count() - 1, b);
-}
-
-void GamePage::updateButton(Game* g)
-{
-  if (!g || !g->button) {
-    return;
-  }
-
-  g->button->setText(g->game->displayGameName().replace("&", "&&"));
   QIcon icon = g->game->gameIcon();
-  if (icon.isNull()) {
-    icon = QIcon(":/MO/gui/executable");
-  }
   if (icon.isNull()) {
     icon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
   }
-  g->button->setIcon(icon);
+  g->item = ui->games->addGame(g->game->displayGameName(), g->game->steamAPPId(),
+                              icon, g->installed, g->game->gameShortName(),
+                              g->game->gameName());
+  updateItem(g);
+}
 
-  if (g->installed) {
-    const QString compact = compactPathForDescription(g->dir);
-    const QFontMetrics fm(g->button->font());
-    const QString elided = fm.elidedText(compact, Qt::ElideMiddle, 460);
-    g->button->setDescription(elided);
-    g->button->setToolTip(QDir::toNativeSeparators(g->dir));
+void GamePage::updateItem(Game* g)
+{
+  if (!g || !g->item) {
+    return;
+  }
+  g->item->setData(GameLibraryWidget::InstalledRole, g->installed);
+  const QString status = g->installed ? QDir::toNativeSeparators(g->dir)
+      : QObject::tr("No installation detected. Locate the game folder to continue.");
+  g->item->setToolTip(g->game->displayGameName() + "\n" + status);
+  g->item->setData(Qt::AccessibleTextRole, g->game->displayGameName());
+  g->item->setData(Qt::AccessibleDescriptionRole, status);
+}
+
+void GamePage::selectItem(Game* g)
+{
+  if (g && g->item->isHidden()) {
+    // A manually located game may have been excluded by the current search.
+    ui->gamesFilter->clear();
+    fillList();
+  }
+  ui->games->setCurrentItem(g ? g->item : nullptr);
+  updateSelection();
+  if (g) {
+    ui->games->scrollToItem(g->item);
+  }
+}
+
+void GamePage::updateSelection()
+{
+  m_highlighted = nullptr;
+  for (const auto& g : m_games) {
+    if (g->item == ui->games->currentItem() && !g->item->isHidden()) {
+      m_highlighted = g.get();
+      break;
+    }
+  }
+  const bool needsConfirmation = m_highlighted && m_highlighted->installed &&
+      detectMicrosoftStore(m_highlighted->dir) && !m_highlighted->confirmed;
+  m_selection = (m_highlighted && m_highlighted->installed && !needsConfirmation)
+      ? m_highlighted : nullptr;
+  ui->locateSelectedGame->setVisible(m_highlighted && !m_selection);
+  ui->locateSelectedGame->setText(needsConfirmation
+      ? QObject::tr("Use this installation…") : QObject::tr("Locate selected game…"));
+  if (!m_highlighted) {
+    ui->selectedGameDetails->setText(
+        QObject::tr("Select a game to see its installation location."));
   } else {
-    g->button->setDescription(QObject::tr("No installation found"));
-    g->button->setToolTip({});
+    const QString detail = m_highlighted->installed
+        ? compactPathForDescription(m_highlighted->dir)
+        : QObject::tr("No installation detected. Locate the game folder to continue.");
+    ui->selectedGameDetails->setText(m_highlighted->game->displayGameName() +
+                                    "\n" + detail);
   }
-}
-
-void GamePage::selectButton(Game* g)
-{
-  // go through each game, set the button that is for game `g` as active;
-  // some button might not exist, which happens when selecting a custom
-  // folder for a game that was considered uninstalled
-
-  for (const auto& gg : m_games) {
-    if (!g) {
-      // nothing should be selected
-      if (gg->button) {
-        gg->button->setChecked(false);
-      }
-
-      continue;
-    }
-
-    if (gg->game == g->game) {
-      // this is the button that should be selected
-
-      if (!gg->button) {
-        // this happens when the button wasn't visible because the game
-        // was not installed; create it and show it
-        // and it has a button, just check it
-        createGameButton(gg.get());
-        addButton(gg->button);
-      }
-
-      gg->button->setChecked(true);
-      gg->button->setFocus();
-    } else {
-      // this is not the button you're looking for
-      if (gg->button) {
-        gg->button->setChecked(false);
-      }
-    }
-  }
-}
-
-void GamePage::clearButtons()
-{
-  auto* ly = static_cast<QVBoxLayout*>(ui->games->layout());
-
-  ui->games->setUpdatesEnabled(false);
-
-  // delete all children
-  qDeleteAll(ui->games->findChildren<QWidget*>("", Qt::FindDirectChildrenOnly));
-
-  // stretch widgets added with addStretch() are not in the parent widget,
-  // they have to be deleted from the layout itself
-  while (auto* child = ly->takeAt(0))
-    delete child;
-
-  // add a stretch, buttons will be added before
-  ly->addStretch();
-
-  ui->games->setUpdatesEnabled(true);
-
-  for (auto& g : m_games) {
-    // all buttons have been deleted
-    g->button = nullptr;
-  }
-}
-
-QCommandLinkButton* GamePage::createCustomButton()
-{
-  auto* b = new QCommandLinkButton;
-
-  b->setText(QObject::tr("Browse..."));
-  b->setDescription(QObject::tr("The folder must contain a valid game installation"));
-
-  QObject::connect(b, &QAbstractButton::clicked, [&] {
-    selectCustom();
-  });
-
-  return b;
+  updateNavigation();
 }
 
 void GamePage::fillList()
 {
-  const bool showAll = ui->showAllGames->isChecked();
-
-  clearButtons();
-
-  Game* firstButton = nullptr;
-
-  for (auto& g : m_games) {
-    if (!showAll && !g->installed) {
-      // not installed
-      continue;
+  const bool showAll = ui->gamesScope->currentIndex() == 1;
+  int visible = 0;
+  int installed = 0;
+  {
+    const QSignalBlocker blocker(ui->games);
+    for (auto& g : m_games) {
+      installed += g->installed ? 1 : 0;
+      const bool matches = (showAll || g->installed) &&
+          (m_filter.matches(g->game->gameName()) ||
+           m_filter.matches(g->game->displayGameName()));
+      g->item->setHidden(!matches);
+      visible += matches ? 1 : 0;
     }
-
-    if (!m_filter.matches(g->game->gameName()) &&
-        !m_filter.matches(g->game->displayGameName())) {
-      // filtered out
-      continue;
-    }
-
-    createGameButton(g.get());
-    addButton(g->button);
-
-    if (!firstButton) {
-      firstButton = g.get();
+    if (ui->games->currentItem() && ui->games->currentItem()->isHidden()) {
+      ui->games->setCurrentItem(nullptr);
+      ui->games->clearSelection();
     }
   }
-
-  // browse button
-  addButton(createCustomButton());
-
-  if (firstButton) {
-    firstButton->button->setDefault(true);
-  }
+  ui->gamesCount->setText(QObject::tr("%1 shown · %2 installed · %3 supported")
+      .arg(visible).arg(installed).arg(m_games.size()));
+  ui->gamesEmpty->setVisible(visible == 0);
+  ui->games->refreshArtwork();
+  updateSelection();
 }
 
 GamePage::Game* GamePage::checkInstallation(const QString& path, Game* g)
@@ -679,7 +636,7 @@ GamePage::Game* GamePage::checkInstallation(const QString& path, Game* g)
   g->dir       = path;
   g->installed = true;
 
-  updateButton(g);
+  updateItem(g);
 
   return g;
 }

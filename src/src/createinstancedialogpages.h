@@ -7,6 +7,7 @@
 #include <QCommandLinkButton>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 
 namespace MOBase
 {
@@ -180,25 +181,8 @@ private:
   CreateInstanceDialog::Types m_type{CreateInstanceDialog::NoType};
 };
 
-// game plugin page, displays a list of command buttons for each game, along
-// with a "browse" button for custom directories and filtering stuff
-//
-// the game list initially only shows plugins that report isInstalled(), and the
-// user has two ways of specifying paths for games that were not found:
-//
-//   1) by clicking the "Browse..." button and selecting an arbitrary directory
-//
-//      all plugins are checked until one returns true for looksValid(); if none
-//      of them do, this is an error
-//
-//   2) by checking the "Show all supported games" checkbox and clicking one
-//      of the games on the list
-//
-//      if the selected plugin doesn't recognize the directory, the user is
-//      warned, but is allowed to continue; there's also some logic to try to
-//      find another plugin that can manage this directory and suggest it
-//      instead
-//
+// Searchable game library with installation detection and manual folder selection.
+// Artwork is independent of whether a game is installed.
 class GamePage : public Page
 {
 public:
@@ -239,15 +223,15 @@ public:
   void warnUnrecognized(const QString& path);
 
 private:
-  // a single game, with its button and custom directory, if any
+  // a single game, with its card and custom directory, if any
   //
   struct Game
   {
     // game plugin
     MOBase::IPluginGame* game = nullptr;
 
-    // button on the ui
-    QCommandLinkButton* button = nullptr;
+    // card on the ui
+    QListWidgetItem* item = nullptr;
 
     // game directory; set in ctor if the plugin has detected the game, or
     // set later when the user selects a directory
@@ -256,6 +240,7 @@ private:
     // whether a directory has been set for this game, either auto detected
     // or by the user
     bool installed = false;
+    bool confirmed = false;
 
     Game(MOBase::IPluginGame* g);
     Game(const Game&)            = delete;
@@ -263,14 +248,16 @@ private:
   };
 
   // list of all game plugins, even if they're not installed; those are filtered
-  // from the ui if the checkbox isn't checked
+  // from the ui when the Installed filter is selected
   std::vector<std::unique_ptr<Game>> m_games;
 
   // current selection
   Game* m_selection{nullptr};
+  Game* m_highlighted{nullptr};
 
   // filter
   MOBase::FilterWidget m_filter;
+  QObject m_connections;
 
   // returns a list of all the game plugins sorted with natsort
   //
@@ -284,39 +271,10 @@ private:
   //
   Game* findGame(MOBase::IPluginGame* game);
 
-  // creates the ui for the given game button
-  //
-  void createGameButton(Game* g);
-
-  // adds the given button to the ui
-  //
-  void addButton(QAbstractButton* b);
-
-  // updates the given button on the ui, sets the text, icon, etc.
-  //
-  static void updateButton(Game* g);
-
-  // game buttons are toggles, this creates the button for the given game if
-  // it doesn't exist and toggles it on
-  //
-  // the button might not exist if, for example:
-  //   1) this game is currently filtered out (not installed, doesn't match
-  //      filter text, etc) and,
-  //   2) the user browses to a directory that a hidden plugin can use
-  //
-  void selectButton(Game* g);
-
-  // removes all buttons from the ui
-  //
-  void clearButtons();
-
-  // creates the "Browse" button
-  //
-  QCommandLinkButton* createCustomButton();
-
-  // clears the button list and adds all the buttons to it, depending on
-  // filtering and stuff
-  //
+  void createGameItem(Game* g);
+  static void updateItem(Game* g);
+  void selectItem(Game* g);
+  void updateSelection();
   void fillList();
 
   // checks whether the given path looks valid to the given game plugin

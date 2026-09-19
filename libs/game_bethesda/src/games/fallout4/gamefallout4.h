@@ -22,6 +22,7 @@ public:
   QStringList testFilePlugins() const;
 
 public:  // IPluginGame interface
+  virtual QIcon gameIcon() const override;
   virtual QString gameName() const override;
   virtual void detectGame() override;
   virtual QList<MOBase::ExecutableInfo> executables() const override;

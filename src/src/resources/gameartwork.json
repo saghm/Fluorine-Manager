@@ -1,0 +1,195 @@
+{
+  "description": "Verified library artwork. These IDs never change game detection or launch settings. gameName disambiguates plugins sharing a short name. source records the original artwork page.",
+  "entries": [
+    {
+      "shortName": "Fallout3",
+      "title": "Fallout 3",
+      "key": "sgdb-52054",
+      "url": "https://cdn2.steamgriddb.com/grid/838b5a042f1761ef0b5981585a0a7f38.png",
+      "source": "https://www.steamgriddb.com/grid/52054"
+    },
+    {
+      "shortName": "TTW",
+      "title": "Tale of Two Wastelands",
+      "key": "sgdb-552788",
+      "url": "https://cdn2.steamgriddb.com/grid/3494a13070212a46ccd74105df18bad8.png",
+      "source": "https://www.steamgriddb.com/grid/552788"
+    },
+    {
+      "shortName": "BW2",
+      "title": "Black & White 2",
+      "key": "sgdb-54144",
+      "url": "https://cdn2.steamgriddb.com/grid/b3c6f505b6b52d355c5f21327066a2da.png",
+      "source": "https://www.steamgriddb.com/grid/54144"
+    },
+    {
+      "shortName": "BOTG",
+      "title": "Black & White 2: Battle of the Gods",
+      "key": "sgdb-226507",
+      "url": "https://cdn2.steamgriddb.com/grid/871e81fd5752839a1e6cf89f0812fe3e.png",
+      "source": "https://www.steamgriddb.com/grid/226507"
+    },
+    {
+      "shortName": "daggerfallunity",
+      "title": "Daggerfall Unity",
+      "key": "sgdb-217972",
+      "url": "https://cdn2.steamgriddb.com/grid/fc99810c926f24054482d1b5673370ef.png",
+      "source": "https://www.steamgriddb.com/grid/217972"
+    },
+    {
+      "shortName": "starsector",
+      "title": "Starsector",
+      "key": "sgdb-113431",
+      "url": "https://cdn2.steamgriddb.com/grid/e670c2660b926bb4e81b3300d6b7d0e6.png",
+      "source": "https://www.steamgriddb.com/grid/113431"
+    },
+    {
+      "shortName": "stalkeranomaly",
+      "title": "S.T.A.L.K.E.R.: Anomaly",
+      "key": "sgdb-54162",
+      "url": "https://cdn2.steamgriddb.com/grid/d34f3f49ddbbc3e787524ba2289dc643.png",
+      "source": "https://www.steamgriddb.com/grid/54162"
+    },
+    {
+      "shortName": "tdu",
+      "title": "Test Drive Unlimited",
+      "key": "sgdb-101224",
+      "url": "https://cdn2.steamgriddb.com/grid/5b776b4aeed9a6abe4c8f6e26aa3b74f.png",
+      "source": "https://www.steamgriddb.com/grid/101224"
+    },
+    {
+      "shortName": "tdu2",
+      "title": "Test Drive Unlimited 2",
+      "key": "sgdb-95527",
+      "url": "https://cdn2.steamgriddb.com/grid/3b00c10c0e21d16061a04930e94befea.png",
+      "source": "https://www.steamgriddb.com/grid/95527"
+    },
+    {
+      "shortName": "nfshs",
+      "title": "Need for Speed: High Stakes",
+      "key": "sgdb-55044",
+      "url": "https://cdn2.steamgriddb.com/grid/64fbbe8cba26f3d665e8af33ae3ead71.png",
+      "source": "https://www.steamgriddb.com/grid/55044"
+    },
+    {
+      "shortName": "thps3",
+      "title": "Tony Hawk's Pro Skater 3",
+      "key": "sgdb-66578",
+      "url": "https://cdn2.steamgriddb.com/grid/bcc3bc4b265dd4f13ba2296293cec2d9.png",
+      "source": "https://www.steamgriddb.com/grid/66578"
+    },
+    {
+      "shortName": "thps4",
+      "title": "Tony Hawk's Pro Skater 4",
+      "key": "sgdb-138155",
+      "url": "https://cdn2.steamgriddb.com/grid/13dfa6fbe064e0a113525c6c15c78489.png",
+      "source": "https://www.steamgriddb.com/grid/138155"
+    },
+    {
+      "shortName": "thug",
+      "title": "Tony Hawk's Underground",
+      "key": "sgdb-87427",
+      "url": "https://cdn2.steamgriddb.com/grid/02aeed0dbac789507db95655c84c81d3.png",
+      "source": "https://www.steamgriddb.com/grid/87427"
+    },
+    {
+      "shortName": "thug2",
+      "title": "Tony Hawk's Underground 2",
+      "key": "sgdb-287515",
+      "url": "https://cdn2.steamgriddb.com/grid/d1fbbeb938c779bf061b6a112788db9f.png",
+      "source": "https://www.steamgriddb.com/grid/287515"
+    },
+    {
+      "shortName": "zeusandposeidon",
+      "title": "Zeus + Poseidon",
+      "key": "sgdb-194199",
+      "url": "https://cdn2.steamgriddb.com/grid/b2b95c9c48ca7ea00eaf79e492081f52.jpg",
+      "source": "https://www.steamgriddb.com/grid/194199"
+    },
+    {
+      "shortName": "starwarsempireatwar",
+      "title": "Star Wars: Empire at War - Gold Pack",
+      "key": "sgdb-101106",
+      "url": "https://cdn2.steamgriddb.com/grid/d08d5343774bbb48609d43f22d57ac66.png",
+      "source": "https://www.steamgriddb.com/grid/101106"
+    },
+    {
+      "shortName": "oblivionremastered",
+      "title": "The Elder Scrolls IV: Oblivion Remastered",
+      "key": "sgdb-563770",
+      "url": "https://cdn2.steamgriddb.com/grid/58cb7cce31a29f34ba4d5972d5a3da35.jpg",
+      "source": "https://www.steamgriddb.com/grid/563770"
+    },
+    {
+      "shortName": "Nehrim",
+      "title": "Nehrim: At Fate's Edge",
+      "key": "sgdb-253280",
+      "url": "https://cdn2.steamgriddb.com/grid/defb79206ad5ea8244791115112268e5.jpg",
+      "source": "https://www.steamgriddb.com/grid/253280"
+    },
+    {
+      "shortName": "Fallout4London",
+      "title": "Fallout London",
+      "key": "sgdb-537144",
+      "url": "https://cdn2.steamgriddb.com/grid/42c1c40bb861df9b3b84a86b8ae0a33a.png",
+      "source": "https://www.steamgriddb.com/grid/537144"
+    },
+    {
+      "shortName": "grandtheftautothetrilogy",
+      "title": "GTA III - Definitive Edition",
+      "steamId": "1546970",
+      "source": "https://store.steampowered.com/app/1546970/",
+      "gameName": "GTA III - Definitive Edition"
+    },
+    {
+      "shortName": "grandtheftautothetrilogy",
+      "title": "GTA: Vice City - Definitive Edition",
+      "steamId": "1546990",
+      "source": "https://store.steampowered.com/app/1546990/",
+      "gameName": "GTA: Vice City - Definitive Edition"
+    },
+    {
+      "shortName": "grandtheftautothetrilogy",
+      "title": "GTA: San Andreas - Definitive Edition",
+      "steamId": "1547000",
+      "source": "https://store.steampowered.com/app/1547000/",
+      "gameName": "GTA: San Andreas - Definitive Edition"
+    },
+    {
+      "shortName": "silenthill2",
+      "title": "Silent Hill 2 Remake",
+      "steamId": "2124490",
+      "source": "https://store.steampowered.com/app/2124490/"
+    },
+    {
+      "shortName": "xp11",
+      "title": "X-Plane 11",
+      "steamId": "269950",
+      "source": "https://store.steampowered.com/app/269950/"
+    },
+    {
+      "shortName": "palworld_server",
+      "title": "Palworld Server",
+      "steamId": "1623730",
+      "source": "https://store.steampowered.com/app/1623730/"
+    },
+    {
+      "shortName": "FalloutNV",
+      "title": "New Vegas",
+      "steamId": "22380",
+      "source": "https://store.steampowered.com/app/22380/"
+    },
+    {
+      "shortName": "SkyrimSE",
+      "title": "Skyrim Special Edition",
+      "steamId": "489830",
+      "source": "https://store.steampowered.com/app/489830/"
+    },
+    {
+      "shortName": "EnderalSE",
+      "title": "Enderal Special Edition",
+      "steamId": "976620",
+      "source": "https://store.steampowered.com/app/976620/"
+    }
+  ]
+}

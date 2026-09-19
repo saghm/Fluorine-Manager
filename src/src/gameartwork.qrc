@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/Fluorine">
+        <file alias="gameartwork.json">resources/gameartwork.json</file>
+    </qresource>
+</RCC>

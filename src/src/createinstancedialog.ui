@@ -6,12 +6,12 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>493</width>
-    <height>444</height>
+    <width>940</width>
+    <height>760</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Creating an instance</string>
+   <string>New library setup</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
@@ -38,7 +38,7 @@
          </font>
         </property>
         <property name="text">
-         <string>Creating a new instance</string>
+         <string>Create a library setup</string>
         </property>
        </widget>
       </item>
@@ -226,144 +226,55 @@
       </layout>
      </widget>
      <widget class="QWidget" name="page_3">
-      <layout class="QVBoxLayout" name="verticalLayout_7">
-       <item>
-        <widget class="QWidget" name="widget_5" native="true">
-         <layout class="QHBoxLayout" name="horizontalLayout_3">
-          <property name="leftMargin">
-           <number>0</number>
-          </property>
-          <property name="topMargin">
-           <number>0</number>
-          </property>
-          <property name="rightMargin">
-           <number>0</number>
-          </property>
-          <property name="bottomMargin">
-           <number>0</number>
-          </property>
-          <item>
-           <widget class="QLabel" name="label_3">
-            <property name="text">
-             <string>&lt;h3&gt;Select the game to manage.&lt;/h3&gt;</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
-        <widget class="QWidget" name="widget_6" native="true">
-         <layout class="QVBoxLayout" name="verticalLayout_25">
-          <property name="leftMargin">
-           <number>0</number>
-          </property>
-          <property name="topMargin">
-           <number>0</number>
-          </property>
-          <property name="rightMargin">
-           <number>0</number>
-          </property>
-          <property name="bottomMargin">
-           <number>0</number>
-          </property>
-          <item>
-           <widget class="QWidget" name="widget_23" native="true">
-            <layout class="QVBoxLayout" name="verticalLayout_5">
-             <property name="leftMargin">
-              <number>0</number>
-             </property>
-             <property name="topMargin">
-              <number>0</number>
-             </property>
-             <property name="rightMargin">
-              <number>0</number>
-             </property>
-             <property name="bottomMargin">
-              <number>0</number>
-             </property>
-             <item>
-              <widget class="QScrollArea" name="scrollArea_3">
-               <property name="widgetResizable">
-                <bool>true</bool>
-               </property>
-               <widget class="QWidget" name="games">
-                <property name="geometry">
-                 <rect>
-                  <x>0</x>
-                  <y>0</y>
-                  <width>455</width>
-                  <height>275</height>
-                 </rect>
-                </property>
-                <layout class="QVBoxLayout" name="verticalLayout_26">
-                 <property name="leftMargin">
-                  <number>0</number>
-                 </property>
-                 <property name="topMargin">
-                  <number>0</number>
-                 </property>
-                 <property name="rightMargin">
-                  <number>0</number>
-                 </property>
-                 <property name="bottomMargin">
-                  <number>0</number>
-                 </property>
-                </layout>
-               </widget>
-              </widget>
-             </item>
-            </layout>
-           </widget>
-          </item>
-          <item>
-           <widget class="QWidget" name="widget_21" native="true">
-            <layout class="QHBoxLayout" name="horizontalLayout_6" stretch="0,0,0">
-             <property name="leftMargin">
-              <number>0</number>
-             </property>
-             <property name="topMargin">
-              <number>0</number>
-             </property>
-             <property name="rightMargin">
-              <number>0</number>
-             </property>
-             <property name="bottomMargin">
-              <number>0</number>
-             </property>
-             <item>
-              <widget class="QCheckBox" name="showAllGames">
-               <property name="text">
-                <string>Show all supported games</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <spacer name="horizontalSpacer_5">
-               <property name="orientation">
-                <enum>Qt::Horizontal</enum>
-               </property>
-               <property name="sizeHint" stdset="0">
-                <size>
-                 <width>175</width>
-                 <height>20</height>
-                </size>
-               </property>
-              </spacer>
-             </item>
-             <item>
-              <widget class="QLineEdit" name="gamesFilter">
-               <property name="placeholderText">
-                <string>Filter</string>
-               </property>
-              </widget>
-             </item>
-            </layout>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
+      <layout class="QVBoxLayout" name="gameLibraryLayout">
+       <item><widget class="QLabel" name="gameLibraryHeading">
+        <property name="text"><string>&lt;h3&gt;Choose a game&lt;/h3&gt;</string></property>
+       </widget></item>
+       <item><widget class="QLabel" name="gameLibraryHint">
+        <property name="text"><string>Select a game, then choose Next to create its setup.</string></property>
+        <property name="wordWrap"><bool>true</bool></property>
+       </widget></item>
+       <item><layout class="QHBoxLayout" name="gameLibraryFilters">
+        <item><widget class="QLineEdit" name="gamesFilter">
+         <property name="placeholderText"><string>Search games…</string></property>
+         <property name="clearButtonEnabled"><bool>true</bool></property>
+         <property name="accessibleName"><string>Search games</string></property>
+        </widget></item>
+        <item><widget class="QComboBox" name="gamesScope">
+         <property name="accessibleName"><string>Games to display</string></property>
+         <item><property name="text"><string>Installed</string></property></item>
+         <item><property name="text"><string>All supported games</string></property></item>
+        </widget></item>
+       </layout></item>
+       <item><widget class="QLabel" name="gamesCount">
+        <property name="text"><string/></property>
+       </widget></item>
+       <item><widget class="QLabel" name="gamesEmpty">
+        <property name="text"><string>No games found. Try another search, show all supported games, or locate a game folder.</string></property>
+        <property name="wordWrap"><bool>true</bool></property>
+       </widget></item>
+       <item><widget class="GameLibraryWidget" name="games">
+        <property name="minimumSize"><size><width>380</width><height>220</height></size></property>
+       </widget></item>
+       <item><widget class="QLabel" name="selectedGameDetails">
+        <property name="text"><string>Select a game to see its installation location.</string></property>
+        <property name="textFormat"><enum>Qt::PlainText</enum></property>
+        <property name="wordWrap"><bool>true</bool></property>
+       </widget></item>
+       <item><layout class="QHBoxLayout" name="gameLibraryActions">
+        <item><widget class="QPushButton" name="browseGameFolder">
+         <property name="text"><string>Locate game folder…</string></property>
+         <property name="autoDefault"><bool>false</bool></property>
+        </widget></item>
+        <item><spacer name="gameLibraryActionSpacer">
+         <property name="orientation"><enum>Qt::Horizontal</enum></property>
+         <property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property>
+        </spacer></item>
+        <item><widget class="QPushButton" name="locateSelectedGame">
+         <property name="text"><string>Locate selected game…</string></property>
+         <property name="autoDefault"><bool>false</bool></property>
+        </widget></item>
+       </layout></item>
       </layout>
      </widget>
      <widget class="QWidget" name="page_4">
@@ -1310,6 +1221,11 @@
  </widget>
  <customwidgets>
   <customwidget>
+   <class>GameLibraryWidget</class>
+   <extends>QListWidget</extends>
+   <header>gamelibrarywidget.h</header>
+  </customwidget>
+  <customwidget>
    <class>LinkLabel</class>
    <extends>QLabel</extends>
    <header location="global">linklabel.h</header>
@@ -1321,9 +1237,11 @@
   <tabstop>hideIntro</tabstop>
   <tabstop>createGlobal</tabstop>
   <tabstop>createPortable</tabstop>
-  <tabstop>scrollArea_3</tabstop>
-  <tabstop>showAllGames</tabstop>
   <tabstop>gamesFilter</tabstop>
+  <tabstop>gamesScope</tabstop>
+  <tabstop>games</tabstop>
+  <tabstop>browseGameFolder</tabstop>
+  <tabstop>locateSelectedGame</tabstop>
   <tabstop>scrollArea_2</tabstop>
   <tabstop>location</tabstop>
   <tabstop>browseLocation</tabstop>

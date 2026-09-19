@@ -704,9 +704,56 @@ target_link_libraries(test_steam_cloud PRIVATE Qt6::Widgets Qt6::Network Qt6::We
 add_test(NAME test_steam_cloud COMMAND test_steam_cloud)
 set_tests_properties(test_steam_cloud PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+add_executable(test_game_artwork EXCLUDE_FROM_ALL
+    test_game_artwork.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/gameartwork.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/gameartwork.h
+    ${CMAKE_SOURCE_DIR}/src/src/gamelibrarywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/gameartwork.qrc
+    ${CMAKE_SOURCE_DIR}/libs/uibase/src/steamutility.cpp)
+set_target_properties(test_game_artwork PROPERTIES AUTOMOC ON AUTORCC ON CXX_STANDARD 23)
+target_include_directories(test_game_artwork PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/src
+    ${CMAKE_SOURCE_DIR}/libs/uibase/include)
+target_compile_options(test_game_artwork PRIVATE
+    "-idirafter" "${CMAKE_SOURCE_DIR}/libs/uibase/include/uibase")
+target_link_libraries(test_game_artwork PRIVATE Qt6::Widgets Qt6::Network GTest::gtest)
+add_test(NAME test_game_artwork COMMAND test_game_artwork)
+set_tests_properties(test_game_artwork PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(test_settings_navigation EXCLUDE_FROM_ALL
+    test_settings_navigation.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/settingsnavigation.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/settingsnavigation.h)
+set_target_properties(test_settings_navigation PROPERTIES AUTOMOC ON CXX_STANDARD 23)
+target_include_directories(test_settings_navigation PRIVATE ${CMAKE_SOURCE_DIR}/src/src)
+target_link_libraries(test_settings_navigation PRIVATE Qt6::Widgets GTest::gtest)
+add_test(NAME test_settings_navigation COMMAND test_settings_navigation)
+set_tests_properties(test_settings_navigation PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(test_library_setup_panel EXCLUDE_FROM_ALL
+    test_library_setup_panel.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/librarysetuppanel.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/librarysetuppanel.h
+    ${CMAKE_SOURCE_DIR}/src/src/gameartwork.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/gameartwork.h
+    ${CMAKE_SOURCE_DIR}/src/src/settingsnavigation.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/settingsnavigation.h
+    ${CMAKE_SOURCE_DIR}/src/src/gameartwork.qrc
+    ${CMAKE_SOURCE_DIR}/libs/uibase/src/steamutility.cpp)
+set_target_properties(test_library_setup_panel PROPERTIES AUTOMOC ON AUTORCC ON CXX_STANDARD 23)
+target_include_directories(test_library_setup_panel PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/src ${CMAKE_SOURCE_DIR}/libs/uibase/include)
+target_compile_options(test_library_setup_panel PRIVATE
+    "-idirafter" "${CMAKE_SOURCE_DIR}/libs/uibase/include/uibase")
+target_link_libraries(test_library_setup_panel PRIVATE Qt6::Widgets Qt6::Network GTest::gtest)
+add_test(NAME test_library_setup_panel COMMAND test_library_setup_panel)
+set_tests_properties(test_library_setup_panel PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 add_custom_target(fluorine-tests
     DEPENDS test_esptk_tes3 test_bsatk_extraction test_executable_options test_steam_cloud
-            test_conflict_sorting test_launch_environment
+            test_conflict_sorting test_launch_environment test_game_artwork
+            test_settings_navigation test_library_setup_panel
             fluorine_locale_x86_64 fluorine_locale_i386
             test_plugincompatibility test_pefileutils test_curatedguide
             test_metainiutils test_fomoddependency

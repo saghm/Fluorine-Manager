@@ -82,9 +82,14 @@ file(GLOB ORGANIZER_UI
     ${CMAKE_CURRENT_SOURCE_DIR}/*.ui)
 file(GLOB ORGANIZER_QRC
     ${CMAKE_CURRENT_SOURCE_DIR}/*.qrc)
+list(APPEND ORGANIZER_QRC ${CMAKE_CURRENT_SOURCE_DIR}/gameartwork.qrc)
 
 # Keep explicitly listed sources tracked by CMake even when using GLOB.
 list(APPEND ORGANIZER_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/gameartwork.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/librarysetuppanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/settingsnavigation.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/gamelibrarywidget.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/clf3enginemanager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/clf3galleryloader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/steamcloudsync.cpp
@@ -97,6 +102,10 @@ list(APPEND ORGANIZER_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/settingsdialogproton.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/wineprefix.cpp)
 list(APPEND ORGANIZER_HEADERS
+    ${CMAKE_CURRENT_SOURCE_DIR}/gameartwork.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/librarysetuppanel.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/settingsnavigation.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/gamelibrarywidget.h
     ${CMAKE_CURRENT_SOURCE_DIR}/clf3enginemanager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/clf3galleryloader.h
     ${CMAKE_CURRENT_SOURCE_DIR}/steamcloudsync.h

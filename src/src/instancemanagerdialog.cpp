@@ -15,6 +15,7 @@
 #include <QtConcurrent/QtConcurrent>
 #include <QFutureWatcher>
 #include <QMessageBox>
+#include <QMenu>
 #include <QProgressDialog>
 #include <QSet>
 #include <QSettings>
@@ -82,6 +83,23 @@ QIcon instanceIcon(PluginContainer& pc, const Instance& i)
   return game->gameIcon();
 }
 
+namespace
+{
+QString libraryEntryLabel(const Instance& instance)
+{
+  QString detail = instance.gameName();
+  if (detail.compare(instance.displayName(), Qt::CaseInsensitive) == 0) {
+    detail.clear();
+  }
+  if (instance.isActive()) {
+    detail = detail.isEmpty() ? QObject::tr("Current setup")
+                             : QObject::tr("Current · %1").arg(detail);
+  }
+  return detail.isEmpty() ? instance.displayName()
+                         : instance.displayName() + "\n" + detail;
+}
+}  // namespace
+
 // pops up a dialog to ask for an instance name when renaming
 //
 QString getInstanceName(QWidget* parent, const QString& title, const QString& moreText,
@@ -123,12 +141,12 @@ QString getInstanceName(QWidget* parent, const QString& title, const QString& mo
     if (text->text().isEmpty()) {
       error->setText("");
     } else if (!MOBase::validFileName(text->text())) {
-      error->setText(QObject::tr("The instance name must be a valid folder name."));
+      error->setText(QObject::tr("The setup name must be a valid folder name."));
     } else {
       const auto name = MOBase::sanitizeFileName(text->text());
 
       if ((name != oldName) && m.instanceExists(text->text())) {
-        error->setText(QObject::tr("An instance with this name already exists."));
+        error->setText(QObject::tr("A setup with this name already exists."));
       } else {
         okay = true;
       }
@@ -166,16 +184,29 @@ InstanceManagerDialog::InstanceManagerDialog(PluginContainer& pc, QWidget* paren
 {
   ui->setupUi(this);
 
-  ui->splitter->setSizes({250, 1});
+  ui->splitter->setSizes({280, 640});
+  ui->libraryHint->setForegroundRole(QPalette::PlaceholderText);
+  ui->list->setIconSize(QSize(32, 32));
+  ui->list->setSpacing(4);
+
+  auto* moreActions = new QMenu(this);
+  moreActions->addAction(ui->openINI);
+  moreActions->addAction(ui->convertToPortable);
+  moreActions->addAction(ui->convertToGlobal);
+  moreActions->addSeparator();
+  moreActions->addAction(ui->removeFromList);
+  moreActions->addAction(ui->deleteInstance);
+  ui->details->moreActions()->setMenu(moreActions);
   ui->splitter->setStretchFactor(0, 0);
   ui->splitter->setStretchFactor(1, 1);
 
-  m_model = new QStandardItemModel;
+  m_model = new QStandardItemModel(this);
   ui->list->setModel(m_model);
 
   m_filter.setEdit(ui->filter);
   m_filter.setList(ui->list);
   m_filter.setFilteredBorder(false);
+  ui->filter->setPlaceholderText(tr("Search games or setups..."));
 
   updateInstances();
   updateList();
@@ -198,36 +229,36 @@ InstanceManagerDialog::InstanceManagerDialog(PluginContainer& pc, QWidget* paren
     openSelectedInstance();
   });
 
-  connect(ui->rename, &QPushButton::clicked, [&] {
+  connect(ui->details, &LibrarySetupPanel::renameRequested, [&] {
     rename();
   });
-  connect(ui->exploreLocation, &QPushButton::clicked, [&] {
+  connect(ui->details, &LibrarySetupPanel::openSetupFolder, [&] {
     exploreLocation();
   });
-  connect(ui->exploreBaseDirectory, &QPushButton::clicked, [&] {
+  connect(ui->details, &LibrarySetupPanel::openDataFolder, [&] {
     exploreBaseDirectory();
   });
-  connect(ui->exploreGame, &QPushButton::clicked, [&] {
+  connect(ui->details, &LibrarySetupPanel::openGameFolder, [&] {
     exploreGame();
   });
 
-  connect(ui->convertToGlobal, &QPushButton::clicked, [&] {
+  connect(ui->convertToGlobal, &QAction::triggered, [&] {
     convertToGlobal();
   });
-  connect(ui->convertToPortable, &QPushButton::clicked, [&] {
+  connect(ui->convertToPortable, &QAction::triggered, [&] {
     convertToPortable();
   });
-  connect(ui->openINI, &QPushButton::clicked, [&] {
+  connect(ui->openINI, &QAction::triggered, [&] {
     openINI();
   });
-  connect(ui->removeFromList, &QPushButton::clicked, [&] {
+  connect(ui->removeFromList, &QAction::triggered, [&] {
     removeFromList();
   });
-  connect(ui->deleteInstance, &QPushButton::clicked, [&] {
+  connect(ui->deleteInstance, &QAction::triggered, [&] {
     deleteInstance();
   });
 
-  connect(ui->steamDrmCheckBox, &QCheckBox::toggled, [&](bool checked) {
+  connect(ui->details->steamDrmCheckBox(), &QCheckBox::toggled, [&](bool checked) {
     const auto* inst = singleSelection();
     if (!inst) return;
     const QString ini = inst->iniPath();
@@ -236,7 +267,7 @@ InstanceManagerDialog::InstanceManagerDialog(PluginContainer& pc, QWidget* paren
     s.setValue("fluorine/steam_drm", checked);
   });
 
-  connect(ui->vfsRootBuilderCheckBox, &QCheckBox::toggled, [&](bool checked) {
+  connect(ui->details->rootBuilderCheckBox(), &QCheckBox::toggled, [&](bool checked) {
     const auto* inst = singleSelection();
     if (!inst) return;
     const QString ini = inst->iniPath();
@@ -348,8 +379,12 @@ void InstanceManagerDialog::updateList()
   for (std::size_t i = 0; i < m_instances.size(); ++i) {
     const auto& ii = *m_instances[i];
 
-    auto* item = new QStandardItem(ii.displayName());
+    auto* item = new QStandardItem(libraryEntryLabel(ii));
     item->setIcon(instanceIcon(m_pc, ii));
+    item->setToolTip(ii.displayName() + "\n" + ii.gameName() + "\n" + ii.directory());
+    QFont font = item->font();
+    font.setBold(ii.isActive());
+    item->setFont(font);
 
     m_model->appendRow(item);
 
@@ -432,6 +467,12 @@ void InstanceManagerDialog::openSelectedInstance()
 
   const auto& to = *m_instances[i];
 
+  // Returning to the running setup does not change selection or restart the app.
+  if (m_restartOnSelect && to.isActive()) {
+    accept();
+    return;
+  }
+
   if (!confirmSwitch(to)) {
     return;
   }
@@ -476,12 +517,12 @@ bool InstanceManagerDialog::confirmSwitch(const Instance& to)
 
   MOBase::TaskDialog dlg(this);
 
-  const auto r = dlg.title(tr("Switching instances"))
-                     .main(tr("Mod Organizer must restart to manage the instance '%1'.")
+  const auto r = dlg.title(tr("Open setup"))
+                     .main(tr("Fluorine Manager must restart to open the setup '%1'.")
                                .arg(to.displayName()))
                      .content(tr("This confirmation can be disabled in the settings."))
                      .icon(QMessageBox::Question)
-                     .button({tr("Restart Mod Organizer"), QMessageBox::Ok})
+                     .button({tr("Restart Fluorine Manager"), QMessageBox::Ok})
                      .button({tr("Cancel"), QMessageBox::Cancel})
                      .exec();
 
@@ -499,14 +540,14 @@ void InstanceManagerDialog::rename()
 
   auto& m = InstanceManager::singleton();
   if (i->isActive()) {
-    QMessageBox::information(this, tr("Rename instance"),
-                             tr("The active instance cannot be renamed."));
+    QMessageBox::information(this, tr("Rename setup"),
+                             tr("Open another setup before renaming this one."));
     return;
   }
 
   // getting new name
-  const auto newName = getInstanceName(this, tr("Rename instance"), "",
-                                       tr("Instance name"), i->displayName());
+  const auto newName = getInstanceName(this, tr("Rename setup"), "",
+                                       tr("Setup name"), i->displayName());
 
   if (newName.isEmpty()) {
     return;
@@ -541,9 +582,11 @@ void InstanceManagerDialog::rename()
 
   // updating ui
   auto newInstance = std::make_unique<Instance>(dest, wasPortable);
+  newInstance->readFromIni();
   i                = newInstance.get();
 
-  m_model->item(selIndex)->setText(newName);
+  m_model->item(selIndex)->setText(libraryEntryLabel(*i));
+  m_model->item(selIndex)->setToolTip(i->directory());
   m_instances[selIndex] = std::move(newInstance);
 
   fillData(*i);
@@ -586,14 +629,14 @@ void InstanceManagerDialog::removeFromList()
 
   auto& m = InstanceManager::singleton();
   if (i->isActive()) {
-    QMessageBox::information(this, tr("Remove from list"),
+    QMessageBox::information(this, tr("Remove from library"),
                              tr("The active instance cannot be removed."));
     return;
   }
 
   const auto r = QMessageBox::question(
-      this, tr("Remove from list"),
-      tr("Remove \"%1\" from the instance list?\n\n"
+      this, tr("Remove from library"),
+      tr("Remove \"%1\" from your library?\n\n"
          "No files will be deleted.")
           .arg(i->displayName()),
       QMessageBox::Yes | QMessageBox::Cancel);
@@ -713,6 +756,9 @@ void InstanceManagerDialog::deleteInstance()
 void InstanceManagerDialog::setRestartOnSelect(bool b)
 {
   m_restartOnSelect = b;
+  if (const auto* setup = singleSelection()) {
+    fillData(*setup);
+  }
 }
 
 bool InstanceManagerDialog::doDelete(const QStringList& files, bool recycle)
@@ -754,6 +800,7 @@ void InstanceManagerDialog::onSelection()
 {
   const auto i = singleSelectionIndex();
   if (i == NoSelection) {
+    clearData();
     return;
   }
 
@@ -816,52 +863,29 @@ const Instance* InstanceManagerDialog::singleSelection() const
 
 void InstanceManagerDialog::fillData(const Instance& ii)
 {
-  ui->name->setText(ii.displayName());
-  ui->location->setText(ii.directory());
-  ui->baseDirectory->setText(ii.baseDirectory());
-  ui->gameName->setText(ii.gameName());
-  ui->gameDir->setText(ii.gameDirectory());
-
-  // read prefix info and fluorine settings from the instance's INI
-  {
-    const QString ini = ii.iniPath();
-    if (!ini.isEmpty() && QFile::exists(ini)) {
-      QSettings const s(ini, QSettings::IniFormat);
-      ui->prefixPath->setText(s.value("Settings/proton_prefix_path").toString());
-      ui->protonVersion->setText(s.value("fluorine/proton_name").toString());
-
-      ui->steamDrmCheckBox->blockSignals(true);
-      ui->steamDrmCheckBox->setChecked(s.value("fluorine/steam_drm", true).toBool());
-      ui->steamDrmCheckBox->blockSignals(false);
-
-      ui->steamLinuxRuntimeCheckBox->blockSignals(true);
-      ui->steamLinuxRuntimeCheckBox->setChecked(true);
-      ui->steamLinuxRuntimeCheckBox->blockSignals(false);
-
-      ui->vfsRootBuilderCheckBox->blockSignals(true);
-      ui->vfsRootBuilderCheckBox->setChecked(s.value("fluorine/vfs_root_builder", true).toBool());
-      ui->vfsRootBuilderCheckBox->blockSignals(false);
-
-    } else {
-      ui->prefixPath->clear();
-      ui->protonVersion->clear();
-      ui->steamDrmCheckBox->blockSignals(true);
-      ui->steamDrmCheckBox->setChecked(false);
-      ui->steamDrmCheckBox->blockSignals(false);
-      ui->steamLinuxRuntimeCheckBox->blockSignals(true);
-      ui->steamLinuxRuntimeCheckBox->setChecked(true);
-      ui->steamLinuxRuntimeCheckBox->blockSignals(false);
-      ui->vfsRootBuilderCheckBox->blockSignals(true);
-      ui->vfsRootBuilderCheckBox->setChecked(false);
-      ui->vfsRootBuilderCheckBox->blockSignals(false);
-    }
+  LibrarySetupInfo setup;
+  setup.name = ii.displayName();
+  setup.gameName = ii.gameName();
+  setup.setupPath = ii.directory();
+  setup.dataPath = ii.baseDirectory();
+  setup.gamePath = ii.gameDirectory();
+  setup.current = m_restartOnSelect && ii.isActive();
+  setup.icon = instanceIcon(m_pc, ii);
+  if (auto* game = InstanceManager::singleton().gamePluginForDirectory(ii.directory(), m_pc)) {
+    setup.gameShortName = game->gameShortName();
+    setup.steamId = game->steamAPPId();
   }
-
+  const QString ini = ii.iniPath();
+  if (!ini.isEmpty() && QFile::exists(ini)) {
+    QSettings const settings(ini, QSettings::IniFormat);
+    setup.steamDrm = settings.value("fluorine/steam_drm", true).toBool();
+    setup.rootBuilder = settings.value("fluorine/vfs_root_builder", true).toBool();
+  }
+  ui->details->setSetup(setup);
   setButtonsEnabled(true);
-
-  const auto& m = InstanceManager::singleton();
-
-  ui->rename->setEnabled(!ii.isActive());
+  ui->switchToInstance->setText(setup.current ? tr("Return to setup") : tr("Open setup"));
+  ui->removeFromList->setEnabled(!ii.isActive());
+  ui->deleteInstance->setEnabled(!ii.isActive());
 
   if (ii.isPortable()) {
     ui->convertToPortable->setVisible(false);
@@ -887,16 +911,8 @@ void InstanceManagerDialog::fillData(const Instance& ii)
 
 void InstanceManagerDialog::clearData()
 {
-  ui->name->clear();
-  ui->location->clear();
-  ui->baseDirectory->clear();
-  ui->gameName->clear();
-  ui->gameDir->clear();
-  ui->prefixPath->clear();
-  ui->protonVersion->clear();
-  ui->steamDrmCheckBox->blockSignals(true);
-  ui->steamDrmCheckBox->setChecked(false);
-  ui->steamDrmCheckBox->blockSignals(false);
+  ui->details->clear();
+  ui->switchToInstance->setText(tr("Open setup"));
 
   setButtonsEnabled(false);
 
@@ -906,10 +922,8 @@ void InstanceManagerDialog::clearData()
 
 void InstanceManagerDialog::setButtonsEnabled(bool b)
 {
-  ui->rename->setEnabled(b);
-  ui->exploreLocation->setEnabled(b);
-  ui->exploreBaseDirectory->setEnabled(b);
-  ui->exploreGame->setEnabled(b);
+  ui->details->moreActions()->setEnabled(b);
+  ui->openINI->setEnabled(b);
   ui->convertToPortable->setEnabled(b);
   ui->convertToGlobal->setEnabled(b);
   ui->removeFromList->setEnabled(b);
@@ -921,7 +935,7 @@ void InstanceManagerDialog::openExistingPortable()
 {
   // On Flatpak, the native file dialog goes through the XDG Desktop Portal,
   const QString dir = QFileDialog::getExistingDirectory(
-      this, tr("Select portable instance folder"),
+      this, tr("Select existing setup folder"),
       QStandardPaths::writableLocation(QStandardPaths::HomeLocation));
 
   if (dir.isEmpty()) {
@@ -931,7 +945,7 @@ void InstanceManagerDialog::openExistingPortable()
   const QString ini = QDir(dir).filePath("ModOrganizer.ini");
   if (!QFileInfo::exists(ini)) {
     QMessageBox::warning(
-        this, tr("Not an instance"),
+        this, tr("Setup not found"),
         tr("The selected folder does not contain a ModOrganizer.ini file."));
     return;
   }
