@@ -39,4 +39,7 @@ def find_wine_userprofile(organizer=None) -> str | None:
             return user
     except (OSError, ValueError):
         pass
-    return _user_profile(str(Path.home() / ".local/share/fluorine/Prefix/pfx"))
+    data_root = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share")
+    if not data_root.is_absolute():
+        data_root = Path.home() / ".local/share"
+    return _user_profile(str(data_root / "fluorine/Prefix/pfx"))

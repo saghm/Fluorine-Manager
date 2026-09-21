@@ -7,6 +7,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QProcess>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QEventLoop>
@@ -31,7 +32,8 @@ const char* XRANDR_DEB_URL =
 
 QString slrInstallDir()
 {
-  return QDir::homePath() + "/.local/share/fluorine/steamrt";
+  return QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) +
+         "/fluorine/steamrt";
 }
 
 QString slrRunScriptPath()

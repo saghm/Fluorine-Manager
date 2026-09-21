@@ -13,6 +13,7 @@
 #include <QLocalSocket>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QStandardPaths>
 #include <QTextStream>
 #include <QUrl>
 #include <QUrlQuery>
@@ -449,12 +450,7 @@ QString NxmHandlerLinux::socketPath()
 {
   // Use our own data dir for the socket — XDG_RUNTIME_DIR may point to a
   // read-only location on Steam Deck (SteamOS has a read-only root).
-  const QString dataDir = fluorineDataDir();
-  if (!dataDir.isEmpty()) {
-    return QDir(dataDir).filePath("tmp/mo2-nxm.sock");
-  }
-
-  return QDir::homePath() + "/.local/share/fluorine/tmp/mo2-nxm.sock";
+  return QDir(fluorineDataDir()).filePath("tmp/mo2-nxm.sock");
 }
 
 void NxmHandlerLinux::registerHandler()
@@ -465,8 +461,10 @@ void NxmHandlerLinux::registerHandler()
     return;
   }
 
-  const QString appsDir    = ensureDir(home + "/.local/share/applications");
-  const QString configDir  = ensureDir(home + "/.config");
+  const QString appsDir = ensureDir(
+      QStandardPaths::writableLocation(QStandardPaths::ApplicationsLocation));
+  const QString configDir = ensureDir(
+      QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation));
 
   if (appsDir.isEmpty() || configDir.isEmpty()) {
     log::error("cannot register nxm handler: failed to create required directories");
@@ -558,8 +556,10 @@ void NxmHandlerLinux::unregisterHandler()
     return;
   }
 
-  const QString appsDir   = ensureDir(home + "/.local/share/applications");
-  const QString configDir = ensureDir(home + "/.config");
+  const QString appsDir = ensureDir(
+      QStandardPaths::writableLocation(QStandardPaths::ApplicationsLocation));
+  const QString configDir = ensureDir(
+      QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation));
 
   if (appsDir.isEmpty() || configDir.isEmpty()) {
     log::error("cannot remove nxm handler: failed to create required directories");

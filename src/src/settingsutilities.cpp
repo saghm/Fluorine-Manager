@@ -1,4 +1,5 @@
 #include "settingsutilities.h"
+#include "fluorinepaths.h"
 #include "expanderwidget.h"
 
 #include <utility.h>
@@ -219,7 +220,7 @@ QString credentialName(const QString& key)
 // matches the upstream MO2 behaviour that already lived in the #else branch.
 static QSettings& credentialSettings()
 {
-  static QSettings s(QDir::homePath() + "/.config/ModOrganizer/credentials.ini",
+  static QSettings s(fluorineCredentialsPath(),
                      QSettings::IniFormat);
   return s;
 }

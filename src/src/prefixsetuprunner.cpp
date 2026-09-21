@@ -985,7 +985,7 @@ QProcess* PrefixSetupRunner::buildWrappedProcess(
   // inside the container, so we prepend the xrandr dir on the HOST PATH
   // and also pass it through --filesystem below.
   const QString xrandrDir =
-      QDir::homePath() + "/.local/share/fluorine/steamrt/xrandr-bin";
+      fluorineDataDir() + "/steamrt/xrandr-bin";
   if (QDir(xrandrDir).exists()) {
     const QString existing = env.value("PATH");
     env.insert("PATH", existing.isEmpty()

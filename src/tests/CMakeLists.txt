@@ -10,6 +10,20 @@ add_test(NAME test_bundle_launcher
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_bundle_launcher.py)
 add_test(NAME test_build_dependency_repair
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_build_dependency_repair.py)
+
+add_executable(test_xdgpaths EXCLUDE_FROM_ALL
+    test_xdgpaths.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/fluorinepaths.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/fluorineconfig.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/nxmhandler_linux.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/nxmhandler_linux.h)
+set_target_properties(test_xdgpaths PROPERTIES AUTOMOC ON CXX_STANDARD 23)
+target_include_directories(test_xdgpaths PRIVATE ${CMAKE_SOURCE_DIR}/src/src)
+target_compile_options(test_xdgpaths PRIVATE
+    "-idirafter" "${CMAKE_SOURCE_DIR}/libs/uibase/include/uibase")
+target_link_libraries(test_xdgpaths PRIVATE
+    Qt6::Core Qt6::Network Qt6::DBus mo2::uibase GTest::gtest)
+add_test(NAME test_xdgpaths COMMAND test_xdgpaths)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(TEST_FUSE3 REQUIRED IMPORTED_TARGET fuse3)
 
@@ -776,7 +790,7 @@ add_custom_target(fluorine-tests
             test_vfs_backend
             test_fluorineconfigownership
             test_heroicjson test_protondetection
-            test_external_dir_mapping test_portablelauncherscript
+            test_external_dir_mapping test_portablelauncherscript test_xdgpaths
             test_vfs_file_ops
             test_shell_operations
             test_vfs_descriptor_cleanup test_mount_path_utils

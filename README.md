@@ -75,6 +75,7 @@ new-generation publication remain serialized and crash-safe.
   - `libGL`
   - `libGLX`
   - `libstdc++`
+  - NSS and NSPR (`libnss3` and `libnspr4` on Ubuntu)
   - `libX11`
   - `libxkbcommon`
   - `wayland` (if using wayland)
@@ -91,6 +92,8 @@ programs.nix-ld.libraries = with pkgs; [
   xorg.libX11
   libxkbcommon
   stdenv.cc.cc.lib  # libstdc++
+  nss
+  nspr
 ];
 ```
 

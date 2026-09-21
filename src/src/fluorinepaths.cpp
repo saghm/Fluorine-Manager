@@ -16,7 +16,24 @@ static const QString OldFlatpakRoot =
 
 QString fluorineDataDir()
 {
-  return QDir::homePath() + "/.local/share/fluorine";
+  return QDir(QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation))
+      .filePath("fluorine");
+}
+
+QString fluorineCredentialsPath()
+{
+  const QString path =
+      QDir(QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation))
+          .filePath("ModOrganizer/credentials.ini");
+  const QString legacy = QDir::homePath() + "/.config/ModOrganizer/credentials.ini";
+  // Preserve existing logins when upgrading with a custom XDG_CONFIG_HOME.
+  // A file already at the requested location always takes precedence.
+  if (path != legacy && !QFileInfo::exists(path) && QFileInfo::exists(legacy)) {
+    if (QDir().mkpath(QFileInfo(path).absolutePath())) {
+      QFile::copy(legacy, path);
+    }
+  }
+  return path;
 }
 
 QString fluorineVfsCacheDir()

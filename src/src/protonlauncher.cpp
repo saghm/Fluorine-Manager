@@ -874,7 +874,7 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
       containerCmd << QStringLiteral("/usr/bin/env");
       {
         const QString xrandrDir =
-            QDir::homePath() + "/.local/share/fluorine/steamrt/xrandr-bin";
+            fluorineDataDir() + "/steamrt/xrandr-bin";
         if (QDir(xrandrDir).exists()) {
           slrArgs << QStringLiteral("--filesystem=%1").arg(xrandrDir);
           containerCmd << QStringLiteral("PATH=%1:/usr/bin:/bin").arg(xrandrDir);
@@ -906,7 +906,7 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
   // xrandr (steamrt4 ships without it; Proton-GE protonfixes require it).
   {
     const QString fluorineBin =
-        QDir::homePath() + "/.local/share/fluorine/bin";
+        fluorineDataDir() + "/bin";
     const QString existing = env.value("PATH");
     env.insert("PATH", existing.isEmpty() ? fluorineBin
                                           : fluorineBin + ":" + existing);

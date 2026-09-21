@@ -25,6 +25,7 @@ class WinePathsTests(unittest.TestCase):
         self.config.parent.mkdir(parents=True)
         env = patch.dict(os.environ, {
             "HOME": str(self.home), "XDG_CONFIG_HOME": str(self.home / "config"),
+            "XDG_DATA_HOME": "",
         })
         env.start()
         self.addCleanup(env.stop)
@@ -79,6 +80,13 @@ class WinePathsTests(unittest.TestCase):
     def test_windows_does_not_resolve_wine_prefix(self):
         with patch.object(wine_paths.platform, "system", return_value="Windows"):
             self.assertIsNone(wine_paths.find_wine_userprofile())
+
+    def test_default_prefix_respects_data_home(self):
+        prefix = self.make_prefix("custom data/fluorine/Prefix/pfx")
+        with patch.dict(os.environ, {"XDG_DATA_HOME": str(self.home / "custom data")}):
+            self.assertEqual(wine_paths.find_wine_userprofile(), self.user(prefix))
+        with patch.dict(os.environ, {"XDG_DATA_HOME": "relative/path"}):
+            self.assertEqual(wine_paths.find_wine_userprofile(), self.user(self.default))
 
 
 if __name__ == "__main__":

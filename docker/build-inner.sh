@@ -286,6 +286,10 @@ SKIP_PATTERN="${SKIP_PATTERN}|libGL\.so|libEGL|libGLX|libGLdispatch|libgbm|libdr
 SKIP_PATTERN="${SKIP_PATTERN}|libpython"
 # OpenSSL should come from the host so we don't pin users to a stale TLS stack.
 SKIP_PATTERN="${SKIP_PATTERN}|libssl\.so|libcrypto\.so"
+# NSS and NSPR must also come from the host as one matching stack. In
+# particular, bundling a newer libsmime3 while excluding libnss3/libnssutil3
+# makes startup fail on Ubuntu 24.04 with missing NSS_3.101 symbols.
+SKIP_PATTERN="${SKIP_PATTERN}|lib(smime3|ssl3|nspr4|plc4|plds4|softokn3|freebl3|freeblpriv3)\.so"
 
 collect_deps() {
     ldd "$1" 2>/dev/null | grep "=>" | awk '{print $3}' | grep "^/" | sort -u
@@ -653,10 +657,15 @@ unset LD_PRELOAD
 : "${QT_LOGGING_RULES:=default.debug=false}"
 export QT_LOGGING_RULES
 
-# ── Sync entire app to ~/.local/share/fluorine/bin/ ──
+# ── Sync entire app to the XDG user data directory ──
 # This gives instances a stable symlink target that won't break if the user
 # moves or deletes the original tarball extraction directory.
-FLUORINE_DATA="${HOME}/.local/share/fluorine"
+# XDG base directories must be absolute; empty/relative values use the default.
+case "${XDG_DATA_HOME:-}" in
+    /*) FLUORINE_DATA_HOME="${XDG_DATA_HOME}" ;;
+    *)  FLUORINE_DATA_HOME="${HOME}/.local/share" ;;
+esac
+FLUORINE_DATA="${FLUORINE_DATA_HOME}/fluorine"
 BIN_DST="${FLUORINE_DATA}/bin"
 
 # Guard: if we ARE already running from the installed location, skip the sync.
@@ -746,15 +755,18 @@ fi
 # GBM must match the host's Mesa/DRI drivers; TLS uses the host OpenSSL runtime.
 rm -f "${BIN_DST}"/lib/libgbm.so* \
       "${BIN_DST}"/lib/libssl.so* "${BIN_DST}"/lib/libcrypto.so* 2>/dev/null || true
+# Retire partial NSS/NSPR bundles too, including copies from older installers.
+rm -f "${BIN_DST}"/lib/lib{nss3,nssutil3,smime3,ssl3,nspr4,plc4,plds4,softokn3,freebl3,freeblpriv3,nssckbi,nssdbm3}.so* \
+      2>/dev/null || true
 # SteamEnv now preserves Proton's environment without an LD_PRELOAD interposer.
 rm -f "${BIN_DST}/locale/x86_64/libfluorine_locale.so" \
       "${BIN_DST}/locale/i386/libfluorine_locale.so" 2>/dev/null || true
 
 # ── Install icon + desktop file for Wayland taskbar/decoration ──
 ICON_SRC="${BIN_DST}/icons/com.fluorine.manager.png"
-ICON_DST="${HOME}/.local/share/icons/hicolor/256x256/apps/com.fluorine.manager.png"
+ICON_DST="${FLUORINE_DATA_HOME}/icons/hicolor/256x256/apps/com.fluorine.manager.png"
 DESKTOP_SRC="${BIN_DST}/icons/com.fluorine.manager.desktop"
-DESKTOP_DST="${HOME}/.local/share/applications/com.fluorine.manager.desktop"
+DESKTOP_DST="${FLUORINE_DATA_HOME}/applications/com.fluorine.manager.desktop"
 if [ -f "${ICON_SRC}" ] && [ ! -f "${ICON_DST}" ]; then
     mkdir -p "$(dirname "${ICON_DST}")"
     cp -f "${ICON_SRC}" "${ICON_DST}"
@@ -933,9 +945,13 @@ build_installer() {
 set -euo pipefail
 
 APP_NAME="Fluorine Manager"
-INSTALL_DIR="${HOME}/.local/share/fluorine/bin"
-DESKTOP_DIR="${HOME}/.local/share/applications"
-ICON_DIR="${HOME}/.local/share/icons/hicolor/256x256/apps"
+case "${XDG_DATA_HOME:-}" in
+    /*) FLUORINE_DATA_HOME="${XDG_DATA_HOME}" ;;
+    *)  FLUORINE_DATA_HOME="${HOME}/.local/share" ;;
+esac
+INSTALL_DIR="${FLUORINE_DATA_HOME}/fluorine/bin"
+DESKTOP_DIR="${FLUORINE_DATA_HOME}/applications"
+ICON_DIR="${FLUORINE_DATA_HOME}/icons/hicolor/256x256/apps"
 
 echo ""
 echo "╔══════════════════════════════════════════╗"
@@ -978,7 +994,7 @@ case "${CHOICE}" in
 Type=Application
 Name=Fluorine Manager
 Comment=Mod Organizer for Linux
-Exec=${INSTALL_DIR}/fluorine-manager %u
+Exec="${INSTALL_DIR}/fluorine-manager" %u
 Icon=com.fluorine.manager
 Terminal=false
 Categories=Game;Utility;

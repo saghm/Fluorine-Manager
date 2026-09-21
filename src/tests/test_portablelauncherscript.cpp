@@ -53,6 +53,7 @@ QProcessEnvironment environment(const QString& path, const QString& home,
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
   env.insert(QStringLiteral("PATH"), path);
   env.insert(QStringLiteral("HOME"), home);
+  env.remove(QStringLiteral("XDG_DATA_HOME"));
   env.insert(QStringLiteral("CAPTURE_PATH"), capture);
   return env;
 }
@@ -213,6 +214,34 @@ TEST(PortableLauncherScript, UsesStableHomeFallback)
   process.start(result.path, {QStringLiteral("argument")});
   ASSERT_TRUE(process.waitForFinished(10000));
   EXPECT_EQ(process.exitCode(), 0);
+  EXPECT_EQ(capturedArguments(capture),
+            (QList<QByteArray>{"--instance", QDir(instance).canonicalPath().toUtf8(),
+                               "argument"}));
+}
+
+TEST(PortableLauncherScript, UsesXdgDataHomeFallback)
+{
+  QTemporaryDir temp;
+  ASSERT_TRUE(temp.isValid());
+  const QString tools = makeToolPath(temp);
+  ASSERT_FALSE(tools.isEmpty());
+  const QString instance = temp.filePath("instance");
+  ASSERT_TRUE(QDir().mkpath(instance));
+  const Result result = create(instance);
+  ASSERT_EQ(result.status, Status::Created);
+
+  const QString data = temp.filePath("custom data");
+  const QString fallback = QDir(data).filePath("fluorine/bin/fluorine-manager");
+  ASSERT_TRUE(QDir().mkpath(QFileInfo(fallback).absolutePath()));
+  ASSERT_TRUE(writeExecutable(fallback, captureScript()));
+  const QString capture = temp.filePath("capture");
+  auto env = environment(tools, temp.filePath("home"), capture);
+  env.insert("XDG_DATA_HOME", data);
+  QProcess process;
+  process.setProcessEnvironment(env);
+  process.start(result.path, {QStringLiteral("argument")});
+  ASSERT_TRUE(process.waitForFinished(10000));
+  EXPECT_EQ(process.exitCode(), 0) << process.readAllStandardError().toStdString();
   EXPECT_EQ(capturedArguments(capture),
             (QList<QByteArray>{"--instance", QDir(instance).canonicalPath().toUtf8(),
                                "argument"}));

@@ -17,8 +17,12 @@ INSTANCE_DIR="$(CDPATH= cd -- "$(dirname -- "$SELF")" && pwd -P)"
 
 MANAGER="$(type -P fluorine-manager 2>/dev/null || true)"
 if [[ -z "$MANAGER" || ! -x "$MANAGER" ]]; then
-    FALLBACK="${HOME:-}/.local/share/fluorine/bin/fluorine-manager"
-    if [[ -n "${HOME:-}" && -x "$FALLBACK" ]]; then
+    case "${XDG_DATA_HOME:-}" in
+        /*) FLUORINE_DATA_HOME="${XDG_DATA_HOME}" ;;
+        *)  FLUORINE_DATA_HOME="${HOME:-}/.local/share" ;;
+    esac
+    FALLBACK="${FLUORINE_DATA_HOME}/fluorine/bin/fluorine-manager"
+    if [[ -x "$FALLBACK" ]]; then
         MANAGER="$FALLBACK"
     else
         echo "ERROR: fluorine-manager launcher was not found on PATH or in the user installation." >&2

@@ -194,7 +194,7 @@ bool FluorineConfig::canDestroyPrefix() const
   // be removed manually rather than risking unrelated or externally managed
   // data.
   const QString legacyDefault =
-      QDir(fluorineDataDir()).filePath(QStringLiteral("Prefix"));
+      QDir::homePath() + QStringLiteral("/.local/share/fluorine/Prefix");
   return QDir::cleanPath(compatData) == QDir::cleanPath(legacyDefault);
 }
 
