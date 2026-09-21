@@ -26,6 +26,7 @@ class QStackedWidget;
 class QCheckBox;
 class QListWidgetItem;
 class WabbajackPostInstall;
+class Clf3InstallerTabs;
 
 class Clf3InstallerDialog : public QDialog
 {
@@ -99,6 +100,7 @@ private:
   QHash<QString, QListWidgetItem*> m_manualRequests;
 
   QStackedWidget* m_pages{};
+  Clf3InstallerTabs* m_tabs{};
   QLineEdit* m_search{};
   QComboBox* m_gameFilter{};
   QComboBox* m_sortOrder{};

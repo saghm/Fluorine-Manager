@@ -195,6 +195,7 @@ public:
   // validated OAuth/API-key credentials. This is needed by UI flows that can
   // run before the normal instance startup has refreshed the live OAuth object.
   QNetworkReply* makeAuthenticatedGetRequest(const QUrl url);
+  QNetworkReply* makeCollectionRequest(const QUrl& url, const QByteArray& json = {});
   QNetworkReply* makeOAuthPostRequest(const QUrl url, const QByteArray payload);
   QNetworkReply* makeOAuthDeleteRequest(QNetworkRequest request);
   QNetworkReply* makeOAuthCustomRequest(QNetworkRequest request, const QByteArray& verb,

@@ -608,6 +608,7 @@ add_test(NAME test_clf3_nxm_broker COMMAND test_clf3_nxm_broker)
 # ---------------------------------------------------------------------------
 # Embedded-Python package replacement across in-process instance switches
 # ---------------------------------------------------------------------------
+if(TARGET runner AND TARGET mobase)
 add_executable(test_python_module_switch EXCLUDE_FROM_ALL
     ${CMAKE_SOURCE_DIR}/libs/plugin_python/tests/runner/test_module_switch.cpp
 )
@@ -629,6 +630,7 @@ set_tests_properties(test_python_module_switch PROPERTIES
     ENVIRONMENT
         "PLUGIN_DIR=${CMAKE_SOURCE_DIR}/libs/plugin_python/tests/runner/plugins;PYTHONPATH=$<TARGET_FILE_DIR:mobase>"
 )
+endif()
 
 # CLF3 process lifecycle, preflight, setup recovery, and log redaction.
 find_package(Qt6 REQUIRED COMPONENTS Test)
@@ -798,4 +800,27 @@ add_custom_target(fluorine-tests
             test_gamebryo_save_compression
             test_game_save_migration
             test_vfs_catalog test_vfs_index
-            test_staging_promotion test_clf3_nxm_broker test_clf3_install test_python_module_switch)
+            test_staging_promotion test_clf3_nxm_broker test_clf3_install)
+    if(TARGET test_python_module_switch)
+        add_dependencies(fluorine-tests test_python_module_switch)
+    endif()
+
+# Collections acquisition containment and the actual Qt review/install workflow.
+find_package(Qt6 REQUIRED COMPONENTS Widgets Concurrent)
+add_executable(test_clf3_collections EXCLUDE_FROM_ALL
+    test_clf3_collections.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/clf3collectioncompat.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/clf3collectionhost.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/clf3installertabs.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/clf3collectiondialog.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/clf3processcontroller.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/clf3enginemanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/clf3installutils.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/curatedguidenxmbroker.cpp
+)
+set_target_properties(test_clf3_collections PROPERTIES AUTOMOC ON CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
+target_include_directories(test_clf3_collections PRIVATE ${CMAKE_SOURCE_DIR}/libs/uibase/include)
+target_link_libraries(test_clf3_collections PRIVATE mo2::uibase Qt6::Widgets Qt6::Network Qt6::Concurrent Qt6::Test GTest::gtest)
+add_test(NAME test_clf3_collections COMMAND test_clf3_collections)
+set_tests_properties(test_clf3_collections PROPERTIES TIMEOUT 180 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+add_dependencies(fluorine-tests test_clf3_collections)

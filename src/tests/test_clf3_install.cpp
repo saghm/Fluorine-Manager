@@ -475,6 +475,139 @@ printf '%s\n' '{"type":"collection_cancelled","job_id":"job"}'
   EXPECT_TRUE(failure.isEmpty());
 }
 
+TEST_F(Clf3Process, HostedInstallNegotiatesAndRejectsOldEngine)
+{
+  engine(R"(printf '%s\n' '{"type":"hello","protocol_version":1,"engine_version":"old","job_id":"job","capabilities":["collection_plan_v1"]}'
+read -r ignored
+)", false);
+  QSignalSpy failed(&controller, &Clf3ProcessController::failed);
+  QSignalSpy published(&controller, &Clf3ProcessController::collectionPublished);
+  controller.startCollectionInstall({{"output", directory.path()}});
+  ASSERT_TRUE(failed.wait(3000)); EXPECT_TRUE(published.isEmpty());
+}
+
+TEST_F(Clf3Process, HostedInstallContainsCredentialsAndRejectsForeignCompletion)
+{
+  qputenv("MY_NEXUS_CREDENTIAL", "fixture-host-secret");
+  engine(R"([[ -z "$MY_NEXUS_CREDENTIAL" ]] || exit 77
+[[ "$*" != *fixture-host-secret* ]] || exit 78
+printf '%s\n' '{"type":"hello","protocol_version":1,"engine_version":"test","job_id":"job","capabilities":["collection_hosted_install_v1"],"required_capabilities":["collection_hosted_install_v1"]}'
+read -r acknowledgement
+[[ "$acknowledgement" == *collection_hosted_install_v1* ]] || exit 79
+read -r request
+[[ "$request" == *collection_install* && "$request" != *fixture-host-secret* ]] || exit 80
+printf '%s\n' 'private-worker-diagnostic' >&2
+printf '%s\n' '{"type":"collection_install_completed","job_id":"foreign","report_path":"/wrong/.collection/report.json"}'
+)", false);
+  QSignalSpy failed(&controller, &Clf3ProcessController::failed);
+  QSignalSpy published(&controller, &Clf3ProcessController::collectionPublished);
+  QSignalSpy logs(&controller, &Clf3ProcessController::logLine);
+  controller.startCollectionInstall({{"output", directory.path()}});
+  ASSERT_TRUE(failed.wait(3000)); EXPECT_TRUE(published.isEmpty()); EXPECT_TRUE(logs.isEmpty());
+  qunsetenv("MY_NEXUS_CREDENTIAL");
+}
+
+TEST_F(Clf3Process, HostedInstallCancellationDiscardsLatePublication)
+{
+  engine(R"(printf '%s\n' '{"type":"hello","protocol_version":1,"engine_version":"test","job_id":"job","capabilities":["collection_hosted_install_v1"]}'
+read -r acknowledgement
+read -r request
+printf '%s\n' '{"type":"collection_progress","job_id":"job","progress":{"type":"progress","phase":"Staging","completed":1,"total":2,"item":"fixture"}}'
+read -r cancel
+[[ "$cancel" == *cancel* ]] || exit 81
+printf '%s\n' '{"type":"collection_install_completed","job_id":"job","report_path":"/wrong/.collection/report.json"}'
+)", false);
+  QObject::connect(&controller, &Clf3ProcessController::phaseChanged, &controller, [&] { controller.cancel(); });
+  QSignalSpy cancelled(&controller, &Clf3ProcessController::cancelled);
+  QSignalSpy published(&controller, &Clf3ProcessController::collectionPublished);
+  controller.startCollectionInstall({{"output", directory.path()}});
+  ASSERT_TRUE(cancelled.wait(3000)); EXPECT_TRUE(published.isEmpty());
+}
+
+TEST_F(Clf3Process, CollectionCredentialsAreRejectedBeforeProcessStartup)
+{
+  QSignalSpy failed(&controller, &Clf3ProcessController::failed);
+  QSignalSpy logs(&controller, &Clf3ProcessController::logLine);
+  controller.startCollectionPlan("https://www.nexusmods.com/games/skyrim/collections/test?key=fixture-secret");
+  EXPECT_EQ(failed.count(), 1);
+  EXPECT_FALSE(controller.isRunning());
+  controller.startCollectionInstall({{"output", directory.path()}, {"api_key", "fixture-secret"}});
+  EXPECT_EQ(failed.count(), 2);
+  EXPECT_FALSE(controller.isRunning());
+  EXPECT_TRUE(logs.isEmpty());
+}
+
+TEST_F(Clf3Process, ReleasedWorkerKeepsCredentialsOutAndWaitsForExit)
+{
+  qputenv("MY_NEXUS_CREDENTIAL", "fixture-host-secret");
+  engine(R"([[ -z "$MY_NEXUS_CREDENTIAL" ]] || exit 77
+[[ "$1" == collection && "$2" == gui-worker ]] || exit 78
+[[ "$*" != *fixture-host-secret* ]] || exit 79
+data=$(cat "$3")
+[[ "$data" != *fixture-host-secret* ]] || exit 80
+printf '%s\n' 'fixture-host-secret' >&2
+printf '{"type":"completed","report_path":"%s/.collection/report.json"}\n' "${3%/*}"
+sleep 0.2
+)", false);
+  QJsonObject request{{"protocol_version", 1}, {"job_identity", "fixture-job"}};
+  for (const auto* key : {"package", "plan", "artifacts", "stage", "game"}) request.insert(key, directory.filePath(key));
+  request.insert("output", directory.path());
+  QSignalSpy published(&controller, &Clf3ProcessController::collectionPublished);
+  QSignalSpy failed(&controller, &Clf3ProcessController::failed);
+  QSignalSpy logs(&controller, &Clf3ProcessController::logLine);
+  controller.startCollectionLocalInstall(request);
+  QTest::qWait(50);
+  EXPECT_TRUE(published.isEmpty());
+  ASSERT_TRUE(published.wait(3000));
+  EXPECT_FALSE(controller.isRunning());
+  EXPECT_TRUE(failed.isEmpty());
+  EXPECT_TRUE(logs.isEmpty());
+  QFile saved(directory.filePath("worker.json"));
+  ASSERT_TRUE(saved.open(QIODevice::ReadOnly));
+  EXPECT_FALSE(saved.readAll().contains("fixture-host-secret"));
+  qunsetenv("MY_NEXUS_CREDENTIAL");
+}
+
+TEST_F(Clf3Process, ReleasedWorkerCancellationUsesLocalProtocolAndDiscardsLateCompletion)
+{
+  engine(R"(printf '%s\n' '{"type":"progress","phase":"Staging","completed":1,"total":2,"item":"fixture"}'
+read -r cancel
+[[ "$cancel" == cancel ]] || exit 81
+printf '{"type":"completed","report_path":"%s/.collection/report.json"}\n' "${3%/*}"
+)", false);
+  QJsonObject request{{"protocol_version", 1}, {"job_identity", "fixture-job"}};
+  for (const auto* key : {"package", "plan", "artifacts", "stage", "game"}) request.insert(key, directory.filePath(key));
+  request.insert("output", directory.path());
+  QObject::connect(&controller, &Clf3ProcessController::phaseChanged, &controller, [&] { controller.cancel(); });
+  QSignalSpy cancelled(&controller, &Clf3ProcessController::cancelled);
+  QSignalSpy published(&controller, &Clf3ProcessController::collectionPublished);
+  QSignalSpy failed(&controller, &Clf3ProcessController::failed);
+  controller.startCollectionLocalInstall(request);
+  ASSERT_TRUE(cancelled.wait(3000));
+  EXPECT_TRUE(published.isEmpty());
+  EXPECT_TRUE(failed.isEmpty());
+}
+
+TEST_F(Clf3Process, ReleasedWorkerRejectsForeignPublicationAndCredentialFields)
+{
+  engine(R"(printf '%s\n' '{"type":"completed","report_path":"/foreign/.collection/report.json"}'
+)", false);
+  QJsonObject request{{"protocol_version", 1}, {"job_identity", "fixture-job"}};
+  for (const auto* key : {"package", "plan", "artifacts", "stage", "game"}) request.insert(key, directory.filePath(key));
+  request.insert("output", directory.path());
+  QSignalSpy published(&controller, &Clf3ProcessController::collectionPublished);
+  QSignalSpy failed(&controller, &Clf3ProcessController::failed);
+  auto unsafe = request;
+  unsafe.insert("api_key", "fixture-secret");
+  controller.startCollectionLocalInstall(unsafe);
+  EXPECT_EQ(failed.size(), 1);
+  EXPECT_FALSE(QFileInfo::exists(directory.filePath("worker.json")));
+  failed.clear();
+  controller.startCollectionLocalInstall(request);
+  ASSERT_TRUE(failed.wait(3000));
+  EXPECT_TRUE(published.isEmpty());
+}
+
 int main(int argc, char** argv)
 {
   QCoreApplication application(argc, argv);

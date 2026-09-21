@@ -1039,6 +1039,26 @@ QNetworkReply* NXMAccessManager::makeAuthenticatedGetRequest(const QUrl url)
   return get(request);
 }
 
+QNetworkReply* NXMAccessManager::makeCollectionRequest(const QUrl& url, const QByteArray& json)
+{
+  // A collection metadata response must never redirect an authenticated request.
+  if (url.scheme() != "https" || url.host() != "api.nexusmods.com"
+      || url.port(-1) != -1 || !url.userInfo().isEmpty() || url.hasFragment()) return nullptr;
+  QNetworkRequest request(url);
+  request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
+  request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+  request.setTransferTimeout(30000);
+  if (m_NexusOAuth && !m_NexusOAuth->token().isEmpty()) {
+    m_NexusOAuth->prepareRequest(&request, json.isEmpty() ? "GET" : "POST", json);
+  } else if (m_Tokens && !m_Tokens->accessToken.isEmpty()) {
+    request.setRawHeader("Authorization", "Bearer " + m_Tokens->accessToken.toUtf8());
+  } else if (m_Tokens && !m_Tokens->apiKey.isEmpty()) {
+    request.setRawHeader("APIKEY", m_Tokens->apiKey.toUtf8());
+  } else return nullptr;
+  addAPIHeaders(request);
+  return json.isEmpty() ? get(request) : post(request, json);
+}
+
 QNetworkReply* NXMAccessManager::makeOAuthPostRequest(const QUrl url,
                                                       const QByteArray payload = {})
 {

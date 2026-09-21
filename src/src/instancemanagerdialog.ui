@@ -25,7 +25,7 @@
     <item><widget class="QPushButton" name="installWabbajack">
      <property name="text"><string>Install modlist...</string></property>
      <property name="autoDefault"><bool>false</bool></property>
-     <property name="toolTip"><string>Browse and install a Wabbajack modlist with CLF3.</string></property>
+     <property name="toolTip"><string>Browse and install Wabbajack modlists with CLF3, or preview Nexus Collections (WIP; downloads disabled).</string></property>
     </widget></item>
     <item><spacer name="actionSpacer"><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>0</width><height>0</height></size></property></spacer></item>
    </layout></item>

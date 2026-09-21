@@ -26,7 +26,13 @@ public:
   void sendNexusUrls(const QString& requestId, const QStringList& urls);
   void sendManualFile(const QString& requestId, const QString& path);
   void startCollectionPlan(const QString& sourceUrl, const QString& gameVersion = {},
-                           bool allOptional = false);
+                           bool allOptional = false, const QStringList& selectedOptional = {},
+                           const QString& gamePath = {});
+  void queryCollectionCapabilities();
+  void startCollectionInstall(const QJsonObject& request);
+  void startCollectionLocalPlan(const QString& package, const QJsonObject& locator,
+                                const QStringList& selectedOptional, const QString& gameVersion);
+  void startCollectionLocalInstall(const QJsonObject& request);
   void sendCollectionPackage(const QString& jobId, const QString& requestId,
                              const QJsonObject& locator, int schemaId,
                              const QString& packagePath);
@@ -64,6 +70,9 @@ signals:
   void cancelled();
   void collectionRevisionRequired(QString jobId, QString requestId, QJsonObject locator);
   void collectionPlanReady(QJsonObject plan);
+  void collectionCapabilities(QJsonObject capabilities);
+  void collectionSources(QJsonObject sources);
+  void collectionPublished(QString reportPath);
 
 private:
   Clf3EngineManager m_engineManager;
@@ -81,6 +90,12 @@ private:
   bool m_completed{false};
   bool m_cancelRequested{false};
   bool m_collectionPlanning{false};
+  bool m_collectionInstalling{false};
+  bool m_collectionProbing{false};
+  bool m_collectionLocalPlanning{false};
+  bool m_collectionLocalInstalling{false};
+  QJsonObject m_localPlanLocator;
+  QJsonObject m_collectionInstallRequest;
   QString m_collectionJob;
   QString m_collectionRequest;
   bool m_collectionPackageSent{false};

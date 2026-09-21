@@ -1,5 +1,7 @@
 #include "clf3installerdialog.h"
 #include "clf3installutils.h"
+#include "clf3collectiondialog.h"
+#include "clf3installertabs.h"
 
 #include "curatedguidenxmbroker.h"
 #include "gamedetection.h"
@@ -495,11 +497,39 @@ bool Clf3InstallerDialog::shouldSwitchToInstance() const
 
 void Clf3InstallerDialog::buildUi()
 {
-  setWindowTitle(tr("Install Wabbajack Modlist"));
+  setWindowTitle(tr("Install a Modlist"));
   resize(1280, 820);
   auto* outer = new QVBoxLayout(this);
   m_pages     = new QStackedWidget(this);
-  outer->addWidget(m_pages, 1);
+  m_tabs = new Clf3InstallerTabs(m_pages, [this](QWidget* parent) {
+    auto* panel = new Clf3CollectionDialog([](const QUrl& url, const QByteArray& json) {
+      auto* manager = NexusInterface::instance().getAccessManager();
+      return manager ? manager->makeCollectionRequest(url, json) : nullptr;
+    }, parent);
+    QHash<QString, QString> paths;
+    for (const auto& game : detectAllGames().games) {
+      const KnownGame* known = knownGameForDetected(game);
+      if (known) paths.insert(QString::fromLatin1(known->name), game.install_path);
+    }
+    panel->setDetectedGames(paths);
+    return panel;
+  }, this);
+  outer->addWidget(m_tabs, 1);
+  connect(m_tabs, &Clf3InstallerTabs::nexusConnectionRequested,
+          this, &Clf3InstallerDialog::connectNexus);
+  connect(m_tabs, &Clf3InstallerTabs::collectionsFinished, this, [this](int result) {
+    const auto* panel = m_tabs->collections();
+    if (result == QDialog::Accepted && !panel->createdInstanceDir().isEmpty()) {
+      m_createdInstanceDir = panel->createdInstanceDir();
+      InstanceManager::registerPortableInstance(m_createdInstanceDir);
+      m_switchInstance->setChecked(panel->shouldOpen());
+      accept();
+    } else if (m_deferredClose) closeWhenIdle();
+    else reject();
+  });
+  connect(m_pages, &QStackedWidget::currentChanged, this, [this](int page) {
+    m_tabs->setTabEnabled(1, page != 2);
+  });
 
   auto* browsePage   = new QWidget;
   auto* browseLayout = new QVBoxLayout(browsePage);
@@ -1840,6 +1870,11 @@ void Clf3InstallerDialog::requestManualFile(const QString& requestId,
 
 void Clf3InstallerDialog::done(int result)
 {
+  if (m_tabs->collections() && m_tabs->collections()->isBusy()) {
+    m_deferredClose = result;
+    m_tabs->collections()->done(QDialog::Rejected);
+    return;
+  }
   if (m_controller.isRunning() || m_postInstallRunning) {
     m_deferredClose = result;
     if (m_controller.isRunning()) {
@@ -1872,7 +1907,8 @@ void Clf3InstallerDialog::cancelInstall()
 
 void Clf3InstallerDialog::closeWhenIdle()
 {
-  if (!m_deferredClose || m_controller.isRunning() || m_postInstallRunning) return;
+  if (!m_deferredClose || m_controller.isRunning() || m_postInstallRunning
+      || (m_tabs->collections() && m_tabs->collections()->isBusy())) return;
   const int result = *m_deferredClose;
   m_deferredClose.reset();
   QTimer::singleShot(0, this, [this, result] { done(result); });
