@@ -25,6 +25,8 @@ struct Callback : IXAudio2VoiceCallback {
     void STDMETHODCALLTYPE OnVoiceError(void*, HRESULT hr) override { error=hr; SetEvent(done); }
 };
 int main(int argc, char **argv) {
+    if (argc > 2 && !std::freopen(argv[2], "w", stdout)) return 8;
+    std::setvbuf(stdout, nullptr, _IONBF, 0);
     CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     IMMDeviceEnumerator *enumerator=nullptr;
     if (SUCCEEDED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr,

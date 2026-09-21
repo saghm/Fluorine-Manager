@@ -1,4 +1,5 @@
 #include "prefixsetuprunner.h"
+#include "faudioruntime.h"
 
 #include "fluorinepaths.h"
 
@@ -1528,72 +1529,6 @@ bool PrefixSetupRunner::installFAudioRuntime()
 
   const QString bundle = QDir(QCoreApplication::applicationDirPath())
                              .filePath(QStringLiteral("faudio/%1").arg(variant));
-  const QString versionPath = bundle + "/version.txt";
-  QFile versionFile(versionPath);
-  if (!versionFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-    currentStep().errorMessage = QStringLiteral(
-        "Bundled FAudio is missing at %1; rebuild Fluorine with build.sh").arg(bundle);
-    return false;
-  }
-  QString faudioVersion;
-  bool nativePack = false;
-  for (const QByteArray& line : versionFile.readAll().split('\n')) {
-    if (line.startsWith("faudio="))
-      faudioVersion = QString::fromLatin1(line.mid(7)).trimmed();
-    if (line.trimmed() == "override=native")
-      nativePack = true;
-  }
-  if (!nativePack || !QRegularExpression(QStringLiteral(R"(^[0-9]{2}\.[0-9]{2}$)"))
-           .match(faudioVersion).hasMatch()) {
-    currentStep().errorMessage = "Invalid bundled FAudio version metadata";
-    return false;
-  }
-
-  const QStringList dlls32 = QDir(bundle + "/i386-windows")
-                                 .entryList({"*.dll"}, QDir::Files, QDir::Name);
-  const QStringList dlls64 = QDir(bundle + "/x86_64-windows")
-                                 .entryList({"*.dll"}, QDir::Files, QDir::Name);
-  if (dlls32.size() != 35 || dlls32 != dlls64) {
-    currentStep().errorMessage = "Bundled FAudio x86/x64 DLL sets are incomplete";
-    return false;
-  }
-
-  const QString checksumPath = bundle + "/sha256sums.txt";
-  QFile checksumFile(checksumPath);
-  if (!checksumFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-    currentStep().errorMessage = "Bundled FAudio checksums are missing";
-    return false;
-  }
-  const QStringList checksumLines =
-      QString::fromUtf8(checksumFile.readAll()).split('\n', Qt::SkipEmptyParts);
-  if (checksumLines.size() != dlls32.size() * 2) {
-    currentStep().errorMessage = "Bundled FAudio checksum list is incomplete";
-    return false;
-  }
-  QSet<QString> expectedFiles;
-  for (const QString& name : dlls32) {
-    expectedFiles.insert("i386-windows/" + name);
-    expectedFiles.insert("x86_64-windows/" + name);
-  }
-  for (const QString& line : checksumLines) {
-    const QString hash = line.left(64);
-    const QString relative = line.mid(66);
-    const QString absolute = QDir(bundle).filePath(relative);
-    if (line.mid(64, 2) != QLatin1String("  ") ||
-        !expectedFiles.remove(relative) || fileSha256(absolute) != hash) {
-      currentStep().errorMessage =
-          QStringLiteral("Bundled FAudio checksum failed: %1").arg(relative);
-      return false;
-    }
-    QFile module(absolute);
-    if (!module.open(QIODevice::ReadOnly) ||
-        module.read(96).contains("Wine builtin DLL")) {
-      currentStep().errorMessage =
-          QStringLiteral("FAudio DLL is not packaged for prefix loading: %1")
-              .arg(relative);
-      return false;
-    }
-  }
 
   QString sourceProton = m_protonPath;
   QFile sourceMarker(QDir(sourceProton).filePath("fluorine-faudio-runtime.txt"));
@@ -1609,72 +1544,15 @@ bool PrefixSetupRunner::installFAudioRuntime()
     return false;
   }
 
-  // Ordinary PE audio modules load directly from the prefix. Older Fluorine
-  // builds selected a copied runner; migrate back to its recorded base runner.
-  for (const auto& locations : {
-           qMakePair(QStringLiteral("system32"), QStringLiteral("x86_64-windows")),
-           qMakePair(QStringLiteral("syswow64"), QStringLiteral("i386-windows"))}) {
-    const QString targetDir = m_prefixPath + "/drive_c/windows/" + locations.first;
-    if (!QDir(targetDir).exists()) {
-      currentStep().errorMessage =
-          QStringLiteral("Prefix Windows directory is missing: %1").arg(targetDir);
-      return false;
-    }
-    const QStringList existing = QDir(targetDir).entryList(
-        QDir::Files | QDir::System | QDir::NoDotAndDotDot);
-    for (const QString& file : existing) {
-      if (DIRECTX_AUDIO_DLLS.contains(QFileInfo(file).completeBaseName(),
-                                     Qt::CaseInsensitive) &&
-          !QFile::remove(targetDir + "/" + file)) {
-        currentStep().errorMessage =
-            QStringLiteral("Could not replace existing audio DLL: %1").arg(file);
-        return false;
-      }
-    }
-    for (const QString& name : dlls32) {
-      const QString target = targetDir + "/" + name;
-      // QSaveFile follows symlinks; unlink first so a prefix link can never
-      // redirect this write into the shared Proton installation.
-      if ((QFileInfo::exists(target) || QFileInfo(target).isSymLink()) &&
-          !QFile::remove(target)) {
-        currentStep().errorMessage =
-            QStringLiteral("Could not replace audio DLL: %1").arg(target);
-        return false;
-      }
-      QSaveFile output(target);
-      QFile input(bundle + "/" + locations.second + "/" + name);
-      if (!input.open(QIODevice::ReadOnly) ||
-          !output.open(QIODevice::WriteOnly) ||
-          output.write(input.readAll()) != input.size() || !output.commit()) {
-        currentStep().errorMessage =
-            QStringLiteral("Could not install FAudio DLL into prefix: %1").arg(target);
-        return false;
-      }
-    }
-  }
-
-  // Persist the installed payload identity for launch diagnostics and migration.
-  const QString installedDir = m_prefixPath + "/.fluorine-faudio";
-  if (!QDir().mkpath(installedDir)) {
-    currentStep().errorMessage = "Could not create FAudio installation metadata";
+  FAudioPayload payload;
+  if (!installFAudioPayload(m_prefixPath, bundle, payload, currentStep().errorMessage))
     return false;
-  }
-  for (const QString& name : {QStringLiteral("version.txt"),
-                              QStringLiteral("sha256sums.txt")}) {
-    QFile input(bundle + "/" + name);
-    QSaveFile output(installedDir + "/" + name);
-    if (!input.open(QIODevice::ReadOnly) || !output.open(QIODevice::WriteOnly) ||
-        output.write(input.readAll()) != input.size() || !output.commit()) {
-      currentStep().errorMessage = "Could not save FAudio installation metadata";
-      return false;
-    }
-  }
 
   m_protonPath = sourceProton;
   m_wineBin = findWineBinary();
   m_wineserverBin = findWineserverBinary();
   m_faudioDlls.clear();
-  for (const QString& file : dlls32)
+  for (const QString& file : payload.dlls)
     m_faudioDlls.append(QFileInfo(file).completeBaseName());
   if (m_wineBin.isEmpty() || m_wineserverBin.isEmpty() ||
       !applyFAudioOverrides()) {
@@ -1686,8 +1564,8 @@ bool PrefixSetupRunner::installFAudioRuntime()
   emit protonPathChanged(m_protonPath);
   emit logMessage(QStringLiteral("FAudio %1 installed (%2-bit and 64-bit, %3 DLLs); "
                                  "using the selected Proton: %4")
-                      .arg(faudioVersion, QStringLiteral("32"))
-                      .arg(dlls32.size())
+                      .arg(payload.version, QStringLiteral("32"))
+                      .arg(payload.dlls.size())
                       .arg(sourceProton));
   return true;
 }

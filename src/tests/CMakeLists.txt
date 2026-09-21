@@ -665,6 +665,7 @@ add_test(NAME test_executable_options COMMAND test_executable_options)
 
 add_executable(test_launch_environment EXCLUDE_FROM_ALL
     test_launch_environment.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/faudioruntime.cpp
     ${CMAKE_SOURCE_DIR}/src/src/protonlauncher.cpp
     ${CMAKE_SOURCE_DIR}/src/src/launchenvironment.cpp
     ${CMAKE_SOURCE_DIR}/src/src/vfsbackend.cpp)
@@ -676,6 +677,14 @@ target_compile_options(test_launch_environment PRIVATE
 target_link_libraries(test_launch_environment PRIVATE
     Qt6::Core mo2::uibase Boost::program_options GTest::gtest)
 add_test(NAME test_launch_environment COMMAND test_launch_environment)
+
+add_executable(test_faudioruntime EXCLUDE_FROM_ALL
+    test_faudioruntime.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/faudioruntime.cpp)
+set_target_properties(test_faudioruntime PROPERTIES AUTOMOC OFF CXX_STANDARD 23)
+target_include_directories(test_faudioruntime PRIVATE ${CMAKE_SOURCE_DIR}/src/src)
+target_link_libraries(test_faudioruntime PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
+add_test(NAME test_faudioruntime COMMAND test_faudioruntime)
 
 add_executable(test_conflict_sorting EXCLUDE_FROM_ALL
     test_conflict_sorting.cpp
@@ -760,7 +769,7 @@ set_tests_properties(test_library_setup_panel PROPERTIES ENVIRONMENT "QT_QPA_PLA
 
 add_custom_target(fluorine-tests
     DEPENDS test_esptk_tes3 test_bsatk_extraction test_executable_options test_steam_cloud
-            test_conflict_sorting test_launch_environment test_game_artwork test_settings_navigation
+            test_conflict_sorting test_launch_environment test_faudioruntime test_game_artwork test_settings_navigation
             test_fluorine_menu_bar test_library_setup_panel
             test_plugincompatibility test_pefileutils test_curatedguide
             test_metainiutils test_fomoddependency

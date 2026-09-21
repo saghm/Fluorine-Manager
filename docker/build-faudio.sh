@@ -81,6 +81,9 @@ build_variant() {
     if [ ! -f "${work}/prepared" ]; then
         apply_correction "${wine_source}" 0003-audio-ordinary-pe.patch
         apply_correction "${wine_source}" 0007-reverb-parameter-trace.patch
+        # Both packs must support voice creation on uninitialized game threads
+        # with Wine/Proton 10's COM-based WMA decoder activation.
+        apply_correction "${faudio_source}" 0009-wma-com-lifetime.patch
         if [ "${variant}" = latest ]; then
             for correction in 0001-wma-bytes-required.patch 0002-refresh-queued-buffer.patch \
                               0004-refresh-after-callbacks.patch 0005-preserve-lookahead-samples.patch \
@@ -161,6 +164,7 @@ ADAPT
         printf 'faudio=%s\nwine=%s\nvariant=%s\noverride=native\n' "${faudio_tag}" "${wine_tag}" "${variant}"
         printf 'faudio_revision=%s\nwine_revision=%s\nrecipe=%s\n' "${faudio_revision}" "${WINE_REVISION}" "${RECIPE}"
         printf 'backend=Win32/WASAPI\nlinkage=static\nwma=enabled\n'
+        printf 'wma_com_lifetime=per-decoder-mta\n'
         printf 'compiler_x86=%s\n' "$(i686-w64-mingw32-gcc -dumpfullversion)"
         printf 'compiler_x64=%s\n' "$(x86_64-w64-mingw32-gcc -dumpfullversion)"
         printf 'faudio_source_sha256=%s\n' "$(sha256sum "${faudio_archive}" | cut -d' ' -f1)"
@@ -168,6 +172,7 @@ ADAPT
     } > "${variant_dir}/version.txt"
     cp "${PATCH_DIR}/0003-audio-ordinary-pe.patch" "${variant_dir}/"
     cp "${PATCH_DIR}/0007-reverb-parameter-trace.patch" "${variant_dir}/"
+    cp "${PATCH_DIR}/0009-wma-com-lifetime.patch" "${variant_dir}/"
     if [ "${variant}" = latest ]; then
         cp "${PATCH_DIR}"/000{1,2,4,5,6,8}-*.patch "${variant_dir}/"
     fi
@@ -185,5 +190,7 @@ mkdir -p "${OUT_DIR}/tests"
 for compiler in i686 x86_64; do
     "${compiler}-w64-mingw32-g++" -O2 -static -static-libgcc -static-libstdc++ \
         "${SCRIPT_DIR}/faudio-smoke.cpp" -lole32 -o "${OUT_DIR}/tests/${compiler}-smoke.exe"
+    "${compiler}-w64-mingw32-g++" -O2 -static -static-libgcc -static-libstdc++ \
+        "${SCRIPT_DIR}/faudio-wma-test.cpp" -lole32 -o "${OUT_DIR}/tests/${compiler}-wma.exe"
 done
 echo "Bundled FAudio ${SAFE_FAUDIO} (baseline) and ${LATEST_FAUDIO} (patched candidate)."

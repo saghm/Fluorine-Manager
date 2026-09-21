@@ -1,4 +1,5 @@
 #include "protonlauncher.h"
+#include "faudioruntime.h"
 
 #include "fluorinepaths.h"
 #include "launchenvironment.h"
@@ -740,6 +741,19 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
 {
   if (m_binary.isEmpty() || m_protonPath.isEmpty()) {
     return false;
+  }
+
+  FAudioPayload audio;
+  QString audioError;
+  if (!refreshFAudioPayload(
+          m_prefixPath, QCoreApplication::applicationDirPath() + "/faudio",
+          qEnvironmentVariable("FLUORINE_FAUDIO_VARIANT"), audio, audioError)) {
+    MOBase::log::error("Could not prepare FAudio for Proton: {}", audioError);
+    errno = EIO;
+    return false;
+  }
+  if (audio.changed) {
+    MOBase::log::info("Updated prefix FAudio {} for Proton '{}'", audio.version, m_protonPath);
   }
 
   if (m_useSteamDrm) {
