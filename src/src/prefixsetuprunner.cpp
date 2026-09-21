@@ -2519,6 +2519,16 @@ bool PrefixSetupRunner::stepPostSetup()
   // Ensure AppData temp directory exists.
   ensureTempDirectory(m_prefixPath);
 
+  // Skyrim's AppData/Local catalog is runtime-sensitive. Older prefixes may
+  // still have the whole game directory symlinked to Steam; migrate that link
+  // before the generic link scan can expose it again.
+  if (m_appId == kSkyrimSpecialEditionSteamAppId &&
+      !ensureSkyrimSpecialEditionAppDataPrivate(m_prefixPath)) {
+    currentStep().errorMessage =
+        QStringLiteral("Could not isolate Skyrim Special Edition AppData");
+    return false;
+  }
+
   // Create game symlinks.
   createGameSymlinksAuto(m_prefixPath);
 

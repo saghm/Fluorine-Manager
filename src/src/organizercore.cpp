@@ -50,6 +50,7 @@
 #include <uibase/filesystemutilities.h>
 #include <uibase/utility.h>
 #include "fluorineconfig.h"
+#include "prefixsymlinks.h"
 #include "protonlauncher.h"
 #include "wineprefix.h"
 
@@ -2996,6 +2997,23 @@ bool OrganizerCore::beforeRun(
   // Check the game's registry key in the Wine prefix and fix if needed.
   if (!checkGameRegistryKey()) {
     return false;  // user cancelled
+  }
+
+  // Keep Skyrim SE's runtime-sensitive ContentCatalog.txt inside the active
+  // Fluorine prefix. Existing installations may still have the entire
+  // AppData/Local/Skyrim Special Edition directory symlinked to Steam; move
+  // that link to a rollback location before mounting the VFS or deploying
+  // Plugins.txt. Documents/My Games (including saves) remains untouched.
+  if (useProton && managedGame() != nullptr &&
+      resolveWineDataDirName(managedGame()) ==
+          QStringLiteral("Skyrim Special Edition")) {
+    const QString prefixPath = resolveWinePrefixPath(m_Settings, managedGame());
+    if (!prefixPath.isEmpty() &&
+        !ensureSkyrimSpecialEditionAppDataPrivate(prefixPath)) {
+      log::error("beforeRun: could not isolate Skyrim Special Edition "
+                 "AppData in prefix '{}'", prefixPath);
+      return false;
+    }
   }
 
   // VFS Root Builder: read per-instance setting and configure.

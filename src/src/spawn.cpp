@@ -369,20 +369,22 @@ int spawn(const SpawnParameters& sp, pid_t& processId)
 
   logSpawning(sp, bin + " " + sp.arguments);
 
-  QString environmentError;
-  const auto environment = parseExecutableEnvironment(sp.environment, &environmentError);
-  if (!environment) {
-    log::error("Invalid executable environment: {}", environmentError);
+  QString wrapperError;
+  if (!parseLaunchWrapperOptions(sp.wrapperOptions, &wrapperError)) {
+    log::error("Invalid per-wrapper options: {}", wrapperError);
     return EINVAL;
   }
 
+  const QString wrapper = sp.useProton
+      ? QSettings().value("fluorine/launch_wrapper").toString().trimmed() : QString{};
   uint32_t steamAppId = parseSteamAppId(sp.steamAppID);
   ProtonLauncher launcher;
   launcher.setBinary(bin)
       .setArguments(argList)
       .setWorkingDir(cwd)
       .setGameDirectory(MOBase::normalizePathForHost(sp.gameDirectory.absolutePath()))
-      .setSteamAppId(steamAppId);
+      .setSteamAppId(steamAppId)
+      .setWrapper(wrapper, sp.wrapperOptions);
 
   if (sp.useProton) {
     // Read per-instance settings from the instance INI (not the global QSettings).
@@ -421,12 +423,6 @@ int spawn(const SpawnParameters& sp, pid_t& processId)
       return ENOENT;
     }
     launcher.setProtonPath(protonPath);
-
-    const QString wrapper =
-        QSettings().value("fluorine/launch_wrapper").toString().trimmed();
-    if (!wrapper.isEmpty()) {
-      launcher.setWrapper(wrapper);
-    }
 
     if (!sp.saveBindMountSource.isEmpty() && !sp.saveBindMountTarget.isEmpty()) {
       launcher.setSavesBindMount(sp.saveBindMountSource, sp.saveBindMountTarget);
@@ -468,9 +464,6 @@ int spawn(const SpawnParameters& sp, pid_t& processId)
     MOBase::log::info("Launching executable directly without Proton");
   }
 
-  for (auto it = environment->cbegin(); it != environment->cend(); ++it) {
-    launcher.addEnvVar(it.key(), it.value());
-  }
   launcher.setUseTerminal(sp.useTerminal);
 
   const auto [ok, pid] = launcher.launch();
@@ -657,10 +650,10 @@ bool checkBlacklist(QWidget* parent, const SpawnParameters& sp, Settings& settin
 
 pid_t startBinary(QWidget* parent, const SpawnParameters& sp)
 {
-  QString environmentError;
-  if (!parseExecutableEnvironment(sp.environment, &environmentError)) {
-    QMessageBox::critical(parent, QObject::tr("Invalid environment variables"),
-                          environmentError);
+  QString wrapperError;
+  if (!parseLaunchWrapperOptions(sp.wrapperOptions, &wrapperError)) {
+    QMessageBox::critical(parent, QObject::tr("Invalid wrapper options"),
+                          wrapperError);
     return -1;
   }
   if (!sp.useProton) {

@@ -31,18 +31,18 @@ TEST(ExecutableOptions, SteamChoiceSurvivesCloningMergingAndFlagChanges)
   EXPECT_FALSE(tool.useSteam());
 }
 
-TEST(ExecutableOptions, EnvironmentSurvivesCloneMergeAndCanBeCleared)
+TEST(ExecutableOptions, WrapperOptionsSurviveCloneMergeAndCanBeCleared)
 {
   Executable original("Skyrim");
-  original.environment("PROTON_ENABLE_WAYLAND=1\nLD_PRELOAD=");
+  original.wrapperOptions("PROTON_ENABLE_WAYLAND=1 LD_PRELOAD= mangohud --dlsym %command%");
   Executable clone = original;
   Executable edited;
   edited.mergeFrom(clone);
-  EXPECT_EQ(original.environment(), edited.environment());
-  clone.environment("");
+  EXPECT_EQ(original.wrapperOptions(), edited.wrapperOptions());
+  clone.wrapperOptions("");
   edited.mergeFrom(clone);
-  EXPECT_TRUE(edited.environment().isEmpty());
-  EXPECT_FALSE(original.environment().isEmpty());
+  EXPECT_TRUE(edited.wrapperOptions().isEmpty());
+  EXPECT_FALSE(original.wrapperOptions().isEmpty());
 }
 
 TEST(ExecutableOptions, EnvironmentValuesAreLiteralAndEmptyOverridesArePreserved)
@@ -68,6 +68,39 @@ TEST(ExecutableOptions, InvalidEnvironmentRejectsTheWholeInput)
     EXPECT_FALSE(error.isEmpty());
   }
   EXPECT_TRUE(parseExecutableEnvironment(" \n\r\n")->isEmpty());
+}
+
+TEST(ExecutableOptions, WrapperCommandsAndAssignmentsUseTheGlobalSyntax)
+{
+  const auto options = parseLaunchWrapperOptions(
+      "PROTON_ENABLE_WAYLAND=0\nTEST_VALUE=\"a b=c\" EMPTY=\n"
+      "mangohud --dlsym \"/path with spaces/wrapper\" --option=value %command%");
+  ASSERT_TRUE(options);
+  EXPECT_EQ(options->commands, (QStringList{"mangohud", "--dlsym",
+      "/path with spaces/wrapper", "--option=value"}));
+  EXPECT_EQ(options->environment, (QMap<QString, QString>{{"PROTON_ENABLE_WAYLAND", "0"},
+      {"TEST_VALUE", "a b=c"}, {"EMPTY", ""}}));
+  QString error;
+  EXPECT_FALSE(parseLaunchWrapperOptions(QString("mangohud") + QChar::Null, &error));
+  EXPECT_FALSE(error.isEmpty());
+  EXPECT_TRUE(parseLaunchWrapperOptions("", &error)->commands.isEmpty());
+  EXPECT_TRUE(error.isEmpty());
+}
+
+TEST(ExecutableOptions, LegacyLiteralEnvironmentBecomesEquivalentWrapperOptions)
+{
+  const QString legacy =
+      "PATH_WITH_SPACES=/a b/c\nEMPTY=\nDUPLICATE=old\nDUPLICATE=new\n"
+      "LITERAL=$(do not execute)=yes\nQUOTES=\"hello\" \\\"world\\\"\n"
+      "APOSTROPHE=don't change this\nWHITESPACE=  a b\t \n"
+      "UNICODE=日本語 Русский\nCOMMAND=%command%\n";
+  const auto expected = parseExecutableEnvironment(legacy);
+  ASSERT_TRUE(expected);
+  const auto migrated = parseLaunchWrapperOptions(wrapperOptionsFromLegacyEnvironment(legacy));
+  ASSERT_TRUE(migrated);
+  EXPECT_TRUE(migrated->commands.isEmpty());
+  EXPECT_EQ(migrated->environment, *expected);
+  EXPECT_TRUE(wrapperOptionsFromLegacyEnvironment("\n\r\n").isEmpty());
 }
 
 TEST(ExecutableOptions, TrayBehaviorDoesNotChangePinOrShortcutIcon)

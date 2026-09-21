@@ -83,10 +83,10 @@ public:
   bool hide() const override;
   bool useProton() const;
   bool useTerminal() const;
-  const QString& environment() const { return m_environment; }
-  Executable& environment(const QString& text)
+  const QString& wrapperOptions() const { return m_wrapperOptions; }
+  Executable& wrapperOptions(const QString& text)
   {
-    m_environment = text;
+    m_wrapperOptions = text;
     return *this;
   }
   bool useSteam() const { return m_useSteam; }
@@ -106,7 +106,7 @@ private:
   QString m_workingDirectory;
   Flags m_flags = UseProton;
   bool m_useSteam = true;
-  QString m_environment;
+  QString m_wrapperOptions;
 };
 
 /*!

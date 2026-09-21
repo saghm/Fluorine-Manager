@@ -140,15 +140,11 @@ TEST(LaunchEnvironment, ExecutableValuesWinForNativeAndProtonLaunches)
     ASSERT_TRUE(file.setPermissions(file.permissions() | QFile::ExeOwner));
     ProtonLauncher launcher;
     launcher.setBinary(script).setWorkingDir(temp.path())
-        .setWrapper("PROTON_ENABLE_WAYLAND=1 TEST_KEEP=global TEST_EMPTY=global")
+        .setWrapper("PROTON_ENABLE_WAYLAND=1 TEST_KEEP=global TEST_EMPTY=global",
+            wrapperOptionsFromLegacyEnvironment(
+                "PROTON_ENABLE_WAYLAND=0\nTEST_EMPTY=\nTEST_LITERAL=a b=$(literal)\nLC_ALL=C\nHOST_LC_ALL="))
         .setSteamDrm(false).setUseSLR(false);
     if (proton) launcher.setProtonPath(script).setPrefix(temp.path());
-    const auto environment = parseExecutableEnvironment(
-        "PROTON_ENABLE_WAYLAND=0\nTEST_EMPTY=\nTEST_LITERAL=a b=$(literal)\nLC_ALL=C\nHOST_LC_ALL=");
-    ASSERT_TRUE(environment);
-    for (auto it = environment->cbegin(); it != environment->cend(); ++it) {
-      launcher.addEnvVar(it.key(), it.value());
-    }
     launcher.addEnvVar("FLUORINE_TEST_OUTPUT", output);
     ASSERT_TRUE(launcher.launch().first);
     QElapsedTimer timer;
@@ -223,6 +219,90 @@ TEST(LaunchEnvironment, SteamBridgeKeepsPreparedEnvironmentWithoutPreloads)
     QCoreApplication::processEvents();
   }
   slrRunScript.clear();
+}
+
+TEST(LaunchWrappers, PerWrapperOptionsComposeWithGlobalsForNativeProtonAndSlr)
+{
+  for (int mode : {0, 1, 2}) {
+    for (int localMode : {0, 1, 2}) { // inherit, variables only, variables + command
+      SCOPED_TRACE(testing::Message() << "launch=" << mode << " local=" << localMode);
+      QTemporaryDir temp;
+      ASSERT_TRUE(temp.isValid());
+      const QString output = temp.filePath("result");
+      const QString trace = temp.filePath("trace");
+      const QString binary = temp.filePath("target program");
+      const QString global = temp.filePath("global wrapper");
+      const QString local = temp.filePath("local wrapper");
+      auto writeScript = [](const QString& path, const QByteArray& body) {
+        QFile file(path);
+        if (!file.open(QIODevice::WriteOnly)) return false;
+        if (file.write("#!/bin/sh\n" + body) < 0) return false;
+        return file.setPermissions(QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
+      };
+      ASSERT_TRUE(writeScript(global,
+          "printf 'global:%s:%s\\n' \"$1\" \"$WRAPPER_TEST_SCOPE\" >> \"$WRAPPER_TEST_TRACE\"\n"
+          "shift\nexec \"$@\"\n"));
+      ASSERT_TRUE(writeScript(local,
+          "printf 'local:%s:%s\\n' \"$1\" \"$WRAPPER_TEST_SCOPE\" >> \"$WRAPPER_TEST_TRACE\"\n"
+          "shift\nexec \"$@\"\n"));
+      ASSERT_TRUE(writeScript(binary,
+          "printf '%s\\n' \"$WRAPPER_TEST_SCOPE\" \"$WRAPPER_TEST_KEEP\" "
+          "\"$WRAPPER_TEST_EMPTY\" \"$@\" > \"$FLUORINE_TEST_OUTPUT.tmp\"\n"
+          "/bin/mv -- \"$FLUORINE_TEST_OUTPUT.tmp\" \"$FLUORINE_TEST_OUTPUT\"\n"));
+      slrRunScript = temp.filePath("runtime");
+      struct ResetRuntime { ~ResetRuntime() { slrRunScript.clear(); } } resetRuntime;
+      ASSERT_TRUE(writeScript(slrRunScript,
+          "while [ \"$#\" -gt 0 ]; do\n"
+          "  if [ \"$1\" = -- ]; then shift; exec \"$@\"; fi\n"
+          "  shift\ndone\nexit 91\n"));
+
+      const QString globalOptions = QString(
+          "WRAPPER_TEST_SCOPE=global WRAPPER_TEST_KEEP=global WRAPPER_TEST_EMPTY=global "
+          "\"%1\" \"global option\" %command%").arg(global);
+      QString localOptions;
+      if (localMode > 0) localOptions = "WRAPPER_TEST_SCOPE=local WRAPPER_TEST_EMPTY=";
+      if (localMode > 1) localOptions += QString(" \"%1\" \"local option\" %command%").arg(local);
+      ProtonLauncher launcher;
+      launcher.setBinary(binary).setWorkingDir(temp.path())
+          .setArguments({"argument with spaces", "--literal=a=b", "$(literal);$HOME"})
+          .setWrapper(globalOptions, localOptions).setSteamDrm(false).setUseSLR(mode == 2)
+          .addEnvVar("FLUORINE_TEST_OUTPUT", output).addEnvVar("WRAPPER_TEST_TRACE", trace);
+      if (mode > 0) launcher.setProtonPath(binary).setPrefix(temp.path());
+      ASSERT_TRUE(launcher.launch().first);
+      QElapsedTimer timer;
+      timer.start();
+      while (!QFile::exists(output) && timer.elapsed() < 5000) {
+        QCoreApplication::processEvents();
+        QThread::msleep(10);
+      }
+      const QByteArray scope = localMode ? "local" : "global";
+      QFile result(output), wrapperTrace(trace);
+      ASSERT_TRUE(result.open(QIODevice::ReadOnly));
+      ASSERT_TRUE(wrapperTrace.open(QIODevice::ReadOnly));
+      QByteArray expected = scope + "\nglobal\n" + (localMode ? "\n" : "global\n");
+      if (mode > 0) expected += "waitforexitandrun\n" + binary.toUtf8() + '\n';
+      expected += "argument with spaces\n--literal=a=b\n$(literal);$HOME\n";
+      EXPECT_EQ(result.readAll(), expected);
+      QByteArray expectedTrace = "global:global option:" + scope + '\n';
+      if (localMode > 1) expectedTrace += "local:local option:local\n";
+      EXPECT_EQ(wrapperTrace.readAll(), expectedTrace);
+      QCoreApplication::processEvents();
+    }
+  }
+}
+
+TEST(LaunchWrappers, InvalidOptionsRejectLaunchAndCanBeReplaced)
+{
+  ProtonLauncher launcher;
+  launcher.setBinary("/bin/true").setWrapper("", QString("mangohud") + QChar::Null);
+  const auto [ok, pid] = launcher.launch();
+  EXPECT_FALSE(ok);
+  EXPECT_EQ(pid, -1);
+  EXPECT_EQ(errno, EINVAL);
+  launcher.setWrapper("/missing/global/wrapper", "/missing/local/wrapper");
+  launcher.setWrapper("");
+  EXPECT_TRUE(launcher.launch().first);
+  QCoreApplication::processEvents();
 }
 
 int main(int argc, char** argv)

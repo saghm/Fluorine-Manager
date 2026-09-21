@@ -5,6 +5,14 @@
 ShaderManager::ShaderManager(MOBase::IOrganizer* moInfo) : m_MOInfo{ moInfo }
 {}
 
+void ShaderManager::cleanup()
+{
+    for (auto*& program : m_Programs) {
+        delete program;
+        program = nullptr;
+    }
+}
+
 QOpenGLShaderProgram* ShaderManager::getProgram(ShaderType type)
 {
     if (type == None) {
@@ -52,14 +60,19 @@ QOpenGLShaderProgram* ShaderManager::loadProgram(ShaderType type)
         return nullptr;
     }
 
-    auto game = m_MOInfo->managedGame();
     auto dataPath = MOBase::IOrganizer::getPluginDataPath();
     auto vertexShader = QString("%1/shaders/%2").arg(dataPath).arg(vert);
     auto fragmentShader = QString("%1/shaders/%2").arg(dataPath).arg(frag);
 
     auto program = new QOpenGLShaderProgram(QOpenGLContext::currentContext());
-    program->addShaderFromSourceFile(QOpenGLShader::Vertex, vertexShader);
-    program->addShaderFromSourceFile(QOpenGLShader::Fragment, fragmentShader);
+    if (!program->addShaderFromSourceFile(QOpenGLShader::Vertex, vertexShader) ||
+        !program->addShaderFromSourceFile(QOpenGLShader::Fragment, fragmentShader)) {
+        qWarning("Could not compile NIF preview shaders %s / %s: %s",
+                 qUtf8Printable(vertexShader), qUtf8Printable(fragmentShader),
+                 qUtf8Printable(program->log()));
+        delete program;
+        return nullptr;
+    }
 
     program->bindAttributeLocation("position", AttribPosition);
     program->bindAttributeLocation("normal", AttribNormal);
@@ -68,7 +81,11 @@ QOpenGLShaderProgram* ShaderManager::loadProgram(ShaderType type)
     program->bindAttributeLocation("texCoord", AttribTexCoord);
     program->bindAttributeLocation("color", AttribColor);
 
-    program->link();
+    if (!program->link()) {
+        qWarning("Could not link NIF preview shaders: %s", qUtf8Printable(program->log()));
+        delete program;
+        return nullptr;
+    }
 
     return program;
 }

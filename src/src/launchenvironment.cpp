@@ -1,7 +1,9 @@
 #include "launchenvironment.h"
 
 #include <QCoreApplication>
+#include <QProcess>
 #include <QRegularExpression>
+#include <algorithm>
 
 std::wstring commandLineFromUtf8Arguments(int argc, char* const argv[])
 {
@@ -87,4 +89,46 @@ std::optional<QMap<QString, QString>> parseExecutableEnvironment(
     variables.insert(name, line.mid(equals + 1));
   }
   return variables;
+}
+
+std::optional<LaunchWrapperOptions> parseLaunchWrapperOptions(
+    const QString& text, QString* error)
+{
+  if (error) error->clear();
+  if (text.contains(QChar::Null)) {
+    if (error) *error = QCoreApplication::translate(
+        "LaunchWrapperOptions", "Wrapper options cannot contain a null character.");
+    return std::nullopt;
+  }
+
+  LaunchWrapperOptions options;
+  for (const auto& token : QProcess::splitCommand(text.trimmed())) {
+    if (token.compare("%command%", Qt::CaseInsensitive) == 0) continue;
+    const auto equals = token.indexOf('=');
+    const auto name = token.left(equals);
+    const bool validName = !name.isEmpty() &&
+        (name.front().isLetter() || name.front() == '_') &&
+        std::all_of(name.begin(), name.end(), [](QChar c) {
+          return c.isLetterOrNumber() || c == '_';
+        });
+    if (equals > 0 && validName)
+      options.environment.insert(name, token.mid(equals + 1));
+    else
+      options.commands.append(token);
+  }
+  return options;
+}
+
+QString wrapperOptionsFromLegacyEnvironment(const QString& text)
+{
+  const auto environment = parseExecutableEnvironment(text);
+  if (!environment) return text;
+  QStringList options;
+  for (auto it = environment->cbegin(); it != environment->cend(); ++it) {
+    QString token = it.key() + '=' + it.value();
+    // QProcess::splitCommand represents a literal double quote with three.
+    token.replace('"', QStringLiteral("\"\"\""));
+    options.append('"' + token + '"');
+  }
+  return options.join('\n');
 }

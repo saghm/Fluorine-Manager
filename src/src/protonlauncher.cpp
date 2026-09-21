@@ -549,43 +549,6 @@ void wrapProgram(const QStringList& wrapperCommands, const QString& program,
   wrappedArguments.append(program);
   wrappedArguments.append(arguments);
 }
-
-bool isValidEnvKey(const QString& key)
-{
-  if (key.isEmpty()) {
-    return false;
-  }
-
-  const QChar first = key.front();
-  if (!(first.isLetter() || first == QChar('_'))) {
-    return false;
-  }
-
-  for (const QChar c : key) {
-    if (!(c.isLetterOrNumber() || c == QChar('_'))) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-bool parseEnvAssignment(const QString& token, QString& keyOut, QString& valueOut)
-{
-  const int eq = token.indexOf('=');
-  if (eq <= 0) {
-    return false;
-  }
-
-  const QString key = token.left(eq);
-  if (!isValidEnvKey(key)) {
-    return false;
-  }
-
-  keyOut   = key;
-  valueOut = token.mid(eq + 1);
-  return true;
-}
 }  // namespace
 
 ProtonLauncher::ProtonLauncher()
@@ -634,25 +597,19 @@ ProtonLauncher& ProtonLauncher::setSteamAppId(uint32_t id)
   return *this;
 }
 
-ProtonLauncher& ProtonLauncher::setWrapper(const QString& wrapperCmd)
+ProtonLauncher& ProtonLauncher::setWrapper(const QString& wrapperCmd,
+                                          const QString& executableOptions)
 {
   m_wrapperCommands.clear();
   m_wrapperEnvVars.clear();
-
-  const QStringList parts = QProcess::splitCommand(wrapperCmd.trimmed());
-  for (const QString& part : parts) {
-    if (part.compare("%command%", Qt::CaseInsensitive) == 0) {
-      continue;
-    }
-    QString key;
-    QString value;
-    if (parseEnvAssignment(part, key, value)) {
-      m_wrapperEnvVars.insert(key, value);
-    } else {
-      m_wrapperCommands.push_back(part);
-    }
-  }
-
+  m_executableEnvVars.clear();
+  const auto global = parseLaunchWrapperOptions(wrapperCmd, &m_wrapperError);
+  if (!global) return *this;
+  const auto local = parseLaunchWrapperOptions(executableOptions, &m_wrapperError);
+  if (!local) return *this;
+  m_wrapperCommands = global->commands + local->commands;
+  m_wrapperEnvVars = global->environment;
+  m_executableEnvVars = local->environment;
   return *this;
 }
 
@@ -729,6 +686,11 @@ bool ProtonLauncher::unprivilegedBindMountSupported()
 std::pair<bool, qint64> ProtonLauncher::launch() const
 {
   qint64 pid = -1;
+  if (!m_wrapperError.isEmpty()) {
+    MOBase::log::error("Invalid launch wrapper options: {}", m_wrapperError);
+    errno = EINVAL;
+    return {false, pid};
+  }
 
   if (!m_protonPath.isEmpty()) {
     return {launchWithProton(pid), pid};
@@ -1004,6 +966,9 @@ bool ProtonLauncher::launchWithProton(qint64& pid) const
   for (auto it = m_envVars.cbegin(); it != m_envVars.cend(); ++it) {
     env.insert(it.key(), it.value());
   }
+  for (auto it = m_executableEnvVars.cbegin(); it != m_executableEnvVars.cend(); ++it) {
+    env.insert(it.key(), it.value());
+  }
 
   prepareProtonLocale(env);
   if (m_useSteamDrm) {
@@ -1082,6 +1047,9 @@ bool ProtonLauncher::launchDirect(qint64& pid) const
     env.insert(it.key(), it.value());
   }
   for (auto it = m_envVars.cbegin(); it != m_envVars.cend(); ++it) {
+    env.insert(it.key(), it.value());
+  }
+  for (auto it = m_executableEnvVars.cbegin(); it != m_executableEnvVars.cend(); ++it) {
     env.insert(it.key(), it.value());
   }
 

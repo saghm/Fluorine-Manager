@@ -1,4 +1,5 @@
 #include "slrmanager.h"
+#include "xrandrinstaller.h"
 
 #include <QDir>
 #include <QFile>
@@ -7,6 +8,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QProcess>
+#include <QSaveFile>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTimer>
@@ -27,7 +29,7 @@ const char* EXTRACTED_DIR = "SteamLinuxRuntime_4";
 // and some protonfixes require at launch. We inject it from the Debian
 // x11-xserver-utils package.
 const char* XRANDR_DEB_URL =
-    "http://ftp.debian.org/debian/pool/main/x/x11-xserver-utils/"
+    "https://deb.debian.org/debian/pool/main/x/x11-xserver-utils/"
     "x11-xserver-utils_7.7+11_amd64.deb";
 
 QString slrInstallDir()
@@ -49,24 +51,31 @@ QString localBuildIdPath()
 /// Blocking HTTP GET that returns the response body as QByteArray.
 QByteArray httpGet(const QString& url, const int* cancelFlag,
                    const std::function<void(float)>& progressCb = nullptr,
-                   const QString& destFile = {})
+                   const QString& destFile = {}, QString* error = nullptr)
 {
+  if (error) error->clear();
+  if (cancelFlag && *cancelFlag != 0) {
+    if (error) *error = QStringLiteral("Download cancelled");
+    return {};
+  }
   QNetworkAccessManager mgr;
   QNetworkRequest request{QUrl(url)};
   request.setRawHeader("User-Agent", "Fluorine-Manager/slr");
   request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                        QNetworkRequest::NoLessSafeRedirectPolicy);
   request.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
-
-  QNetworkReply* reply = mgr.get(request);
-  QEventLoop loop;
-
-  QFile outFile;
+  request.setTransferTimeout(30000);
+  QSaveFile outFile;
   if (!destFile.isEmpty()) {
     outFile.setFileName(destFile);
-    if (!outFile.open(QIODevice::WriteOnly))
+    if (!outFile.open(QIODevice::WriteOnly)) {
+      if (error) *error = outFile.errorString();
       return {};
+    }
   }
+  QNetworkReply* reply = mgr.get(request);
+  QEventLoop loop;
+  QString writeError;
 
   QByteArray inMemoryBuf;
   qint64 totalBytes = -1;
@@ -77,9 +86,13 @@ QByteArray httpGet(const QString& url, const int* cancelFlag,
       totalBytes = reply->header(QNetworkRequest::ContentLengthHeader).toLongLong();
     QByteArray chunk = reply->readAll();
     received += chunk.size();
-    if (outFile.isOpen())
-      outFile.write(chunk);
-    else
+    if (outFile.isOpen()) {
+      if (outFile.write(chunk) != chunk.size()) {
+        writeError = outFile.errorString();
+        reply->abort();
+        return;
+      }
+    } else
       inMemoryBuf.append(chunk);
     if (progressCb && totalBytes > 0)
       progressCb(static_cast<float>(received) / static_cast<float>(totalBytes));
@@ -101,19 +114,20 @@ QByteArray httpGet(const QString& url, const int* cancelFlag,
 
   loop.exec();
 
-  if (outFile.isOpen())
-    outFile.close();
-
-  if (reply->error() != QNetworkReply::NoError) {
+  if (reply->error() != QNetworkReply::NoError || !writeError.isEmpty()) {
+    const auto reason = writeError.isEmpty() ? reply->errorString() : writeError;
     MOBase::log::warn("SLR download request failed: {} ({})",
                       url,
-                      reply->errorString());
+                      reason);
+    if (error) *error = reason;
     reply->deleteLater();
-    if (!destFile.isEmpty())
-      QFile::remove(destFile);
     return {};
   }
-
+  if (outFile.isOpen() && !outFile.commit()) {
+    if (error) *error = outFile.errorString();
+    reply->deleteLater();
+    return {};
+  }
   reply->deleteLater();
   return inMemoryBuf;
 }
@@ -214,55 +228,23 @@ static bool installXrandrAssets(const int* cancelFlag,
   const QString installDir = slrInstallDir();
   QDir().mkpath(installDir);
 
-  const QString debPath = installDir + "/x11-xserver-utils.deb";
-  status(QStringLiteral("Downloading xrandr..."));
-  httpGet(QString::fromLatin1(XRANDR_DEB_URL), cancelFlag, nullptr, debPath);
-  if (!QFileInfo::exists(debPath)) {
-    MOBase::log::warn("Failed to download xrandr .deb — runtime will lack xrandr");
+  QTemporaryDir staging(installDir + "/xrandr-download-XXXXXX");
+  auto fail = [&](const QString& error) {
+    status(QStringLiteral("Failed to install xrandr: %1").arg(error));
+    MOBase::log::warn("Failed to install xrandr: {}", error);
     return false;
-  }
-
-  const QString tmpExtract = installDir + "/xrandr_tmp";
-  QDir(tmpExtract).removeRecursively();
-  QDir().mkpath(tmpExtract);
-
-  QProcess ar;
-  ar.setWorkingDirectory(tmpExtract);
-  ar.start(QStringLiteral("ar"),
-           {QStringLiteral("x"), debPath, QStringLiteral("data.tar.xz")});
-  ar.waitForFinished(30000);
-
-  QProcess untar;
-  untar.setWorkingDirectory(tmpExtract);
-  untar.start(QStringLiteral("tar"),
-              {QStringLiteral("xf"), QStringLiteral("data.tar.xz"),
-               QStringLiteral("./usr/bin/xrandr")});
-  untar.waitForFinished(30000);
-
-  const QString xrandrSrc = tmpExtract + "/usr/bin/xrandr";
-  bool ok = false;
-  if (QFileInfo::exists(xrandrSrc)) {
-    const QString xrandrDir = installDir + "/xrandr-bin";
-    QDir().mkpath(xrandrDir);
-    const QString dst = xrandrDir + "/xrandr";
-    QFile::remove(dst);
-    if (QFile::copy(xrandrSrc, dst)) {
-      QFile::setPermissions(dst, QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-                                     QFileDevice::ExeOwner | QFileDevice::ReadGroup |
-                                     QFileDevice::ExeGroup | QFileDevice::ReadOther |
-                                     QFileDevice::ExeOther);
-      MOBase::log::info("Installed xrandr to {}", dst.toStdString());
-      ok = true;
-    } else {
-      MOBase::log::warn("Failed to copy xrandr into fluorine bin dir");
-    }
-  } else {
-    MOBase::log::warn("xrandr .deb extracted but binary not found");
-  }
-
-  QDir(tmpExtract).removeRecursively();
-  QFile::remove(debPath);
-  return ok;
+  };
+  if (!staging.isValid())
+    return fail(QStringLiteral("Cannot create download staging directory"));
+  const QString debPath = staging.filePath("x11-xserver-utils.deb");
+  status(QStringLiteral("Downloading xrandr..."));
+  QString error;
+  httpGet(QString::fromLatin1(XRANDR_DEB_URL), cancelFlag, nullptr, debPath, &error);
+  if (!error.isEmpty()) return fail(error);
+  error = installXrandrFromDeb(debPath, xrandrInjectedPath(), cancelFlag);
+  if (!error.isEmpty()) return fail(error);
+  MOBase::log::info("Installed xrandr to {}", xrandrInjectedPath());
+  return true;
 }
 
 bool ensureXrandrInstalled(const int* cancelFlag,
@@ -321,7 +303,8 @@ QString downloadSlr(const std::function<void(float)>& progressCb,
     // doesn't silently fail on distros without host xrandr exposed.
     if (!isXrandrInjected()) {
       status(QStringLiteral("Injecting xrandr into existing runtime..."));
-      installXrandrAssets(cancelFlag, statusCb);
+      if (!installXrandrAssets(cancelFlag, statusCb))
+        return QStringLiteral("Failed to install xrandr helper; see the setup log");
     }
     status(QStringLiteral("Steam Linux Runtime is already up to date"));
     progress(1.0f);
@@ -341,12 +324,13 @@ QString downloadSlr(const std::function<void(float)>& progressCb,
 
   // 2. Download.
   status(QStringLiteral("Downloading Steam Linux Runtime (steamrt4, ~200 MB)..."));
+  QString downloadError;
   httpGet(QStringLiteral("%1/%2").arg(QLatin1String(BASE_URL), QLatin1String(ARCHIVE_NAME)),
-          cancelFlag, progress, archivePath);
+          cancelFlag, progress, archivePath, &downloadError);
   progress(1.0f);
 
-  if (!QFileInfo::exists(archivePath))
-    return QStringLiteral("Download failed or was cancelled");
+  if (!downloadError.isEmpty())
+    return QStringLiteral("Runtime download failed: %1").arg(downloadError);
 
   // 3. Extract.
   status(QStringLiteral("Extracting Steam Linux Runtime..."));
@@ -369,15 +353,17 @@ QString downloadSlr(const std::function<void(float)>& progressCb,
     return replaceError;
   }
 
-  // 4. Inject xrandr into the container (steamrt4 ships without it, but
-  // Proton-GE and several protonfixes invoke xrandr during launch).
-  status(QStringLiteral("Injecting xrandr into runtime..."));
-  installXrandrAssets(cancelFlag, statusCb);
-
-  // 5. Save BUILD_ID.
+  // Record the installed runtime before its separate helper step, so retrying
+  // a failed xrandr download does not download the entire runtime again.
   if (!writeLocalBuildId(remoteBuildId)) {
     MOBase::log::warn("Failed to write SLR BUILD_ID marker");
   }
+
+  // 4. Inject xrandr into the container (steamrt4 ships without it, but
+  // Proton-GE and several protonfixes invoke xrandr during launch).
+  status(QStringLiteral("Injecting xrandr into runtime..."));
+  if (!installXrandrAssets(cancelFlag, statusCb))
+    return QStringLiteral("Failed to install xrandr helper; see the setup log");
 
   MOBase::log::info("Steam Linux Runtime installed successfully");
   status(QStringLiteral("Steam Linux Runtime ready"));

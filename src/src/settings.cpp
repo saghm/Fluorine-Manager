@@ -22,6 +22,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "env.h"
 #include "envmetrics.h"
 #include "executableslist.h"
+#include "gamepath.h"
 #include "instancemanager.h"
 #include "modelutils.h"
 #include "nxmhandler_linux.h"
@@ -674,7 +675,7 @@ void GameSettings::setForceEnableCoreFiles(bool)
 std::optional<QString> GameSettings::directory() const
 {
   if (auto v = getOptional<QByteArray>(m_Settings, "General", "gamePath")) {
-    return loadStoredPath(QString::fromUtf8(*v));
+    return resolveStoredGamePath(QString::fromUtf8(*v), m_Settings.fileName());
   }
 
   return {};

@@ -1006,7 +1006,7 @@ ProcessRunner& ProcessRunner::setFromExecutable(const Executable& exe)
   setCurrentDirectory(currentDirectory);
   setSteamID(exe.steamAppID());
   m_sp.useSteam = exe.useSteam();
-  m_sp.environment = exe.environment();
+  m_sp.wrapperOptions = exe.wrapperOptions();
   setCustomOverwrite(customOverwrite);
   setForcedLibraries(forcedLibraries);
 
@@ -1080,7 +1080,7 @@ ProcessRunner& ProcessRunner::setFromFileOrExecutable(
 
       setSteamID(exe.steamAppID());
       m_sp.useSteam = exe.useSteam();
-      m_sp.environment = exe.environment();
+      m_sp.wrapperOptions = exe.wrapperOptions();
       m_sp.useProton = exe.useProton();
       m_sp.useTerminal = exe.useTerminal();
       setCustomOverwrite(profile->setting("custom_overwrites", exe.title()).toString());
@@ -1097,7 +1097,7 @@ ProcessRunner& ProcessRunner::setFromFileOrExecutable(
 
       setSteamID(exe.steamAppID());
       m_sp.useSteam = exe.useSteam();
-      m_sp.environment = exe.environment();
+      m_sp.wrapperOptions = exe.wrapperOptions();
       m_sp.useProton = exe.useProton();
       m_sp.useTerminal = exe.useTerminal();
       setCustomOverwrite(profile->setting("custom_overwrites", exe.title()).toString());

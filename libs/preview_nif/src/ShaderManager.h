@@ -39,6 +39,7 @@ public:
     ShaderManager& operator=(ShaderManager&&) = delete;
 
     QOpenGLShaderProgram* getProgram(ShaderType type);
+    void cleanup();
 
 private:
     QOpenGLShaderProgram* loadProgram(ShaderType type);

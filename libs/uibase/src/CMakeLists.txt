@@ -205,6 +205,7 @@ if(NOT WIN32)
 		${CMAKE_SOURCE_DIR}/src/src/iconextractor.cpp
 		${CMAKE_SOURCE_DIR}/src/src/prefixsymlinks.cpp
 		${CMAKE_SOURCE_DIR}/src/src/slrmanager.cpp
+		${CMAKE_SOURCE_DIR}/src/src/xrandrinstaller.cpp
 		${CMAKE_SOURCE_DIR}/src/src/steamappinfo.cpp
 	)
 endif()

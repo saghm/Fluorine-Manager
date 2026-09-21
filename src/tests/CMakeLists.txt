@@ -29,6 +29,13 @@ pkg_check_modules(TEST_FUSE3 REQUIRED IMPORTED_TARGET fuse3)
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/prefix_safety_tests.cmake)
 
+add_executable(test_gamepath EXCLUDE_FROM_ALL test_gamepath.cpp)
+set_target_properties(test_gamepath PROPERTIES AUTOMOC OFF CXX_STANDARD 23)
+target_include_directories(test_gamepath PRIVATE ${CMAKE_SOURCE_DIR}/src/src)
+target_link_libraries(test_gamepath PRIVATE
+    Qt6::Core mo2::uibase GTest::gtest GTest::gtest_main)
+add_test(NAME test_gamepath COMMAND test_gamepath)
+
 # ---------------------------------------------------------------------------
 # Python regression tests
 # ---------------------------------------------------------------------------
@@ -791,6 +798,7 @@ add_custom_target(fluorine-tests
             test_metainiutils test_fomoddependency
             test_vfs_backend
             test_fluorineconfigownership
+            test_prefixsymlinks
             test_heroicjson test_protondetection
             test_external_dir_mapping test_portablelauncherscript test_xdgpaths
             test_vfs_file_ops
@@ -798,7 +806,7 @@ add_custom_target(fluorine-tests
             test_vfs_descriptor_cleanup test_mount_path_utils
             test_vfs_runtime_index
             test_gamebryo_save_compression
-            test_game_save_migration
+            test_game_save_migration test_gamepath
             test_vfs_catalog test_vfs_index
             test_staging_promotion test_clf3_nxm_broker test_clf3_install)
     if(TARGET test_python_module_switch)
@@ -824,3 +832,5 @@ target_link_libraries(test_clf3_collections PRIVATE mo2::uibase Qt6::Widgets Qt6
 add_test(NAME test_clf3_collections COMMAND test_clf3_collections)
 set_tests_properties(test_clf3_collections PROPERTIES TIMEOUT 180 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 add_dependencies(fluorine-tests test_clf3_collections)
+
+include(${CMAKE_CURRENT_SOURCE_DIR}/preview_tests.cmake)

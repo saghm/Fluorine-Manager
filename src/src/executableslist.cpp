@@ -18,6 +18,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "executableslist.h"
+#include "launchenvironment.h"
 
 #include "iplugingame.h"
 #include "settings.h"
@@ -107,7 +108,9 @@ void ExecutablesList::load(const MOBase::IPluginGame* game, const Settings& s)
                       .arguments(map["arguments"].toString())
                       .steamAppID(map["steamAppID"].toString())
                       .useSteam(!map.contains("useSteam") || map["useSteam"].toBool())
-                      .environment(map["environment"].toString())
+                      .wrapperOptions(map.contains("wrapperOptions")
+                          ? map["wrapperOptions"].toString()
+                          : wrapperOptionsFromLegacyEnvironment(map["environment"].toString()))
                       .workingDirectory(map["workingDirectory"].toString())
                       .flags(flags));
   }
@@ -139,7 +142,7 @@ void ExecutablesList::store(Settings& s)
     map["useProton"]            = item.useProton();
     map["useTerminal"]          = item.useTerminal();
     map["useSteam"]             = item.useSteam();
-    map["environment"]          = item.environment();
+    map["wrapperOptions"]       = item.wrapperOptions();
 
     v.push_back(std::move(map));
   }
@@ -527,5 +530,5 @@ void Executable::mergeFrom(const Executable& other)
   m_workingDirectory = other.workingDirectory();
   m_flags            = other.flags();
   m_useSteam         = other.useSteam();
-  m_environment      = other.environment();
+  m_wrapperOptions   = other.wrapperOptions();
 }

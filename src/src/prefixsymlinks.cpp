@@ -11,6 +11,10 @@
 
 namespace {
 
+constexpr auto kSkyrimSpecialEditionDirectory = "Skyrim Special Edition";
+constexpr auto kLegacyLinkDirectory = ".fluorine/legacy-links";
+constexpr auto kLegacyLinkName = "skyrim-special-edition-appdata.link";
+
 static const char* SKIP_DIRS[] = {
     "Temp", "Microsoft", "wine", "Public", "root",
     "Application Data", "Cookies", "Local Settings",
@@ -28,6 +32,85 @@ bool shouldSkip(const QString& name)
       return true;
   }
   return false;
+}
+
+bool isPathEntryPresent(const QString& path)
+{
+  const QFileInfo info(path);
+  // QFileInfo::exists() is false for a dangling link, but a dangling link is
+  // still an entry that must not be overwritten or discarded.
+  return info.exists() || info.isSymLink();
+}
+
+QString nextLegacyLinkPath(const QString& prefixPath)
+{
+  const QDir backupDir(QDir(prefixPath).filePath(kLegacyLinkDirectory));
+  const QString base = backupDir.filePath(kLegacyLinkName);
+  if (!isPathEntryPresent(base) &&
+      !isPathEntryPresent(base + QStringLiteral(".target")))
+    return base;
+
+  for (int index = 1; index < 10000; ++index) {
+    const QString candidate =
+        backupDir.filePath(QStringLiteral("%1.%2").arg(kLegacyLinkName).arg(index));
+    if (!isPathEntryPresent(candidate) &&
+        !isPathEntryPresent(candidate + QStringLiteral(".target")))
+      return candidate;
+  }
+
+  return {};
+}
+
+/// Read the literal link target. QFileInfo::symLinkTarget() may normalize a
+/// relative target; retaining the literal is needed if a failed migration has
+/// to restore the link at its original parent directory.
+QString readSymlinkTargetLiteral(const QString& path)
+{
+  const QByteArray encodedPath = QFile::encodeName(path);
+  QByteArray buffer(256, '\0');
+
+  for (;;) {
+    const ssize_t length = ::readlink(encodedPath.constData(), buffer.data(),
+                                      static_cast<size_t>(buffer.size()));
+    if (length < 0)
+      return {};
+    if (length < buffer.size()) {
+      buffer.truncate(static_cast<int>(length));
+      return QFile::decodeName(buffer);
+    }
+    if (buffer.size() >= 1024 * 1024)
+      return {};
+    buffer.resize(buffer.size() * 2);
+  }
+}
+
+bool hasSymlinkAncestor(const QStringList& ancestors)
+{
+  for (const QString& ancestor : ancestors) {
+    if (QFileInfo(ancestor).isSymLink())
+      return true;
+  }
+  return false;
+}
+
+bool writeLinkMetadata(const QString& path, const QString& target)
+{
+  QFile metadata(path);
+  if (!metadata.open(QIODevice::WriteOnly | QIODevice::NewOnly | QIODevice::Text))
+    return false;
+  const QByteArray encodedTarget = target.toUtf8();
+  bool complete = metadata.write(encodedTarget) == encodedTarget.size();
+  if (complete)
+    complete = metadata.flush();
+  if (metadata.error() != QFileDevice::NoError)
+    complete = false;
+  metadata.close();
+  // NewOnly guarantees that this migration created the sidecar. Remove a
+  // partial file so a later setup can retry instead of treating it as a
+  // reserved rollback slot.
+  if (!complete)
+    QFile::remove(path);
+  return complete;
 }
 
 /// Find the username directory inside drive_c/users/.
@@ -80,6 +163,18 @@ int scanAndLinkAll(const QString& nakBase, const QString& gameBase,
   for (const QString& folder : dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
     if (shouldSkip(folder))
       continue;
+    // Skyrim's AppData/Local catalog is tied to the game runtime/content
+    // version. Sharing it between Steam and Fluorine prefixes can make
+    // Skyrim 1.6.1170 parse a newer CSV2 catalog and throw invalid stoull.
+    // Documents/My Games remains linked so the existing save/profile flow is
+    // unchanged; this exclusion is deliberately limited to AppData/Local.
+    if (label.compare(QStringLiteral("AppData/Local"), Qt::CaseInsensitive) == 0 &&
+        folder.compare(QLatin1String(kSkyrimSpecialEditionDirectory),
+                       Qt::CaseInsensitive) == 0) {
+      MOBase::log::info("Not linking AppData/Local/{}; keeping it private per "
+                        "prefix", folder);
+      continue;
+    }
     if (skipMyGames && folder == QStringLiteral("My Games"))
       continue;
 
@@ -106,6 +201,128 @@ void ensureTempDirectory(const QString& prefixPath)
     MOBase::log::info("Ensured AppData/Local/Temp directory exists");
   else
     MOBase::log::warn("Failed to create Temp directory at {}", tempDir);
+}
+
+bool ensureSkyrimSpecialEditionAppDataPrivate(const QString& prefixPath)
+{
+  const QString prefixRoot = QDir(prefixPath).absolutePath();
+  const QString driveC = QDir(prefixRoot).filePath("drive_c");
+  const QString usersDir = QDir(driveC).filePath("users");
+  const QString username = findPrefixUsername(usersDir);
+  const QString userDir = QDir(usersDir).filePath(username);
+  const QString appDataDir = QDir(userDir).filePath("AppData");
+  const QString appDataLocal =
+      QDir(appDataDir).filePath("Local");
+  const QString skyrimPath =
+      QDir(appDataLocal).filePath(QLatin1String(kSkyrimSpecialEditionDirectory));
+
+  // A symlink in any ancestor would make the migration operate outside the
+  // managed prefix. Refuse before moving the game-directory link; the caller
+  // can repair the prefix layout explicitly without risking external files.
+  if (hasSymlinkAncestor({prefixRoot, driveC, usersDir, userDir, appDataDir,
+                          appDataLocal})) {
+    MOBase::log::error("Refusing Skyrim AppData migration because an ancestor "
+                       "is a symlink (path '{}')", skyrimPath);
+    return false;
+  }
+
+  const QFileInfo existing(skyrimPath);
+  if (existing.isSymLink()) {
+    const QString backupPath = nextLegacyLinkPath(prefixPath);
+    if (backupPath.isEmpty()) {
+      MOBase::log::error("Unable to reserve a rollback path for legacy Skyrim "
+                         "AppData link '{}'", skyrimPath);
+      return false;
+    }
+
+    if (!QDir().mkpath(QFileInfo(backupPath).absolutePath())) {
+      MOBase::log::error("Unable to create rollback directory for legacy Skyrim "
+                         "AppData link '{}'", backupPath);
+      return false;
+    }
+
+    const QString originalTarget = readSymlinkTargetLiteral(skyrimPath);
+    if (originalTarget.isEmpty()) {
+      MOBase::log::error("Unable to read legacy Skyrim AppData link '{}'; "
+                         "leaving it unchanged", skyrimPath);
+      return false;
+    }
+
+    // A relative link changes meaning if it is merely renamed into the
+    // rollback directory. Recreate the backup with an absolute equivalent and
+    // retain the literal target in a sidecar for exact rollback.
+    const QString backupTarget = QDir::isAbsolutePath(originalTarget)
+        ? originalTarget
+        : QDir(QFileInfo(skyrimPath).absolutePath()).absoluteFilePath(originalTarget);
+    if (!QFile::link(backupTarget, backupPath)) {
+      MOBase::log::error("Unable to preserve legacy Skyrim AppData link '{}' "
+                         "as '{}'", skyrimPath, backupPath);
+      return false;
+    }
+
+    const QString metadataPath = backupPath + QStringLiteral(".target");
+    if (!writeLinkMetadata(metadataPath, originalTarget)) {
+      QFile::remove(backupPath);
+      MOBase::log::error("Unable to record legacy Skyrim AppData link target; "
+                         "leaving '{}' unchanged", skyrimPath);
+      return false;
+    }
+
+    // Remove the link itself, never the directory it targets. This preserves
+    // the Steam catalog and every other target file byte-for-byte.
+    if (!QFile::remove(skyrimPath)) {
+      QFile::remove(metadataPath);
+      QFile::remove(backupPath);
+      MOBase::log::error("Unable to preserve legacy Skyrim AppData link '{}' "
+                         "as '{}'", skyrimPath, backupPath);
+      return false;
+    }
+
+    if (!QDir().mkpath(skyrimPath)) {
+      // Roll back while the destination is still absent. If rollback itself
+      // fails, the original link remains safely stored at backupPath and the
+      // target is still untouched.
+      if (!isPathEntryPresent(skyrimPath) &&
+          QFile::link(originalTarget, skyrimPath)) {
+        QFile::remove(metadataPath);
+        QFile::remove(backupPath);
+        MOBase::log::error("Unable to create private Skyrim AppData directory; "
+                           "restored legacy link '{}'", skyrimPath);
+      } else {
+        MOBase::log::error("Unable to create private Skyrim AppData directory; "
+                           "legacy link preserved at '{}'", backupPath);
+      }
+      return false;
+    }
+
+    MOBase::log::info("Migrated shared Skyrim AppData link '{}' to private "
+                      "directory; rollback link saved at '{}'", skyrimPath,
+                      backupPath);
+    return true;
+  }
+
+  if (existing.exists()) {
+    if (existing.isDir()) {
+      // A real directory is user-owned prefix data. Leave it and all of its
+      // contents intact, including any catalog it may already contain.
+      MOBase::log::debug("Skyrim AppData path '{}' is already a private "
+                         "directory", skyrimPath);
+      return true;
+    }
+
+    MOBase::log::error("Skyrim AppData path '{}' exists but is not a directory; "
+                       "refusing to overwrite it", skyrimPath);
+    return false;
+  }
+
+  if (!QDir().mkpath(skyrimPath)) {
+    MOBase::log::error("Unable to create private Skyrim AppData directory '{}'",
+                       skyrimPath);
+    return false;
+  }
+
+  MOBase::log::info("Created private Skyrim AppData directory '{}'", skyrimPath);
+  return true;
 }
 
 void createGameSymlinksAuto(const QString& prefixPath)

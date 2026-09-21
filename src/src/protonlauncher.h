@@ -20,7 +20,9 @@ public:
   ProtonLauncher& setProtonPath(const QString& path);
   ProtonLauncher& setPrefix(const QString& path);
   ProtonLauncher& setSteamAppId(uint32_t id);
-  ProtonLauncher& setWrapper(const QString& wrapperCmd);
+  // Global commands wrap local commands; local variables override global ones.
+  ProtonLauncher& setWrapper(const QString& wrapperCmd,
+                             const QString& executableOptions = {});
   ProtonLauncher& setSteamDrm(bool useSteamDrm);
   ProtonLauncher& setUseSLR(bool useSLR);
   ProtonLauncher& setStoreVariant(const QString& variant);
@@ -61,6 +63,8 @@ private:
   QString m_storeVariant; // "GOG", "Epic", or empty for Steam
   QMap<QString, QString> m_envVars;
   QMap<QString, QString> m_wrapperEnvVars;
+  QMap<QString, QString> m_executableEnvVars;
+  QString m_wrapperError;
   bool m_useTerminal = false;
   QString m_bindMountSource;
   QString m_bindMountTarget;

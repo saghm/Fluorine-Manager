@@ -519,25 +519,25 @@
                     </layout>
                    </item>
                    <item row="1" column="0">
-                    <widget class="QLabel" name="environmentLabel">
+                    <widget class="QLabel" name="wrapperOptionsLabel">
                      <property name="text">
-                      <string>Environment</string>
+                      <string>Per Wrapper Options</string>
                      </property>
                      <property name="buddy">
-                      <cstring>environment</cstring>
+                      <cstring>wrapperOptions</cstring>
                      </property>
                     </widget>
                    </item>
                    <item row="1" column="1">
-                    <widget class="QPlainTextEdit" name="environment">
+                    <widget class="QPlainTextEdit" name="wrapperOptions">
                      <property name="maximumHeight">
                       <number>85</number>
                      </property>
                      <property name="placeholderText">
-                      <string>PROTON_ENABLE_WAYLAND=0</string>
+                      <string>PROTON_ENABLE_WAYLAND=0 mangohud --dlsym</string>
                      </property>
                      <property name="toolTip">
-                      <string>One NAME=value per line. These values override matching global launch variables for this executable. Other global settings and wrapper commands still apply. Leave blank to inherit everything. Values are literal; do not add shell quotes or %command%.</string>
+                      <string>Environment assignments and wrapper commands for this executable, using the same syntax as the global launch wrapper. Local commands run after the global wrapper; local variables override matching global values. Use double quotes around values or paths containing spaces. The executable is appended automatically; %command% is optional. Leave blank to inherit the global wrapper.</string>
                      </property>
                      <property name="tabChangesFocus">
                       <bool>true</bool>
@@ -729,7 +729,7 @@
   <tabstop>hide</tabstop>
   <tabstop>workingDirectory</tabstop>
   <tabstop>browseWorkingDirectory</tabstop>
-  <tabstop>environment</tabstop>
+  <tabstop>wrapperOptions</tabstop>
   <tabstop>overwriteSteamAppID</tabstop>
   <tabstop>steamAppID</tabstop>
   <tabstop>forceLoadLibraries</tabstop>

@@ -17,6 +17,8 @@
 
 #include <memory>
 
+class QLabel;
+
 class NifWidget : public QOpenGLWidget
 {
     Q_OBJECT
@@ -47,6 +49,7 @@ protected:
 private:
     void cleanup();
     void updateCamera();
+    void showError(const QString& message);
 
     inline static QWeakPointer<Camera> SharedCamera;
 
@@ -57,6 +60,10 @@ private:
     std::unique_ptr<ShaderManager> m_ShaderManager;
 
     QOpenGLDebugLogger* m_Logger = nullptr;
+    QLabel* m_ErrorLabel = nullptr;
+    bool m_Initialized = false;
+    QMetaObject::Connection m_ContextCleanup;
+    QMetaObject::Connection m_CameraConnection;
 
     std::vector<OpenGLShape> m_GLShapes;
 
@@ -65,7 +72,7 @@ private:
     QMatrix4x4 m_ViewMatrix;
     QMatrix4x4 m_ProjectionMatrix;
 
-    int m_ViewportWidth;
-    int m_ViewportHeight;
+    int m_ViewportWidth = 1;
+    int m_ViewportHeight = 1;
     QPoint m_MousePos;
 };

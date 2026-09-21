@@ -3,12 +3,13 @@ import sys
 import threading
 import enum
 
-from PyQt6.QtCore import QCoreApplication, qDebug, Qt, QSize
+from PyQt6 import sip
+from PyQt6.QtCore import QCoreApplication, qDebug, qWarning, Qt, QSize
 from PyQt6.QtGui import QColor, QOpenGLContext, QSurfaceFormat, QMatrix4x4, QVector4D
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
-from PyQt6.QtWidgets import QGridLayout, QLabel, QPushButton, QWidget, QColorDialog, QComboBox
+from PyQt6.QtWidgets import QGridLayout, QLabel, QPushButton, QWidget, QColorDialog, QComboBox, QVBoxLayout
 from PyQt6.QtOpenGL import QOpenGLBuffer, QOpenGLDebugLogger, QOpenGLShader, QOpenGLShaderProgram, QOpenGLTexture, \
-    QOpenGLVersionProfile, QOpenGLVertexArrayObject, QOpenGLFunctions_4_1_Core, QOpenGLVersionFunctionsFactory
+    QOpenGLVersionProfile, QOpenGLVertexArrayObject, QOpenGLVersionFunctionsFactory
 
 from DDS.DDSFile import DDSFile
 
@@ -56,6 +57,8 @@ void main()
 fragmentShaderFloat = """
 #version 150
 
+out vec4 fragColor;
+
 uniform sampler2D aTexture;
 uniform mat4 channelMatrix;
 uniform vec4 channelOffset;
@@ -64,12 +67,14 @@ in vec2 texCoord;
 
 void main()
 {
-    gl_FragData[0] = channelMatrix *  texture(aTexture, texCoord) + channelOffset;
+    fragColor = channelMatrix *  texture(aTexture, texCoord) + channelOffset;
 }
 """
 
 fragmentShaderUInt = """
 #version 150
+
+out vec4 fragColor;
 
 uniform usampler2D aTexture;
 uniform mat4 channelMatrix;
@@ -80,12 +85,14 @@ in vec2 texCoord;
 void main()
 {
     // autofilled alpha is 1, so if we have a scaling factor, we need separate ones for luminance and alpha
-    gl_FragData[0] = channelMatrix * texture(aTexture, texCoord) + channelOffset;
+    fragColor = channelMatrix * texture(aTexture, texCoord) + channelOffset;
 }
 """
 
 fragmentShaderSInt = """
 #version 150
+
+out vec4 fragColor;
 
 uniform isampler2D aTexture;
 uniform mat4 channelMatrix;
@@ -96,12 +103,14 @@ in vec2 texCoord;
 void main()
 {
     // autofilled alpha is 1, so if we have a scaling factor and offset, we need separate ones for luminance and alpha
-    gl_FragData[0] = channelMatrix * texture(aTexture, texCoord) + channelOffset;
+    fragColor = channelMatrix * texture(aTexture, texCoord) + channelOffset;
 }
 """
 
 fragmentShaderCube = """
 #version 150
+
+out vec4 fragColor;
 
 uniform samplerCube aTexture;
 uniform mat4 channelMatrix;
@@ -115,7 +124,7 @@ void main()
 {
     float theta = -2.0 * PI * texCoord.x;
     float phi = PI * texCoord.y;
-    gl_FragData[0] = channelMatrix * texture(aTexture, vec3(sin(theta) * sin(phi), cos(theta) * sin(phi), cos(phi))) + channelOffset;
+    fragColor = channelMatrix * texture(aTexture, vec3(sin(theta) * sin(phi), cos(theta) * sin(phi), cos(phi))) + channelOffset;
 }
 """
 
@@ -133,6 +142,8 @@ void main()
 transparencyFS = """
 #version 150
 
+out vec4 fragColor;
+
 uniform vec4 backgroundColour;
 
 void main()
@@ -141,8 +152,8 @@ void main()
     float y = gl_FragCoord.y;
     x = mod(x, 16.0);
     y = mod(y, 16.0);
-    gl_FragData[0] = x < 8.0 ^^ y < 8.0 ? vec4(vec3(191.0/255.0), 1.0) : vec4(1.0);
-    gl_FragData[0].rgb = backgroundColour.rgb * backgroundColour.a + gl_FragData[0].rgb * (1.0 - backgroundColour.a);
+    fragColor = x < 8.0 ^^ y < 8.0 ? vec4(vec3(191.0/255.0), 1.0) : vec4(1.0);
+    fragColor.rgb = backgroundColour.rgb * backgroundColour.a + fragColor.rgb * (1.0 - backgroundColour.a);
 }
 """
 
@@ -193,10 +204,6 @@ class DDSOptions:
         self.channelOffset = QVector4D(vector)
 
 
-glVersionProfile = QOpenGLVersionProfile()
-glVersionProfile.setVersion(2, 1)
-
-
 class DDSWidget(QOpenGLWidget):
     def __init__(self, ddsFile, ddsOptions=DDSOptions(), debugContext=False, parent=None, f=Qt.WindowType(0)):
         super(DDSWidget, self).__init__(parent, f)
@@ -206,6 +213,9 @@ class DDSWidget(QOpenGLWidget):
         self.ddsOptions = ddsOptions
 
         self.clean = True
+        self._initialized = False
+        self._gl = None
+        self._context = None
 
         self.logger = None
 
@@ -215,38 +225,74 @@ class DDSWidget(QOpenGLWidget):
         self.vbo = None
         self.vao = None
 
+        # GLSL 150 requires OpenGL 3.2. Request compatibility for older GPUs;
+        # initializeGL also handles a core context supplied by Qt/the driver.
+        format = QSurfaceFormat()
+        format.setRenderableType(QSurfaceFormat.RenderableType.OpenGL)
+        format.setVersion(3, 2)
+        format.setProfile(QSurfaceFormat.OpenGLContextProfile.CompatibilityProfile)
+        format.setOption(QSurfaceFormat.FormatOption.DeprecatedFunctions)
         if debugContext:
-            format = QSurfaceFormat()
             format.setOption(QSurfaceFormat.FormatOption.DebugContext)
-            self.setFormat(format)
             self.logger = QOpenGLDebugLogger(self)
+        self.setFormat(format)
+        self.errorLabel = QLabel(self)
+        self.errorLabel.setObjectName("ddsPreviewError")
+        self.errorLabel.setTextFormat(Qt.TextFormat.PlainText)
+        self.errorLabel.setWordWrap(True)
+        self.errorLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.errorLabel.hide()
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.errorLabel)
 
     def __del__(self):
         self.cleanup()
 
-    def __dtor__(self):
-        self.cleanup()
+    def fail(self, message):
+        self._initialized = False
+        qWarning(self.tr("DDS preview failed: {0}").format(message))
+        self.errorLabel.setText(self.tr("Unable to display DDS preview: {0}").format(message))
+        self.errorLabel.show()
 
     def initializeGL(self):
-        if self.logger:
-            self.logger.initialize()
+        self._initialized = False
+        self.errorLabel.hide()
+        try:
+            self._initializeGL()
+        except Exception as error:
+            # Exceptions escaping a PyQt virtual callback abort the application.
+            self.fail(str(error))
+
+    def _initializeGL(self):
+        context = QOpenGLContext.currentContext()
+        if context is None or context.isOpenGLES() or context.format().version() < (3, 2):
+            raise RuntimeError(self.tr("Desktop OpenGL 3.2 or newer is required."))
+        # PyQt exposes only the 2.0, 2.1 and 4.1-core versioned wrappers.
+        # The upload/draw calls used here are in both 2.1 and 4.1 core.
+        profile = QOpenGLVersionProfile()
+        if context.format().profile() == QSurfaceFormat.OpenGLContextProfile.CoreProfile:
+            profile.setVersion(4, 1)
+            profile.setProfile(QSurfaceFormat.OpenGLContextProfile.CoreProfile)
+        else:
+            profile.setVersion(2, 1)
+        gl = QOpenGLVersionFunctionsFactory.get(profile, context)
+        if gl is None or not gl.initializeOpenGLFunctions():
+            raise RuntimeError(self.tr("OpenGL 3.2 compatibility or OpenGL 4.1 core functions are required."))
+        self._gl = gl
+        self._context = context
+        context.aboutToBeDestroyed.connect(self.cleanup)
+        self.clean = False
+
+        if self.logger and self.logger.initialize():
             self.logger.messageLogged.connect(
                 lambda message: qDebug(self.tr("OpenGL debug message: {0}").format(message.message())))
             self.logger.startLogging()
 
-        gl = QOpenGLVersionFunctionsFactory.get(glVersionProfile)
-        QOpenGLContext.currentContext().aboutToBeDestroyed.connect(self.cleanup)
-
-        self.clean = False
-
-        fragmentShader = None
         vertexShader = vertexShader2D
         if self.ddsFile.isCubemap:
             fragmentShader = fragmentShaderCube
             vertexShader = vertexShaderCube
-            if QOpenGLContext.currentContext().hasExtension(b"GL_ARB_seamless_cube_map"):
-                GL_TEXTURE_CUBE_MAP_SEAMLESS = 0x884F
-                gl.glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS)
+            gl.glEnable(0x884F)  # GL_TEXTURE_CUBE_MAP_SEAMLESS (OpenGL 3.2)
         elif self.ddsFile.glFormat.samplerType == "F":
             fragmentShader = fragmentShaderFloat
         elif self.ddsFile.glFormat.samplerType == "UI":
@@ -254,37 +300,47 @@ class DDSWidget(QOpenGLWidget):
         else:
             fragmentShader = fragmentShaderSInt
 
-        self.program = QOpenGLShaderProgram(self)
-        self.program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, vertexShader)
-        self.program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, fragmentShader)
-        self.program.bindAttributeLocation("position", 0)
-        self.program.bindAttributeLocation("texCoordIn", 1)
-        self.program.link()
+        def compileProgram(program, vertex, fragment, textured=False):
+            if not program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, vertex):
+                raise RuntimeError(program.log())
+            if not program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, fragment):
+                raise RuntimeError(program.log())
+            program.bindAttributeLocation("position", 0)
+            if textured:
+                program.bindAttributeLocation("texCoordIn", 1)
+            if not program.link():
+                raise RuntimeError(program.log())
 
+        self.program = QOpenGLShaderProgram(self)
+        compileProgram(self.program, vertexShader, fragmentShader, True)
         self.transparecyProgram = QOpenGLShaderProgram(self)
-        self.transparecyProgram.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, transparencyVS)
-        self.transparecyProgram.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, transparencyFS)
-        self.transparecyProgram.bindAttributeLocation("position", 0)
-        self.transparecyProgram.link()
+        compileProgram(self.transparecyProgram, transparencyVS, transparencyFS)
 
         self.vao = QOpenGLVertexArrayObject(self)
+        if not self.vao.create():
+            raise RuntimeError(self.tr("Could not create the preview vertex array."))
         vaoBinder = QOpenGLVertexArrayObject.Binder(self.vao)
-
         self.vbo = QOpenGLBuffer(QOpenGLBuffer.Type.VertexBuffer)
-        self.vbo.create()
-        self.vbo.bind()
-
+        if not self.vbo.create() or not self.vbo.bind():
+            raise RuntimeError(self.tr("Could not create the preview vertex buffer."))
         theBytes = struct.pack("%sf" % len(vertices), *vertices)
         self.vbo.allocate(theBytes, len(theBytes))
-
         gl.glEnableVertexAttribArray(0)
         gl.glEnableVertexAttribArray(1)
         gl.glVertexAttribPointer(0, 4, gl.GL_FLOAT, False, 6 * 4, 0)
         gl.glVertexAttribPointer(1, 2, gl.GL_FLOAT, False, 6 * 4, 4 * 4)
-
-        self.texture = self.ddsFile.asQOpenGLTexture(gl, QOpenGLContext.currentContext())
+        self.texture = self.ddsFile.asQOpenGLTexture(gl, context)
+        if self.texture is None or not self.texture.isStorageAllocated():
+            raise RuntimeError(self.tr("The graphics driver cannot load this DDS texture format."))
+        self._initialized = True
+        # A new context after reparenting may keep the same widget size, so Qt
+        # need not deliver resizeGL before the first paint with these programs.
+        self.resizeGL(self.width(), self.height())
 
     def resizeGL(self, w, h):
+        if not self._initialized:
+            return
+        w, h = max(w, 1), max(h, 1)
         aspectRatioTex = self.texture.width() / self.texture.height() if self.texture else 1.0
         aspectRatioWidget = w / h
         ratioRatio = aspectRatioTex / aspectRatioWidget
@@ -294,7 +350,15 @@ class DDSWidget(QOpenGLWidget):
         self.program.release()
 
     def paintGL(self):
-        gl = QOpenGLVersionFunctionsFactory.get(glVersionProfile)
+        if not self._initialized:
+            return
+        try:
+            self._paintGL()
+        except Exception as error:
+            self.fail(str(error))
+
+    def _paintGL(self):
+        gl = self._gl
 
         vaoBinder = QOpenGLVertexArrayObject.Binder(self.vao)
 
@@ -312,7 +376,7 @@ class DDSWidget(QOpenGLWidget):
         self.program.bind()
 
         if self.texture:
-            self.texture.bind()
+            self.texture.bind(0)
 
         gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
@@ -323,25 +387,41 @@ class DDSWidget(QOpenGLWidget):
         gl.glDrawArrays(gl.GL_TRIANGLES, 0, 6)
 
         if self.texture:
-            self.texture.release()
+            self.texture.release(0)
         self.program.release()
 
     def cleanup(self):
-        if not self.clean:
-            self.makeCurrent()
-
-            self.program = None
-            self.transparecyProgram = None
-            if self.texture:
-                self.texture.destroy()
-            self.texture = None
+        if getattr(self, "clean", True):
+            return
+        self.clean = True
+        self._initialized = False
+        if sip.isdeleted(self):
+            return
+        context = self._context
+        if context is not None and not sip.isdeleted(context):
+            try:
+                context.aboutToBeDestroyed.disconnect(self.cleanup)
+            except (TypeError, RuntimeError):
+                pass
+        self.makeCurrent()
+        for name in ("program", "transparecyProgram"):
+            program = getattr(self, name)
+            if program is not None and not sip.isdeleted(program):
+                sip.delete(program)
+            setattr(self, name, None)
+        if self.texture is not None:
+            self.texture.destroy()
+        self.texture = None
+        if self.vbo is not None:
             self.vbo.destroy()
-            self.vbo = None
+        self.vbo = None
+        if self.vao is not None and not sip.isdeleted(self.vao):
             self.vao.destroy()
-            self.vao = None
-
-            self.doneCurrent()
-            self.clean = True
+            sip.delete(self.vao)
+        self.vao = None
+        self._gl = None
+        self._context = None
+        self.doneCurrent()
 
     def tr(self, str):
         return QCoreApplication.translate("DDSWidget", str)
