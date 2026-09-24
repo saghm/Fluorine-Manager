@@ -251,6 +251,11 @@ private:
   };
   void finishUpdateInfo(const NxmUpdateInfoData& data);
 
+  // Batches the per-mod problems recorded during an update check into a single
+  // message once the current burst of responses settles.
+  void scheduleUpdateCheckProblemSummary();
+  void drainUpdateCheckProblems();
+
 private:
   static const char* PATTERN_BACKUP_GLOB;
   static const char* PATTERN_BACKUP_REGEX;
@@ -283,6 +288,9 @@ private:
   QTimer m_CheckBSATimer;
   QTimer m_SaveMetaTimer;
   QTimer m_UpdateProblemsTimer;
+
+  // true while a drain of ModInfo::takeUnshownUpdateCheckProblems() is queued.
+  bool m_UpdateCheckProblemSummaryPending{false};
 
   QFuture<void> m_MetaSave;
 

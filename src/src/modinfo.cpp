@@ -26,6 +26,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "modinfoseparator.h"
 
 #include "categories.h"
+#include "modidrecovery.h"
 #include "modinfodialog.h"
 #include "modlist.h"
 #include "organizercore.h"
@@ -44,6 +45,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <QApplication>
 #include <QDirIterator>
 #include <QMutexLocker>
+#include <QSettings>
 #include <QTimeZone>
 
 using namespace MOBase;
@@ -308,14 +310,205 @@ void ModInfo::updateIndices()
 
 ModInfo::ModInfo(OrganizerCore& core) :  m_Core(core) {}
 
+namespace
+{
+
+// Bookkeeping for one "Check for updates" run: which per-mod nexus requests
+// are still in flight and what went wrong along the way.
+//
+// This has its own mutex rather than s_Mutex: filteredMods() reads it from a
+// QtConcurrent worker while the GUI thread records problems, and taking
+// s_Mutex there would invite a lock order inversion.
+struct UpdateCheckRun
+{
+  QMutex mutex;
+  std::vector<ModInfo::UpdateCheckProblem> problems;
+  std::set<std::pair<QString, int>> pending;
+};
+
+UpdateCheckRun& updateCheckRun()
+{
+  static UpdateCheckRun state;
+  return state;
+}
+
+std::pair<QString, int> updateCheckKey(const QString& gameName, int modID)
+{
+  return {gameName.toLower(), modID};
+}
+
+}  // namespace
+
+void ModInfo::clearUpdateCheckRun()
+{
+  UpdateCheckRun& state = updateCheckRun();
+  QMutexLocker locker(&state.mutex);
+  state.problems.clear();
+  state.pending.clear();
+}
+
+void ModInfo::registerPendingUpdateCheck(const QString& gameName, int modID)
+{
+  if (modID <= 0) {
+    return;
+  }
+  UpdateCheckRun& state = updateCheckRun();
+  QMutexLocker locker(&state.mutex);
+  state.pending.insert(updateCheckKey(gameName, modID));
+}
+
+bool ModInfo::isUpdateCheckPending(const QString& gameName, int modID)
+{
+  if (modID <= 0) {
+    return false;
+  }
+  UpdateCheckRun& state = updateCheckRun();
+  QMutexLocker locker(&state.mutex);
+  return state.pending.find(updateCheckKey(gameName, modID)) != state.pending.end();
+}
+
+void ModInfo::finishUpdateCheckRequest(const QString& gameName, int modID)
+{
+  if (modID <= 0) {
+    return;
+  }
+  UpdateCheckRun& state = updateCheckRun();
+  QMutexLocker locker(&state.mutex);
+  state.pending.erase(updateCheckKey(gameName, modID));
+}
+
+void ModInfo::noteUpdateCheckProblem(const QString& gameName, int modID,
+                                     const QString& message, bool failure,
+                                     bool alreadyShown)
+{
+  if (modID <= 0) {
+    return;
+  }
+  UpdateCheckRun& state = updateCheckRun();
+  QMutexLocker locker(&state.mutex);
+
+  const auto key = updateCheckKey(gameName, modID);
+  for (auto& problem : state.problems) {
+    if (updateCheckKey(problem.gameName, problem.modID) == key) {
+      // one entry per mod: the newest problem wins
+      problem.message = message;
+      problem.failure = failure;
+      problem.shown   = alreadyShown;
+      return;
+    }
+  }
+
+  ModInfo::UpdateCheckProblem problem;
+  problem.gameName = key.first;
+  problem.modID    = modID;
+  problem.message  = message;
+  problem.failure  = failure;
+  problem.shown    = alreadyShown;
+  state.problems.push_back(problem);
+}
+
+void ModInfo::clearUpdateCheckProblem(const QString& gameName, int modID)
+{
+  if (modID <= 0) {
+    return;
+  }
+  const auto key = updateCheckKey(gameName, modID);
+  UpdateCheckRun& state = updateCheckRun();
+  QMutexLocker locker(&state.mutex);
+  std::erase_if(state.problems, [&](const ModInfo::UpdateCheckProblem& problem) {
+    return updateCheckKey(problem.gameName, problem.modID) == key;
+  });
+}
+
+bool ModInfo::updateCheckFailed(const QString& gameName, int modID)
+{
+  if (modID <= 0) {
+    return false;
+  }
+  const auto key = updateCheckKey(gameName, modID);
+  UpdateCheckRun& state = updateCheckRun();
+  QMutexLocker locker(&state.mutex);
+  for (const auto& problem : state.problems) {
+    if (problem.failure && updateCheckKey(problem.gameName, problem.modID) == key) {
+      return true;
+    }
+  }
+  return false;
+}
+
+std::vector<ModInfo::UpdateCheckProblem> ModInfo::takeUnshownUpdateCheckProblems()
+{
+  std::vector<ModInfo::UpdateCheckProblem> unshown;
+  UpdateCheckRun& state = updateCheckRun();
+  QMutexLocker locker(&state.mutex);
+  for (auto& problem : state.problems) {
+    if (!problem.shown) {
+      problem.shown = true;
+      unshown.push_back(problem);
+    }
+  }
+  return unshown;
+}
+
+void ModInfo::recoverMissingModIds()
+{
+  if (s_Collection.empty()) {
+    return;
+  }
+
+  const QString downloadsPath = s_Collection.front()->m_Core.downloadsPath();
+  bool recoveredAny           = false;
+
+  for (const auto& mod : s_Collection) {
+    if (mod->nexusId() > 0) {
+      // A valid id is never overwritten (D.1).
+      continue;
+    }
+    const QString installationFile = mod->installationFile();
+    if (installationFile.isEmpty()) {
+      continue;
+    }
+
+    QSettings downloadMeta(QDir(downloadsPath).filePath(installationFile + ".meta"),
+                           QSettings::IniFormat);
+    const int recovered = ModIdRecovery::recover(mod->url(), installationFile,
+                                                 downloadMeta.value("modid").toString(),
+                                                 downloadMeta.value("url").toString(),
+                                                 downloadMeta.value("directURL").toString());
+    if (!ModIdRecovery::canApply(mod->nexusId(), recovered)) {
+      continue;
+    }
+
+    mod->setNexusID(recovered);
+    mod->saveMeta();
+    recoveredAny = true;
+    log::info("recovered missing nexus mod id {} for \"{}\"", recovered, mod->name());
+  }
+
+  if (recoveredAny) {
+    // nexusId() feeds s_ModsByModID, so the index has to be rebuilt.
+    updateIndices();
+  }
+}
+
 bool ModInfo::checkAllForUpdate(PluginContainer* pluginContainer, QObject* receiver)
 {
   bool updatesAvailable = true;
 
+  // A new run supersedes whatever the previous one recorded.
+  clearUpdateCheckRun();
+  recoverMissingModIds();
+
   QDateTime earliest = QDateTime::currentDateTimeUtc();
   QDateTime latest   = QDateTime::fromMSecsSinceEpoch(0);
+  // every game that has a mod we may talk to nexus about...
+  std::set<QString> nexusGames;
+  // ...and the subset of those whose check is due right now
   std::set<QString> games;
   for (const auto& mod : s_Collection) {
+    if (mod->nexusId() > 0) {
+      nexusGames.insert(mod->gameName().toLower());
+    }
     if (mod->canBeUpdated()) {
       if (mod->getLastNexusUpdate() < earliest)
         earliest = mod->getLastNexusUpdate();
@@ -326,20 +519,30 @@ bool ModInfo::checkAllForUpdate(PluginContainer* pluginContainer, QObject* recei
   }
 
   // Detect invalid source games
-  for (auto itr = games.begin(); itr != games.end();) {
-    auto gamePlugins        = pluginContainer->plugins<IPluginGame>();
-    IPluginGame* gamePlugin = qApp->property("managed_game").value<IPluginGame*>();
-    for (auto *plugin : gamePlugins) {
-      if (plugin != nullptr &&
-          plugin->gameShortName().compare(*itr, Qt::CaseInsensitive) == 0) {
-        gamePlugin = plugin;
-        break;
+  auto dropInvalidSources = [&](std::set<QString>& gameNames) {
+    for (auto itr = gameNames.begin(); itr != gameNames.end();) {
+      auto gamePlugins        = pluginContainer->plugins<IPluginGame>();
+      IPluginGame* gamePlugin = qApp->property("managed_game").value<IPluginGame*>();
+      for (auto *plugin : gamePlugins) {
+        if (plugin != nullptr &&
+            plugin->gameShortName().compare(*itr, Qt::CaseInsensitive) == 0) {
+          gamePlugin = plugin;
+          break;
+        }
+      }
+      if (gamePlugin != nullptr && gamePlugin->gameNexusName().isEmpty()) {
+        log::warn("{}", tr("The update check has found a mod with a Nexus ID and source "
+                           "game of %1, but this game is not a valid Nexus source.")
+                            .arg(gamePlugin->gameName()));
+        itr = gameNames.erase(itr);
+      } else {
+        ++itr;
       }
     }
-    if (gamePlugin != nullptr && gamePlugin->gameNexusName().isEmpty()) {
-      log::warn("{}", tr("The update check has found a mod with a Nexus ID and source "
-                         "game of %1, but this game is not a valid Nexus source.")
-                          .arg(gamePlugin->gameName()));
+  };
+  dropInvalidSources(nexusGames);
+  for (auto itr = games.begin(); itr != games.end();) {
+    if (nexusGames.find(*itr) == nexusGames.end()) {
       itr = games.erase(itr);
     } else {
       ++itr;
@@ -350,7 +553,8 @@ bool ModInfo::checkAllForUpdate(PluginContainer* pluginContainer, QObject* recei
     std::set<std::pair<QString, int>> organizedGames;
     for (const auto& mod : s_Collection) {
       if (mod->canBeUpdated() &&
-          mod->getLastNexusUpdate() < QDateTime::currentDateTimeUtc().addMonths(-1)) {
+          mod->getLastNexusUpdate() < QDateTime::currentDateTimeUtc().addMonths(-1) &&
+          games.find(mod->gameName().toLower()) != games.end()) {
         organizedGames.insert(
             std::make_pair<QString, int>(mod->gameName().toLower(), mod->nexusId()));
       }
@@ -361,18 +565,39 @@ bool ModInfo::checkAllForUpdate(PluginContainer* pluginContainer, QObject* recei
                 tr("All of your mods have been checked recently. We restrict update "
                    "checks to help preserve your available API requests."));
       updatesAvailable = false;
+
+      // The click still has to do something visible: the bulk request is one
+      // request per game and refreshes the dates the list is judged on.
+      for (const auto& gameName : nexusGames)
+        NexusInterface::instance().requestUpdateInfo(gameName,
+                                                     NexusInterface::UpdatePeriod::DAY,
+                                                     receiver, QVariant(false),
+                                                     QString());
     } else {
       log::info("{}", tr("You have mods that haven't been checked within the last "
                          "month using the new API. These mods must be checked before "
                          "we can use the bulk update API. "
                          "This will consume significantly more API requests than "
-                         "usual. You will need to rerun the update check once complete "
-                         "in order to parse the remaining mods."));
+                         "usual. The bulk phase follows automatically once they "
+                         "are done."));
     }
 
-    for (const auto& game : organizedGames)
-      NexusInterface::instance().requestUpdates(game.second, receiver, QVariant(),
-                                                game.first, QString());
+    for (const auto& game : organizedGames) {
+      if (NexusInterface::instance().requestUpdates(game.second, receiver, QVariant(),
+                                                    game.first, QString()) >= 0) {
+        registerPendingUpdateCheck(game.first, game.second);
+      }
+    }
+
+    if (!organizedGames.empty()) {
+      // Enqueued behind the per-mod requests above, so the queue runs it only
+      // once every priming request has completed: one click, one run.
+      for (const auto& gameName : games)
+        NexusInterface::instance().requestUpdateInfo(gameName,
+                                                     NexusInterface::UpdatePeriod::MONTH,
+                                                     receiver, QVariant(true),
+                                                     QString());
+    }
   } else if (earliest < QDateTime::currentDateTimeUtc().addMonths(-1)) {
     for (const auto& gameName : games)
       NexusInterface::instance().requestUpdateInfo(gameName,
@@ -430,8 +655,11 @@ std::set<QSharedPointer<ModInfo>> ModInfo::filteredMods(QString gameName,
     std::copy_if(s_Collection.begin(), s_Collection.end(),
                  std::inserter(updates, updates.end()),
                  [=](QSharedPointer<ModInfo> info) -> bool {
+                   // A mod whose check failed this run keeps its old timestamp
+                   // so the next run retries it instead of claiming it is fresh.
                    return info->gameName().compare(gameName, Qt::CaseInsensitive) == 0 &&
-                       info->canBeUpdated();
+                       info->canBeUpdated() &&
+                       !updateCheckFailed(info->gameName(), info->nexusId());
                  });
     std::set<QSharedPointer<ModInfo>> diff;
     std::set_difference(updates.begin(), updates.end(), finalMods.begin(),
@@ -484,8 +712,10 @@ void ModInfo::manualUpdateCheck(QObject* receiver, std::multimap<QString, int> I
     }
 
     for (const auto& game : organizedGames) {
-      NexusInterface::instance().requestUpdates(game.second, receiver, QVariant(),
-                                                game.first, QString());
+      if (NexusInterface::instance().requestUpdates(game.second, receiver, QVariant(),
+                                                    game.first, QString()) >= 0) {
+        registerPendingUpdateCheck(game.first, game.second);
+      }
     }
   } else {
     log::info("None of the selected mods can be updated.");

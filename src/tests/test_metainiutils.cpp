@@ -104,6 +104,45 @@ TEST(MetaIniUtils, FoldsLowercaseDuplicatesToUpstreamCase)
   EXPECT_FALSE(after.contains("lastnexusquery="));
 }
 
+// The update-check fix adds seven meta keys; they must survive the case
+// normalizer with their canonical upstream spelling (and not collide with the
+// pre-existing newestVersion/lastNexusUpdate keys).
+TEST(MetaIniUtils, NormalizesUpdateEvidenceKeys)
+{
+  QTemporaryDir dir;
+  ASSERT_TRUE(dir.isValid());
+  const auto* contents = "[General]\n"
+                         "newestfileid=991\n"
+                         "latestfileupdate=1700000000\n"
+                         "installedfileupdate=1690000000\n"
+                         "updatechainfileid=992\n"
+                         "lastcheckerror=transient failure\n"
+                         "nexusmodstatus=hidden\n"
+                         "nexusmodavailable=0\n"
+                         "newestversion=2.0\n";
+  const QString path = writeIni(dir, contents);
+  EXPECT_TRUE(MetaIniUtils::normalizeMetaIniCase(path));
+
+  QSettings s(path, QSettings::IniFormat);
+  EXPECT_EQ(991, s.value("newestFileId").toInt());
+  EXPECT_EQ(1700000000, s.value("latestFileUpdate").toLongLong());
+  EXPECT_EQ(1690000000, s.value("installedFileUpdate").toLongLong());
+  EXPECT_EQ(992, s.value("updateChainFileId").toInt());
+  EXPECT_EQ("transient failure", s.value("lastCheckError").toString());
+  EXPECT_EQ("hidden", s.value("nexusModStatus").toString());
+  EXPECT_EQ(0, s.value("nexusModAvailable").toInt());
+  EXPECT_EQ("2.0", s.value("newestVersion").toString());
+
+  const QByteArray after = readAll(path);
+  EXPECT_FALSE(after.contains("newestfileid="));
+  EXPECT_FALSE(after.contains("latestfileupdate="));
+  EXPECT_FALSE(after.contains("installedfileupdate="));
+  EXPECT_FALSE(after.contains("updatechainfileid="));
+  EXPECT_FALSE(after.contains("lastcheckerror="));
+  EXPECT_FALSE(after.contains("nexusmodstatus="));
+  EXPECT_FALSE(after.contains("nexusmodavailable="));
+}
+
 // QSettings IniFormat supports multi-line values via trailing-`\` line
 // continuation. Continuation lines must travel with their key when the key
 // is canonicalized, otherwise the value gets corrupted.

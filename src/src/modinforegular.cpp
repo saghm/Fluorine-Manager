@@ -124,6 +124,13 @@ void ModInfoRegular::readMeta()
       loadMetaPath(metaFile.value("installationFile", "").toString());
   m_NexusDescription = metaFile.value("nexusDescription", "").toString();
   m_NexusFileStatus  = metaFile.value("nexusFileStatus", "1").toInt();
+  m_NewestFileId     = metaFile.value("newestFileId", 0).toInt();
+  m_LatestFileUpdate = metaFile.value("latestFileUpdate", 0).toLongLong();
+  m_InstalledFileUpdate = metaFile.value("installedFileUpdate", 0).toLongLong();
+  m_UpdateChainFileId   = metaFile.value("updateChainFileId", 0).toInt();
+  m_LastCheckError      = metaFile.value("lastCheckError", "").toString();
+  m_NexusModStatus      = metaFile.value("nexusModStatus", "").toString();
+  m_NexusModAvailable   = metaFile.value("nexusModAvailable", -1).toInt();
   m_NexusCategory    = metaFile.value("nexusCategory", 0).toInt();
   m_Author           = metaFile.value("author", "").toString();
   m_Uploader         = metaFile.value("uploader", "").toString();
@@ -298,6 +305,25 @@ void ModInfoRegular::saveMeta()
       metaFile.setValue("url", m_CustomURL);
       metaFile.setValue("hasCustomURL", m_HasCustomURL);
       metaFile.setValue("nexusFileStatus", m_NexusFileStatus);
+      metaFile.setValue("newestFileId", m_NewestFileId);
+      metaFile.setValue("latestFileUpdate", m_LatestFileUpdate);
+      metaFile.setValue("installedFileUpdate", m_InstalledFileUpdate);
+      metaFile.setValue("updateChainFileId", m_UpdateChainFileId);
+      if (m_LastCheckError.isEmpty()) {
+        metaFile.remove("lastCheckError");
+      } else {
+        metaFile.setValue("lastCheckError", m_LastCheckError);
+      }
+      if (m_NexusModStatus.isEmpty()) {
+        metaFile.remove("nexusModStatus");
+      } else {
+        metaFile.setValue("nexusModStatus", m_NexusModStatus);
+      }
+      if (m_NexusModAvailable < 0) {
+        metaFile.remove("nexusModAvailable");
+      } else {
+        metaFile.setValue("nexusModAvailable", m_NexusModAvailable);
+      }
       metaFile.setValue("lastNexusQuery", m_LastNexusQuery.toString(Qt::ISODate));
       metaFile.setValue("lastNexusUpdate", m_LastNexusUpdate.toString(Qt::ISODate));
       metaFile.setValue("nexusLastModified", m_NexusLastModified.toString(Qt::ISODate));
@@ -358,21 +384,72 @@ void ModInfoRegular::saveMeta()
 
 bool ModInfoRegular::updateAvailable() const
 {
-  if (m_IgnoredVersion.isValid() && (m_IgnoredVersion == m_NewestVersion)) {
-    return false;
-  }
-  if (m_NexusFileStatus == 4 || m_NexusFileStatus == 6) {
-    return true;
-  }
-  return m_NewestVersion.isValid() && (m_Version < m_NewestVersion);
+  return computeUpdateVerdict() == UpdateVerdict::Verdict::Update;
 }
 
 bool ModInfoRegular::downgradeAvailable() const
 {
-  if (m_IgnoredVersion.isValid() && (m_IgnoredVersion == m_NewestVersion)) {
-    return false;
+  return computeUpdateVerdict() == UpdateVerdict::Verdict::Downgrade;
+}
+
+UpdateVerdict::Verdict ModInfoRegular::computeUpdateVerdict() const
+{
+  UpdateVerdict::Evidence evidence;
+  evidence.installedFileUpdate  = m_InstalledFileUpdate;
+  evidence.latestFileUpdate     = m_LatestFileUpdate;
+  evidence.chainSuccessorFileId = m_UpdateChainFileId;
+  evidence.installedFileStatus  = m_NexusFileStatus;
+
+  UpdateVerdict::VersionEvidence versions;
+  versions.installed = m_Version.isValid() ? m_Version.canonicalString() : QString();
+  versions.newest = m_NewestVersion.isValid() ? m_NewestVersion.canonicalString()
+                                              : QString();
+  versions.ignored = updateIgnored();
+
+  return UpdateVerdict::compute(evidence, versions);
+}
+
+void ModInfoRegular::setUpdateEvidence(int newestFileId, qint64 latestFileUpdate,
+                                       qint64 installedFileUpdate,
+                                       int chainSuccessorFileId)
+{
+  if (m_NewestFileId == newestFileId && m_LatestFileUpdate == latestFileUpdate &&
+      m_InstalledFileUpdate == installedFileUpdate &&
+      m_UpdateChainFileId == chainSuccessorFileId) {
+    return;
   }
-  return m_NewestVersion.isValid() && (m_NewestVersion < m_Version);
+  m_NewestFileId        = newestFileId;
+  m_LatestFileUpdate    = latestFileUpdate;
+  m_InstalledFileUpdate = installedFileUpdate;
+  m_UpdateChainFileId   = chainSuccessorFileId;
+  m_MetaInfoChanged     = true;
+}
+
+void ModInfoRegular::setLastCheckError(const QString& error)
+{
+  if (m_LastCheckError == error) {
+    return;
+  }
+  m_LastCheckError = error;
+  m_MetaInfoChanged = true;
+}
+
+void ModInfoRegular::setNexusModStatus(const QString& status)
+{
+  if (m_NexusModStatus == status) {
+    return;
+  }
+  m_NexusModStatus = status;
+  m_MetaInfoChanged = true;
+}
+
+void ModInfoRegular::setNexusModAvailable(int available)
+{
+  if (m_NexusModAvailable == available) {
+    return;
+  }
+  m_NexusModAvailable = available;
+  m_MetaInfoChanged   = true;
 }
 
 void ModInfoRegular::nxmDescriptionAvailable(QString, int, QVariant,

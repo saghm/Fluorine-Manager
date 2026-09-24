@@ -3135,13 +3135,28 @@ void MainWindow::finishUpdateInfo(const NxmUpdateInfoData& data)
                        "update checks to help preserve your available API requests."));
 
   for (const auto& game : organizedGames) {
-    NexusInterface::instance().requestUpdates(game.second, this, QVariant(), game.first,
-                                              QString());
+    if (NexusInterface::instance().requestUpdates(game.second, this, QVariant(), game.first,
+                                                  QString()) >= 0) {
+      ModInfo::registerPendingUpdateCheck(game.first, game.second);
+    }
   }
 }
 
 namespace
 {
+
+/**
+ * @brief Map a nexus game domain name back to the game's short name.
+ */
+QString gameShortNameForNexus(PluginContainer& pluginContainer, const QString& nexusName)
+{
+  for (IPluginGame* game : pluginContainer.plugins<IPluginGame>()) {
+    if (game->gameNexusName() == nexusName) {
+      return game->gameShortName();
+    }
+  }
+  return {};
+}
 
 /**
  * @brief Walk the file_updates chain starting at installedFileId and return
@@ -3173,40 +3188,59 @@ findUpdateChainSuccessors(int installedFileId,
 }
 
 /**
- * @brief Resolve the Nexus file_id of a mod's installed file. We don't yet
- *   persist a nexusFileId on ModInfoRegular like upstream does, so fall
- *   back to matching by filename against both the files list and the
- *   update chain (archived-hidden files can disappear from the files list
- *   but still appear in the update chain).
+ * @brief Resolve the Nexus file_id of a mod's installed file.
+ *
+ * Identity is anchored on ids, not on names inside the update chain: those two
+ * fields are content-hash paths and can never match an archive name (root
+ * cause 8). The recorded id wins when it is unambiguous, because it is the
+ * only anchor that survives the author re-uploading the same archive name
+ * under a new file_id — matching the name there would resolve to the *new*
+ * file, whose chain is empty and whose timestamps are the current ones, and
+ * the check would report nothing forever.
+ *
+ * `installedFiles` is append-only (`addInstalledFile` never erases), so a mod
+ * reinstalled from a different file carries every id it ever got. With several
+ * candidates the archive name is the only statement of what is in the folder
+ * right now, so it disambiguates; with no name match we fall back to the first
+ * recorded id (the plan's `[installedFiles] 1\fileid`).
  */
 std::optional<int> resolveInstalledFileId(const ModInfo::Ptr& mod,
-                                          const QList<QVariant>& files,
-                                          const QList<QVariant>& fileUpdates)
+                                          const QList<QVariant>& files)
 {
+  std::vector<int> recordedForMod;
+  std::vector<int> recordedAny;
+  for (const auto& recorded : mod->installedFiles()) {
+    if (recorded.second <= 0) {
+      continue;
+    }
+    recordedAny.push_back(recorded.second);
+    if (recorded.first == mod->nexusId()) {
+      recordedForMod.push_back(recorded.second);
+    }
+  }
+  // Empty `recordedForMod` means the mod id changed on Nexus since install.
+  const std::vector<int>& recorded =
+      recordedForMod.empty() ? recordedAny : recordedForMod;
+
+  if (recorded.size() == 1) {
+    return recorded.front();
+  }
+
   const QString installedFileName = QFileInfo(mod->installationFile()).fileName();
-  if (installedFileName.isEmpty()) {
-    return std::nullopt;
-  }
-
-  for (const auto& file : files) {
-    const auto fileData = file.toMap();
-    if (fileData["file_name"].toString().compare(installedFileName,
-                                                 Qt::CaseInsensitive) == 0) {
-      return fileData["file_id"].toInt();
+  if (!installedFileName.isEmpty()) {
+    for (const auto& file : files) {
+      const auto fileData = file.toMap();
+      if (fileData["file_name"].toString().compare(installedFileName,
+                                                   Qt::CaseInsensitive) == 0) {
+        return fileData["file_id"].toInt();
+      }
     }
   }
 
-  for (const auto& updateEntry : fileUpdates) {
-    const auto updateData = updateEntry.toMap();
-    if (installedFileName.compare(updateData["old_file_name"].toString(),
-                                  Qt::CaseInsensitive) == 0) {
-      return updateData["old_file_id"].toInt();
-    }
-    if (installedFileName.compare(updateData["new_file_name"].toString(),
-                                  Qt::CaseInsensitive) == 0) {
-      return updateData["new_file_id"].toInt();
-    }
+  if (!recorded.empty()) {
+    return recorded.front();
   }
+
   return std::nullopt;
 }
 
@@ -3269,13 +3303,12 @@ void MainWindow::nxmUpdatesAvailable(QString gameName, int modID, QVariant userD
   QList const files       = resultInfo["files"].toList();
   QList const fileUpdates = resultInfo["file_updates"].toList();
 
-  QString gameShortName;
-  for (IPluginGame* game : m_PluginContainer.plugins<IPluginGame>()) {
-    if (game->gameNexusName() == gameName) {
-      gameShortName = game->gameShortName();
-      break;
-    }
-  }
+  const QString gameShortName = gameShortNameForNexus(m_PluginContainer, gameName);
+
+  // The per-mod request succeeded: stop gating failure handling on it and drop
+  // whatever a previous attempt recorded for this mod.
+  ModInfo::finishUpdateCheckRequest(gameShortName, modID);
+  ModInfo::clearUpdateCheckProblem(gameShortName, modID);
 
   QHash<int, QVariantMap> filesById;
   filesById.reserve(files.size());
@@ -3291,25 +3324,62 @@ void MainWindow::nxmUpdatesAvailable(QString gameName, int modID, QVariant userD
     updatesByOldId.insert(updateData["old_file_id"].toInt(), updateData);
   }
 
-  bool requiresInfo                           = false;
-  std::vector<ModInfo::Ptr> const installedMods = ModInfo::getByModID(gameShortName, modID);
+  // Evidence for the date-recency rule: the newest file the author still
+  // offers as current. Primary/MAIN files are the anchor so a later optional
+  // upload can never look like an update; the newest active file is the
+  // fallback when a mod has no primary/MAIN file at all.
+  int newestFileId        = 0;
+  qint64 latestFileUpdate = 0;
+  int preferredFileId     = 0;
+  qint64 preferredUpdate  = 0;
+  for (const auto& file : files) {
+    const QVariantMap fileData = file.toMap();
+    const qint64 uploaded      = fileData["uploaded_timestamp"].toLongLong();
+    const int category         = fileData["category_id"].toInt();
+    if (!NexusInterface::isActiveFileStatus(category)) {
+      continue;
+    }
+    if (uploaded > latestFileUpdate) {
+      latestFileUpdate = uploaded;
+      newestFileId     = fileData["file_id"].toInt();
+    }
+    if (fileData["is_primary"].toBool() ||
+        category == NexusInterface::FileStatus::MAIN) {
+      if (uploaded > preferredUpdate) {
+        preferredUpdate = uploaded;
+        preferredFileId = fileData["file_id"].toInt();
+      }
+    }
+  }
+  if (preferredFileId > 0) {
+    newestFileId   = preferredFileId;
+    latestFileUpdate = preferredUpdate;
+  }
 
+  std::vector<ModInfo::Ptr> const installedMods =
+      ModInfo::getByModID(gameShortName, modID);
   for (const auto& mod : installedMods) {
-    mod->setLastNexusUpdate(QDateTime::currentDateTimeUtc());
+    mod->setLastCheckError({});
+  }
 
-    const auto installedFileId = resolveInstalledFileId(mod, files, fileUpdates);
+  bool requiresInfo = false;
+  for (const auto& mod : installedMods) {
+    const auto installedFileId = resolveInstalledFileId(mod, files);
     if (!installedFileId) {
       // Manually-created mod (modID set via the edit dialog) or anything we
-      // can't tie back to a Nexus file by filename. Fall back to the global
-      // mod page version.
+      // can't tie back to a Nexus file. The mod page lookup below provides the
+      // version-based verdict instead — and, critically, this mod is *not*
+      // stamped as checked: the check is not finished yet (root cause 6).
       requiresInfo = true;
       continue;
     }
 
-    int nexusFileStatus = NexusInterface::FileStatus::ARCHIVED_HIDDEN;
+    int nexusFileStatus        = NexusInterface::FileStatus::ARCHIVED_HIDDEN;
+    qint64 installedFileUpdate = 0;
     if (const auto fileIt = filesById.constFind(*installedFileId);
         fileIt != filesById.constEnd()) {
-      nexusFileStatus = fileIt.value()["category_id"].toInt();
+      nexusFileStatus      = fileIt.value()["category_id"].toInt();
+      installedFileUpdate = fileIt.value()["uploaded_timestamp"].toLongLong();
     }
     mod->setNexusFileStatus(nexusFileStatus);
 
@@ -3319,14 +3389,27 @@ void MainWindow::nxmUpdatesAvailable(QString gameName, int modID, QVariant userD
     if (!newestVersionValue.isEmpty()) {
       mod->setNewestVersion(newestVersionValue);
     }
+
+    // The author's own succession statement for the installed file; 0 when the
+    // installed file has not been superseded.
+    const auto successors = findUpdateChainSuccessors(*installedFileId, updatesByOldId);
+    const int chainSuccessor = successors.empty() ? 0 : successors.back();
+
+    mod->setUpdateEvidence(newestFileId, latestFileUpdate, installedFileUpdate,
+                           chainSuccessor);
+
+    // Evidence collected — only now is this mod "checked".
+    mod->setLastNexusUpdate(QDateTime::currentDateTimeUtc());
   }
 
   // invalidate the filter to display mods with an update
   ui->modList->invalidateFilter();
 
   if (requiresInfo) {
-    NexusInterface::instance().requestModInfo(gameShortName, modID, this, QVariant(),
-                                              QString());
+    if (NexusInterface::instance().requestModInfo(gameShortName, modID, this, QVariant(),
+                                                  QString()) >= 0) {
+      ModInfo::registerPendingUpdateCheck(gameShortName, modID);
+    }
   }
 }
 
@@ -3337,18 +3420,30 @@ void MainWindow::nxmModInfoAvailable(QString gameName, int modID, QVariant userD
   QString gameNameReal;
   bool foundUpdate = false;
 
-  for (IPluginGame* game : m_PluginContainer.plugins<IPluginGame>()) {
-    if (game->gameNexusName() == gameName) {
-      gameNameReal = game->gameShortName();
-      break;
-    }
-  }
+  gameNameReal = gameShortNameForNexus(m_PluginContainer, gameName);
 
   std::vector<ModInfo::Ptr> const modsList = ModInfo::getByModID(gameNameReal, modID);
+
+  // D.2: the mod page answered, so whatever failed before is superseded.
+  ModInfo::finishUpdateCheckRequest(gameNameReal, modID);
+  ModInfo::clearUpdateCheckProblem(gameNameReal, modID);
+
+  const QString modStatus   = result["status"].toString();
+  const bool hasAvailable   = result.contains("available");
+  const bool modAvailable   = result["available"].toBool();
 
   for (const auto& mod : modsList) {
     QDateTime const now          = QDateTime::currentDateTimeUtc();
     QDateTime const updateTarget = mod->getExpires();
+
+    mod->setLastCheckError({});
+
+    if (!modStatus.isEmpty()) {
+      mod->setNexusModStatus(modStatus);
+    }
+    if (hasAvailable) {
+      mod->setNexusModAvailable(modAvailable ? 1 : 0);
+    }
 
     // if file is still listed as optional or miscellaneous don't update the version as
     // often optional files are left with an older version than the main mod version.
@@ -3391,6 +3486,22 @@ void MainWindow::nxmModInfoAvailable(QString gameName, int modID, QVariant userD
         QDateTime::fromSecsSinceEpoch(result["updated_timestamp"].toInt(), QTimeZone::UTC));
 
     m_OrganizerCore.modList()->notifyChange(ModInfo::getIndex(mod->name()));
+  }
+
+  // D.2: surface mods Nexus no longer serves as a normal published mod instead
+  // of letting them silently produce no verdict.
+  const bool restricted = (hasAvailable && !modAvailable) ||
+                          (!modStatus.isEmpty() && modStatus != QLatin1String("published"));
+  if (restricted && !modsList.empty()) {
+    const QString message =
+        (hasAvailable && !modAvailable)
+            ? tr("Nexus reports this mod as deleted (mod %1).").arg(modID)
+            : tr("Nexus reports this mod as \"%1\" (mod %2).").arg(modStatus).arg(modID);
+    ModInfo::noteUpdateCheckProblem(gameNameReal, modID, message, false);
+    for (const auto& mod : modsList) {
+      mod->setLastCheckError(message);
+    }
+    scheduleUpdateCheckProblemSummary();
   }
 
   if (foundUpdate) {
@@ -3521,40 +3632,138 @@ void MainWindow::nxmGameInfoAvailable(QString gameName, QVariant, QVariant resul
   }
 }
 
-void MainWindow::nxmRequestFailed(QString gameName, int modID, int, QVariant, int,
-                                  int errorCode, const QString& errorString)
+void MainWindow::nxmRequestFailed(QString gameName, int modID, int, QVariant userData,
+                                  int, int errorCode, const QString& errorString)
 {
-  if (errorCode == QNetworkReply::ContentAccessDenied ||
-      errorCode == QNetworkReply::ContentNotFoundError ||
-      errorCode == QNetworkReply::ServiceUnavailableError) {
-    // update last checked timestamp on orphaned mods as well to avoid repeating
-    // requests
-    QString gameNameReal;
-    for (IPluginGame* game : m_PluginContainer.plugins<IPluginGame>()) {
-      if (game->gameNexusName() == gameName) {
-        gameNameReal = game->gameShortName();
-        break;
-      }
-    }
-    if (gameName == QString::fromStdWString(AppConfig::mo2NexusGameId()) &&
-        modID == AppConfig::mo2NexusModId()) {
-      log::info("{}", tr("This action appears to be blocked. If you're trying to "
-                         "endorse MO2, please download it from Nexus first."));
-    } else {
-      log::debug("{}",
-                 tr("Mod ID %1 no longer seems to be available on Nexus.").arg(modID));
-      auto orphanedMods = ModInfo::getByModID(gameNameReal, modID);
-      for (const auto& mod : orphanedMods) {
-        mod->setLastNexusUpdate(QDateTime::currentDateTimeUtc());
+  const QString gameShortName = gameShortNameForNexus(m_PluginContainer, gameName);
+
+  // Only a failure of a check we actually issued belongs in the check report;
+  // NexusInterface requests are app-global signals, so the pending-set gate is
+  // what keeps downloads, endorsements and descriptions out of it.
+  if (modID > 0 && userData.toInt() != 1 && !gameShortName.isEmpty() &&
+      ModInfo::isUpdateCheckPending(gameShortName, modID)) {
+    ModInfo::finishUpdateCheckRequest(gameShortName, modID);
+
+    // requestFinished() passes the *HTTP* status code here; 0 means the request
+    // timed out, was aborted or returned an empty response.
+    const bool gone      = (errorCode == 404);
+    const bool transient = (errorCode == 403 || errorCode == 503 || errorCode == 0);
+
+    const QString message =
+        errorCode > 0 ? tr("Nexus request for mod %1 failed (error %2): %3")
+                             .arg(modID)
+                             .arg(errorCode)
+                             .arg(errorString)
+                      : tr("Nexus request for mod %1 timed out: %2")
+                            .arg(modID)
+                            .arg(errorString);
+
+    const auto mods = ModInfo::getByModID(gameShortName, modID);
+    for (const auto& mod : mods) {
+      if (gone) {
+        // Genuinely gone: stop asking about it. Deliberately *not* stamped as
+        // checked — nexusID = -1 already takes it out of canBeUpdated(), and a
+        // mod must never be marked as checked when its check failed.
         mod->setLastNexusQuery(QDateTime::currentDateTimeUtc());
         mod->setNexusID(-1);
       }
+      // Transient errors touch neither the check timestamp nor the mod id, so
+      // the mod stays eligible for the next run.
+      mod->setLastCheckError(message);
     }
-  } else {
-    MessageDialog::showMessage(
-        tr("Error %1: Request to Nexus failed: %2").arg(errorCode).arg(errorString),
-        this);
+
+    // Unexpected codes keep the old immediate dialog; transient ones are only
+    // batched into the run summary.
+    ModInfo::noteUpdateCheckProblem(gameShortName, modID, message, true, !transient);
+    if (!transient) {
+      MessageDialog::showMessage(
+          tr("Error %1: Request to Nexus failed: %2").arg(errorCode).arg(errorString),
+          this);
+    }
+    scheduleUpdateCheckProblemSummary();
+    return;
   }
+
+  if (gameName == QString::fromStdWString(AppConfig::mo2NexusGameId()) &&
+      modID == AppConfig::mo2NexusModId()) {
+    log::info("{}", tr("This action appears to be blocked. If you're trying to "
+                       "endorse MO2, please download it from Nexus first."));
+    return;
+  }
+
+  MessageDialog::showMessage(
+      tr("Error %1: Request to Nexus failed: %2").arg(errorCode).arg(errorString), this);
+}
+
+void MainWindow::scheduleUpdateCheckProblemSummary()
+{
+  if (m_UpdateCheckProblemSummaryPending) {
+    return;
+  }
+  // Batch whatever the current burst of responses produced into one message
+  // instead of popping a dialog per failed mod.
+  m_UpdateCheckProblemSummaryPending = true;
+  QTimer::singleShot(1500, this, [this]() {
+    m_UpdateCheckProblemSummaryPending = false;
+    drainUpdateCheckProblems();
+  });
+}
+
+void MainWindow::drainUpdateCheckProblems()
+{
+  const auto problems = ModInfo::takeUnshownUpdateCheckProblems();
+  if (problems.empty()) {
+    return;
+  }
+
+  constexpr qsizetype maxListed = 8;
+  QStringList failureLabels;
+  QStringList noticeLabels;
+  int failureCount = 0;
+  int noticeCount  = 0;
+
+  for (const auto& problem : problems) {
+    const auto mods = ModInfo::getByModID(problem.gameName, problem.modID);
+    const QString label =
+        mods.empty() ? tr("mod %1").arg(problem.modID)
+                     : tr("%1 (mod %2)").arg(mods.front()->name()).arg(problem.modID);
+
+    if (problem.failure) {
+      ++failureCount;
+      if (failureLabels.size() < maxListed) {
+        failureLabels.append(label);
+      }
+    } else {
+      ++noticeCount;
+      if (noticeLabels.size() < maxListed) {
+        noticeLabels.append(label);
+      }
+    }
+  }
+
+  QStringList sections;
+  if (failureCount > 0) {
+    const int listed = static_cast<int>(failureLabels.size());
+    QString text     = tr("%1 mod(s) could not be checked: %2")
+                       .arg(failureCount)
+                       .arg(failureLabels.join(QLatin1String(", ")));
+    if (failureCount > listed) {
+      text += tr(" and %1 more").arg(failureCount - listed);
+    }
+    sections.append(text);
+  }
+  if (noticeCount > 0) {
+    const int listed = static_cast<int>(noticeLabels.size());
+    QString text     = tr("%1 mod(s) are deleted, hidden or under moderation on Nexus: %2")
+                       .arg(noticeCount)
+                       .arg(noticeLabels.join(QLatin1String(", ")));
+    if (noticeCount > listed) {
+      text += tr(" and %1 more").arg(noticeCount - listed);
+    }
+    sections.append(text);
+  }
+
+  MessageDialog::showMessage(sections.join(QLatin1Char('\n')), this);
 }
 
 BSA::EErrorCode MainWindow::extractBSA(BSA::Archive& archive, BSA::Folder::Ptr folder,

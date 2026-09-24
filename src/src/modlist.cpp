@@ -458,6 +458,14 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
               "<br>" + tr("This mod will be available to check in %2.").arg(remainsStr);
         }
       }
+      // Why no verdict was produced (hidden/deleted mod, nexus error, ...).
+      if (const QString checkError = modInfo->lastCheckError(); !checkError.isEmpty()) {
+        text += "<br>" + checkError;
+      }
+      if (const QString modStatus = modInfo->nexusModStatus();
+          !modStatus.isEmpty() && modStatus.compare(QLatin1String("published")) != 0) {
+        text += "<br>" + tr("Nexus status: %1").arg(modStatus);
+      }
       return text;
     } else if (column == COL_CATEGORY) {
       const std::set<int>& categories = modInfo->getCategories();

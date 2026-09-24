@@ -211,12 +211,87 @@ public:  // Static functions:
   static void manualUpdateCheck(QObject* receiver, std::multimap<QString, int> IDs);
 
   /**
+   * @brief Try to recover invalid Nexus mod ids from recorded metadata.
+   *
+   * Consults the download's .meta and the archive filename (D.1) for mods whose
+   * disk value is missing or invalid. A mod id that is already valid is never
+   * overwritten.
+   */
+  static void recoverMissingModIds();
+
+  /**
    * @brief Query nexus information for every mod and update the "newest version"
    * information.
    *
    * @return true if any mods are checked for update.
    */
   static bool checkAllForUpdate(PluginContainer* pluginContainer, QObject* receiver);
+
+public:  // Update-check bookkeeping
+  /**
+   * @brief A problem recorded while checking a mod against Nexus.
+   *
+   * Failures (failure == true) keep the mod out of the "already checked"
+   * stamping done by filteredMods() so the next run retries them; notices
+   * (failure == false) are informational only (hidden/deleted mods).
+   */
+  struct UpdateCheckProblem
+  {
+    QString gameName;  // game short name, lower case
+    int     modID    = 0;
+    QString message;
+    bool    failure  = true;
+    bool    shown    = false;  // already handed to the user once
+  };
+
+  /**
+   * @brief Drop everything remembered about the current check run.
+   */
+  static void clearUpdateCheckRun();
+
+  /**
+   * @brief Remember that a per-mod nexus request issued by the check is in flight.
+   *
+   * Only failures for pending requests are surfaced as check failures, which
+   * keeps unrelated nexus errors (downloads, endorsements) out of the summary.
+   */
+  static void registerPendingUpdateCheck(const QString& gameName, int modID);
+
+  /**
+   * @return true if a check for this mod was issued and has not completed yet.
+   */
+  static bool isUpdateCheckPending(const QString& gameName, int modID);
+
+  /**
+   * @brief Mark the pending check request for this mod as completed.
+   */
+  static void finishUpdateCheckRequest(const QString& gameName, int modID);
+
+  /**
+   * @brief Record a problem for the current check run so it can be surfaced.
+   */
+  static void noteUpdateCheckProblem(const QString& gameName, int modID,
+                                     const QString& message, bool failure = true,
+                                     bool alreadyShown = false);
+
+  /**
+   * @brief Forget every recorded problem for this mod (it checked out fine).
+   */
+  static void clearUpdateCheckProblem(const QString& gameName, int modID);
+
+  /**
+   * @return true if the current check run failed for this mod.
+   */
+  static bool updateCheckFailed(const QString& gameName, int modID);
+
+  /**
+   * @brief Take the problems that have not been shown to the user yet.
+   *
+   * The taken entries are marked as shown but kept until the mod checks out
+   * successfully or a new run starts, so filteredMods() can keep excluding
+   * them.
+   */
+  static std::vector<UpdateCheckProblem> takeUnshownUpdateCheckProblems();
 
   /**
    *
@@ -928,6 +1003,49 @@ public:  // Nexus stuff
    * @brief Assigns the given Nexus category ID
    */
   virtual void setNexusCategory(int category) = 0;
+
+public:  // Update evidence / check diagnostics
+  // Only ModInfoRegular collects Nexus update evidence; the default
+  // implementations keep the other mod types out of the way.
+
+  /**
+   * @brief Persist the file-level evidence backing the update verdict.
+   *
+   * @param newestFileId id of the newest primary/MAIN file (0 if unknown).
+   * @param latestFileUpdate upload timestamp of that file (0 if unknown).
+   * @param installedFileUpdate upload timestamp of the installed file.
+   * @param chainSuccessorFileId terminal successor of the installed file in the
+   *        file_updates chain, 0 when there is none.
+   */
+  virtual void setUpdateEvidence(int newestFileId, qint64 latestFileUpdate,
+                                 qint64 installedFileUpdate, int chainSuccessorFileId)
+  {
+  }
+
+  virtual int newestFileId() const { return 0; }
+  virtual qint64 latestFileUpdate() const { return 0; }
+  virtual qint64 installedFileUpdate() const { return 0; }
+  virtual int updateChainFileId() const { return 0; }
+
+  /**
+   * @return why the last update check for this mod did not produce a verdict.
+   */
+  virtual QString lastCheckError() const { return {}; }
+  virtual void setLastCheckError(const QString&) {}
+
+  /**
+   * @return the Nexus mod status ("published", "hidden", "under_moderation", ...),
+   *         empty when unknown.
+   */
+  virtual QString nexusModStatus() const { return {}; }
+  virtual void setNexusModStatus(const QString&) {}
+
+  /**
+   * @return 1 when Nexus reports the mod as available, 0 when it is not and -1
+   *         when unknown.
+   */
+  virtual int nexusModAvailable() const { return -1; }
+  virtual void setNexusModAvailable(int) {}
 
 public:  // Conflicts
   // retrieve the list of mods (as mod index) that are overwritten by this one.

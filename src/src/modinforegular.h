@@ -5,6 +5,7 @@
 
 #include "modinfowithconflictinfo.h"
 #include "nexusinterface.h"
+#include "updateverdict.h"
 
 /**
  * @brief Represents meta information about a single mod.
@@ -448,6 +449,24 @@ public:
     return m_InstalledFileIDs;
   }
 
+public:  // Update evidence / check diagnostics
+  void setUpdateEvidence(int newestFileId, qint64 latestFileUpdate,
+                         qint64 installedFileUpdate, int chainSuccessorFileId) override;
+
+  int newestFileId() const override { return m_NewestFileId; }
+  qint64 latestFileUpdate() const override { return m_LatestFileUpdate; }
+  qint64 installedFileUpdate() const override { return m_InstalledFileUpdate; }
+  int updateChainFileId() const override { return m_UpdateChainFileId; }
+
+  QString lastCheckError() const override { return m_LastCheckError; }
+  void setLastCheckError(const QString& error) override;
+
+  QString nexusModStatus() const override { return m_NexusModStatus; }
+  void setNexusModStatus(const QString& status) override;
+
+  int nexusModAvailable() const override { return m_NexusModAvailable; }
+  void setNexusModAvailable(int available) override;
+
 public:  // Plugin operations:
   QVariant pluginSetting(const QString& pluginName, const QString& key,
                                  const QVariant& defaultValue) const override;
@@ -461,6 +480,10 @@ public:  // Plugin operations:
 private:
   void setEndorsedState(MOBase::EndorsedState endorsedState);
   void setTrackedState(MOBase::TrackedState trackedState);
+
+  // Evidence-based verdict (updateverdict.h); shared by updateAvailable() and
+  // downgradeAvailable() so the two can never disagree.
+  UpdateVerdict::Verdict computeUpdateVerdict() const;
 
 private slots:
 
@@ -517,6 +540,21 @@ private:
   int m_NexusFileStatus;
   MOBase::VersionInfo m_NewestVersion;
   MOBase::VersionInfo m_IgnoredVersion;
+
+  // File-level evidence backing the update verdict (see updateverdict.h).
+  // Zeroed/empty on mods that have never been checked with evidence
+  // collection, in which case the verdict falls back to the guarded version
+  // comparison.
+  int m_NewestFileId{0};
+  qint64 m_LatestFileUpdate{0};
+  qint64 m_InstalledFileUpdate{0};
+  int m_UpdateChainFileId{0};
+
+  // Why the last check did not produce a verdict ("" when it did).
+  QString m_LastCheckError;
+  // Nexus mod-info status captured alongside the check (D.2).
+  QString m_NexusModStatus;
+  int m_NexusModAvailable{-1};
 
   MOBase::EndorsedState m_EndorsedState{MOBase::EndorsedState::ENDORSED_UNKNOWN};
   MOBase::TrackedState m_TrackedState{MOBase::TrackedState::TRACKED_UNKNOWN};

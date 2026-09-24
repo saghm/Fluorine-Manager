@@ -220,6 +220,11 @@ void ModListViewActions::setAllMatchingModsEnabled(bool enabled) const
 void ModListViewActions::checkModsForUpdates() const
 {
   bool checkingModsForUpdate = false;
+  bool notAuthenticated      = false;
+  // Tokens exist but the session is being re-validated: checkModsForUpdates()
+  // re-runs from the doAfterLogin() callback, so no check has run yet and none
+  // was refused — neither message below applies to this pass.
+  bool awaitingLogin         = false;
   if (NexusInterface::instance().getAccessManager()->validated()) {
     checkingModsForUpdate =
         ModInfo::checkAllForUpdate(&m_core.pluginContainer(), m_receiver);
@@ -230,6 +235,7 @@ void ModListViewActions::checkModsForUpdates() const
     NexusOAuthTokens tokens;
     if (GlobalSettings::nexusOAuthTokens(tokens) ||
         GlobalSettings::nexusApiKey(tokens.apiKey)) {
+      awaitingLogin = true;
       m_core.doAfterLogin([=, this]() {
         checkModsForUpdates();
       });
@@ -237,7 +243,16 @@ void ModListViewActions::checkModsForUpdates() const
     } else {
       log::warn("{}", tr("You are not currently authenticated with Nexus. Please do so "
                          "under Settings -> Nexus."));
+      notAuthenticated = true;
     }
+  }
+
+  if (notAuthenticated) {
+    // The log alone made this look like a silent no-op.
+    MessageDialog::showMessage(
+        tr("You are not currently authenticated with Nexus. Please do so under "
+           "Settings -> Nexus."),
+        m_view);
   }
 
   bool updatesAvailable = false;
@@ -255,6 +270,13 @@ void ModListViewActions::checkModsForUpdates() const
 
     m_filters.setSelection(
         {{.type=ModListSortProxy::TypeSpecial, .id=CategoryFactory::UpdateAvailable, .inverse=false}});
+  } else if (!notAuthenticated && !awaitingLogin) {
+    // checkAllForUpdate() only refuses when nothing was due; say so instead of
+    // doing nothing visible.
+    MessageDialog::showMessage(
+        tr("All mods were checked less than 5 minutes ago. Update checks are "
+           "restricted to help preserve your available API requests."),
+        m_view);
   }
 }
 

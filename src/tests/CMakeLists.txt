@@ -239,6 +239,50 @@ target_link_libraries(test_metainiutils PRIVATE
 add_test(NAME test_metainiutils COMMAND test_metainiutils)
 
 # ---------------------------------------------------------------------------
+# Evidence-based Nexus update verdict tests
+# ---------------------------------------------------------------------------
+add_executable(test_updateverdict EXCLUDE_FROM_ALL
+    test_updateverdict.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/updateverdict.cpp
+)
+set_target_properties(test_updateverdict PROPERTIES
+    AUTOMOC OFF
+    CXX_STANDARD 23
+    CXX_STANDARD_REQUIRED ON
+)
+target_include_directories(test_updateverdict PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/src
+)
+target_link_libraries(test_updateverdict PRIVATE
+    Qt6::Core
+    GTest::gtest
+    GTest::gtest_main
+)
+add_test(NAME test_updateverdict COMMAND test_updateverdict)
+
+# ---------------------------------------------------------------------------
+# Nexus mod-id recovery tests (update check D.1)
+# ---------------------------------------------------------------------------
+add_executable(test_modidrecovery EXCLUDE_FROM_ALL
+    test_modidrecovery.cpp
+    ${CMAKE_SOURCE_DIR}/src/src/modidrecovery.cpp
+)
+set_target_properties(test_modidrecovery PROPERTIES
+    AUTOMOC OFF
+    CXX_STANDARD 23
+    CXX_STANDARD_REQUIRED ON
+)
+target_include_directories(test_modidrecovery PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/src
+)
+target_link_libraries(test_modidrecovery PRIVATE
+    Qt6::Core
+    GTest::gtest
+    GTest::gtest_main
+)
+add_test(NAME test_modidrecovery COMMAND test_modidrecovery)
+
+# ---------------------------------------------------------------------------
 # FOMOD dependency-transition and rerun recommendation tests
 # ---------------------------------------------------------------------------
 add_executable(test_fomoddependency EXCLUDE_FROM_ALL
@@ -796,6 +840,7 @@ add_custom_target(fluorine-tests
             test_fluorine_menu_bar test_library_setup_panel
             test_plugincompatibility test_pefileutils test_curatedguide
             test_metainiutils test_fomoddependency
+            test_updateverdict test_modidrecovery
             test_vfs_backend
             test_fluorineconfigownership
             test_prefixsymlinks
