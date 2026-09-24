@@ -809,7 +809,7 @@ void ModListView::setup(OrganizerCore& core, CategoryFactory& factory, MainWindo
   m_filters.reset(new FilterList(mwui, core, factory));
   m_categories = &factory;
   m_actions =
-      new ModListViewActions(core, *m_filters, factory, this, mwui->espList, mw);
+      new ModListViewActions(core, factory, this, mwui->espList, mw);
   ui = {mwui->groupCombo,
         mwui->activeModsCounter,
         mwui->modFilterEdit,

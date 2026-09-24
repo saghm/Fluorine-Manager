@@ -311,16 +311,42 @@ public:
                         const MOBase::IPluginGame* game);
 
   /**
-   * @brief request nexus descriptions for multiple mods at once
-   * @param modID id of the mod the caller is interested in
+   * @brief request the full file list of every given mod in a single request
+   *
+   * One aliased `modFiles` selection per mod, all in one GraphQL document, so
+   * checking a whole library costs exactly one request no matter how many mods
+   * are in it.
+   *
+   * @param gameName the game short name the mods belong to
+   * @param modIDs ids of the mods whose file lists are wanted
    * @param receiver the object to receive the result asynchronously via a signal
-   * (nxmDescriptionAvailable)
+   * (nxmModFileListsAvailable)
    * @param userData user data to be returned with the result
-   * @param gameName the game with which the mods are associated
-   * @return int an id to identify the request
+   * @param subModule the module to use for throttling
+   * @return int an id to identify the request, -1 when it was not issued
    */
-  int requestUpdates(const int& modID, QObject* receiver, QVariant userData,
-                     QString gameName, const QString& subModule);
+  int requestModFileLists(const QString& gameName, const QList<int>& modIDs,
+                          QObject* receiver, QVariant userData,
+                          const QString& subModule);
+
+  /**
+   * @brief request the version chain of the given nexus file versions
+   *
+   * Versions are identified by their v2 file uid and come back with the
+   * `mod_file_id` they belong to and their `position` in that chain, which is
+   * how a superseded file finds its declared successor.
+   *
+   * @param gameName the game short name the versions belong to
+   * @param versionIDs uids of the versions to look up (at most 2000 per call)
+   * @param receiver the object to receive the result asynchronously via a signal
+   * (nxmModFileVersionsAvailable)
+   * @param userData user data to be returned with the result
+   * @param subModule the module to use for throttling
+   * @return int an id to identify the request, -1 when it was not issued
+   */
+  int requestModFileVersions(const QString& gameName, const QStringList& versionIDs,
+                             QObject* receiver, QVariant userData,
+                             const QString& subModule);
 
   /**
    * @brief request a list of the files belonging to a mod
@@ -600,8 +626,10 @@ signals:
                            QVariant resultData, int requestID);
   void nxmUpdateInfoAvailable(QString gameName, QVariant userData, QVariant resultData,
                               int requestID);
-  void nxmUpdatesAvailable(QString gameName, int modID, QVariant userData,
-                           QVariant resultData, int requestID);
+  void nxmModFileListsAvailable(QString gameName, QVariant userData, QVariant resultData,
+                                int requestID);
+  void nxmModFileVersionsAvailable(QString gameName, QVariant userData,
+                                   QVariant resultData, int requestID);
   void nxmFilesAvailable(QString gameName, int modID, QVariant userData,
                          QVariant resultData, int requestID);
   void nxmFileInfoAvailable(QString gameName, int modID, int fileID, QVariant userData,
@@ -653,7 +681,8 @@ private:
       TYPE_DOWNLOADURL,
       TYPE_ENDORSEMENTS,
       TYPE_TOGGLEENDORSEMENT,
-      TYPE_GETUPDATES,
+      TYPE_MODFILELISTS,
+      TYPE_MODFILEVERSIONS,
       TYPE_CHECKUPDATES,
       TYPE_TOGGLETRACKING,
       TYPE_TRACKEDMODS,
@@ -672,6 +701,9 @@ private:
     int m_Endorse;
     int m_Track;
     QByteArray m_Hash;
+    // Raw JSON body of request types that build their payload up-front instead
+    // of deriving it from the request info (the bulk v2/v3 endpoints).
+    QByteArray m_RawPostBody;
     QMap<QNetworkReply::NetworkError, QList<int>> m_AllowedErrors;
     bool m_IgnoreGenericErrorHandler;
 

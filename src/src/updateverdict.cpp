@@ -13,6 +13,36 @@ namespace UpdateVerdict
 namespace
 {
 
+// Names of the evidence groups, as recorded in the meta's
+// `updateEvidenceSampled` key. "files" covers the anchor file id, both upload
+// timestamps and the chain successor; "fileVersions" covers the two per-file
+// version labels.
+const QString FILES_FIELD        = QStringLiteral("files");
+const QString FILE_VERSION_FIELD = QStringLiteral("fileVersions");
+
+}  // namespace
+
+QStringList requiredEvidenceFields()
+{
+  return {FILES_FIELD, FILE_VERSION_FIELD};
+}
+
+bool evidenceFieldsSampled(const QStringList& sampled)
+{
+  const QStringList required = requiredEvidenceFields();
+  return std::all_of(required.begin(), required.end(), [&sampled](const QString& name) {
+    return sampled.contains(name);
+  });
+}
+
+bool fileVersionLabelsSampled(const QStringList& sampled)
+{
+  return sampled.contains(FILE_VERSION_FIELD);
+}
+
+namespace
+{
+
 // --- small string helpers -------------------------------------------------
 
 QString trimFromBothEnds(QString text, const QString& chars)
@@ -137,6 +167,12 @@ QString digitString(const ParsedVersion& parsed)
 bool isActiveFileStatus(int status)
 {
   // MAIN, UPDATE, OPTIONAL, MISC.
+  //
+  // Mirrors NexusInterface::isActiveFileStatus() (nexusinterface.h:193) by
+  // literal category id, because this translation unit must stay free of
+  // nexusinterface.h's QtNetwork/UIBAse dependencies. Nothing links the two:
+  // if a category is added or reclassified upstream, change both switches
+  // together or they will silently disagree.
   switch (status) {
   case 1:
   case 2:
@@ -208,38 +244,45 @@ bool isDateVersion(const QString& value)
   return false;
 }
 
-int compareNormalized(const QString& installedRaw, const QString& newestRaw)
+Comparison compareNormalized(const QString& installedRaw, const QString& newestRaw)
 {
+  // Every early return below states *why* the comparison could not be made.
+  // `indeterminate` is what keeps a refused comparison from being rendered as
+  // "up to date" (see Comparison in updateverdict.h).
+  const auto undecidable = [] { return Comparison{0, true}; };
+
   const QString installed = installedRaw.trimmed();
   const QString newest    = newestRaw.trimmed();
 
   // An unknown side cannot be ordered; biased towards "no flag".
   if (installed.isEmpty() || newest.isEmpty()) {
-    return 0;
+    return undecidable();
   }
 
-  // A date-shaped version is not orderable, so any pair involving one is equal.
+  // A date-shaped version is not orderable, so any pair involving one is
+  // undecidable rather than equal.
   if (isDateVersion(installed) || isDateVersion(newest)) {
-    return 0;
+    return undecidable();
   }
 
   const ParsedVersion left  = parseVersion(installed);
   const ParsedVersion right = parseVersion(newest);
   if (!left.valid || !right.valid) {
-    return 0;
+    return undecidable();
   }
 
   QVector<int> leftSegments  = toSegments(left);
   QVector<int> rightSegments = toSegments(right);
   if (leftSegments.isEmpty() || rightSegments.isEmpty()) {
-    return 0;
+    return undecidable();
   }
 
   const int cmp = compareSegments(leftSegments, rightSegments);
   if (cmp == 0) {
-    // Equal numeric core: suffixes ("2.0b" vs "2.0") are display-only and can
-    // never by themselves raise or clear a flag.
-    return 0;
+    // The numeric comparison actually ran and found them equal. Suffixes
+    // ("2.0b" vs "2.0") are display-only and can never by themselves raise or
+    // clear a flag, so this is a real "no update", not an unknown.
+    return Comparison{0, false};
   }
 
   // Scheme-change guard: a year-like leading segment against a small leading
@@ -247,16 +290,16 @@ int compareNormalized(const QString& installedRaw, const QString& newestRaw)
   // that one is newer. Symmetric, so both directions stay unflagged.
   if ((isYearSegment(leftSegments.first()) && rightSegments.first() < 100) ||
       (isYearSegment(rightSegments.first()) && leftSegments.first() < 100)) {
-    return 0;
+    return undecidable();
   }
 
   // Compact-segment ambiguity: "1.102" and "1.10.2" are the same digit string
   // split differently and therefore cannot be ordered safely.
   if (left.parts.size() != right.parts.size() && digitString(left) == digitString(right)) {
-    return 0;
+    return undecidable();
   }
 
-  return cmp;
+  return Comparison{cmp, false};
 }
 
 Verdict compute(const Evidence& evidence, const VersionEvidence& versions)
@@ -271,10 +314,26 @@ Verdict compute(const Evidence& evidence, const VersionEvidence& versions)
     return Verdict::Update;
   }
 
-  // Rule 3 — installed file category (preserved verbatim from the previous
-  // verdict): OLD_VERSION (4) and REMOVED (6) both mean "not current".
-  // (ARCHIVED_HIDDEN is 1000, not 6 — see NexusInterface::FileStatus.)
-  if (evidence.installedFileStatus == 4 || evidence.installedFileStatus == 6) {
+  // Rule 3 — the installed file has stopped being offered, so the page is no
+  // longer about it: that is "not current" whatever the dates or the version
+  // labels say. OLD_VERSION (4), REMOVED (6), ARCHIVED (7) and ARCHIVED_HIDDEN
+  // (1000) are all inactive; MAIN (1), UPDATE (2), OPTIONAL_FILE (3) and MISC (5)
+  // are current (see NexusInterface::isActiveFileStatus).
+  //
+  // Two gates keep this honest. An unknown upload date (0) means the file was
+  // never seen — that is how a file only hidden by Nexus is recorded — so it
+  // cannot be placed against the page at all and stays on rule 5 below, which
+  // answers "unknown" rather than inventing a date. And a file that sits *ahead*
+  // of everything the page still offers was not succeeded by anything, so it is
+  // the rollback rule 4 already knows, not an update: folding it into rule 3
+  // would turn a rollback row into a false "outdated".
+  if (evidence.installedFileStatus > 0 &&
+      !isActiveFileStatus(evidence.installedFileStatus) &&
+      evidence.installedFileUpdate > 0) {
+    if (evidence.latestFileUpdate > 0 &&
+        evidence.installedFileUpdate > evidence.latestFileUpdate) {
+      return Verdict::Downgrade;
+    }
     return Verdict::Update;
   }
 
@@ -283,7 +342,33 @@ Verdict compute(const Evidence& evidence, const VersionEvidence& versions)
   // equal: there is deliberately no fall-through to the version strings.
   if (evidence.latestFileUpdate > 0 && evidence.installedFileUpdate > 0) {
     if (evidence.latestFileUpdate > evidence.installedFileUpdate) {
-      return Verdict::Update;
+      // The anchor file was uploaded later than the installed one. That is
+      // only an update if the anchor is actually a newer release *of what is
+      // installed*: the author routinely uploads sibling files back to back
+      // (SE/AE vs VR builds minutes apart, a second optional patch), and a
+      // later upload of a different file is not an update to this one.
+      //
+      // The labels decide that, and on a meta written before the labels were
+      // collected there is nothing to decide it with: the two empty strings
+      // mean "never sampled", not "equal". Ruling Update here would be
+      // asserting the question was settled when it was never asked, so the
+      // honest answer is Unknown until the file list has actually been
+      // fetched. (A label that *was* sampled and came back empty falls through
+      // to the comparison below, which refuses and yields Update on the dates
+      // alone — that is the pre-existing behaviour, unchanged.)
+      if (!evidence.fileVersionSampled) {
+        return Verdict::Unknown;
+      }
+
+      // The labels veto a red, they never raise one — an unknown label
+      // (empty, unparsable, date-shaped) leaves the date alone, so the rule
+      // still does not depend on how a version happens to be formatted.
+      const Comparison comparison = compareNormalized(evidence.installedFileVersion,
+                                                      evidence.latestFileVersion);
+      if (comparison.indeterminate || comparison.cmp < 0) {
+        return Verdict::Update;
+      }
+      return Verdict::None;
     }
     if (evidence.installedFileUpdate > evidence.latestFileUpdate &&
         !isActiveFileStatus(evidence.installedFileStatus)) {
@@ -296,14 +381,20 @@ Verdict compute(const Evidence& evidence, const VersionEvidence& versions)
 
   // Rule 5 — guarded version fallback, only when the evidence is incomplete
   // (e.g. a mod that has never been checked with evidence collection).
-  const int cmp = compareNormalized(versions.installed, versions.newest);
-  if (cmp < 0) {
+  // A refused comparison is Unknown, not None: we did not establish that the
+  // installed version is current, we established that we cannot tell.
+  const Comparison comparison = compareNormalized(versions.installed, versions.newest);
+  if (comparison.cmp < 0) {
     return Verdict::Update;
   }
-  if (cmp > 0) {
-    return Verdict::Downgrade;
+  if (comparison.cmp > 0) {
+    // V2 asymmetry, applied here exactly as in rule 4: being ahead of the
+    // recorded newest is only a rollback when the installed file has stopped
+    // being offered. A still-listed newer file is simply the newest file.
+    return isActiveFileStatus(evidence.installedFileStatus) ? Verdict::None
+                                                            : Verdict::Downgrade;
   }
-  return Verdict::None;
+  return comparison.indeterminate ? Verdict::Unknown : Verdict::None;
 }
 
 }  // namespace UpdateVerdict

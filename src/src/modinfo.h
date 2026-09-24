@@ -268,11 +268,40 @@ public:  // Update-check bookkeeping
   static void finishUpdateCheckRequest(const QString& gameName, int modID);
 
   /**
+   * @brief Remember that a bulk file-list request (requestModFileLists) is in
+   * flight.
+   *
+   * Keyed by the nexus request id rather than by game name, so a failed
+   * endorsement/track/description request for the same game can never be
+   * mistaken for a failed update check. A request that was never enqueued
+   * (throttled) returns -1 and must not be registered.
+   */
+  static void registerPendingBulkUpdateCheck(int requestID, const QString& gameName);
+
+  /**
+   * @brief Consume a pending bulk update request.
+   *
+   * @param gameName receives the game's short name when the request was pending.
+   * @return true if requestID was a bulk update check issued by this run.
+   */
+  static bool finishBulkUpdateCheckRequest(int requestID, QString& gameName);
+
+  /**
    * @brief Record a problem for the current check run so it can be surfaced.
    */
   static void noteUpdateCheckProblem(const QString& gameName, int modID,
                                      const QString& message, bool failure = true,
                                      bool alreadyShown = false);
+
+  /**
+   * @brief Record a whole-game update check failure.
+   *
+   * Used for a failed bulk file-list request, which belongs to the game rather
+   * than to any single mod. Recorded with modID 0, which is never a valid
+   * nexus mod id for an update check, so it cannot be confused with a per-mod
+   * result by updateCheckFailed() or filteredMods().
+   */
+  static void noteUpdateCheckGameProblem(const QString& gameName, const QString& message);
 
   /**
    * @brief Forget every recorded problem for this mod (it checked out fine).
@@ -299,6 +328,21 @@ public:  // Update-check bookkeeping
   static std::set<ModInfo::Ptr> filteredMods(QString gameName, QVariantList updateData,
                                              bool addOldMods  = false,
                                              bool markUpdated = false);
+
+  /**
+   * @brief Ask Nexus for the file lists of all given mods in a single request.
+   *
+   * The response is delivered to nxmModFileListsAvailable() on the receiver and
+   * the request id is registered as a bulk check, so a failure is reported
+   * against the whole game rather than against any single mod.
+   *
+   * @param gameName game short name the mods belong to
+   * @param modIDs nexus ids of the mods to look up
+   * @param receiver object receiving the response
+   * @return the nexus request id, or -1 when no request was issued
+   */
+  static int requestModFileLists(const QString& gameName, const std::set<int>& modIDs,
+                                 QObject* receiver);
 
   /**
    * @brief Check wheter a name corresponds to a separator or not,
@@ -625,6 +669,21 @@ public:  // Methods after this do not come from IModInterface:
    * @return true if the newest version is older than the installed one.
    */
   virtual bool downgradeAvailable() const = 0;
+
+  /**
+   * @brief Whether the last check ran but could not reach a verdict.
+   *
+   * Distinct from updateAvailable()/downgradeAvailable() returning false: false
+   * from those asserts "no update exists", whereas this means nothing could
+   * decide — no file-level evidence was captured *and* the version pair is not
+   * orderable (a side missing or unparsable, a date-shaped version, or a
+   * B.1 ambiguity guard). Such a mod must not be rendered as "up to date".
+   *
+   * The default is false: the types with no version bookkeeping (foreign,
+   * overwrite, backup, separator) already report no update, so they have no
+   * verdict to be uncertain about.
+   */
+  virtual bool updateVerdictUnknown() const { return false; }
 
   /**
    * @brief Request an update of nexus description for this mod.
@@ -1011,14 +1070,21 @@ public:  // Update evidence / check diagnostics
   /**
    * @brief Persist the file-level evidence backing the update verdict.
    *
-   * @param newestFileId id of the newest primary/MAIN file (0 if unknown).
+   * @param newestFileId id of the file the verdict is decided against (0 if
+   *        unknown).
    * @param latestFileUpdate upload timestamp of that file (0 if unknown).
    * @param installedFileUpdate upload timestamp of the installed file.
    * @param chainSuccessorFileId terminal successor of the installed file in the
    *        file_updates chain, 0 when there is none.
+   * @param installedFileVersion version label of the installed file as Nexus
+   *        reported it, empty when unknown.
+   * @param latestFileVersion version label of the anchor file, empty when
+   *        unknown.
    */
   virtual void setUpdateEvidence(int newestFileId, qint64 latestFileUpdate,
-                                 qint64 installedFileUpdate, int chainSuccessorFileId)
+                                 qint64 installedFileUpdate, int chainSuccessorFileId,
+                                 const QString& installedFileVersion,
+                                 const QString& latestFileVersion)
   {
   }
 
@@ -1026,6 +1092,22 @@ public:  // Update evidence / check diagnostics
   virtual qint64 latestFileUpdate() const { return 0; }
   virtual qint64 installedFileUpdate() const { return 0; }
   virtual int updateChainFileId() const { return 0; }
+
+  /**
+   * @brief True when this mod has evidence the current build needs but that no
+   *        file-list fetch has ever recorded for it.
+   *
+   * A meta written before a field existed records nothing for it, and a
+   * default written on save is indistinguishable from a real empty answer —
+   * so the meta carries an explicit list of the evidence groups a fetch has
+   * filled in, and this reports whether that list still has holes.
+   *
+   * filteredMods() gives these mods a real file list on the next "Check for
+   * updates" whatever the bulk response says, which is what makes adding an
+   * evidence field backfill every existing mod instead of silently leaving the
+   * whole library on incomplete evidence for a month.
+   */
+  virtual bool needsEvidenceRefresh() const { return false; }
 
   /**
    * @return why the last update check for this mod did not produce a verdict.

@@ -378,6 +378,9 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
         return {};
       } else if (modInfo->updateAvailable() || modInfo->downgradeAvailable()) {
         return QBrush(Qt::red);
+      } else if (modInfo->updateVerdictUnknown()) {
+        // "No update" was never established, so no colour may claim it.
+        return {};
       } else {
         return QBrush(Qt::darkGreen);
       }
@@ -433,6 +436,13 @@ QVariant ModList::data(const QModelIndex& modelIndex, int role) const
                         "(i.e. due to a bug) or the author uses a non-standard "
                         "versioning scheme and that newest version is actually newer. "
                         "Either way you may want to \"upgrade\".");
+      } else if (modInfo->updateVerdictUnknown()) {
+        // Not a claim of "up to date": the check could not establish one either
+        // way, so say so instead of leaving the reader to infer it from silence.
+        text +=
+            "<br>" + tr("Could not determine whether an update exists: this mod has no "
+                        "file information from Nexus yet, and the installed and newest "
+                        "version strings cannot be compared.");
       }
       if (modInfo->getNexusFileStatus() == NexusInterface::FileStatus::OLD_VERSION) {
         text += "<br>" + tr("This file has been marked as \"Old\". There is most "

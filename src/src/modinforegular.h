@@ -65,6 +65,13 @@ public:
   bool downgradeAvailable() const override;
 
   /**
+   * @brief true when the check ran but no evidence could decide the verdict
+   *
+   * @return true if the verdict is unknown rather than "no update"
+   **/
+  bool updateVerdictUnknown() const override;
+
+  /**
    * @brief request an update of nexus description for this mod.
    *
    * This requests mod information from the nexus. This is an asynchronous request,
@@ -451,12 +458,34 @@ public:
 
 public:  // Update evidence / check diagnostics
   void setUpdateEvidence(int newestFileId, qint64 latestFileUpdate,
-                         qint64 installedFileUpdate, int chainSuccessorFileId) override;
+                         qint64 installedFileUpdate, int chainSuccessorFileId,
+                         const QString& installedFileVersion,
+                         const QString& latestFileVersion) override;
+
+  /**
+   * @brief Forget all recorded facts about the currently installed Nexus file.
+   *
+   * Called when the folder's installed file changes, since the recorded chain
+   * successor, upload date and category all described the previous content.
+   */
+  void clearUpdateEvidence();
 
   int newestFileId() const override { return m_NewestFileId; }
   qint64 latestFileUpdate() const override { return m_LatestFileUpdate; }
   qint64 installedFileUpdate() const override { return m_InstalledFileUpdate; }
   int updateChainFileId() const override { return m_UpdateChainFileId; }
+
+  /**
+   * @brief True when the evidence groups a fetch records are incomplete.
+   *
+   * Empty for a mod that has never been checked, and for every meta written
+   * before the current set of evidence groups existed — which is what makes a
+   * newly added field backfill itself across the whole library.
+   */
+  bool needsEvidenceRefresh() const override
+  {
+    return !UpdateVerdict::evidenceFieldsSampled(m_SampledEvidenceFields);
+  }
 
   QString lastCheckError() const override { return m_LastCheckError; }
   void setLastCheckError(const QString& error) override;
@@ -549,6 +578,18 @@ private:
   qint64 m_LatestFileUpdate{0};
   qint64 m_InstalledFileUpdate{0};
   int m_UpdateChainFileId{0};
+  // Version labels of the two files above, as Nexus reported them.
+  QString m_InstalledFileVersion;
+  QString m_LatestFileVersion;
+
+  // Which evidence groups a file-list fetch has actually written for this
+  // mod, as stored in the meta's `updateEvidenceSampled` key. This is what
+  // separates "Nexus returned an empty version label" from "no fetch has ever
+  // run under a build that records labels", which an empty string on its own
+  // cannot: saveMeta() would happily persist the empty default and make the
+  // two cases look the same. Empty until the first fetch, which is also why
+  // every meta written by an older build is due for a refresh.
+  QStringList m_SampledEvidenceFields;
 
   // Why the last check did not produce a verdict ("" when it did).
   QString m_LastCheckError;

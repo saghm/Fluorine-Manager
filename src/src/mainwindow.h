@@ -27,6 +27,10 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <uibase/log.h>
 #include <uibase/tutorialcontrol.h>
 
+#include <QHash>
+#include <QSet>
+#include <QVariant>
+
 #include "delayedfilewriter.h"
 #include "fluorineupdater.h"
 #include "iuserinterface.h"
@@ -292,6 +296,45 @@ private:
   // true while a drain of ModInfo::takeUnshownUpdateCheckProblems() is queued.
   bool m_UpdateCheckProblemSummaryPending{false};
 
+  // One row of the version-chain lookup: which chain a file version belongs to
+  // (mod_file_id) and where it sits in that chain (position).
+  struct FileChainRow
+  {
+    qint64 modFileId = 0;
+    double position  = 0;
+  };
+
+  // A bulk file-list check in flight. The file lists of the mods arrive in a
+  // single v2 response while the version chains of their installed files arrive
+  // in one or more v3 responses, so the pieces are collected here until every
+  // response for this run has landed; only then are verdicts computed and mods
+  // stamped as checked.
+  struct EvidenceRun
+  {
+    QString game;      // game short name
+    QList<int> modIDs; // mods the file lists were requested for, in request order
+
+    int chunksExpected = 0;  // v3 responses still outstanding
+    int chunksReceived = 0;
+
+    // Normalized file rows per mod, keyed by nexus mod id. Absent when Nexus
+    // returned no file list for that mod (page hidden or deleted).
+    QHash<int, QVariantList> filesByMod;
+
+    // v3 version-chain rows, keyed by the file's v2 uid.
+    QHash<QString, FileChainRow> chainByUid;
+  };
+
+  QHash<int, EvidenceRun> m_EvidenceRuns;
+
+  // Stamp one mod from the file list of its Nexus page.
+  void applyUpdateEvidence(const QString& gameShortName, int modID,
+                           const QVariantList& files,
+                           const QHash<int, std::vector<int>>& successorsByFileId);
+
+  // Compute and stamp every verdict of a run whose responses have all arrived.
+  void finishEvidenceRun(const EvidenceRun& run);
+
   QFuture<void> m_MetaSave;
 
   QTime m_StartTime;
@@ -378,8 +421,10 @@ private slots:
                               int requestID);
 
   void nxmEndorsementsAvailable(QVariant userData, QVariant resultData, int);
-  void nxmUpdatesAvailable(QString gameName, int modID, QVariant userData,
-                           QVariant resultData, int requestID);
+  void nxmModFileListsAvailable(QString gameName, QVariant userData, QVariant resultData,
+                                int requestID);
+  void nxmModFileVersionsAvailable(QString gameName, QVariant userData,
+                                   QVariant resultData, int requestID);
   void nxmModInfoAvailable(QString gameName, int modID, QVariant userData,
                            QVariant resultData, int requestID);
   void nxmEndorsementToggled(QString, int, QVariant, QVariant resultData, int);

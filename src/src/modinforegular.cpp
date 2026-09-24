@@ -128,6 +128,22 @@ void ModInfoRegular::readMeta()
   m_LatestFileUpdate = metaFile.value("latestFileUpdate", 0).toLongLong();
   m_InstalledFileUpdate = metaFile.value("installedFileUpdate", 0).toLongLong();
   m_UpdateChainFileId   = metaFile.value("updateChainFileId", 0).toInt();
+
+  // The two per-file version labels. Note these are only meaningful together
+  // with the marker below: an absent key means the labels were never fetched,
+  // which is not the same as a fetch that came back empty.
+  m_InstalledFileVersion = metaFile.value("installedFileVersion", "").toString();
+  m_LatestFileVersion    = metaFile.value("latestFileVersion", "").toString();
+
+  // Which evidence groups a real file-list fetch has filled in. Absent in every
+  // meta written by a build that predates the key, which is what makes such a
+  // mod due for a refresh rather than trusted.
+  m_SampledEvidenceFields.clear();
+  const QString sampledFields = metaFile.value("updateEvidenceSampled", "").toString();
+  if (!sampledFields.isEmpty()) {
+    m_SampledEvidenceFields = sampledFields.split(',', Qt::SkipEmptyParts);
+  }
+
   m_LastCheckError      = metaFile.value("lastCheckError", "").toString();
   m_NexusModStatus      = metaFile.value("nexusModStatus", "").toString();
   m_NexusModAvailable   = metaFile.value("nexusModAvailable", -1).toInt();
@@ -309,6 +325,22 @@ void ModInfoRegular::saveMeta()
       metaFile.setValue("latestFileUpdate", m_LatestFileUpdate);
       metaFile.setValue("installedFileUpdate", m_InstalledFileUpdate);
       metaFile.setValue("updateChainFileId", m_UpdateChainFileId);
+      // Only write labels a fetch actually recorded. Persisting the empty
+      // default for a mod that has never been fetched is what made "never
+      // sampled" and "sampled, and Nexus had nothing to report" look identical
+      // on disk, and it is why a stale meta could be trusted for a month.
+      if (UpdateVerdict::fileVersionLabelsSampled(m_SampledEvidenceFields)) {
+        metaFile.setValue("installedFileVersion", m_InstalledFileVersion);
+        metaFile.setValue("latestFileVersion", m_LatestFileVersion);
+      } else {
+        metaFile.remove("installedFileVersion");
+        metaFile.remove("latestFileVersion");
+      }
+      if (m_SampledEvidenceFields.isEmpty()) {
+        metaFile.remove("updateEvidenceSampled");
+      } else {
+        metaFile.setValue("updateEvidenceSampled", m_SampledEvidenceFields.join(','));
+      }
       if (m_LastCheckError.isEmpty()) {
         metaFile.remove("lastCheckError");
       } else {
@@ -392,13 +424,22 @@ bool ModInfoRegular::downgradeAvailable() const
   return computeUpdateVerdict() == UpdateVerdict::Verdict::Downgrade;
 }
 
+bool ModInfoRegular::updateVerdictUnknown() const
+{
+  return computeUpdateVerdict() == UpdateVerdict::Verdict::Unknown;
+}
+
 UpdateVerdict::Verdict ModInfoRegular::computeUpdateVerdict() const
 {
   UpdateVerdict::Evidence evidence;
   evidence.installedFileUpdate  = m_InstalledFileUpdate;
   evidence.latestFileUpdate     = m_LatestFileUpdate;
+  evidence.installedFileVersion = m_InstalledFileVersion;
+  evidence.latestFileVersion    = m_LatestFileVersion;
   evidence.chainSuccessorFileId = m_UpdateChainFileId;
   evidence.installedFileStatus  = m_NexusFileStatus;
+  evidence.fileVersionSampled =
+      UpdateVerdict::fileVersionLabelsSampled(m_SampledEvidenceFields);
 
   UpdateVerdict::VersionEvidence versions;
   versions.installed = m_Version.isValid() ? m_Version.canonicalString() : QString();
@@ -411,18 +452,58 @@ UpdateVerdict::Verdict ModInfoRegular::computeUpdateVerdict() const
 
 void ModInfoRegular::setUpdateEvidence(int newestFileId, qint64 latestFileUpdate,
                                        qint64 installedFileUpdate,
-                                       int chainSuccessorFileId)
+                                       int chainSuccessorFileId,
+                                       const QString& installedFileVersion,
+                                       const QString& latestFileVersion)
 {
-  if (m_NewestFileId == newestFileId && m_LatestFileUpdate == latestFileUpdate &&
+  // A fetch counts as a fetch even when it happens to reproduce every stored
+  // value, so the marker is part of the early-out rather than a side effect of
+  // it — otherwise a mod whose response carries nothing would keep being asked
+  // for on every check forever.
+  const bool wasComplete = !needsEvidenceRefresh();
+  if (wasComplete && m_NewestFileId == newestFileId &&
+      m_LatestFileUpdate == latestFileUpdate &&
       m_InstalledFileUpdate == installedFileUpdate &&
-      m_UpdateChainFileId == chainSuccessorFileId) {
+      m_UpdateChainFileId == chainSuccessorFileId &&
+      m_InstalledFileVersion == installedFileVersion &&
+      m_LatestFileVersion == latestFileVersion) {
     return;
   }
-  m_NewestFileId        = newestFileId;
-  m_LatestFileUpdate    = latestFileUpdate;
-  m_InstalledFileUpdate = installedFileUpdate;
-  m_UpdateChainFileId   = chainSuccessorFileId;
-  m_MetaInfoChanged     = true;
+  m_NewestFileId         = newestFileId;
+  m_LatestFileUpdate     = latestFileUpdate;
+  m_InstalledFileUpdate  = installedFileUpdate;
+  m_UpdateChainFileId    = chainSuccessorFileId;
+  m_InstalledFileVersion = installedFileVersion;
+  m_LatestFileVersion    = latestFileVersion;
+  // Everything this call was handed counts as recorded, including the values
+  // that came back empty: an author who never set a version label has still
+  // been asked, and the answer stands until the next fetch.
+  m_SampledEvidenceFields = UpdateVerdict::requiredEvidenceFields();
+  m_MetaInfoChanged      = true;
+  // These fields *are* the verdict for rules 2 and 4; without a signal
+  // the mod list keeps painting the previous answer.
+  emit modDetailsUpdated(true);
+}
+
+void ModInfoRegular::clearUpdateEvidence()
+{
+  if (m_NewestFileId == 0 && m_LatestFileUpdate == 0 && m_InstalledFileUpdate == 0 &&
+      m_UpdateChainFileId == 0 && m_InstalledFileVersion.isEmpty() &&
+      m_LatestFileVersion.isEmpty() && m_SampledEvidenceFields.isEmpty()) {
+    return;
+  }
+  m_NewestFileId         = 0;
+  m_LatestFileUpdate     = 0;
+  m_InstalledFileUpdate  = 0;
+  m_UpdateChainFileId    = 0;
+  m_InstalledFileVersion.clear();
+  m_LatestFileVersion.clear();
+  // The marker goes with the evidence: the installed file just changed, so
+  // everything recorded described the previous content and the mod is due for
+  // a fresh file list.
+  m_SampledEvidenceFields.clear();
+  m_MetaInfoChanged      = true;
+  emit modDetailsUpdated(true);
 }
 
 void ModInfoRegular::setLastCheckError(const QString& error)
@@ -662,6 +743,12 @@ void ModInfoRegular::setNewestVersion(const VersionInfo& version)
   if (version != m_NewestVersion) {
     m_NewestVersion   = version;
     m_MetaInfoChanged = true;
+    // newestVersion feeds the verdict, so the list has to be told. Its
+    // siblings (setNexusFileStatus, setLastNexusUpdate) already do this; the
+    // verdict setters were the only ones that changed the answer silently,
+    // which left the mod list showing a stale colour until something else
+    // forced a full repaint.
+    emit modDetailsUpdated(true);
   }
 }
 
@@ -1053,8 +1140,23 @@ QStringList ModInfoRegular::archives(bool checkOnDisk)
 
 void ModInfoRegular::addInstalledFile(int modId, int fileId)
 {
-  m_InstalledFileIDs.insert(std::make_pair(modId, fileId));
+  const bool added = m_InstalledFileIDs.insert(std::make_pair(modId, fileId)).second;
   m_MetaInfoChanged = true;
+  if (added) {
+    // The folder now holds a different Nexus file, so every recorded fact about
+    // the *previous* installed file is wrong: its chain successor, its upload
+    // date and its category all described content that is no longer there.
+    // Leaving them in place made a freshly updated mod keep painting the
+    // verdict it had before the reinstall, until the next check happened to
+    // cover it again.
+    clearUpdateEvidence();
+    // The previous file's category is likewise meaningless now; fall back to
+    // the "unknown category" default rather than claiming the new file is old.
+    if (m_NexusFileStatus != 1) {
+      m_NexusFileStatus = 1;
+      emit modDetailsUpdated(true);
+    }
+  }
 }
 
 std::vector<QString> ModInfoRegular::getIniTweaks() const

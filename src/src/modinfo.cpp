@@ -44,6 +44,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <QApplication>
 #include <QDirIterator>
+#include <QHash>
 #include <QMutexLocker>
 #include <QSettings>
 #include <QTimeZone>
@@ -324,6 +325,13 @@ struct UpdateCheckRun
   QMutex mutex;
   std::vector<ModInfo::UpdateCheckProblem> problems;
   std::set<std::pair<QString, int>> pending;
+
+  // Bulk file-list requests in flight, keyed by the nexus request id
+  // (unique per request, from NXMRequestInfo::s_NextID). Keying by id rather
+  // than by game name is what guarantees an unrelated failed request for the
+  // same game — endorsement, track, description — can never be reported as a
+  // failed update check.
+  QHash<int, QString> pendingBulk;
 };
 
 UpdateCheckRun& updateCheckRun()
@@ -345,6 +353,33 @@ void ModInfo::clearUpdateCheckRun()
   QMutexLocker locker(&state.mutex);
   state.problems.clear();
   state.pending.clear();
+  state.pendingBulk.clear();
+}
+
+void ModInfo::registerPendingBulkUpdateCheck(int requestID, const QString& gameName)
+{
+  if (requestID < 0) {
+    return;
+  }
+  UpdateCheckRun& state = updateCheckRun();
+  QMutexLocker locker(&state.mutex);
+  state.pendingBulk.insert(requestID, gameName);
+}
+
+bool ModInfo::finishBulkUpdateCheckRequest(int requestID, QString& gameName)
+{
+  if (requestID < 0) {
+    return false;
+  }
+  UpdateCheckRun& state = updateCheckRun();
+  QMutexLocker locker(&state.mutex);
+  const auto it = state.pendingBulk.constFind(requestID);
+  if (it == state.pendingBulk.constEnd()) {
+    return false;
+  }
+  gameName = it.value();
+  state.pendingBulk.erase(it);
+  return true;
 }
 
 void ModInfo::registerPendingUpdateCheck(const QString& gameName, int modID)
@@ -404,6 +439,33 @@ void ModInfo::noteUpdateCheckProblem(const QString& gameName, int modID,
   problem.message  = message;
   problem.failure  = failure;
   problem.shown    = alreadyShown;
+  state.problems.push_back(problem);
+}
+
+void ModInfo::noteUpdateCheckGameProblem(const QString& gameName, const QString& message)
+{
+  UpdateCheckRun& state = updateCheckRun();
+  QMutexLocker locker(&state.mutex);
+
+  // modID 0 marks "the whole game's check", which is how a bulk file-list
+  // failure is represented: it is not attributable to any single mod, and 0 can
+  // never collide with a real nexus mod id (update checks require nexusId() > 0).
+  const auto key = updateCheckKey(gameName, 0);
+  for (auto& problem : state.problems) {
+    if (updateCheckKey(problem.gameName, problem.modID) == key) {
+      problem.message = message;
+      problem.failure = true;
+      problem.shown   = false;
+      return;
+    }
+  }
+
+  ModInfo::UpdateCheckProblem problem;
+  problem.gameName = key.first;
+  problem.modID    = 0;
+  problem.message  = message;
+  problem.failure  = true;
+  problem.shown    = false;
   state.problems.push_back(problem);
 }
 
@@ -491,6 +553,37 @@ void ModInfo::recoverMissingModIds()
   }
 }
 
+int ModInfo::requestModFileLists(const QString& gameName, const std::set<int>& modIDs,
+                                 QObject* receiver)
+{
+  if (modIDs.empty()) {
+    return -1;
+  }
+
+  QList<int>   ids;
+  QVariantList idList;
+  ids.reserve(static_cast<int>(modIDs.size()));
+  idList.reserve(static_cast<int>(modIDs.size()));
+  for (int modID : modIDs) {
+    ids.append(modID);
+    idList.append(modID);
+  }
+
+  // The response handler needs to know which mods were asked for, and the
+  // request id needs to be recognisable as part of this game's check so a
+  // failure is attributed to it and to nothing else.
+  QVariantMap userData;
+  userData.insert(QStringLiteral("game"), gameName);
+  userData.insert(QStringLiteral("modIds"), idList);
+
+  const int requestID = NexusInterface::instance().requestModFileLists(
+      gameName, ids, receiver, userData, QString());
+  if (requestID >= 0) {
+    registerPendingBulkUpdateCheck(requestID, gameName);
+  }
+  return requestID;
+}
+
 bool ModInfo::checkAllForUpdate(PluginContainer* pluginContainer, QObject* receiver)
 {
   bool updatesAvailable = true;
@@ -549,6 +642,19 @@ bool ModInfo::checkAllForUpdate(PluginContainer* pluginContainer, QObject* recei
     }
   }
 
+  // One bulk request per game, as before. The nexus request id is registered so
+  // that a failure can be attributed to *this game's* update check — and only to
+  // it — in nxmRequestFailed(), which is an app-global signal carrying no
+  // request type. A throttled request returns -1 and is not registered.
+  const auto bulkCheck = [receiver](const QString& gameName,
+                                    NexusInterface::UpdatePeriod period, bool markUpdated) {
+    const int requestID = NexusInterface::instance().requestUpdateInfo(
+        gameName, period, receiver, QVariant(markUpdated), QString());
+    if (requestID >= 0) {
+      ModInfo::registerPendingBulkUpdateCheck(requestID, gameName);
+    }
+  };
+
   if (latest < QDateTime::currentDateTimeUtc().addMonths(-1)) {
     std::set<std::pair<QString, int>> organizedGames;
     for (const auto& mod : s_Collection) {
@@ -569,55 +675,32 @@ bool ModInfo::checkAllForUpdate(PluginContainer* pluginContainer, QObject* recei
       // The click still has to do something visible: the bulk request is one
       // request per game and refreshes the dates the list is judged on.
       for (const auto& gameName : nexusGames)
-        NexusInterface::instance().requestUpdateInfo(gameName,
-                                                     NexusInterface::UpdatePeriod::DAY,
-                                                     receiver, QVariant(false),
-                                                     QString());
+        bulkCheck(gameName, NexusInterface::UpdatePeriod::DAY, false);
     } else {
       log::info("{}", tr("You have mods that haven't been checked within the last "
-                         "month using the new API. These mods must be checked before "
-                         "we can use the bulk update API. "
-                         "This will consume significantly more API requests than "
-                         "usual. The bulk phase follows automatically once they "
-                         "are done."));
-    }
-
-    for (const auto& game : organizedGames) {
-      if (NexusInterface::instance().requestUpdates(game.second, receiver, QVariant(),
-                                                    game.first, QString()) >= 0) {
-        registerPendingUpdateCheck(game.first, game.second);
-      }
+                         "month. Their file lists are fetched in one bulk request "
+                         "as part of this check."));
     }
 
     if (!organizedGames.empty()) {
-      // Enqueued behind the per-mod requests above, so the queue runs it only
-      // once every priming request has completed: one click, one run.
+      // One bulk request per game: filteredMods(addOldMods=true) returns every
+      // mod older than a month, so the file lists fetched from that response on
+      // cover exactly these mods. Nothing is checked by a request of its own.
       for (const auto& gameName : games)
-        NexusInterface::instance().requestUpdateInfo(gameName,
-                                                     NexusInterface::UpdatePeriod::MONTH,
-                                                     receiver, QVariant(true),
-                                                     QString());
+        bulkCheck(gameName, NexusInterface::UpdatePeriod::MONTH, true);
     }
   } else if (earliest < QDateTime::currentDateTimeUtc().addMonths(-1)) {
     for (const auto& gameName : games)
-      NexusInterface::instance().requestUpdateInfo(gameName,
-                                                   NexusInterface::UpdatePeriod::MONTH,
-                                                   receiver, QVariant(true), QString());
+      bulkCheck(gameName, NexusInterface::UpdatePeriod::MONTH, true);
   } else if (earliest < QDateTime::currentDateTimeUtc().addDays(-7)) {
     for (const auto& gameName : games)
-      NexusInterface::instance().requestUpdateInfo(
-          gameName, NexusInterface::UpdatePeriod::MONTH, receiver, QVariant(false),
-          QString());
+      bulkCheck(gameName, NexusInterface::UpdatePeriod::MONTH, false);
   } else if (earliest < QDateTime::currentDateTimeUtc().addDays(-1)) {
     for (const auto& gameName : games)
-      NexusInterface::instance().requestUpdateInfo(
-          gameName, NexusInterface::UpdatePeriod::WEEK, receiver, QVariant(false),
-          QString());
+      bulkCheck(gameName, NexusInterface::UpdatePeriod::WEEK, false);
   } else {
     for (const auto& gameName : games)
-      NexusInterface::instance().requestUpdateInfo(
-          gameName, NexusInterface::UpdatePeriod::DAY, receiver, QVariant(false),
-          QString());
+      bulkCheck(gameName, NexusInterface::UpdatePeriod::DAY, false);
   }
 
   return updatesAvailable;
@@ -650,6 +733,26 @@ std::set<QSharedPointer<ModInfo>> ModInfo::filteredMods(QString gameName,
           mod->gameName().compare(gameName, Qt::CaseInsensitive) == 0)
         finalMods.insert(mod);
 
+  // Mods whose recorded evidence predates a field this build needs are due no
+  // matter what the bulk response says: their verdict would otherwise be
+  // computed from evidence nobody ever collected, and lastNexusUpdate would
+  // keep them stamped as checked for a month. This is the backfill path, and it
+  // runs regardless of addOldMods because a mod can be freshly stamped *and*
+  // still be missing everything the verdict needs.
+  //
+  // Deliberately does not touch lastNexusUpdate. A mod whose fetch fails keeps
+  // its real check timestamp, so it falls back to the normal one-month retry
+  // cadence instead of being asked again on every check, and "last checked"
+  // still shows a date.
+  for (const auto& mod : s_Collection) {
+    if (!mod->canBeUpdated() || !mod->needsEvidenceRefresh()) {
+      continue;
+    }
+    if (mod->gameName().compare(gameName, Qt::CaseInsensitive) == 0) {
+      finalMods.insert(mod);
+    }
+  }
+
   if (markUpdated) {
     std::set<QSharedPointer<ModInfo>> updates;
     std::copy_if(s_Collection.begin(), s_Collection.end(),
@@ -674,7 +777,6 @@ std::set<QSharedPointer<ModInfo>> ModInfo::filteredMods(QString gameName,
 void ModInfo::manualUpdateCheck(QObject* receiver, std::multimap<QString, int> IDs)
 {
   std::vector<QSharedPointer<ModInfo>> mods;
-  std::set<std::pair<QString, int>> organizedGames;
 
   for (const auto& ID : IDs) {
     for (const auto& matchedMod : getByModID(ID.first, ID.second)) {
@@ -706,16 +808,15 @@ void ModInfo::manualUpdateCheck(QObject* receiver, std::multimap<QString, int> I
   if (!mods.empty()) {
     log::info("Checking updates for {} mods...", mods.size());
 
+    // Every selected mod of a game goes into a single request, so checking a
+    // selection costs the same one request per game as checking everything.
+    std::map<QString, std::set<int>> byGame;
     for (const auto& mod : mods) {
-      organizedGames.insert(
-          std::make_pair<QString, int>(mod->gameName().toLower(), mod->nexusId()));
+      byGame[mod->gameName().toLower()].insert(mod->nexusId());
     }
 
-    for (const auto& game : organizedGames) {
-      if (NexusInterface::instance().requestUpdates(game.second, receiver, QVariant(),
-                                                    game.first, QString()) >= 0) {
-        registerPendingUpdateCheck(game.first, game.second);
-      }
+    for (const auto& game : byGame) {
+      requestModFileLists(game.first, game.second, receiver);
     }
   } else {
     log::info("None of the selected mods can be updated.");

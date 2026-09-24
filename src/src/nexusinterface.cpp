@@ -30,7 +30,9 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <utility.h>
 
 #include <QApplication>
+#include <QJsonArray>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QNetworkCookieJar>
 #include <QRegularExpression>
 
@@ -541,27 +543,100 @@ int NexusInterface::requestUpdateInfo(QString gameName,
   return requestInfo.m_ID;
 }
 
-int NexusInterface::requestUpdates(const int& modID, QObject* receiver,
-                                   QVariant userData, QString gameName,
-                                   const QString& subModule)
+int NexusInterface::requestModFileLists(const QString& gameName, const QList<int>& modIDs,
+                                        QObject* receiver, QVariant userData,
+                                        const QString& subModule)
 {
   if (m_User.shouldThrottle()) {
     throttledWarning(m_User);
     return -1;
   }
 
-  IPluginGame* game = getGame(gameName);
-  if (game == nullptr) {
-    log::error("requestUpdates can't find plugin for {}", gameName);
+  if (modIDs.isEmpty()) {
     return -1;
   }
 
-  NXMRequestInfo const requestInfo(modID, NXMRequestInfo::TYPE_GETUPDATES, userData,
-                             subModule, game);
+  IPluginGame* game = getGame(gameName);
+  if (game == nullptr) {
+    log::error("requestModFileLists can't find plugin for {}", gameName);
+    return -1;
+  }
+
+  // One aliased selection per mod, all inside a single document: the file lists
+  // of an entire library arrive in one response, so the cost of a check is one
+  // request however many mods are in it.
+  QString query = QStringLiteral("query {");
+  for (int i = 0; i < modIDs.size(); ++i) {
+    query += QStringLiteral(" m%1: modFiles(modId: \"%2\", gameId: \"%3\") ")
+                 .arg(i)
+                 .arg(modIDs.at(i))
+                 .arg(game->nexusGameID());
+    query += QStringLiteral("{ uid fileId version date categoryId primary name }");
+  }
+  query += QStringLiteral(" }");
+
+  QJsonObject body;
+  body.insert(QStringLiteral("query"), query);
+
+  NXMRequestInfo requestInfo(NXMRequestInfo::TYPE_MODFILELISTS, userData, subModule, game);
+  applyGameNameOverride(requestInfo, gameName, game);
+  requestInfo.m_Reroute     = true;
+  requestInfo.m_URL         = QStringLiteral("https://api.nexusmods.com/v2/graphql");
+  requestInfo.m_RawPostBody = QJsonDocument(body).toJson(QJsonDocument::Compact);
   m_RequestQueue.enqueue(requestInfo);
 
-  connect(this, SIGNAL(nxmUpdatesAvailable(QString, int, QVariant, QVariant, int)),
-          receiver, SLOT(nxmUpdatesAvailable(QString, int, QVariant, QVariant, int)),
+  connect(this, SIGNAL(nxmModFileListsAvailable(QString, QVariant, QVariant, int)),
+          receiver, SLOT(nxmModFileListsAvailable(QString, QVariant, QVariant, int)),
+          Qt::UniqueConnection);
+
+  connect(
+      this, SIGNAL(nxmRequestFailed(QString, int, int, QVariant, int, int, QString)),
+      receiver, SLOT(nxmRequestFailed(QString, int, int, QVariant, int, int, QString)),
+      Qt::UniqueConnection);
+
+  nextRequest();
+  return requestInfo.m_ID;
+}
+
+int NexusInterface::requestModFileVersions(const QString& gameName,
+                                           const QStringList& versionIDs,
+                                           QObject* receiver, QVariant userData,
+                                           const QString& subModule)
+{
+  if (m_User.shouldThrottle()) {
+    throttledWarning(m_User);
+    return -1;
+  }
+
+  if (versionIDs.isEmpty()) {
+    return -1;
+  }
+
+  IPluginGame* game = getGame(gameName);
+  if (game == nullptr) {
+    log::error("requestModFileVersions can't find plugin for {}", gameName);
+    return -1;
+  }
+
+  QJsonArray ids;
+  for (const QString& id : versionIDs) {
+    ids.append(id);
+  }
+
+  QJsonObject body;
+  body.insert(QStringLiteral("version_ids"), ids);
+
+  NXMRequestInfo requestInfo(NXMRequestInfo::TYPE_MODFILEVERSIONS, userData, subModule,
+                             game);
+  applyGameNameOverride(requestInfo, gameName, game);
+  requestInfo.m_Reroute     = true;
+  requestInfo.m_URL =
+      QStringLiteral("https://api.nexusmods.com/v3/mod-file-versions/batch");
+  requestInfo.m_RawPostBody = QJsonDocument(body).toJson(QJsonDocument::Compact);
+  m_RequestQueue.enqueue(requestInfo);
+
+  connect(this, SIGNAL(nxmModFileVersionsAvailable(QString, QVariant, QVariant, int)),
+          receiver, SLOT(nxmModFileVersionsAvailable(QString, QVariant, QVariant, int)),
           Qt::UniqueConnection);
 
   connect(
@@ -914,12 +989,16 @@ void NexusInterface::nextRequest()
                 .arg(info.m_GameName)
                 .arg(period);
     } break;
-    case NXMRequestInfo::TYPE_FILES:
-    case NXMRequestInfo::TYPE_GETUPDATES: {
+    case NXMRequestInfo::TYPE_FILES: {
       url = QString("%1/games/%2/mods/%3/files")
                 .arg(info.m_URL)
                 .arg(info.m_GameName)
                 .arg(info.m_ModID);
+    } break;
+    case NXMRequestInfo::TYPE_MODFILELISTS:
+    case NXMRequestInfo::TYPE_MODFILEVERSIONS: {
+      // Rerouted below: the URL and the JSON body were already built by the
+      // request function that issued them.
     } break;
     case NXMRequestInfo::TYPE_FILEINFO: {
       url = QString("%1/games/%2/mods/%3/files/%4")
@@ -990,6 +1069,13 @@ void NexusInterface::nextRequest()
     }
   } else {
     url = info.m_URL;
+  }
+
+  if (!info.m_RawPostBody.isEmpty()) {
+    // The bulk v2/v3 endpoints take a fixed JSON document that was already put
+    // together by the request function, rather than one derived from the
+    // request info above.
+    postData = QJsonDocument::fromJson(info.m_RawPostBody);
   }
 
   const auto currentTokens = m_AccessManager->tokens();
@@ -1069,7 +1155,13 @@ void NexusInterface::requestFinished(std::list<NXMRequestInfo>::iterator iter)
       // These errors are allows to silently happen.  They should be handled in
       // nxmRequestFailed below.
     } else if (statusCode == 429) {
-      m_User.limits(parseLimits(reply));
+      // Only apply limits the endpoint actually reported. The v2/v3 APIs send no
+      // rate-limit headers at all, and storing their empty result would wipe the
+      // known limits and make the account look permanently exhausted.
+      if (const APILimits limits = parseLimits(reply);
+          limits.maxDailyRequests > 0 || limits.maxHourlyRequests > 0) {
+        m_User.limits(limits);
+      }
 
       if (!m_User.exhausted()) {
         log::warn("You appear to be making requests to the Nexus API too quickly and "
@@ -1135,9 +1227,13 @@ void NexusInterface::requestFinished(std::list<NXMRequestInfo>::iterator iter)
           emit nxmFilesAvailable(iter->m_GameName, iter->m_ModID, iter->m_UserData,
                                  result, iter->m_ID);
         } break;
-        case NXMRequestInfo::TYPE_GETUPDATES: {
-          emit nxmUpdatesAvailable(iter->m_GameName, iter->m_ModID, iter->m_UserData,
-                                   result, iter->m_ID);
+        case NXMRequestInfo::TYPE_MODFILELISTS: {
+          emit nxmModFileListsAvailable(iter->m_GameName, iter->m_UserData, result,
+                                        iter->m_ID);
+        } break;
+        case NXMRequestInfo::TYPE_MODFILEVERSIONS: {
+          emit nxmModFileVersionsAvailable(iter->m_GameName, iter->m_UserData, result,
+                                           iter->m_ID);
         } break;
         case NXMRequestInfo::TYPE_FILEINFO: {
           emit nxmFileInfoAvailable(iter->m_GameName, iter->m_ModID, iter->m_FileID,
@@ -1184,7 +1280,12 @@ void NexusInterface::requestFinished(std::list<NXMRequestInfo>::iterator iter)
         } break;
         }
 
-        m_User.limits(parseLimits(reply));
+        // Empty limits are ignored here for the same reason as in the 429
+        // branch above.
+        if (const APILimits limits = parseLimits(reply);
+            limits.maxDailyRequests > 0 || limits.maxHourlyRequests > 0) {
+          m_User.limits(limits);
+        }
         emit requestsChanged(getAPIStats(), m_User);
       } else {
         emit nxmRequestFailed(iter->m_GameName, iter->m_ModID, iter->m_FileID,

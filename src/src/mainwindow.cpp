@@ -3089,8 +3089,15 @@ void MainWindow::nxmEndorsementsAvailable(QVariant userData, QVariant resultData
 }
 
 void MainWindow::nxmUpdateInfoAvailable(QString gameName, QVariant userData,
-                                        QVariant resultData, int)
+                                        QVariant resultData, int requestID)
 {
+  // The bulk check for this game succeeded; drop it from the pending set so a
+  // later unrelated failure cannot be attributed to it.
+  {
+    QString bulkGame;
+    ModInfo::finishBulkUpdateCheckRequest(requestID, bulkGame);
+  }
+
   QString gameNameReal;
   for (IPluginGame* game : m_PluginContainer.plugins<IPluginGame>()) {
     if (game->gameNexusName() == gameName) {
@@ -3134,11 +3141,16 @@ void MainWindow::finishUpdateInfo(const NxmUpdateInfoData& data)
     log::warn("{}", tr("All of your mods have been checked recently. We restrict "
                        "update checks to help preserve your available API requests."));
 
+  // One request for the file lists of every mod of the game. The ids are
+  // grouped by game so a mixed set still costs one request per game rather
+  // than one per mod.
+  std::map<QString, std::set<int>> modIDsByGame;
   for (const auto& game : organizedGames) {
-    if (NexusInterface::instance().requestUpdates(game.second, this, QVariant(), game.first,
-                                                  QString()) >= 0) {
-      ModInfo::registerPendingUpdateCheck(game.first, game.second);
-    }
+    modIDsByGame[game.first].insert(game.second);
+  }
+
+  for (const auto& game : modIDsByGame) {
+    ModInfo::requestModFileLists(game.first, game.second, this);
   }
 }
 
@@ -3159,50 +3171,80 @@ QString gameShortNameForNexus(PluginContainer& pluginContainer, const QString& n
 }
 
 /**
- * @brief Walk the file_updates chain starting at installedFileId and return
- *   the ordered list of successor file_ids (oldest first).
+ * @brief Map a game's short name back to its human-readable name.
+ *
+ * The update-check registry keys games by their lower-cased short name; this
+ * turns that back into something worth putting in front of a user.
  */
-std::vector<int>
-findUpdateChainSuccessors(int installedFileId,
-                          const QHash<int, QVariantMap>& updatesByOldId)
+QString gameDisplayName(PluginContainer& pluginContainer, const QString& shortName)
 {
-  std::vector<int> successors;
-  QSet<int> visited;
-  int currentId = installedFileId;
-
-  while (true) {
-    const auto updateIt = updatesByOldId.constFind(currentId);
-    if (updateIt == updatesByOldId.constEnd()) {
-      break;
+  for (IPluginGame* game : pluginContainer.plugins<IPluginGame>()) {
+    if (game->gameShortName().compare(shortName, Qt::CaseInsensitive) == 0) {
+      return game->gameName();
     }
-
-    currentId = updateIt.value()["new_file_id"].toInt();
-    if (visited.contains(currentId)) {
-      break;
-    }
-    visited.insert(currentId);
-    successors.push_back(currentId);
   }
+  return shortName;
+}
 
-  return successors;
+/**
+ * @brief Turn a JSON id — string or number — into the string form Nexus uses
+ *   to identify it.
+ *
+ * Large ids can arrive as doubles; going through the integer keeps them exact
+ * instead of losing digits to a default float conversion.
+ */
+QString idToString(const QVariant& value)
+{
+  if (value.metaType().id() == QMetaType::QString) {
+    return value.toString();
+  }
+  bool ok = false;
+  const qlonglong asInteger = value.toLongLong(&ok);
+  if (ok) {
+    return QString::number(asInteger);
+  }
+  return value.toString();
+}
+
+/**
+ * @brief Bring a row of the v2 `modFiles` response into the shape the rest of
+ *   the check works in, which is the shape of the v1 file list.
+ *
+ * The archive name is not among the fields: v2 exposes only the display name.
+ * The uid is kept because that is what the version-chain lookup is keyed on.
+ */
+QVariantMap normalizeFileRow(const QVariant& row)
+{
+  const QVariantMap file = row.toMap();
+  QVariantMap normalized;
+  normalized.insert("file_id", file.value("fileId"));
+  normalized.insert("version", file.value("version"));
+  normalized.insert("uploaded_timestamp", file.value("date"));
+  normalized.insert("category_id", file.value("categoryId"));
+  normalized.insert("is_primary", file.value("primary"));
+  normalized.insert("name", file.value("name"));
+  normalized.insert("uid", idToString(file.value("uid")));
+  return normalized;
 }
 
 /**
  * @brief Resolve the Nexus file_id of a mod's installed file.
  *
- * Identity is anchored on ids, not on names inside the update chain: those two
- * fields are content-hash paths and can never match an archive name (root
- * cause 8). The recorded id wins when it is unambiguous, because it is the
- * only anchor that survives the author re-uploading the same archive name
- * under a new file_id — matching the name there would resolve to the *new*
- * file, whose chain is empty and whose timestamps are the current ones, and
- * the check would report nothing forever.
+ * Identity is anchored on ids first: `installedFiles` is append-only
+ * (`addInstalledFile` never erases), so a mod reinstalled from a different
+ * file carries every id it ever got, while a mod with exactly one recorded id
+ * has nothing to choose between — that covers about nine in ten of them, and
+ * the recorded id is the only anchor that survives an author re-uploading the
+ * same archive under a new file_id.
  *
- * `installedFiles` is append-only (`addInstalledFile` never erases), so a mod
- * reinstalled from a different file carries every id it ever got. With several
- * candidates the archive name is the only statement of what is in the folder
- * right now, so it disambiguates; with no name match we fall back to the first
- * recorded id (the plan's `[installedFiles] 1\fileid`).
+ * When the list is ambiguous there is no archive name to compare against: v2
+ * exposes only the display name, which a downloaded file name does not equal
+ * (root cause 8). What the archive name does carry is the file's upload
+ * timestamp, embedded as ten decimal digits in every name Nexus generates,
+ * and after that a display name the archive name starts with together with the
+ * version label. Both steps only accept a *unique* match, and a mod whose file
+ * cannot be matched uniquely stays unresolved: it takes the mod-info path and
+ * is asked again on the next check rather than being anchored on a guess.
  */
 std::optional<int> resolveInstalledFileId(const ModInfo::Ptr& mod,
                                           const QList<QVariant>& files)
@@ -3226,19 +3268,88 @@ std::optional<int> resolveInstalledFileId(const ModInfo::Ptr& mod,
     return recorded.front();
   }
 
-  const QString installedFileName = QFileInfo(mod->installationFile()).fileName();
-  if (!installedFileName.isEmpty()) {
-    for (const auto& file : files) {
-      const auto fileData = file.toMap();
-      if (fileData["file_name"].toString().compare(installedFileName,
-                                                   Qt::CaseInsensitive) == 0) {
-        return fileData["file_id"].toInt();
+  // Several recorded installs, or none at all: only the files the mod could
+  // actually have been installed from are worth comparing against.
+  const auto isCandidate = [&recorded](const QVariantMap& file) {
+    if (recorded.size() <= 1) {
+      return true;
+    }
+    const int fileId = file["file_id"].toInt();
+    return std::find(recorded.begin(), recorded.end(), fileId) != recorded.end();
+  };
+
+  const auto uniqueMatch = [](std::vector<int> matches) -> std::optional<int> {
+    std::sort(matches.begin(), matches.end());
+    matches.erase(std::unique(matches.begin(), matches.end()), matches.end());
+    if (matches.size() == 1) {
+      return matches.front();
+    }
+    return std::nullopt;
+  };
+
+  const QString archiveName = QFileInfo(mod->installationFile()).fileName();
+
+  if (!archiveName.isEmpty()) {
+    static const QRegularExpression timestampPattern(
+        QStringLiteral("(?<!\\d)\\d{10}(?!\\d)"));
+
+    QSet<QString> timestamps;
+    auto timestampMatch = timestampPattern.globalMatch(archiveName);
+    while (timestampMatch.hasNext()) {
+      timestamps.insert(timestampMatch.next().captured(0));
+    }
+
+    if (!timestamps.isEmpty()) {
+      std::vector<int> matches;
+      for (const auto& file : files) {
+        const QVariantMap fileData = file.toMap();
+        if (!isCandidate(fileData)) {
+          continue;
+        }
+        const QString uploaded =
+            QString::number(fileData["uploaded_timestamp"].toLongLong());
+        if (timestamps.contains(uploaded)) {
+          matches.push_back(fileData["file_id"].toInt());
+        }
       }
+      if (const auto match = uniqueMatch(std::move(matches))) {
+        return match;
+      }
+    }
+
+    // Otherwise the display name is what the archive name begins with and the
+    // version label appears somewhere in it. Separators are normalized because
+    // an archive name is written as `v1-2-0` where the label says `1.2.0`.
+    const QString namePrefix    = archiveName.toLower();
+    const QString normalizedName = QString(namePrefix).replace('-', '.').replace('_', '.');
+
+    std::vector<int> matches;
+    for (const auto& file : files) {
+      const QVariantMap fileData = file.toMap();
+      if (!isCandidate(fileData)) {
+        continue;
+      }
+      const QString displayName = fileData["name"].toString().trimmed().toLower();
+      const QString version     = fileData["version"].toString().trimmed().toLower();
+      if (displayName.isEmpty() || version.isEmpty()) {
+        continue;
+      }
+      if (!namePrefix.startsWith(displayName)) {
+        continue;
+      }
+      if (!normalizedName.contains(QString(version).replace('-', '.').replace('_', '.'))) {
+        continue;
+      }
+      matches.push_back(fileData["file_id"].toInt());
+    }
+    if (const auto match = uniqueMatch(std::move(matches))) {
+      return match;
     }
   }
 
-  if (!recorded.empty()) {
-    return recorded.front();
+  // One file offered and nothing recorded: there is nothing else it could be.
+  if (recorded.empty() && files.size() == 1) {
+    return files.front().toMap()["file_id"].toInt();
   }
 
   return std::nullopt;
@@ -3246,17 +3357,17 @@ std::optional<int> resolveInstalledFileId(const ModInfo::Ptr& mod,
 
 /**
  * @brief Pick the newest version string for an installed file by walking
- *   the update chain. Active files prefer an active successor; obsolete
- *   files also accept the latest downloadable (listed, not removed)
- *   successor; both fall back to the file's own version.
+ *   its successors in the file's chain. Active files prefer an active
+ *   successor; obsolete files also accept the latest downloadable (listed,
+ *   not removed) successor; both fall back to the file's own version.
+ *
+ * @param chainSuccessors every file that supersedes the installed one, oldest
+ *   first
  */
 QString pickNewestVersion(int installedFileId, bool fileIsActive,
                           const QHash<int, QVariantMap>& filesById,
-                          const QHash<int, QVariantMap>& updatesByOldId)
+                          const std::vector<int>& chainSuccessors)
 {
-  const auto chainSuccessors =
-      findUpdateChainSuccessors(installedFileId, updatesByOldId);
-
   std::optional<int> latestActiveSuccessor;
   std::optional<int> latestDownloadableSuccessor;
 
@@ -3296,18 +3407,12 @@ QString pickNewestVersion(int installedFileId, bool fileIsActive,
 
 }  // namespace
 
-void MainWindow::nxmUpdatesAvailable(QString gameName, int modID, QVariant userData,
-                                     QVariant resultData, int requestID)
+void MainWindow::applyUpdateEvidence(const QString& gameShortName, int modID,
+                                     const QVariantList& files,
+                                     const QHash<int, std::vector<int>>& successorsByFileId)
 {
-  QVariantMap resultInfo  = resultData.toMap();
-  QList const files       = resultInfo["files"].toList();
-  QList const fileUpdates = resultInfo["file_updates"].toList();
-
-  const QString gameShortName = gameShortNameForNexus(m_PluginContainer, gameName);
-
-  // The per-mod request succeeded: stop gating failure handling on it and drop
-  // whatever a previous attempt recorded for this mod.
-  ModInfo::finishUpdateCheckRequest(gameShortName, modID);
+  // This mod's check produced an answer, so whatever the previous run recorded
+  // for it is superseded.
   ModInfo::clearUpdateCheckProblem(gameShortName, modID);
 
   QHash<int, QVariantMap> filesById;
@@ -3317,17 +3422,11 @@ void MainWindow::nxmUpdatesAvailable(QString gameName, int modID, QVariant userD
     filesById.insert(fileData["file_id"].toInt(), fileData);
   }
 
-  QHash<int, QVariantMap> updatesByOldId;
-  updatesByOldId.reserve(fileUpdates.size());
-  for (const auto& updateEntry : fileUpdates) {
-    const QVariantMap updateData = updateEntry.toMap();
-    updatesByOldId.insert(updateData["old_file_id"].toInt(), updateData);
-  }
-
-  // Evidence for the date-recency rule: the newest file the author still
-  // offers as current. Primary/MAIN files are the anchor so a later optional
-  // upload can never look like an update; the newest active file is the
-  // fallback when a mod has no primary/MAIN file at all.
+  // Page-wide anchor for the date-recency rule, used only when the installed
+  // file is no longer offered by Nexus (see the per-mod selection below).
+  // Primary/MAIN files are the anchor so a later optional upload can never
+  // look like an update; the newest active file is the fallback when a mod
+  // has no primary/MAIN file at all.
   int newestFileId        = 0;
   qint64 latestFileUpdate = 0;
   int preferredFileId     = 0;
@@ -3370,36 +3469,107 @@ void MainWindow::nxmUpdatesAvailable(QString gameName, int modID, QVariant userD
       // can't tie back to a Nexus file. The mod page lookup below provides the
       // version-based verdict instead — and, critically, this mod is *not*
       // stamped as checked: the check is not finished yet (root cause 6).
+      //
+      // It also keeps no evidence marker, so it stays pending and is asked for
+      // again on the next check rather than being trusted for a month. That is
+      // deliberate: the file list did arrive but said nothing about *this*
+      // mod's installed file, and there is no honest evidence to record.
       requiresInfo = true;
       continue;
     }
 
     int nexusFileStatus        = NexusInterface::FileStatus::ARCHIVED_HIDDEN;
     qint64 installedFileUpdate = 0;
+    QString installedFileVersion;
     if (const auto fileIt = filesById.constFind(*installedFileId);
         fileIt != filesById.constEnd()) {
       nexusFileStatus      = fileIt.value()["category_id"].toInt();
-      installedFileUpdate = fileIt.value()["uploaded_timestamp"].toLongLong();
+      installedFileUpdate  = fileIt.value()["uploaded_timestamp"].toLongLong();
+      installedFileVersion = fileIt.value()["version"].toString();
     }
     mod->setNexusFileStatus(nexusFileStatus);
 
+    // Pick the file this mod's dates are judged against.
+    //
+    // While the installed file is still offered, the anchor is the newest file
+    // of the *same category* — the installed file itself is in that set, so
+    // the anchor can never be older than the install. Matching the category
+    // keeps a later upload of a different kind of file (another optional, a
+    // misc attachment) from reading as an update; sibling files that share a
+    // category, such as an SE and a VR build uploaded a minute apart, are
+    // separated by the version-label veto in rule 4 instead.
+    //
+    // Once the installed file is no longer offered there is no same-category
+    // file left to compare against, so the whole page becomes the anchor and
+    // the question turns into "has the page moved backwards past me?".
+    int anchorFileId    = newestFileId;
+    qint64 anchorUpdate = latestFileUpdate;
+    if (installedFileUpdate > 0 &&
+        NexusInterface::isActiveFileStatus(nexusFileStatus)) {
+      anchorFileId   = *installedFileId;
+      anchorUpdate   = installedFileUpdate;
+      for (const auto& file : files) {
+        const QVariantMap fileData = file.toMap();
+        if (fileData["category_id"].toInt() != nexusFileStatus) {
+          continue;
+        }
+        const qint64 uploaded = fileData["uploaded_timestamp"].toLongLong();
+        // Strictly greater, so a timestamp tie keeps the installed file: on a
+        // tie we have no reason to flag anything.
+        if (uploaded > anchorUpdate) {
+          anchorUpdate = uploaded;
+          anchorFileId = fileData["file_id"].toInt();
+        }
+      }
+    }
+    const QString anchorFileVersion =
+        anchorFileId > 0 ? filesById.value(anchorFileId)["version"].toString()
+                         : QString();
+
+    const std::vector<int> chainSuccessors =
+        successorsByFileId.value(*installedFileId);
+
     const QString newestVersionValue = pickNewestVersion(
         *installedFileId, NexusInterface::isActiveFileStatus(nexusFileStatus),
-        filesById, updatesByOldId);
+        filesById, chainSuccessors);
     if (!newestVersionValue.isEmpty()) {
       mod->setNewestVersion(newestVersionValue);
     }
 
-    // The author's own succession statement for the installed file; 0 when the
-    // installed file has not been superseded.
-    const auto successors = findUpdateChainSuccessors(*installedFileId, updatesByOldId);
-    const int chainSuccessor = successors.empty() ? 0 : successors.back();
+    // The declared succession of the installed file; 0 when the installed file
+    // has not been superseded.
+    const int chainSuccessor = chainSuccessors.empty() ? 0 : chainSuccessors.back();
 
-    mod->setUpdateEvidence(newestFileId, latestFileUpdate, installedFileUpdate,
-                           chainSuccessor);
+    mod->setUpdateEvidence(anchorFileId, anchorUpdate, installedFileUpdate,
+                           chainSuccessor, installedFileVersion, anchorFileVersion);
 
     // Evidence collected — only now is this mod "checked".
     mod->setLastNexusUpdate(QDateTime::currentDateTimeUtc());
+
+    // One line per checked mod, so a run can be audited after the fact instead
+    // of guessed at: which rule decided this mod, and from what inputs.
+    const char* const verdict = mod->updateAvailable()  ? "update"
+                                : mod->downgradeAvailable() ? "downgrade"
+                                : mod->updateVerdictUnknown() ? "unknown"
+                                                              : "none";
+    log::info("update verdict [{}]: mod={} game={} verdict={} installedFile={} chain={} "
+              "status={} installedDate={} anchorDate={} version={} newest={} "
+              "installedLabel={} anchorLabel={}",
+              modID, mod->name(), gameShortName, verdict, *installedFileId, chainSuccessor,
+              nexusFileStatus, installedFileUpdate, anchorUpdate,
+              mod->version().canonicalString(), mod->newestVersion().canonicalString(),
+              installedFileVersion, anchorFileVersion);
+
+    // Repaint this mod's row now rather than relying on the single
+    // invalidateFilter() below. That call only re-evaluates *which* rows pass
+    // the filter; it is not a reliable way to get changed cells repainted, and
+    // the mod-info handler has always done this per mod (see
+    // nxmModInfoAvailable). Without it a finished check could leave the list
+    // showing the previous run's verdict until a restart.
+    const unsigned int row = ModInfo::getIndex(mod->name());
+    if (row != UINT_MAX) {
+      m_OrganizerCore.modList()->notifyChange(static_cast<int>(row));
+    }
   }
 
   // invalidate the filter to display mods with an update
@@ -3410,6 +3580,233 @@ void MainWindow::nxmUpdatesAvailable(QString gameName, int modID, QVariant userD
                                                   QString()) >= 0) {
       ModInfo::registerPendingUpdateCheck(gameShortName, modID);
     }
+  }
+}
+
+void MainWindow::nxmModFileListsAvailable(QString gameName, QVariant userData,
+                                          QVariant resultData, int requestID)
+{
+  // The bulk request landed: take it out of the pending set so that nothing
+  // later can be blamed for it.
+  ModInfo::finishBulkUpdateCheckRequest(requestID, gameName);
+
+  const QVariantMap request = userData.toMap();
+  const QString game        = request.value(QStringLiteral("game")).toString();
+  const QVariantList modIds = request.value(QStringLiteral("modIds")).toList();
+
+  const QVariantMap payload = resultData.toMap().value(QStringLiteral("data")).toMap();
+  if (payload.isEmpty()) {
+    // GraphQL answers without a `data` member when the document itself is
+    // refused. Nothing at all was learned, so the whole game stays unchecked
+    // and is asked again on the next run.
+    ModInfo::noteUpdateCheckGameProblem(
+        game, tr("Nexus did not answer the request for the mods' file lists."));
+    scheduleUpdateCheckProblemSummary();
+    return;
+  }
+
+  EvidenceRun run;
+  run.game = game;
+  run.modIDs.reserve(modIds.size());
+  for (const QVariant& modId : modIds) {
+    run.modIDs.append(modId.toInt());
+  }
+
+  QStringList uids;
+  QSet<QString> seenUids;
+  const auto addUid = [&uids, &seenUids](const QString& uid) {
+    if (!uid.isEmpty() && !seenUids.contains(uid)) {
+      seenUids.insert(uid);
+      uids.append(uid);
+    }
+  };
+
+  for (int i = 0; i < run.modIDs.size(); ++i) {
+    const int modID        = run.modIDs.at(i);
+    const QVariant listed  = payload.value(QStringLiteral("m%1").arg(i));
+
+    if (listed.isNull()) {
+      // Nexus has no file list for this mod at all — a hidden or deleted page.
+      // It is recorded as an informational problem and is *not* stamped, so the
+      // next run asks again instead of trusting an empty answer.
+      ModInfo::noteUpdateCheckProblem(
+          game, modID, tr("Nexus did not return a file list for this mod."), false);
+      scheduleUpdateCheckProblemSummary();
+      continue;
+    }
+
+    QVariantList files;
+    const QVariantList rows = listed.toList();
+    files.reserve(rows.size());
+    for (const QVariant& row : rows) {
+      files.append(normalizeFileRow(row));
+    }
+    run.filesByMod.insert(modID, files);
+
+    // Ask for the installed file's uid plus every file uploaded at or after
+    // it: only those can sit behind it in its chain, and they are all asked
+    // for in the same batch below.
+    for (const ModInfo::Ptr& mod : ModInfo::getByModID(game, modID)) {
+      const auto installedFileId = resolveInstalledFileId(mod, files);
+      if (!installedFileId) {
+        continue;
+      }
+
+      QVariantMap installedRow;
+      for (const QVariant& file : files) {
+        const QVariantMap row = file.toMap();
+        if (row.value("file_id").toInt() == *installedFileId) {
+          installedRow = row;
+          break;
+        }
+      }
+      if (installedRow.isEmpty()) {
+        // Not offered by Nexus any more: rule 5 has to do without a chain.
+        continue;
+      }
+
+      const qint64 installedAt   = installedRow.value("uploaded_timestamp").toLongLong();
+      const QString installedUid = installedRow.value("uid").toString();
+      if (installedUid.isEmpty()) {
+        continue;
+      }
+      addUid(installedUid);
+
+      for (const QVariant& file : files) {
+        const QVariantMap row = file.toMap();
+        if (row.value("uploaded_timestamp").toLongLong() >= installedAt) {
+          addUid(row.value("uid").toString());
+        }
+      }
+    }
+  }
+
+  if (uids.isEmpty()) {
+    // Nothing to look up: the rules that do not need a chain still decide.
+    finishEvidenceRun(run);
+    return;
+  }
+
+  // The batch endpoint takes at most 2000 ids per call.
+  constexpr int chunkSize = 2000;
+  const int chunks =
+      static_cast<int>((uids.size() + chunkSize - 1) / chunkSize);
+
+  run.chunksExpected = chunks;
+  m_EvidenceRuns.insert(requestID, run);
+
+  for (int chunk = 0; chunk < chunks; ++chunk) {
+    QVariantMap chunkUserData;
+    chunkUserData.insert(QStringLiteral("run"), requestID);
+
+    const int chunkID = NexusInterface::instance().requestModFileVersions(
+        game, uids.mid(chunk * chunkSize, chunkSize), this, chunkUserData, QString());
+    if (chunkID < 0) {
+      // Without this response the run can never complete: drop it whole rather
+      // than judge a mod from half of its evidence.
+      m_EvidenceRuns.remove(requestID);
+      return;
+    }
+    ModInfo::registerPendingBulkUpdateCheck(chunkID, game);
+  }
+}
+
+void MainWindow::nxmModFileVersionsAvailable(QString gameName, QVariant userData,
+                                             QVariant resultData, int requestID)
+{
+  const QVariantMap request = userData.toMap();
+  const int runId           = request.value(QStringLiteral("run")).toInt();
+
+  auto runIt = m_EvidenceRuns.find(runId);
+
+  // The request is finished either way; consume it so that nothing later can
+  // be blamed for it.
+  ModInfo::finishBulkUpdateCheckRequest(requestID, gameName);
+
+  if (runIt == m_EvidenceRuns.end()) {
+    // The run was abandoned while this response was in flight.
+    return;
+  }
+
+  const QVariantList rows =
+      resultData.toMap().value(QStringLiteral("data")).toMap().value("versions").toList();
+  for (const QVariant& row : rows) {
+    const QVariantMap data = row.toMap();
+    const QString uid      = idToString(data.value("id"));
+    if (uid.isEmpty()) {
+      continue;
+    }
+    FileChainRow chain;
+    chain.modFileId = data.value("mod_file_id").toLongLong();
+    chain.position  = data.value("position").toDouble();
+    runIt->chainByUid.insert(uid, chain);
+  }
+
+  if (++runIt->chunksReceived >= runIt->chunksExpected) {
+    const EvidenceRun run = runIt.value();
+    m_EvidenceRuns.erase(runIt);
+    finishEvidenceRun(run);
+  }
+}
+
+void MainWindow::finishEvidenceRun(const EvidenceRun& run)
+{
+  // The version-chain rows carry no file id, only the uid Nexus gave the
+  // version: this maps every uid of the run back to its file.
+  QHash<QString, int> fileIdByUid;
+  // Chain -> the files of that chain as (position, file id).
+  QHash<qint64, std::vector<std::pair<double, int>>> chains;
+
+  for (auto modIt = run.filesByMod.constBegin(); modIt != run.filesByMod.constEnd();
+       ++modIt) {
+    for (const QVariant& file : modIt.value()) {
+      const QVariantMap row = file.toMap();
+      const QString uid     = row.value("uid").toString();
+      if (uid.isEmpty()) {
+        continue;
+      }
+      fileIdByUid.insert(uid, row.value("file_id").toInt());
+    }
+  }
+
+  for (auto chainIt = run.chainByUid.constBegin();
+       chainIt != run.chainByUid.constEnd(); ++chainIt) {
+    const int fileId = fileIdByUid.value(chainIt.key(), 0);
+    if (fileId <= 0) {
+      continue;
+    }
+    chains[chainIt.value().modFileId].emplace_back(chainIt.value().position, fileId);
+  }
+
+  // For every file, the files that supersede it, oldest first — the sequence
+  // pickNewestVersion() walks, whose last entry is rule 2's succession
+  // statement. Position is the author's own ordering inside the chain, so a
+  // later upload filed underneath an older one cannot read as its successor.
+  QHash<int, std::vector<int>> successorsByFileId;
+  for (auto& chain : chains) {
+    std::sort(chain.begin(), chain.end());
+
+    std::vector<int> ordered;
+    ordered.reserve(chain.size());
+    for (const auto& member : chain) {
+      ordered.push_back(member.second);
+    }
+    for (std::size_t i = 0; i < ordered.size(); ++i) {
+      auto& successors = successorsByFileId[ordered[i]];
+      for (std::size_t j = i + 1; j < ordered.size(); ++j) {
+        successors.push_back(ordered[j]);
+      }
+    }
+  }
+
+  for (int modID : run.modIDs) {
+    const QVariantList files = run.filesByMod.value(modID);
+    if (files.isEmpty()) {
+      // No file list for this mod: the problem recorded when the response
+      // arrived stands, and this mod is not stamped.
+      continue;
+    }
+    applyUpdateEvidence(run.game, modID, files, successorsByFileId);
   }
 }
 
@@ -3633,8 +4030,43 @@ void MainWindow::nxmGameInfoAvailable(QString gameName, QVariant, QVariant resul
 }
 
 void MainWindow::nxmRequestFailed(QString gameName, int modID, int, QVariant userData,
-                                  int, int errorCode, const QString& errorString)
+                                  int requestID, int errorCode, const QString& errorString)
 {
+  // A failed version-chain response abandons the run waiting for it: without
+  // those rows the chain rules have no input, and a run that is missing a
+  // response must never be stamped as complete.
+  {
+    const QVariantMap request = userData.toMap();
+    const QVariant runId      = request.value(QStringLiteral("run"));
+    if (runId.isValid()) {
+      m_EvidenceRuns.remove(runId.toInt());
+    }
+  }
+
+  // A bulk update request — the per-game update list, the file lists of a run
+  // or one of its version-chain batches — has no mod id, so the per-mod pending
+  // gate below can never see it. The nexus request id is unique per request, so
+  // matching on it attributes the failure to exactly the game's update check
+  // that issued it and cannot capture an endorsement/track/description failure.
+  {
+    QString bulkGame;
+    if (ModInfo::finishBulkUpdateCheckRequest(requestID, bulkGame)) {
+      const QString message =
+          errorCode > 0
+              ? tr("The update check for %1 failed (error %2): %3")
+                    .arg(bulkGame)
+                    .arg(errorCode)
+                    .arg(errorString)
+              : tr("The update check for %1 timed out: %2").arg(bulkGame).arg(errorString);
+
+      // No mod is stamped: filteredMods() never runs when the bulk response is
+      // missing, so every mod stays due and the next run retries the whole game.
+      ModInfo::noteUpdateCheckGameProblem(bulkGame, message);
+      scheduleUpdateCheckProblemSummary();
+      return;
+    }
+  }
+
   const QString gameShortName = gameShortNameForNexus(m_PluginContainer, gameName);
 
   // Only a failure of a check we actually issued belongs in the check report;
@@ -3719,10 +4151,20 @@ void MainWindow::drainUpdateCheckProblems()
   constexpr qsizetype maxListed = 8;
   QStringList failureLabels;
   QStringList noticeLabels;
+  QStringList gameFailureLabels;
   int failureCount = 0;
   int noticeCount  = 0;
 
   for (const auto& problem : problems) {
+    if (problem.modID <= 0) {
+      // Whole-game (bulk) failure: not attributable to any single mod, and it
+      // must not be counted as a failed mod.
+      if (problem.failure && gameFailureLabels.size() < maxListed) {
+        gameFailureLabels.append(gameDisplayName(m_PluginContainer, problem.gameName));
+      }
+      continue;
+    }
+
     const auto mods = ModInfo::getByModID(problem.gameName, problem.modID);
     const QString label =
         mods.empty() ? tr("mod %1").arg(problem.modID)
@@ -3742,6 +4184,12 @@ void MainWindow::drainUpdateCheckProblems()
   }
 
   QStringList sections;
+  if (!gameFailureLabels.empty()) {
+    sections.append(
+        tr("The update check could not be completed for: %1. Nothing was marked as "
+           "checked, so the next run will try these games again.")
+            .arg(gameFailureLabels.join(QLatin1String(", "))));
+  }
   if (failureCount > 0) {
     const int listed = static_cast<int>(failureLabels.size());
     QString text     = tr("%1 mod(s) could not be checked: %2")

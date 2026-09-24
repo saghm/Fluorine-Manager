@@ -8,7 +8,6 @@
 #include "modinfodialogfwd.h"
 
 class CategoryFactory;
-class FilterList;
 class MainWindow;
 class ModListView;
 class PluginListView;
@@ -23,7 +22,7 @@ public:
   // currently passing the main window itself because a lots of stuff needs it but
   // it would be nice to avoid passing it at some point
   //
-  ModListViewActions(OrganizerCore& core, FilterList& filters,
+  ModListViewActions(OrganizerCore& core,
                      CategoryFactory& categoryFactory, ModListView* view,
                      PluginListView* pluginView, QObject* nxmReceiver);
 
@@ -183,7 +182,6 @@ private:
 
 private:
   OrganizerCore& m_core;
-  FilterList& m_filters;
   CategoryFactory& m_categories;
   ModListView* m_view;
   PluginListView* m_pluginView;

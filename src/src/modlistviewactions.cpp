@@ -34,11 +34,11 @@
 using namespace MOBase;
 using namespace MOShared;
 
-ModListViewActions::ModListViewActions(OrganizerCore& core, FilterList& filters,
+ModListViewActions::ModListViewActions(OrganizerCore& core,
                                        CategoryFactory& categoryFactory,
                                        ModListView* view, PluginListView* pluginView,
                                        QObject* nxmReceiver)
-    : QObject(view), m_core(core), m_filters(filters), m_categories(categoryFactory),
+    : QObject(view), m_core(core), m_categories(categoryFactory),
       m_view(view), m_pluginView(pluginView), m_parent(view->topLevelWidget()),
       m_receiver(nxmReceiver)
 {}
@@ -255,21 +255,32 @@ void ModListViewActions::checkModsForUpdates() const
         m_view);
   }
 
-  bool updatesAvailable = false;
+  // Same predicate ModListSortProxy applies for the UpdateAvailable category,
+  // so the count we report is the count that filter would show.
+  int updateCount = 0;
   for (const auto& mod : m_core.modList()->allMods()) {
     ModInfo::Ptr const modInfo = ModInfo::getByName(mod);
-    if (modInfo->updateAvailable()) {
-      updatesAvailable = true;
-      break;
+    if (modInfo->updateAvailable() || modInfo->downgradeAvailable()) {
+      ++updateCount;
     }
   }
 
-  if (updatesAvailable || checkingModsForUpdate) {
-    m_view->setFilterCriteria(
-        {{.type=ModListSortProxy::TypeSpecial, .id=CategoryFactory::UpdateAvailable, .inverse=false}});
-
-    m_filters.setSelection(
-        {{.type=ModListSortProxy::TypeSpecial, .id=CategoryFactory::UpdateAvailable, .inverse=false}});
+  if (checkingModsForUpdate) {
+    // Never install a filter from here. Writing the criteria straight into the
+    // sort proxy bypassed onFiltersCriteria(), the only path that updates the
+    // Filters panel and the "Filter:" label, and FilterList::setSelection()
+    // only poked the tree items without emitting criteriaChanged(). The result
+    // was a list that no longer showed every mod while the panel reported no
+    // filter at all — "Clear filters" was the only way out. Verdicts now land
+    // in place as the responses arrive, and the Updates quick-filter is there
+    // if the user wants the list narrowed.
+    MessageDialog::showMessage(
+        updateCount > 0
+            ? tr("Checking mods for updates. %n mod(s) currently shown as out "
+                 "of date — use the Updates filter to show only them.",
+                 "", updateCount)
+            : tr("Checking mods for updates..."),
+        m_view);
   } else if (!notAuthenticated && !awaitingLogin) {
     // checkAllForUpdate() only refuses when nothing was due; say so instead of
     // doing nothing visible.
